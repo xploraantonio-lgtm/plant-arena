@@ -1,0 +1,438 @@
+.jardin-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 12px 20px;
+  overflow: hidden;
+  user-select: none;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #fff;
+}
+
+/* Header */
+.jardin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(12, 20, 35, 0.85);
+  backdrop-filter: blur(10px);
+  border: 2px solid #52b788;
+  border-radius: 16px;
+  padding: 8px 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  margin-bottom: 10px;
+  z-index: 10;
+}
+
+.jardin-back-btn {
+  background: linear-gradient(180deg, #2d6a4f 0%, #1b4332 100%);
+  border: 2px solid #52b788;
+  color: #fff;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+
+.jardin-back-btn:hover {
+  transform: scale(1.05);
+  background: linear-gradient(180deg, #40916c 0%, #2d6a4f 100%);
+}
+
+.jardin-header__center {
+  text-align: center;
+}
+
+.jardin-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #74c69d;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8), 0 0 10px rgba(82, 183, 136, 0.4);
+  margin: 0;
+}
+
+.jardin-subtitle {
+  font-size: 11px;
+  color: #b7e4c7;
+}
+
+.jardin-header__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jardin-btn-sec {
+  background: linear-gradient(180deg, #e0a32e 0%, #b87c14 100%);
+  border: 2px solid #ffda79;
+  color: #1a1000;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.jardin-btn-sec:hover {
+  transform: scale(1.05);
+  filter: brightness(1.15);
+}
+
+.jardin-mute-btn {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #74c69d;
+  color: #fff;
+  font-size: 16px;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+}
+
+/* Active Battle Deck Container */
+.jardin-deck-container {
+  background: rgba(18, 28, 45, 0.9);
+  backdrop-filter: blur(12px);
+  border: 2px solid #74c69d;
+  border-radius: 18px;
+  padding: 12px 16px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+  margin-bottom: 12px;
+  z-index: 10;
+}
+
+.jardin-deck-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.jardin-deck-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffda79;
+  letter-spacing: 0.5px;
+}
+
+.jardin-deck-status {
+  font-size: 11px;
+  font-weight: bold;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.15);
+  border: 1px solid #ff6b6b;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.jardin-deck-status--ready {
+  color: #52e061;
+  background: rgba(82, 224, 97, 0.15);
+  border-color: #52e061;
+}
+
+/* Slots Grid */
+.jardin-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.jardin-slot {
+  position: relative;
+  height: 105px;
+  background: rgba(8, 14, 24, 0.85);
+  border: 2px dashed #40916c;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.jardin-slot:hover {
+  transform: translateY(-2px);
+  border-color: #74c69d;
+  background: rgba(18, 30, 48, 0.95);
+}
+
+.jardin-slot--filled {
+  border: 2px solid #52b788;
+  background: linear-gradient(180deg, rgba(30, 50, 75, 0.9) 0%, rgba(15, 25, 40, 0.9) 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.jardin-slot--active {
+  border-color: #ffda79 !important;
+  box-shadow: 0 0 15px rgba(255, 218, 121, 0.8) !important;
+}
+
+.jardin-slot__num {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #74c69d;
+  opacity: 0.8;
+}
+
+.jardin-slot__remove-btn {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  background: rgba(220, 38, 38, 0.9);
+  border: 1px solid #ff7878;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: all 0.15s ease;
+}
+
+.jardin-slot__remove-btn:hover {
+  transform: scale(1.2);
+  background: #ff2222;
+}
+
+.jardin-slot__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+
+.jardin-slot__cost {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #ffd166;
+  border-radius: 8px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #ffd166;
+}
+
+.jardin-slot__sun {
+  width: 12px;
+  height: 12px;
+}
+
+.jardin-slot__img {
+  max-width: 50px;
+  max-height: 50px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.jardin-slot__name {
+  font-size: 10px;
+  font-weight: bold;
+  color: #e0e0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jardin-slot__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #40916c;
+}
+
+.jardin-slot__plus {
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.jardin-slot__hint {
+  font-size: 9px;
+  font-weight: bold;
+}
+
+/* Action Bar */
+.jardin-action-bar {
+  display: flex;
+  justify-content: center;
+}
+
+.jardin-play-btn {
+  background: linear-gradient(180deg, #52e061 0%, #2b9338 100%);
+  border: 2px solid #a3ffab;
+  color: #062a0a;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  padding: 8px 30px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(82, 224, 97, 0.4);
+}
+
+.jardin-play-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(82, 224, 97, 0.7);
+}
+
+.jardin-play-btn:disabled {
+  background: #4a5568;
+  border-color: #718096;
+  color: #a0aec0;
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+/* Inventory Catalog Grid */
+.jardin-inventory-container {
+  flex: 1;
+  background: rgba(12, 20, 32, 0.85);
+  backdrop-filter: blur(10px);
+  border: 2px solid #40916c;
+  border-radius: 18px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.jardin-inventory-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #74c69d;
+  margin: 0 0 10px 0;
+  letter-spacing: 0.5px;
+}
+
+.jardin-inventory-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.jardin-inventory-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.jardin-inventory-grid::-webkit-scrollbar-thumb {
+  background: #40916c;
+  border-radius: 3px;
+}
+
+.jardin-card {
+  position: relative;
+  height: 110px;
+  background: rgba(20, 32, 50, 0.8);
+  border: 2px solid #2d6a4f;
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.jardin-card:hover {
+  transform: translateY(-3px) scale(1.03);
+  border-color: #74c69d;
+  background: rgba(30, 48, 75, 0.9);
+}
+
+.jardin-card--indeck {
+  border-color: #52e061;
+  background: linear-gradient(180deg, rgba(20, 50, 30, 0.85) 0%, rgba(10, 30, 18, 0.9) 100%);
+  box-shadow: 0 0 10px rgba(82, 224, 97, 0.3);
+}
+
+.jardin-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.jardin-card__cost {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #ffd166;
+  border-radius: 6px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-weight: bold;
+  color: #ffd166;
+}
+
+.jardin-card__sun {
+  width: 10px;
+  height: 10px;
+}
+
+.jardin-card__badge {
+  font-size: 8px;
+  font-weight: 900;
+  color: #52e061;
+  background: rgba(82, 224, 97, 0.2);
+  border: 1px solid #52e061;
+  padding: 1px 4px;
+  border-radius: 6px;
+}
+
+.jardin-card__img {
+  max-width: 48px;
+  max-height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.jardin-card__name {
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jardin-card__cat {
+  font-size: 8px;
+  color: #b7e4c7;
+}

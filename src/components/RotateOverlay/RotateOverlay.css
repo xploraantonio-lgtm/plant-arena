@@ -1,0 +1,36 @@
+.rotate-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #07130d;
+  color: #fff;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 18px;
+  text-align: center;
+}
+
+.rotate-overlay__icon {
+  font-size: 64px;
+  animation: rotate-hint 1.6s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(90deg);
+  }
+}
+
+/* Solo se muestra en pantallas angostas en modo vertical (celulares) */
+@media (max-width: 900px) and (orientation: portrait) {
+  .rotate-overlay {
+    display: flex;
+  }
+}

@@ -1,0 +1,313 @@
+.main-menu {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  color: #fff;
+  overflow: hidden;
+
+  /* ============================================================
+     POSICIÓN DE LAS PLANTAS — edita estos valores para moverlas.
+     left/right y bottom son % del tamaño del stage (960x540).
+     width es el tamaño de la imagen. Guarda y se ve al instante.
+     ============================================================ */
+
+  /* Planta izquierda (plant1.png) */
+  --plant1-left: 9%;
+  --plant1-bottom: 16%;
+  --plant1-width: 200px;
+
+  /* Planta derecha (plant2.png) */
+  --plant2-right: 9%;
+  --plant2-bottom: 16%;
+  --plant2-width: 200px;
+}
+
+.main-menu::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    rgba(6, 16, 24, 0.35),
+    rgba(6, 16, 24, 0.65)
+  );
+  pointer-events: none;
+}
+
+.topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 22px;
+}
+
+.topbar__right {
+  display: flex;
+  gap: 10px;
+}
+
+.card {
+  background: rgba(16, 26, 24, 0.85);
+  border: 2px solid #76d832;
+  border-radius: 14px;
+  padding: 8px 16px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.card--player {
+  display: flex;
+  flex-direction: column;
+}
+
+.card__title {
+  font-weight: 700;
+}
+
+.card__subtitle {
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.card--stat {
+  border-color: #ffd76b;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card__icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.mute-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(16, 26, 24, 0.85);
+  border: 2px solid #76d832;
+  color: #fff;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.logo {
+  position: absolute;
+  z-index: 2;
+  top: 4%;
+  left: 50%;
+  height: 90px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+  animation: logo-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes logo-pulse {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.18);
+  }
+}
+
+.plant {
+  position: absolute;
+  z-index: 1;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.5));
+}
+
+/* Efecto "vivo": las plantas respiran/se mecen suavemente y de forma
+   desincronizada entre sí (duración y delay distintos) para que no
+   se muevan como espejo una de la otra. */
+.plant--left {
+  left: var(--plant1-left);
+  bottom: var(--plant1-bottom);
+  width: var(--plant1-width);
+  animation: plant-sway-left 3.2s ease-in-out infinite;
+}
+
+.plant--right {
+  right: var(--plant2-right);
+  bottom: var(--plant2-bottom);
+  width: var(--plant2-width);
+  animation: plant-sway-right 3.8s ease-in-out infinite;
+  animation-delay: -1.2s;
+}
+
+@keyframes plant-sway-left {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(-3deg);
+  }
+}
+
+@keyframes plant-sway-right {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(3deg);
+  }
+}
+
+.play-button {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-button__art {
+  width: 190px;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.6));
+  transition: transform 0.1s ease;
+}
+
+.play-button:active .play-button__art {
+  transform: scale(0.96);
+}
+
+.play-button__label {
+  position: absolute;
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: #ffd23f;
+  text-shadow:
+    0 2px 0 #7a4a00,
+    0 4px 3px rgba(0, 0, 0, 0.7);
+  text-align: center;
+  pointer-events: none;
+}
+
+.panel {
+  position: absolute;
+  z-index: 2;
+  bottom: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel--left {
+  left: 16px;
+}
+
+.panel--right {
+  right: 16px;
+  align-items: flex-end;
+}
+
+/* Botones "banner" (jardin.png / coleccion.png / Arena.png): la imagen
+   trae el icono en un marco y deja el lado derecho vacío para el texto,
+   así que el label se superpone en esa zona en blanco. */
+.banner-button {
+  position: relative;
+  width: 168px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+  transition: transform 0.1s ease;
+}
+
+.banner-button:active {
+  transform: scale(0.97);
+}
+
+.banner-button img {
+  width: 100%;
+  display: block;
+}
+
+.banner-button span {
+  position: absolute;
+  top: 50%;
+  left: 66%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.icon-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 37, 26, 0.9);
+  color: #fff;
+  border: 2px solid #75d832;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.icon-button img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.icon-button--purple {
+  border-color: #b26bff;
+}
+
+.footer {
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 44px;
+  background: rgba(5, 11, 18, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+  font-size: 13px;
+}
+
+.footer-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.footer-button img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}

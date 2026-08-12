@@ -1,0 +1,147 @@
+.plant-hand-container {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 100;
+  background: rgba(18, 30, 15, 0.88);
+  border: 2px solid #5a8e32;
+  border-radius: 12px;
+  padding: 6px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+/* Sun Counter */
+.sun-counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #4a3418, #2a1b0a);
+  border: 2px solid #e0a32e;
+  border-radius: 8px;
+  padding: 4px 10px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.sun-counter__icon {
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(0 0 6px #ffea00);
+  animation: sunPulse 2s infinite ease-in-out;
+}
+
+@keyframes sunPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.sun-counter__value {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff4a3;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Plant Cards List */
+.plant-hand {
+  display: flex;
+  gap: 8px;
+}
+
+.plant-hand__card {
+  position: relative;
+  width: 58px;
+  height: 82px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: transform 0.15s ease, filter 0.15s ease;
+  overflow: hidden;
+  user-select: none;
+}
+
+.plant-hand__card:hover:not(.plant-hand__card--disabled) {
+  transform: translateY(-4px);
+  filter: drop-shadow(0 6px 12px rgba(158, 224, 82, 0.7));
+}
+
+.plant-hand__card--selected {
+  transform: translateY(-6px) scale(1.08) !important;
+  filter: drop-shadow(0 0 12px #ffea00) !important;
+}
+
+.plant-hand__card--disabled {
+  cursor: not-allowed;
+  filter: grayscale(100%) brightness(55%) opacity(0.7) !important;
+}
+
+.plant-hand__card--disabled .plant-hand__packet-img {
+  filter: grayscale(100%) brightness(55%);
+}
+
+/* Seed Packet Image Wrapper */
+.plant-hand__packet-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.plant-hand__packet-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Cooldown Overlay */
+.plant-hand__cooldown-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: 0 0 4px 4px;
+  pointer-events: none;
+  transition: height 0.1s linear;
+}
+
+/* Shovel Tool */
+.plant-hand__shovel {
+  background: linear-gradient(180deg, #8d6e63 0%, #4e342e 100%);
+  border: 2px solid #bcaaa4;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.plant-hand__shovel-icon {
+  width: 36px;
+  height: 36px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.plant-hand__shovel-name {
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  margin-top: 2px;
+}
