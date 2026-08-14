@@ -13,12 +13,39 @@ export interface CollectionPlant {
   categoryLabel: string
   cost: number
   cooldownSec: number
-  hp: number
+  hp: number | string
   damage: number | string
   sprite: string
   cardImage: string
   description: string
   lore: string
+}
+
+export const PLANT_RARITIES: Record<string, { label: string; short: string; color: string; bg: string }> = {
+  // Comunes (4) -> C
+  sunflower: { label: 'COMÚN', short: 'C', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.2)' },
+  peashooter: { label: 'COMÚN', short: 'C', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.2)' },
+  wallnut: { label: 'COMÚN', short: 'C', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.2)' },
+  chomper: { label: 'COMÚN', short: 'C', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.2)' },
+
+  // Poco Comunes (5) -> PC
+  garlic: { label: 'POCO COMÚN', short: 'PC', color: '#22d3ee', bg: 'rgba(34, 211, 238, 0.2)' },
+  bonkchoy: { label: 'POCO COMÚN', short: 'PC', color: '#22d3ee', bg: 'rgba(34, 211, 238, 0.2)' },
+  repeater: { label: 'POCO COMÚN', short: 'PC', color: '#22d3ee', bg: 'rgba(34, 211, 238, 0.2)' },
+  melonpult: { label: 'POCO COMÚN', short: 'PC', color: '#22d3ee', bg: 'rgba(34, 211, 238, 0.2)' },
+  squash: { label: 'POCO COMÚN', short: 'PC', color: '#22d3ee', bg: 'rgba(34, 211, 238, 0.2)' },
+
+  // Raras (2) -> R
+  twinsunflower: { label: 'RARA', short: 'R', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.2)' },
+  jalapeno: { label: 'RARA', short: 'R', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.2)' },
+
+  // Épicas (2) -> E
+  aloe: { label: 'ÉPICA', short: 'E', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.2)' },
+  tallnut: { label: 'ÉPICA', short: 'E', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.2)' },
+
+  // Legendarias (2) -> L
+  iceberglettuce: { label: 'LEGENDARIA', short: 'L', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.2)' },
+  threepeater: { label: 'LEGENDARIA', short: 'L', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.2)' },
 }
 
 const LORE_MAP: Record<string, string> = {
@@ -34,6 +61,9 @@ const LORE_MAP: Record<string, string> = {
   twinsunflower: 'Dos cabezas producen mejor que una. Twin Sunflower ilumina el terreno con energía solar multiplicada.',
   threepeater: 'Threepeater vigila tres líneas a la vez brindando cobertura de fuego múltiple.',
   tallnut: 'Tall-nut es un muro gigante inamovible. Su gran altura imposibilita el avance enemigo y resiste el doble de daño.',
+  jalapeno: 'Jalapeño es de 1 solo uso. Desata una bola de fuego ardiente que quema la fila entera limpiando el carril.',
+  iceberglettuce: 'Iceberg Lettuce cuesta 0 Soles y es de 1 solo uso. Al colocarse en el campo, congela a todos los enemigos durante 7 segundos.',
+  aloe: 'Aloe Curandera escanea el carril y cura con ondas de luz mística a las plantas heridas aliadas.',
 }
 
 export const CATALOG: CollectionPlant[] = (Object.keys(PLANT_CONFIGS) as PlantId[]).map((id) => {
@@ -47,6 +77,8 @@ export const CATALOG: CollectionPlant[] = (Object.keys(PLANT_CONFIGS) as PlantId
       ? 'Tanque Defensivo'
       : 'Mele / Cuerpo a Cuerpo'
 
+  const isInstant = c.id === 'jalapeno' || c.id === 'iceberglettuce' || c.id === 'squash'
+
   return {
     id: c.id,
     name: c.name,
@@ -54,7 +86,7 @@ export const CATALOG: CollectionPlant[] = (Object.keys(PLANT_CONFIGS) as PlantId
     categoryLabel: catLabel,
     cost: c.cost,
     cooldownSec: c.cooldownMs / 1000,
-    hp: c.maxHp,
+    hp: isInstant ? 'Un Solo Uso' : c.maxHp,
     damage: c.damage !== undefined ? c.damage : (c.category === 'producer' ? '0 (Produce Soles)' : 'Especial'),
     sprite: c.sprite,
     cardImage: c.packetActive || c.icon,
@@ -92,6 +124,8 @@ export default function Collection({
     }
   }
 
+  const selectedRarity = PLANT_RARITIES[selectedPlant.id] || { label: 'COMÚN', short: 'C', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.2)' }
+
   return (
     <div className="collection-screen" style={{ backgroundImage: `url(${background})` }}>
       {/* Header Bar */}
@@ -99,7 +133,12 @@ export default function Collection({
         <button className="collection-back-btn" type="button" onClick={onBack}>
           ⬅️ MENÚ
         </button>
-        <h1 className="collection-title">ALMANAQUE DE PLANTAS</h1>
+        <div style={{ textAlign: 'center' }}>
+          <h1 className="collection-title">📖 ALMANAQUE DE PLANTAS (GUÍA DE REFERENCIA)</h1>
+          <span style={{ fontSize: '11px', color: '#fde68a' }}>
+            ℹ️ Catálogo y campo de prueba sandbox. Tu verdadero inventario está en 🪴 Mi Jardín.
+          </span>
+        </div>
         <button
           className="collection-mute-btn"
           type="button"
@@ -119,14 +158,7 @@ export default function Collection({
           className={`collection-tab ${activeTab === 'all' ? 'collection-tab--active' : ''}`}
           onClick={() => setActiveTab('all')}
         >
-          TODAS ({CATALOG.length})
-        </button>
-        <button
-          type="button"
-          className={`collection-tab ${activeTab === 'melee' ? 'collection-tab--active' : ''}`}
-          onClick={() => setActiveTab('melee')}
-        >
-          🥊 MELE / CUERPO A CUERPO
+          🌟 TODAS ({CATALOG.length})
         </button>
         <button
           type="button"
@@ -157,6 +189,8 @@ export default function Collection({
         <div className="collection-grid">
           {filteredCatalog.map((plant) => {
             const isSelected = selectedPlant.id === plant.id
+            const rarity = PLANT_RARITIES[plant.id] || { label: 'COMÚN', short: 'C', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.2)' }
+
             return (
               <button
                 key={plant.id}
@@ -167,10 +201,24 @@ export default function Collection({
                   soundManager.playSound('plantation', 0.4)
                 }}
               >
-                <div className="collection-card__cost">
-                  <img src={sunIcon} alt="Sol" className="collection-card__cost-icon" />
-                  <span>{plant.cost}</span>
+                <div className="collection-card__header-row">
+                  <div className="collection-card__cost">
+                    <img src={sunIcon} alt="Sol" className="collection-card__cost-icon" />
+                    <span>{plant.cost}</span>
+                  </div>
+
+                  <span
+                    className="collection-card__rarity-tag"
+                    style={{
+                      color: rarity.color,
+                      borderColor: rarity.color,
+                      backgroundColor: rarity.bg,
+                    }}
+                  >
+                    {rarity.short}
+                  </span>
                 </div>
+
                 <img src={plant.cardImage} alt={plant.name} className="collection-card__img" />
                 <span className="collection-card__name">{plant.name}</span>
               </button>
@@ -189,7 +237,20 @@ export default function Collection({
           </div>
 
           <div className="collection-inspector__info">
-            <h2 className="collection-inspector__name">{selectedPlant.name}</h2>
+            <div className="collection-inspector__title-row">
+              <h2 className="collection-inspector__name">{selectedPlant.name}</h2>
+              <span
+                className="collection-inspector__rarity-badge"
+                style={{
+                  color: selectedRarity.color,
+                  borderColor: selectedRarity.color,
+                  backgroundColor: selectedRarity.bg,
+                }}
+              >
+                {selectedRarity.label}
+              </span>
+            </div>
+
             <span className="collection-inspector__badge">{selectedPlant.categoryLabel}</span>
 
             {/* Stats Row */}
@@ -233,10 +294,15 @@ export default function Collection({
             <button
               type="button"
               className="collection-inspector__sound-btn"
-              onClick={playPreviewSound}
-              title="Probar disparos en el Campo de Batalla (Sandbox)"
+              onClick={() => {
+                playPreviewSound()
+                if (onPracticePlant) {
+                  onPracticePlant(selectedPlant.id)
+                }
+              }}
+              title="Probar disparos y explosiones en el Campo de Batalla (Sandbox)"
             >
-              🎯 PROBAR DISPARO EN CAMPO DE BATALLA
+              🎯 PROBAR EN CAMPO DE BATALLA (SANDBOX)
             </button>
           </div>
         </div>

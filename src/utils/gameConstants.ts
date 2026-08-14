@@ -174,6 +174,48 @@ export const PLANT_CONFIGS: Record<PlantId, PlantConfig> = {
     sprite: '/game-assets/greenfoot/transparenttallnut.png',
     description: 'Nuez gigante defensiva ultra resistente. Absorbe una cantidad enorme de daño frente a los enemigos.',
   },
+  jalapeno: {
+    id: 'jalapeno',
+    name: 'Jalapeño',
+    cost: 125,
+    cooldownMs: 15000,
+    maxHp: 1,
+    category: 'defensive',
+    damage: 1000,
+    icon: '/game-assets/plants/jalapeno_hd.png',
+    packetActive: '/game-assets/plants/jalapeno_hd.png',
+    packetDisabled: '/game-assets/plants/jalapeno_hd.png',
+    sprite: '/game-assets/plants/jalapeno_hd.png',
+    description: 'Planta Explosiva de Carril de 1 Solo Uso. Al colocarlo en el carril, explota quemando la línea entera e infligiendo 1000 de daño masivo antes de desaparecer.',
+  },
+  iceberglettuce: {
+    id: 'iceberglettuce',
+    name: 'Lechuga Helada',
+    cost: 0,
+    cooldownMs: 12000,
+    maxHp: 1,
+    category: 'defensive',
+    damage: 0,
+    icon: '/game-assets/plants/iceberglettuce_hd.png',
+    packetActive: '/game-assets/plants/iceberglettuce_hd.png',
+    packetDisabled: '/game-assets/plants/iceberglettuce_hd.png',
+    sprite: '/game-assets/plants/iceberglettuce_hd.png',
+    description: 'Planta de Hielo de 0 Soles de 1 Solo Uso. Al colocarse en el campo, congela a todos los enemigos durante 7 segundos, dejándolos completamente inmóviles e incapaces de atacar o actuar.',
+  },
+  aloe: {
+    id: 'aloe',
+    name: 'Aloe Curandera',
+    cost: 100,
+    cooldownMs: 8000,
+    maxHp: 400,
+    category: 'producer',
+    damage: 0,
+    icon: '/game-assets/plants/aloe_hd.png',
+    packetActive: '/game-assets/plants/aloe_hd.png',
+    packetDisabled: '/game-assets/plants/aloe_hd.png',
+    sprite: '/game-assets/plants/aloe_hd.png',
+    description: 'Planta de Soporte Curativo Inteligente. Regenera la salud de las plantas heridas en su carril.',
+  },
 }
 
 export const ENEMY_PLANT_CONFIGS: Record<EnemyPlantType, EnemyPlantConfig> = {
@@ -235,7 +277,7 @@ export const ENEMY_PLANT_CONFIGS: Record<EnemyPlantType, EnemyPlantConfig> = {
 }
 
 export const INITIAL_SUN = 0
-export const INITIAL_BASE_HP = 1000
+export const INITIAL_BASE_HP = 600
 export const SUN_VALUE = 25
 
 export const LANES_CONFIG = [
@@ -250,3 +292,16 @@ export const FIELD_WIDTH_PCT = BASE_RIGHT_START_X - BASE_LEFT_END_X
 export const TOTAL_COLUMNS = 12
 export const P1_COLUMNS = 6
 export const P2_COLUMNS = 6
+
+export function getScaledPlantConfig(plantId: PlantId, level: number = 0): PlantConfig {
+  const base = PLANT_CONFIGS[plantId]
+  if (!base || level <= 0) return base
+
+  const scale = 1 + level * 0.15
+
+  return {
+    ...base,
+    maxHp: Math.round(base.maxHp * scale),
+    damage: base.damage !== undefined ? Math.round(base.damage * scale) : undefined,
+  }
+}

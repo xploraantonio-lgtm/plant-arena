@@ -113,7 +113,7 @@ export function useGameEngine() {
       p1BaseHp: INITIAL_BASE_HP,
       p2BaseHp: INITIAL_BASE_HP,
       sunBank: INITIAL_SUN,
-      p2SunBank: INITIAL_SUN,
+      p2SunBank: INITIAL_SUN, // 100% Paridad Justa: Ambos jugadores inician con 150 soles
       plants: [],
       enemyPlants: [],
       projectiles: [],
@@ -131,10 +131,10 @@ export function useGameEngine() {
     }
 
     lastTickRef.current = now
-    lastSkySunRef.current = now
+    lastSkySunRef.current = now - 3500 // El primer sol del cielo cae a los 2.5s para la carrera del más rápido
     lastP1PassiveSunRef.current = now
-    lastP2PassiveSunRef.current = now
-    lastEnemySpawnRef.current = now
+    lastP2PassiveSunRef.current = now - 3500
+    lastEnemySpawnRef.current = now - 1000
     waveTimerRef.current = now
 
     soundManager.playBgm('battle')
@@ -266,7 +266,7 @@ export function useGameEngine() {
       if (!config) return
 
       if (state.sunBank < config.cost) return
-      if (state.cooldowns[card] > Date.now()) return
+      if (!state.isPracticeMode && state.cooldowns[card] > Date.now()) return
 
       const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
       const cellCenterX = BASE_LEFT_END_X + col * colWidth + colWidth / 2
@@ -276,6 +276,49 @@ export function useGameEngine() {
       if (!isWalkingUnit) {
         const existing = state.plants.find((p) => p.lane === lane && p.col === col && !p.isWalking)
         if (existing) return
+      }
+
+      // Jalapeño Instant Lane-Clearing Explosion!
+      if (card === 'jalapeno') {
+        state.sunBank -= config.cost
+        state.cooldowns[card] = Date.now() + config.cooldownMs
+        state.stats.plantsPlaced += 1
+        state.selectedCard = null
+
+        soundManager.playSound('pea_hit', 1.0)
+
+        // Inflict 1000 damage to ALL enemies in this lane
+        const laneEnemies = state.enemyPlants.filter((e) => e.lane === lane && e.hp > 0)
+        laneEnemies.forEach((e) => {
+          e.hp -= 1000
+          if (e.hp <= 0) {
+            state.stats.enemyPlantsDefeated += 1
+            state.stats.score += 100
+          }
+        })
+
+        // Temporary full-lane flame visual explosion wave that disappears after 1200ms
+        const tempFlame: PlantEntity = {
+          id: `jalapeno-flame-${Date.now()}`,
+          plantId: 'jalapeno',
+          lane,
+          col,
+          x: 50, // Center of lane for full-width flame wave
+          hp: 1,
+          maxHp: 1,
+          lastActionTime: Date.now(),
+          isWalking: false,
+          state: 'attacking',
+          spriteOverride: '/game-assets/plants/jalapeno_flame_fx.png'
+        }
+        state.plants.push(tempFlame)
+        setTimeout(() => {
+          stateRef.current.plants = stateRef.current.plants.filter((p) => p.id !== tempFlame.id)
+          forceRender()
+        }, 1200)
+
+        forceRender()
+        return
       }
 
       const newPlant: PlantEntity = {
@@ -340,89 +383,149 @@ export function useGameEngine() {
           }
         }
 
-        // 1. PC AI SUN RECOVERY (P2 PC collects suns over time every 6.0s)
+        // 1. PC AI SKY SUN RECOVERY (Synchronized with sky sun drop every 6.0s for 100% fair parity)
         if (!state.isPracticeMode && now - lastP2PassiveSunRef.current > 6000) {
           lastP2PassiveSunRef.current = now
           state.p2SunBank += 25
         }
 
-        // 2. PC AI SUN-BASED PURCHASING & PLANT SPAWNING
-        const spawnInterval = Math.max(2500, 5500 - state.wave * 300)
+        // 2. PC AI TACTICAL PURCHASING & PLANT SPAWNING (SUNFLOWER-FIRST RULE + THREAT ASSESSMENT)
+        const spawnInterval = Math.max(1200, 2200 - state.wave * 200)
         if (!state.isPracticeMode && now - lastEnemySpawnRef.current > spawnInterval) {
           lastEnemySpawnRef.current = now
 
-          // Find enemy plants affordable with p2SunBank
-          const allTypes: EnemyPlantType[] = [
-            'enemy_sunflower',
-            'enemy_wallnut',
-            'enemy_peashooter',
-            'enemy_chomper',
-            'enemy_melonpult',
-          ]
-          const affordableTypes = allTypes.filter(
-            (t) => ENEMY_PLANT_CONFIGS[t].cost <= state.p2SunBank
-          )
+          // Count active P2 Sunflowers
+          const p2Sunflowers = state.enemyPlants.filter(
+            (e) => e.type === 'enemy_sunflower' && e.hp > 0
+          ).length
 
-          if (affordableTypes.length > 0) {
-            // Smart Lane Selection: AI checks which lanes have P1 plants advancing towards P2 base
-            const lanesWithThreat = [0, 1, 2].filter((l) =>
-              state.plants.some((pl) => pl.lane === l && pl.hp > 0 && pl.x > 30)
-            )
-            const lane =
-              lanesWithThreat.length > 0 && Math.random() < 0.7
-                ? lanesWithThreat[Math.floor(Math.random() * lanesWithThreat.length)]
-                : Math.floor(Math.random() * 3)
+          // Assess lane threats (P1 player plants advancing towards P2 base)
+          const laneThreats = [0, 1, 2].map((l) => {
+            const P1Advancing = state.plants.filter((pl) => pl.lane === l && pl.hp > 0 && pl.x > 25)
+            return { lane: l, count: P1Advancing.length, threat: P1Advancing.length > 0 }
+          })
+          const activeThreatLanes = laneThreats.filter((t) => t.threat).map((t) => t.lane)
+          const isEmergency = state.plants.some((pl) => pl.hp > 0 && pl.x > 60)
 
-            const chosenType = affordableTypes[Math.floor(Math.random() * affordableTypes.length)]
-            const eConfig = ENEMY_PLANT_CONFIGS[chosenType]
-            const isWalking = eConfig.category === 'melee'
+          let chosenType: EnemyPlantType | null = null
 
-            if (isWalking) {
-              state.enemyPlants.push({
-                id: `enemy-${now}-${Math.random()}`,
-                type: chosenType,
-                lane,
-                x: BASE_RIGHT_START_X - 1,
-                hp: eConfig.maxHp,
-                maxHp: eConfig.maxHp,
-                speed: eConfig.speed,
-                damage: eConfig.damage,
-                isWalking: true,
-                state: 'walking',
-                lastAttackTime: Date.now(),
-              })
-              state.p2SunBank -= eConfig.cost
-            } else {
-              // Smart Placement: Defensive Wall-nuts in front (cols 6..7), Shooters & Sunflowers in back (cols 8..11)
-              const preferredCols =
-                eConfig.category === 'defensive' ? [6, 7, 8] : [8, 9, 10, 11, 7, 6]
+          // REGLA 1: GIRASOLES PRIMERO PARA ESTABLECER ECONOMÍA DE SOLES (Si no hay emergencia)
+          if (p2Sunflowers === 0 && !isEmergency) {
+            if (state.p2SunBank >= ENEMY_PLANT_CONFIGS.enemy_sunflower.cost) {
+              chosenType = 'enemy_sunflower'
+            }
+          } else if (
+            p2Sunflowers === 1 &&
+            !isEmergency &&
+            Math.random() < 0.60 &&
+            state.p2SunBank >= ENEMY_PLANT_CONFIGS.enemy_sunflower.cost
+          ) {
+            chosenType = 'enemy_sunflower'
+          } else {
+            // REGLA 2: FILTRAR ÚNICAMENTE PLANTAS QUE EL BOT REALMENTE PUEDA PAGAR AHORA MISMO
+            const affordableTypes: EnemyPlantType[] = ([
+              'enemy_wallnut',
+              'enemy_peashooter',
+              'enemy_chomper',
+              'enemy_melonpult',
+              'enemy_sunflower',
+            ] as EnemyPlantType[]).filter((t) => ENEMY_PLANT_CONFIGS[t].cost <= state.p2SunBank)
 
-              const availableCols = preferredCols.filter((col) => {
-                return !state.enemyPlants.some(
-                  (e) => e.lane === lane && e.col === col && !e.isWalking
+            if (affordableTypes.length > 0) {
+              if (activeThreatLanes.length > 0) {
+                // MODO DEFENSA: Si el jugador está atacando, priorizar Tanque (Wallnut) o Atacante de carril
+                const wallnutCost = ENEMY_PLANT_CONFIGS.enemy_wallnut.cost
+                if (state.p2SunBank >= wallnutCost && Math.random() < 0.5) {
+                  chosenType = 'enemy_wallnut'
+                } else {
+                  const combatTypes = affordableTypes.filter((t) => t !== 'enemy_sunflower')
+                  if (combatTypes.length > 0) {
+                    chosenType = combatTypes[Math.floor(Math.random() * combatTypes.length)]
+                  } else {
+                    chosenType = affordableTypes[Math.floor(Math.random() * affordableTypes.length)]
+                  }
+                }
+              } else {
+                // MODO ATAQUE: Lanzar unidades ofensivas contra el jugador
+                const attackTypes = affordableTypes.filter(
+                  (t) => t !== 'enemy_sunflower' && t !== 'enemy_wallnut'
                 )
-              })
+                if (attackTypes.length > 0) {
+                  chosenType = attackTypes[Math.floor(Math.random() * attackTypes.length)]
+                } else {
+                  chosenType = affordableTypes[Math.floor(Math.random() * affordableTypes.length)]
+                }
+              }
+            }
+          }
 
-              if (availableCols.length > 0) {
-                const targetCol = availableCols[0]
-                const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
-                const cellCenterX = BASE_LEFT_END_X + targetCol * colWidth + colWidth / 2
+          // GUARDIA ESTRICTO: VERIFICAR QUE EL BOT REALMENTE TIENE SOLES SUFICIENTES AHORA MISMO
+          if (chosenType) {
+            const eConfig = ENEMY_PLANT_CONFIGS[chosenType]
 
+            if (state.p2SunBank < eConfig.cost) {
+              // NO TIENE SOLES SUFICIENTES -> CANCELAR COLOCACIÓN
+              chosenType = null
+            } else {
+              const isWalking = eConfig.category === 'melee'
+
+              const lane =
+                activeThreatLanes.length > 0 && Math.random() < 0.85
+                  ? activeThreatLanes[Math.floor(Math.random() * activeThreatLanes.length)]
+                  : Math.floor(Math.random() * 3)
+
+              if (isWalking) {
                 state.enemyPlants.push({
                   id: `enemy-${now}-${Math.random()}`,
                   type: chosenType,
                   lane,
-                  col: targetCol,
-                  x: cellCenterX,
+                  x: BASE_RIGHT_START_X - 1,
                   hp: eConfig.maxHp,
                   maxHp: eConfig.maxHp,
-                  speed: 0,
+                  speed: eConfig.speed,
                   damage: eConfig.damage,
-                  isWalking: false,
-                  state: 'idle',
+                  isWalking: true,
+                  state: 'walking',
                   lastAttackTime: Date.now(),
                 })
-                state.p2SunBank -= eConfig.cost
+                // DEDUCIR SOLES RIGUROSAMENTE
+                state.p2SunBank = Math.max(0, state.p2SunBank - eConfig.cost)
+              } else {
+                const preferredCols =
+                  chosenType === 'enemy_sunflower'
+                    ? [11, 10, 9, 8]
+                    : eConfig.category === 'defensive'
+                    ? [6, 7, 8]
+                    : [8, 9, 10, 11, 7, 6]
+
+                const availableCols = preferredCols.filter((col) => {
+                  return !state.enemyPlants.some(
+                    (e) => e.lane === lane && e.col === col && !e.isWalking
+                  )
+                })
+
+                if (availableCols.length > 0) {
+                  const targetCol = availableCols[0]
+                  const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
+                  const cellCenterX = BASE_LEFT_END_X + targetCol * colWidth + colWidth / 2
+
+                  state.enemyPlants.push({
+                    id: `enemy-${now}-${Math.random()}`,
+                    type: chosenType,
+                    lane,
+                    col: targetCol,
+                    x: cellCenterX,
+                    hp: eConfig.maxHp,
+                    maxHp: eConfig.maxHp,
+                    speed: 0,
+                    damage: eConfig.damage,
+                    isWalking: false,
+                    state: 'idle',
+                    lastAttackTime: Date.now(),
+                  })
+                  // DEDUCIR SOLES RIGUROSAMENTE
+                  state.p2SunBank = Math.max(0, state.p2SunBank - eConfig.cost)
+                }
               }
             }
           }
@@ -518,6 +621,51 @@ export function useGameEngine() {
                 })
                 soundManager.playSound('pea_hit', 1.0)
                 plant.hp = 0 // Detonate Potato Mine
+              }
+            }
+          }
+
+          // Iceberg Lettuce instant placement detonation: Asset 1 -> Asset 2 for 2s -> Asset 1 brief -> disappear & freeze ALL enemy units for 7s
+          if (plant.plantId === 'iceberglettuce' && !plant.isArmed) {
+            plant.isArmed = true // Mark as triggered immediately upon placement
+            plant.spriteOverride = '/game-assets/plants/iceberglettuce_burst.png'
+            soundManager.playSound('pea_hit', 1.0)
+
+            // Freeze ALL opponent plants/enemies across ALL lanes for 7 seconds!
+            const freezeUntilTime = Date.now() + 7000
+            state.enemyPlants.forEach((e) => {
+              e.frozenUntil = freezeUntilTime
+            })
+
+            // After 2 seconds, return briefly to Asset 1, then disappear!
+            setTimeout(() => {
+              if (stateRef.current.plants.some((p) => p.id === plant.id)) {
+                plant.spriteOverride = '/game-assets/plants/iceberglettuce_hd.png'
+                setTimeout(() => {
+                  stateRef.current.plants = stateRef.current.plants.filter((p) => p.id !== plant.id)
+                  forceRender()
+                }, 300)
+              }
+            }, 2000)
+          }
+
+          // Aloe Healer (scans lane & heals closest wounded friendly plant with cloud FX)
+          if (plant.plantId === 'aloe') {
+            if (Date.now() - plant.lastActionTime > 2500) {
+              plant.lastActionTime = Date.now()
+              const woundedAlly = state.plants.find(
+                (p) => p.id !== plant.id && p.lane === plant.lane && p.hp < p.maxHp && p.hp > 0
+              )
+              if (woundedAlly) {
+                woundedAlly.hp = Math.min(woundedAlly.maxHp, woundedAlly.hp + 60)
+                woundedAlly.isHealingFx = true
+                soundManager.playSound('plantation', 0.6)
+
+                const targetId = woundedAlly.id
+                setTimeout(() => {
+                  const ally = stateRef.current.plants.find((p) => p.id === targetId)
+                  if (ally) ally.isHealingFx = false
+                }, 1500)
               }
             }
           }
@@ -734,6 +882,21 @@ export function useGameEngine() {
 
           const config = ENEMY_PLANT_CONFIGS[e.type]
 
+          // Frozen enemy check (Iceberg Lettuce freeze for exactly 7.0 seconds)
+          if (e.frozenUntil) {
+            if (Date.now() < e.frozenUntil) {
+              nextEnemies.push(e)
+              continue
+            } else {
+              // 7 seconds expired! Clear freeze & restore walking state
+              e.frozenUntil = undefined
+              if (config.category === 'melee') {
+                e.isWalking = true
+                e.speed = config.speed
+              }
+            }
+          }
+
           // Enemy Sunflower (Girasol Enemigo P2) generates +25 Sun for PC AI every 6s
           if (e.type === 'enemy_sunflower') {
             if (Date.now() - e.lastAttackTime > 6000) {
@@ -859,10 +1022,17 @@ export function useGameEngine() {
         document.removeEventListener('visibilitychange', handleVisibilityChange)
         if (animationFrameId) cancelAnimationFrame(animationFrameId)
         if (bgIntervalId) clearInterval(bgIntervalId)
-      }
+      };
     }, [forceRender])
 
   const state = stateRef.current
+
+  const surrenderGame = () => {
+    stateRef.current.status = 'defeat'
+    stateRef.current.p1BaseHp = 0
+    soundManager.playSound('defeat', 0.7)
+    forceRender()
+  }
 
   return {
     gameStatus: state.status,
@@ -885,6 +1055,7 @@ export function useGameEngine() {
     stats: state.stats,
     startGame,
     startPracticeGame,
+    surrenderGame,
     collectSun,
     placePlant,
     digPlant,

@@ -19,7 +19,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(12, 20, 35, 0.85);
+  background: rgba(12, 20, 35, 0.92);
   backdrop-filter: blur(10px);
   border: 2px solid #52b788;
   border-radius: 16px;
@@ -52,7 +52,7 @@
 }
 
 .jardin-title {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 900;
   color: #74c69d;
   letter-spacing: 1px;
@@ -69,6 +69,32 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.jardin-token-badge {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #fbbf24;
+  color: #fbbf24;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 14px;
+}
+
+.jardin-btn-shop {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border: 2px solid #fef08a;
+  color: #1a1000;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.jardin-btn-shop:hover {
+  transform: scale(1.05);
 }
 
 .jardin-btn-sec {
@@ -99,6 +125,277 @@
   cursor: pointer;
 }
 
+/* Scroll Area for content */
+.jardin-scroll-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+  z-index: 10;
+}
+
+.jardin-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.jardin-scroll-area::-webkit-scrollbar-thumb {
+  background: #52b788;
+  border-radius: 3px;
+}
+
+/* UNOPENED PACKS INVENTORY SECTION */
+.jardin-packs-section {
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(12px);
+  border: 2px solid #fbbf24;
+  border-radius: 18px;
+  padding: 12px 16px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+}
+
+.jardin-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.jardin-section-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fbbf24;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.jardin-buy-more-btn {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  border: 1px solid #93c5fd;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 4px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.jardin-buy-more-btn:hover {
+  transform: scale(1.04);
+}
+
+.jardin-empty-packs {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px dashed rgba(251, 191, 36, 0.4);
+  border-radius: 14px;
+  padding: 12px 20px;
+}
+
+.jardin-empty-icon {
+  font-size: 32px;
+}
+
+.jardin-empty-info {
+  flex: 1;
+}
+
+.jardin-empty-info strong {
+  font-size: 13px;
+  color: #fbbf24;
+  display: block;
+}
+
+.jardin-empty-info p {
+  font-size: 11px;
+  color: #cbd5e1;
+  margin: 2px 0 0 0;
+}
+
+.jardin-empty-btn {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border: 1px solid #fef08a;
+  color: #1a1000;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.jardin-packs-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.jardin-pack-card {
+  background: rgba(30, 41, 59, 0.9);
+  border: 2px solid #60a5fa;
+  border-radius: 14px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  transition: transform 0.2s ease;
+  position: relative;
+}
+
+.jardin-pack-card:hover {
+  transform: translateY(-2px);
+}
+
+.jardin-pack-card--epic {
+  border-color: #c084fc;
+}
+
+.jardin-pack-card--legendary {
+  border-color: #fde047;
+  background: linear-gradient(180deg, rgba(40, 30, 10, 0.9) 0%, rgba(30, 41, 59, 0.9) 100%);
+}
+
+/* Stack Badge (x5 SOBRES) */
+.jardin-pack-stack-badge {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  border: 2px solid #fecaca;
+  color: #ffffff;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.6);
+  z-index: 5;
+  letter-spacing: 0.5px;
+  animation: stackPulse 2s infinite ease-in-out;
+}
+
+@keyframes stackPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.jardin-pack-controls-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.jardin-pack-qty-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 8px;
+  padding: 3px 6px;
+}
+
+.jardin-pack-qty-label {
+  font-size: 9px;
+  font-weight: 900;
+  color: #fbbf24;
+}
+
+.jardin-pack-qty-btn {
+  background: #334155;
+  border: 1px solid #64748b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jardin-pack-qty-btn:hover {
+  background: #475569;
+  border-color: #fbbf24;
+}
+
+.jardin-pack-qty-num {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  color: #ffffff;
+  min-width: 18px;
+  text-align: center;
+}
+
+.jardin-pack-qty-max {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  border: 1px solid #93c5fd;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 2px;
+}
+
+.jardin-pack-qty-max:hover {
+  background: linear-gradient(180deg, #60a5fa 0%, #1d4ed8 100%);
+}
+
+.jardin-pack-card__img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+
+.jardin-pack-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.jardin-pack-card__name {
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.jardin-pack-card__rarity {
+  font-size: 9px;
+  color: #fbbf24;
+}
+
+.jardin-pack-card__open-btn {
+  width: 100%;
+  margin-top: 4px;
+  background: linear-gradient(180deg, #eab308 0%, #ca8a04 100%);
+  border: 1px solid #fef08a;
+  color: #1a1000;
+  font-weight: 900;
+  font-size: 11px;
+  padding: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.4);
+}
+
+.jardin-pack-card__open-btn:hover {
+  transform: scale(1.05);
+}
+
 /* Active Battle Deck Container */
 .jardin-deck-container {
   background: rgba(18, 28, 45, 0.9);
@@ -107,8 +404,6 @@
   border-radius: 18px;
   padding: 12px 16px;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
-  margin-bottom: 12px;
-  z-index: 10;
 }
 
 .jardin-deck-header {
@@ -119,7 +414,7 @@
 }
 
 .jardin-deck-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   color: #ffda79;
   letter-spacing: 0.5px;
@@ -315,7 +610,6 @@
 
 /* Inventory Catalog Grid */
 .jardin-inventory-container {
-  flex: 1;
   background: rgba(12, 20, 32, 0.85);
   backdrop-filter: blur(10px);
   border: 2px solid #40916c;
@@ -323,8 +617,6 @@
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  z-index: 10;
 }
 
 .jardin-inventory-title {
@@ -336,21 +628,9 @@
 }
 
 .jardin-inventory-grid {
-  flex: 1;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 10px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.jardin-inventory-grid::-webkit-scrollbar {
-  width: 6px;
-}
-
-.jardin-inventory-grid::-webkit-scrollbar-thumb {
-  background: #40916c;
-  border-radius: 3px;
 }
 
 .jardin-card {
@@ -379,6 +659,17 @@
   border-color: #52e061;
   background: linear-gradient(180deg, rgba(20, 50, 30, 0.85) 0%, rgba(10, 30, 18, 0.9) 100%);
   box-shadow: 0 0 10px rgba(82, 224, 97, 0.3);
+}
+
+.jardin-card--locked {
+  opacity: 0.65;
+  background: rgba(15, 23, 42, 0.8);
+  border: 2px dashed #475569;
+}
+
+.jardin-card--locked:hover {
+  opacity: 0.9;
+  border-color: #fbbf24;
 }
 
 .jardin-card__header {
@@ -416,11 +707,25 @@
   border-radius: 6px;
 }
 
+.jardin-card__badge-locked {
+  font-size: 8px;
+  font-weight: 900;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.2);
+  border: 1px solid #f87171;
+  padding: 1px 4px;
+  border-radius: 6px;
+}
+
 .jardin-card__img {
   max-width: 48px;
   max-height: 48px;
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.jardin-card__img--locked {
+  filter: grayscale(1) opacity(0.5);
 }
 
 .jardin-card__name {
@@ -435,4 +740,62 @@
 .jardin-card__cat {
   font-size: 8px;
   color: #b7e4c7;
+}
+
+/* CIRCULAR LEVEL BADGE */
+.jardin-level-circle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1.5px solid #7dd3fc;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.6);
+  z-index: 5;
+}
+
+.jardin-level-circle--max {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  border-color: #fef08a;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(217, 119, 6, 0.8);
+}
+
+.jardin-card-copies-tag {
+  font-size: 8px;
+  font-weight: 800;
+  color: #fde68a;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  padding: 1px 4px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.jardin-fuse-btn {
+  width: 100%;
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+  border: 1px solid #86efac;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+  padding: 3px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 3px;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.6);
+  animation: fusePulse 1.5s infinite ease-in-out;
+}
+
+@keyframes fusePulse {
+  0%, 100% { border-color: #86efac; transform: scale(1); }
+  50% { border-color: #fef08a; transform: scale(1.03); }
 }

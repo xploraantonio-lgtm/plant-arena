@@ -15,27 +15,49 @@ import chat from '../../assets/ico/chat.png'
 import clan from '../../assets/ico/clan.png'
 import ajustes from '../../assets/ico/ajustes.png'
 import { soundManager } from '../../utils/audioManager'
+import { getRemainingTimeString, type FreePackSlot } from '../../utils/freePackManager'
 import './MainMenu.css'
 
 interface MainMenuProps {
+  userElo?: number
+  freePackSlots?: FreePackSlot[]
   onPlay: () => void
   onOpenCollection?: () => void
   onOpenJardin?: () => void
   onOpenShop?: () => void
+  onOpenRanking?: () => void
+  onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
+  onFastUnlockSlot?: (slotId: number) => void
+  onOpenSlotPack?: (slotId: number) => void
 }
 
 export default function MainMenu({
+  userElo = 1000,
+  freePackSlots = [],
   onPlay,
   onOpenCollection,
   onOpenJardin,
   onOpenShop,
+  onOpenRanking,
+  onStartSlotUnlock,
+  onFastUnlockSlot,
+  onOpenSlotPack,
 }: MainMenuProps) {
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
+  const [, setTicker] = useState<number>(0)
 
   useEffect(() => {
     soundManager.playBgm('menu')
     const unsubscribe = soundManager.subscribe((muted) => setIsMuted(muted))
     return () => unsubscribe()
+  }, [])
+
+  // Force tick every second to animate countdown timers
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTicker((t) => t + 1)
+    }, 1000)
+    return () => clearInterval(interval)
   }, [])
 
   return (
@@ -57,9 +79,14 @@ export default function MainMenu({
             <img className="card__icon" src={gema} alt="" />
             1,250
           </div>
-          <div className="card card--stat">
+          <div
+            className="card card--stat"
+            style={{ cursor: 'pointer' }}
+            onClick={onOpenRanking}
+            title="Ver Camino de Arenas y Ranking Global"
+          >
             <img className="card__icon" src={ranking} alt="" />
-            1200
+            {userElo} 🏆
           </div>
           <button
             className="mute-button"
@@ -82,6 +109,89 @@ export default function MainMenu({
         <span className="play-button__label">PLAY</span>
       </button>
 
+      {/* 4 FREE BATTLE PACK SLOTS (CLASH ROYALE STYLE) */}
+      <div className="main-menu-chest-slots">
+        {freePackSlots.map((slot) => {
+          const remainingText = getRemainingTimeString(slot)
+          return (
+            <div
+              key={slot.slotId}
+              className={`chest-slot chest-slot--${slot.status}`}
+              onClick={() => {
+                if (slot.status === 'locked' && onStartSlotUnlock) {
+                  const res = onStartSlotUnlock(slot.slotId)
+                  if (!res.success && res.error) {
+                    alert(res.error)
+                  } else {
+                    soundManager.playSound('click', 0.5)
+                  }
+                } else if (slot.status === 'unlocking') {
+                  // If clicking on unlocking slot, fast-unlock for demo
+                  if (onFastUnlockSlot) {
+                    onFastUnlockSlot(slot.slotId)
+                  }
+                } else if (slot.status === 'ready' && onOpenSlotPack) {
+                  onOpenSlotPack(slot.slotId)
+                }
+              }}
+            >
+              {slot.status === 'empty' && (
+                <div className="chest-slot__empty">
+                  <span className="chest-slot__empty-icon">📦</span>
+                  <span className="chest-slot__empty-label">SLOT VACÍO</span>
+                </div>
+              )}
+
+              {slot.status === 'locked' && (
+                <div className="chest-slot__content">
+                  <span className="chest-slot__arena-tag">ARENA {slot.arenaLevel}</span>
+                  <img
+                    src="/game-assets/greenfoot/seed_pack_common_whitebg.png"
+                    alt="Sobre Gratis"
+                    className="chest-slot__pack-img"
+                  />
+                  <span className="chest-slot__timer">⏳ {slot.durationHours}h</span>
+                  <span className="chest-slot__btn-hint">INICIAR</span>
+                </div>
+              )}
+
+              {slot.status === 'unlocking' && (
+                <div className="chest-slot__content chest-slot__content--unlocking">
+                  <span className="chest-slot__arena-tag">DESBLOQUEANDO</span>
+                  <img
+                    src="/game-assets/greenfoot/seed_pack_common_whitebg.png"
+                    alt="Sobre Gratis"
+                    className="chest-slot__pack-img chest-slot__pack-img--pulsing"
+                  />
+                  <span className="chest-slot__timer chest-slot__timer--active">
+                    ⏱️ {remainingText}
+                  </span>
+                  <span className="chest-slot__btn-hint chest-slot__btn-hint--test">
+                    ⚡ ABRIR (TEST)
+                  </span>
+                </div>
+              )}
+
+              {slot.status === 'ready' && (
+                <div className="chest-slot__content chest-slot__content--ready">
+                  <span className="chest-slot__arena-tag chest-slot__arena-tag--ready">
+                    ¡LISTO!
+                  </span>
+                  <img
+                    src="/game-assets/greenfoot/seed_pack_common_whitebg.png"
+                    alt="Sobre Gratis"
+                    className="chest-slot__pack-img chest-slot__pack-img--glowing"
+                  />
+                  <span className="chest-slot__btn-hint chest-slot__btn-hint--ready">
+                    ✨ ABRIR
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
       <div className="panel panel--left">
         <button className="banner-button" type="button" onClick={onOpenJardin}>
           <img src={jardin} alt="" />
@@ -94,7 +204,7 @@ export default function MainMenu({
       </div>
 
       <div className="panel panel--right">
-        <button className="banner-button" type="button">
+        <button className="banner-button" type="button" onClick={onOpenRanking}>
           <img src={arena} alt="" />
           <span>RANKING</span>
         </button>

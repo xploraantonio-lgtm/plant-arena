@@ -1,0 +1,109 @@
+import type { PlantId } from '../types/game'
+
+export interface FreePackSlot {
+  slotId: number // 0, 1, 2, 3
+  status: 'empty' | 'locked' | 'unlocking' | 'ready'
+  durationHours: 1 | 2 | 4
+  unlockStartedAt?: number // Timestamp ms
+  arenaLevel: number // 1, 2, 3, 4, 5
+}
+
+export function createEmptySlots(): FreePackSlot[] {
+  return [
+    { slotId: 0, status: 'empty', durationHours: 1, arenaLevel: 1 },
+    { slotId: 1, status: 'empty', durationHours: 2, arenaLevel: 1 },
+    { slotId: 2, status: 'empty', durationHours: 1, arenaLevel: 1 },
+    { slotId: 3, status: 'empty', durationHours: 4, arenaLevel: 1 },
+  ]
+}
+
+// Draw 1 card according to Arena level rules
+export function drawFreePackCard(arenaLevel: number, unlockedPlants: PlantId[] = []): { plantId: PlantId; rarityLabel: string; isNew: boolean } {
+  const poolComun: PlantId[] = ['sunflower', 'peashooter', 'wallnut', 'chomper']
+  const poolPocoComun: PlantId[] = ['garlic', 'bonkchoy', 'repeater', 'melonpult', 'squash']
+  const poolRara: PlantId[] = ['twinsunflower', 'jalapeno']
+  const poolEpica: PlantId[] = ['aloe', 'tallnut']
+
+  const rand = Math.random() * 100
+  let chosenPool: PlantId[] = poolComun
+  let rarityLabel = 'COMÚN'
+
+  if (arenaLevel === 1) {
+    // 50% Común, 50% Poco Común
+    if (rand < 50) {
+      chosenPool = poolComun
+      rarityLabel = 'COMÚN'
+    } else {
+      chosenPool = poolPocoComun
+      rarityLabel = 'POCO COMÚN'
+    }
+  } else if (arenaLevel === 2) {
+    // 40% Común, 45% Poco Común, 15% Rara
+    if (rand < 40) {
+      chosenPool = poolComun
+      rarityLabel = 'COMÚN'
+    } else if (rand < 85) {
+      chosenPool = poolPocoComun
+      rarityLabel = 'POCO COMÚN'
+    } else {
+      chosenPool = poolRara
+      rarityLabel = 'RARA'
+    }
+  } else if (arenaLevel === 3) {
+    // 50% Poco Común, 50% Rara
+    if (rand < 50) {
+      chosenPool = poolPocoComun
+      rarityLabel = 'POCO COMÚN'
+    } else {
+      chosenPool = poolRara
+      rarityLabel = 'RARA'
+    }
+  } else if (arenaLevel === 4) {
+    // 100% Rara
+    chosenPool = poolRara
+    rarityLabel = 'RARA'
+  } else {
+    // Arena 5: 95% Rara, 5% Épica
+    if (rand < 95) {
+      chosenPool = poolRara
+      rarityLabel = 'RARA'
+    } else {
+      chosenPool = poolEpica
+      rarityLabel = 'ÉPICA'
+    }
+  }
+
+  const selectedPlantId = chosenPool[Math.floor(Math.random() * chosenPool.length)]
+  const isNew = !unlockedPlants.includes(selectedPlantId)
+
+  return {
+    plantId: selectedPlantId,
+    rarityLabel,
+    isNew,
+  }
+}
+
+// Calculate formatted remaining time string
+export function getRemainingTimeString(slot: FreePackSlot): string {
+  if (slot.status !== 'unlocking' || !slot.unlockStartedAt) {
+    return `${slot.durationHours}h`
+  }
+
+  const totalMs = slot.durationHours * 3600 * 1000
+  const elapsedMs = Date.now() - slot.unlockStartedAt
+  const remainingMs = Math.max(0, totalMs - elapsedMs)
+
+  if (remainingMs <= 0) {
+    return '¡LISTO!'
+  }
+
+  const totalSec = Math.floor(remainingMs / 1000)
+  const hours = Math.floor(totalSec / 3600)
+  const mins = Math.floor((totalSec % 3600) / 60)
+  const secs = totalSec % 60
+
+  if (hours > 0) {
+    return `${hours}h ${mins}m`
+  }
+  return `${mins}m ${secs}s`
+}

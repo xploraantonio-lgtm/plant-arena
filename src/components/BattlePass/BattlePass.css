@@ -1,0 +1,234 @@
+.battle-pass-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Banner */
+.battle-pass-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 23, 42, 0.9);
+  border: 2px solid #fbbf24;
+  border-radius: 16px;
+  padding: 10px 18px;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+.battle-pass-banner__season {
+  font-size: 10px;
+  font-weight: 900;
+  color: #f59e0b;
+  letter-spacing: 1px;
+}
+
+.battle-pass-banner__title {
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+  margin: 2px 0;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.battle-pass-banner__desc {
+  font-size: 11px;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.battle-pass-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.battle-pass-vip-badge {
+  background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+  border: 1.5px solid #fef08a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 14px;
+  border-radius: 12px;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.6);
+}
+
+.battle-pass-buy-btn {
+  background: linear-gradient(180deg, #ca8a04 0%, #a16207 100%);
+  border: 2px solid #fef08a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 8px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(202, 138, 4, 0.6);
+  transition: transform 0.2s ease;
+}
+
+.battle-pass-buy-btn:hover {
+  transform: scale(1.05);
+}
+
+/* HORIZONTAL ROAD TRACK SCROLLER */
+.battle-pass-road-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+}
+
+.battle-pass-road-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.battle-pass-road-scroll::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 4px;
+}
+
+.battle-pass-road-track {
+  display: flex;
+  gap: 12px;
+  height: 100%;
+  min-width: max-content;
+  padding: 4px;
+}
+
+/* LEVEL COLUMN */
+.pass-level-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 140px;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1.5px solid #334155;
+  border-radius: 14px;
+  padding: 8px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.pass-level-column--unlocked {
+  border-color: #fbbf24;
+  background: rgba(15, 23, 42, 0.88);
+}
+
+/* REWARD BOX (TOP & BOTTOM) */
+.pass-reward-box {
+  width: 100%;
+  flex: 1;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #475569;
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  text-align: center;
+}
+
+.pass-reward-box--ready {
+  border-color: #4ade80;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+}
+
+.pass-reward-box--claimed {
+  opacity: 0.6;
+}
+
+.pass-box-tag {
+  font-size: 8px;
+  font-weight: 900;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+}
+
+.pass-box-tag--vip {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border: 1px solid #fbbf24;
+}
+
+.pass-box-icon {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+.pass-box-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+  margin: 2px 0;
+}
+
+.pass-box-status {
+  font-size: 8px;
+  font-weight: 900;
+  color: #94a3b8;
+}
+
+.pass-box-status--claimed {
+  color: #4ade80;
+}
+
+.pass-box-status--vip {
+  color: #fbbf24;
+}
+
+.pass-box-claim-btn {
+  width: 100%;
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+  border: 1px solid #86efac;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 4px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.4);
+}
+
+.pass-box-claim-btn--vip {
+  background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+  border-color: #fef08a;
+}
+
+/* MIDDLE NODE BADGE */
+.pass-node-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #0f172a;
+  border: 1.5px solid #fbbf24;
+  border-radius: 10px;
+  padding: 4px 10px;
+  margin: 4px 0;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+.pass-node-num {
+  font-size: 9px;
+  font-weight: 900;
+  color: #fbbf24;
+}
+
+.pass-node-elo {
+  font-size: 8px;
+  color: #fde68a;
+}

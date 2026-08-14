@@ -11,6 +11,9 @@ export type PlantId =
   | 'twinsunflower'
   | 'threepeater'
   | 'tallnut'
+  | 'jalapeno'
+  | 'iceberglettuce'
+  | 'aloe'
 
 export type PlantCategory = 'producer' | 'ranged' | 'defensive' | 'melee'
 
@@ -46,6 +49,9 @@ export interface PlantEntity {
   smashStartTime?: number
   isArmed?: boolean
   armedAtTime?: number
+  spriteOverride?: string
+  frozenUntil?: number
+  isHealingFx?: boolean
 }
 
 export type EnemyPlantType =
@@ -80,6 +86,7 @@ export interface EnemyPlantEntity {
   isWalking: boolean
   state: 'idle' | 'walking' | 'attacking'
   lastAttackTime: number
+  frozenUntil?: number
 }
 
 export interface ProjectileEntity {

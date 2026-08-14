@@ -49,6 +49,44 @@
   text-align: center;
 }
 
+/* Carousel Wrapper */
+.plant-hand-carousel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Arrow Navigation Buttons */
+.plant-hand__arrow {
+  background: linear-gradient(180deg, #3d5a80 0%, #1d3557 100%);
+  border: 1.5px solid #a8dadc;
+  color: #f1faee;
+  border-radius: 6px;
+  width: 28px;
+  height: 82px;
+  font-size: 14px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.plant-hand__arrow:hover:not(:disabled) {
+  background: linear-gradient(180deg, #457b9d 0%, #1d3557 100%);
+  transform: scale(1.05);
+  box-shadow: 0 0 10px rgba(168, 218, 220, 0.6);
+}
+
+.plant-hand__arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  border-color: #457b9d;
+}
+
 /* Plant Cards List */
 .plant-hand {
   display: flex;
