@@ -18,7 +18,7 @@ const melonImg = '/game-assets/images/Plants/melon_pult.png'
 const needleImg = '/game-assets/greenfoot/needle1.png'
 import PlantHand from './PlantHand'
 import { soundManager } from '../../utils/audioManager'
-import './Battlefield.css'
+import { toggleFullscreen } from '../../utils/fullscreen'
 
 interface BaseTowerProps {
   team: 'p1' | 'p2'
@@ -200,6 +200,14 @@ export default function Battlefield({
     >
       {/* Top Controls Bar */}
       <div className="battlefield-top-controls">
+        <button
+          type="button"
+          className="fullscreen-toggle-btn"
+          onClick={toggleFullscreen}
+          title="Pantalla Completa (Ocultar navegador)"
+        >
+          ⛶
+        </button>
         <button
           type="button"
           className="sound-toggle-btn"

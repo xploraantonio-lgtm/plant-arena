@@ -8,18 +8,26 @@
   user-select: none;
 }
 
-/* Sound Toggle Button */
-.sound-toggle-btn {
+/* Top Controls Bar */
+.battlefield-top-controls {
   position: absolute;
   top: 14px;
   right: 14px;
   z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fullscreen-toggle-btn,
+.sound-toggle-btn {
+  position: relative;
   background: rgba(0, 0, 0, 0.65);
   border: 2px solid #e0a32e;
   border-radius: 50%;
   width: 40px;
   height: 40px;
-  font-size: 20px;
+  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,6 +37,7 @@
   transition: transform 0.15s ease, background 0.15s ease;
 }
 
+.fullscreen-toggle-btn:hover,
 .sound-toggle-btn:hover {
   transform: scale(1.1);
   background: rgba(0, 0, 0, 0.85);

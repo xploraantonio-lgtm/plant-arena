@@ -16,6 +16,7 @@ import clan from '../../assets/ico/clan.png'
 import ajustes from '../../assets/ico/ajustes.png'
 import { soundManager } from '../../utils/audioManager'
 import { getRemainingTimeString, type FreePackSlot } from '../../utils/freePackManager'
+import { toggleFullscreen } from '../../utils/fullscreen'
 import './MainMenu.css'
 
 interface MainMenuProps {
@@ -88,6 +89,14 @@ export default function MainMenu({
             <img className="card__icon" src={ranking} alt="" />
             {userElo} 🏆
           </div>
+          <button
+            className="fullscreen-button"
+            type="button"
+            onClick={toggleFullscreen}
+            title="Pantalla Completa (Ocultar navegador)"
+          >
+            ⛶
+          </button>
           <button
             className="mute-button"
             type="button"
