@@ -268,9 +268,25 @@
   pointer-events: none !important;
 }
 
+.battlefield--shovel-mode {
+  cursor: url('/game-assets/images/Interface/shovelIcon.png') 16 16, pointer !important;
+}
+
+.battlefield--shovel-mode .lane__cell--p1 {
+  cursor: url('/game-assets/images/Interface/shovelIcon.png') 16 16, pointer !important;
+}
+
 .plant-unit--shovel-target {
   pointer-events: auto !important;
-  cursor: pointer;
+  z-index: 60 !important;
+  cursor: url('/game-assets/images/Interface/shovelIcon.png') 16 16, pointer !important;
+  filter: drop-shadow(0 0 10px rgba(255, 68, 68, 0.8)) brightness(1.25);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.plant-unit--shovel-target:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 16px rgba(255, 0, 0, 1.0)) brightness(1.4);
 }
 
 .entity__hp {

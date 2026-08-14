@@ -346,11 +346,25 @@ export function useGameEngine() {
     [forceRender]
   )
 
-  // Dig plant handler
+  // Dig plant handler (removes plant by ID or by cell lane & column)
   const digPlant = useCallback(
-    (plantId: string) => {
+    (target: string | { lane: number; col: number }) => {
       const state = stateRef.current
-      state.plants = state.plants.filter((p) => p.id !== plantId)
+      if (typeof target === 'string') {
+        state.plants = state.plants.filter((p) => p.id !== target)
+      } else {
+        const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
+        const cellCenterX = BASE_LEFT_END_X + target.col * colWidth + colWidth / 2
+
+        const plantToDig = state.plants.find(
+          (p) =>
+            p.lane === target.lane &&
+            (p.col === target.col || Math.abs(p.x - cellCenterX) < colWidth * 0.8)
+        )
+        if (plantToDig) {
+          state.plants = state.plants.filter((p) => p.id !== plantToDig.id)
+        }
+      }
       state.selectedCard = null
       soundManager.playSound('plantation', 0.5)
       forceRender()

@@ -195,7 +195,7 @@ export default function Battlefield({
 
   return (
     <div
-      className="battlefield"
+      className={`battlefield ${selectedCard === 'shovel' ? 'battlefield--shovel-mode' : ''}`}
       style={{ backgroundImage: `url(${activeBgImage})` }}
     >
       {/* Top Controls Bar */}
@@ -285,12 +285,16 @@ export default function Battlefield({
                   } ${isCellSelected ? 'lane__cell--selectable' : ''}`}
                   style={{
                     width: `${100 / TOTAL_COLUMNS}%`,
-                    zIndex: isCellSelected ? 40 : 1,
+                    zIndex: isCellSelected ? (selectedCard === 'shovel' ? 10 : 40) : 1,
                     pointerEvents: isP1Side ? 'auto' : 'none',
                   }}
                   onClick={() => {
-                    if (selectedCard && selectedCard !== 'shovel' && isP1Side) {
-                      placePlant(lane.id, col)
+                    if (selectedCard && isP1Side) {
+                      if (selectedCard === 'shovel') {
+                        digPlant({ lane: lane.id, col })
+                      } else {
+                        placePlant(lane.id, col)
+                      }
                     }
                   }}
                 />
@@ -337,8 +341,9 @@ export default function Battlefield({
               top: `${laneConfig.topPct + laneConfig.heightPct / 2}%`,
               pointerEvents: isShovelActive ? 'auto' : 'none',
             }}
-            onClick={() => {
+            onClick={(e) => {
               if (isShovelActive) {
+                e.stopPropagation()
                 digPlant(plant.id)
               }
             }}
