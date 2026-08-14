@@ -1,45 +1,52 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import './GameFrame.css'
 
-// Resolución lógica del juego: un lienzo fijo en horizontal.
-// Todo se diseña sobre este tamaño y luego se escala para llenar
-// cualquier pantalla (PC o celular) sin deformarse, igual que un
-// juego móvil que siempre se ve "en formato celular".
-const STAGE_WIDTH = 960
-const STAGE_HEIGHT = 540
+// Base logical height used for uniform responsive scaling across all screen sizes
+const BASE_HEIGHT = 540
 
-function useStageScale() {
-  const [scale, setScale] = useState(1)
+function useStageDimensions() {
+  const [dim, setDim] = useState({ width: 960, height: 540, scale: 1 })
 
   useEffect(() => {
-    function updateScale() {
-      const scaleX = window.innerWidth / STAGE_WIDTH
-      const scaleY = window.innerHeight / STAGE_HEIGHT
-      setScale(Math.min(scaleX, scaleY))
+    function updateDimensions() {
+      const vW = window.innerWidth
+      const vH = window.innerHeight
+
+      // Scale factor based on viewport height relative to 540px base height
+      const scale = vH / BASE_HEIGHT
+
+      // Unscaled logical stage width required to fill full viewport width seamlessly
+      const logicalWidth = Math.max(960, vW / Math.max(0.1, scale))
+
+      setDim({
+        width: logicalWidth,
+        height: BASE_HEIGHT,
+        scale,
+      })
     }
 
-    updateScale()
-    window.addEventListener('resize', updateScale)
-    window.addEventListener('orientationchange', updateScale)
+    updateDimensions()
+    window.addEventListener('resize', updateDimensions)
+    window.addEventListener('orientationchange', updateDimensions)
     return () => {
-      window.removeEventListener('resize', updateScale)
-      window.removeEventListener('orientationchange', updateScale)
+      window.removeEventListener('resize', updateDimensions)
+      window.removeEventListener('orientationchange', updateDimensions)
     }
   }, [])
 
-  return scale
+  return dim
 }
 
 export default function GameFrame({ children }: { children: ReactNode }) {
-  const scale = useStageScale()
+  const { width, height, scale } = useStageDimensions()
 
   return (
     <div className="stage-viewport">
       <div
         className="stage"
         style={{
-          width: STAGE_WIDTH,
-          height: STAGE_HEIGHT,
+          width: `${width}px`,
+          height: `${height}px`,
           transform: `scale(${scale})`,
         }}
       >
@@ -48,3 +55,4 @@ export default function GameFrame({ children }: { children: ReactNode }) {
     </div>
   )
 }
+
