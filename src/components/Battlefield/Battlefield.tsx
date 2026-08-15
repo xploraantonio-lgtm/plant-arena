@@ -19,6 +19,7 @@ const needleImg = '/game-assets/greenfoot/needle1.png'
 import PlantHand from './PlantHand'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
+import './Battlefield.css'
 
 interface BaseTowerProps {
   team: 'p1' | 'p2'
