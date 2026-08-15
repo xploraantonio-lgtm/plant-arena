@@ -104,7 +104,7 @@
   cursor: pointer;
   box-sizing: border-box;
   transition: transform 0.15s ease, filter 0.15s ease;
-  overflow: hidden;
+  overflow: visible;
   user-select: none;
 }
 
@@ -125,6 +125,82 @@
 
 .plant-hand__card--disabled .plant-hand__packet-img {
   filter: grayscale(100%) brightness(55%);
+}
+
+/* Level Star Badge on Seed Packet */
+.plant-hand__card-lvl {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1px solid #7dd3fc;
+  color: #ffffff;
+  font-size: 8.5px;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 4px;
+  box-shadow: 0 0 6px rgba(2, 132, 199, 0.8);
+  z-index: 15;
+  pointer-events: none;
+}
+
+.plant-hand__card-lvl--gold {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  border-color: #fde047;
+  box-shadow: 0 0 8px rgba(217, 119, 6, 0.9);
+}
+
+/* Hover Buffs Tooltip */
+.plant-hand__tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.5px solid #fbbf24;
+  border-radius: 8px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.plant-hand__card:hover .plant-hand__tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.plant-hand__tooltip-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 3px;
+}
+
+.plant-hand__tooltip-lvl {
+  font-size: 9.5px;
+  font-weight: 900;
+  color: #fbbf24;
+}
+
+.plant-hand__tooltip-buffs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 9.5px;
+  font-weight: 800;
 }
 
 /* Seed Packet Image Wrapper */

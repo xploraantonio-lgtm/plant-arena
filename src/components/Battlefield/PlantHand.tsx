@@ -1,9 +1,41 @@
 import { useState, useEffect } from 'react'
 import type { PlantId } from '../../types/game'
-import { PLANT_CONFIGS } from '../../utils/gameConstants'
+import {
+  PLANT_CONFIGS,
+  STAT_LABELS,
+  type PlantStatKey,
+} from '../../utils/gameConstants'
 const sunIcon = '/game-assets/greenfoot/sun1.png'
 const shovelIcon = '/game-assets/images/Interface/shovelIcon.png'
 import './PlantHand.css'
+
+function getCardLevelData(plantId: PlantId) {
+  let level = 0
+  let rolls: PlantStatKey[] = []
+  try {
+    const savedLvls = localStorage.getItem('plant_arena_plant_levels')
+    if (savedLvls) {
+      const parsed = JSON.parse(savedLvls)
+      level = parsed[plantId] || 0
+    }
+    const savedRolls = localStorage.getItem('plant_arena_plant_stat_rolls')
+    if (savedRolls) {
+      const parsed = JSON.parse(savedRolls)
+      rolls = parsed[plantId] || []
+    }
+  } catch {}
+
+  const map = new Map<PlantStatKey, number>()
+  rolls.forEach((r) => map.set(r, (map.get(r) || 0) + 1))
+  const grouped = Array.from(map.entries()).map(([stat, count]) => {
+    const meta = STAT_LABELS[stat]
+    const totalPct = count * 15
+    const label = count > 1 ? `${meta.icon} +${totalPct}% ${meta.suffix.replace('+15% ', '').replace('-15% ', '')} (x${count})` : `${meta.icon} ${meta.suffix}`
+    return { stat, count, label, color: meta.color }
+  })
+
+  return { level, rolls, grouped }
+}
 
 interface PlantHandProps {
   sunBank: number
@@ -88,6 +120,7 @@ export default function PlantHand({
             const cdRatio = isOnCooldown ? cdRemaining / config.cooldownMs : 0
             const canAfford = sunBank >= config.cost
             const isDisabled = !canAfford || isOnCooldown
+            const cardData = getCardLevelData(cardId)
 
             const packetSrc = isDisabled ? config.packetDisabled : config.packetActive
 
@@ -102,8 +135,17 @@ export default function PlantHand({
                   if (isSelected) onSelectCard(null)
                   else if (!isDisabled) onSelectCard(cardId)
                 }}
-                title={`${config.name} (${config.cost} soles)\n${config.description}`}
               >
+                {/* Level Badge in top-right corner of seed packet */}
+                {cardData.level > 0 && (
+                  <div
+                    className={`plant-hand__card-lvl ${cardData.level >= 3 ? 'plant-hand__card-lvl--gold' : ''}`}
+                    title={`Nivel ${cardData.level}`}
+                  >
+                    ⭐{cardData.level}
+                  </div>
+                )}
+
                 {/* Card Seed Packet */}
                 <div className="plant-hand__packet-wrap">
                   <img
@@ -119,6 +161,23 @@ export default function PlantHand({
                     className="plant-hand__cooldown-overlay"
                     style={{ height: `${cdRatio * 100}%` }}
                   />
+                )}
+
+                {/* Hover Buffs Tooltip */}
+                {cardData.level > 0 && (
+                  <div className="plant-hand__tooltip">
+                    <div className="plant-hand__tooltip-head">
+                      <span>{config.name}</span>
+                      <span className="plant-hand__tooltip-lvl">⭐ LVL {cardData.level}</span>
+                    </div>
+                    <div className="plant-hand__tooltip-buffs">
+                      {cardData.grouped.map((g, idx) => (
+                        <span key={idx} style={{ color: g.color }}>
+                          {g.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </button>
             )

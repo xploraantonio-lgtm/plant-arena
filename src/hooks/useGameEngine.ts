@@ -19,8 +19,23 @@ import {
   BASE_RIGHT_START_X,
   FIELD_WIDTH_PCT,
   TOTAL_COLUMNS,
+  getScaledPlantConfig,
+  type PlantStatKey,
 } from '../utils/gameConstants'
 import { soundManager } from '../utils/audioManager'
+
+function getPlantRolls(plantId: PlantId): PlantStatKey[] {
+  try {
+    const saved = localStorage.getItem('plant_arena_plant_stat_rolls')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return parsed[plantId] || []
+    }
+  } catch {
+    // fallback
+  }
+  return []
+}
 
 const createInitialCooldowns = (): Record<PlantId, number> =>
   (Object.keys(PLANT_CONFIGS) as PlantId[]).reduce(
@@ -262,7 +277,8 @@ export function useGameEngine() {
 
       if (!card || card === 'shovel' || state.status !== 'playing') return
 
-      const config = PLANT_CONFIGS[card]
+      const rolls = getPlantRolls(card)
+      const config = getScaledPlantConfig(card, rolls)
       if (!config) return
 
       if (state.sunBank < config.cost) return
@@ -584,7 +600,8 @@ export function useGameEngine() {
         // 4. UPDATE PLAYER 1 PLANTS
         const nextPlants: PlantEntity[] = []
         for (const plant of state.plants) {
-          const config = PLANT_CONFIGS[plant.plantId]
+          const rolls = getPlantRolls(plant.plantId)
+          const config = getScaledPlantConfig(plant.plantId, rolls)
 
           // Sunflower producing suns every 6s
           if (plant.plantId === 'sunflower' || plant.plantId === 'twinsunflower') {
@@ -665,13 +682,16 @@ export function useGameEngine() {
 
           // Aloe Healer (scans lane & heals closest wounded friendly plant with cloud FX)
           if (plant.plantId === 'aloe') {
-            if (Date.now() - plant.lastActionTime > 2500) {
+            const healInterval = config.attackSpeedMs || 2500
+            const healPower = config.damage || 60
+
+            if (Date.now() - plant.lastActionTime > healInterval) {
               plant.lastActionTime = Date.now()
               const woundedAlly = state.plants.find(
                 (p) => p.id !== plant.id && p.lane === plant.lane && p.hp < p.maxHp && p.hp > 0
               )
               if (woundedAlly) {
-                woundedAlly.hp = Math.min(woundedAlly.maxHp, woundedAlly.hp + 60)
+                woundedAlly.hp = Math.min(woundedAlly.maxHp, woundedAlly.hp + healPower)
                 woundedAlly.isHealingFx = true
                 soundManager.playSound('plantation', 0.6)
 

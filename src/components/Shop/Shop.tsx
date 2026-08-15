@@ -304,6 +304,12 @@ export default function Shop({
                   alert(`👑 ¡RECOMPENSA VIP DEL NIVEL ${lvl.level} RECLAMADA!\n${lvl.reward.label}`)
                 }
               }}
+              onClaimAllRewards={(levels) => {
+                if (onClaimPassReward) {
+                  levels.forEach((lvl) => onClaimPassReward(lvl.reward, lvl.level))
+                  alert(`👑 ¡${levels.length} RECOMPENSAS VIP RECLAMADAS CON ÉXITO!`)
+                }
+              }}
             />
           </div>
         )}

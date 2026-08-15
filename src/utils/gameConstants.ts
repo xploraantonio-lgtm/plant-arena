@@ -209,7 +209,8 @@ export const PLANT_CONFIGS: Record<PlantId, PlantConfig> = {
     cooldownMs: 8000,
     maxHp: 400,
     category: 'producer',
-    damage: 0,
+    attackSpeedMs: 2500,
+    damage: 60,
     icon: '/game-assets/plants/aloe_hd.png',
     packetActive: '/game-assets/plants/aloe_hd.png',
     packetDisabled: '/game-assets/plants/aloe_hd.png',
@@ -293,12 +294,78 @@ export const TOTAL_COLUMNS = 12
 export const P1_COLUMNS = 6
 export const P2_COLUMNS = 6
 
-export function getScaledPlantConfig(plantId: PlantId, level: number = 0): PlantConfig {
+export type PlantStatKey = 'hp' | 'damage' | 'attackSpeed' | 'moveSpeed' | 'cooldown'
+
+export const STAT_LABELS: Record<PlantStatKey, { label: string; icon: string; suffix: string; color: string }> = {
+  hp: { label: 'Vida Máxima (HP)', icon: '💚', suffix: '+15% HP', color: '#4ade80' },
+  damage: { label: 'Daño de Ataque', icon: '⚔️', suffix: '+15% Daño', color: '#f87171' },
+  attackSpeed: { label: 'Velocidad de Disparo', icon: '⚡', suffix: '+15% Cadencia', color: '#fbbf24' },
+  moveSpeed: { label: 'Velocidad de Movimiento', icon: '👟', suffix: '+15% Movimiento', color: '#60a5fa' },
+  cooldown: { label: 'Recarga de Carta', icon: '⏳', suffix: '-15% Recarga', color: '#c084fc' },
+}
+
+export function getEligibleStatsForPlant(plantId: PlantId): PlantStatKey[] {
   const base = PLANT_CONFIGS[plantId]
-  if (!base || level <= 0) return base
+  if (!base) return ['hp', 'cooldown']
 
-  const scale = 1 + level * 0.15
+  const list: PlantStatKey[] = ['hp', 'cooldown']
 
+  if (base.damage !== undefined && base.damage > 0) {
+    list.push('damage')
+  }
+  if (base.attackSpeedMs !== undefined && base.attackSpeedMs > 0) {
+    list.push('attackSpeed')
+  }
+  if (base.moveSpeed !== undefined && base.moveSpeed > 0) {
+    list.push('moveSpeed')
+  }
+
+  return list
+}
+
+export function getScaledPlantConfig(
+  plantId: PlantId,
+  levelOrRolls: number | PlantStatKey[] = 0
+): PlantConfig {
+  const base = PLANT_CONFIGS[plantId]
+  if (!base) return base
+
+  if (Array.isArray(levelOrRolls)) {
+    if (levelOrRolls.length === 0) return base
+
+    let hpMultiplier = 1
+    let dmgMultiplier = 1
+    let attackSpeedMultiplier = 1
+    let moveSpeedMultiplier = 1
+    let cooldownMultiplier = 1
+
+    levelOrRolls.forEach((stat) => {
+      if (stat === 'hp') hpMultiplier += 0.15
+      if (stat === 'damage') dmgMultiplier += 0.15
+      if (stat === 'attackSpeed') attackSpeedMultiplier *= 0.85 // 15% faster delay
+      if (stat === 'moveSpeed') moveSpeedMultiplier += 0.15
+      if (stat === 'cooldown') cooldownMultiplier *= 0.85 // 15% faster cooldown
+    })
+
+    return {
+      ...base,
+      maxHp: Math.round(base.maxHp * hpMultiplier),
+      damage: base.damage !== undefined ? Math.round(base.damage * dmgMultiplier) : undefined,
+      attackSpeedMs:
+        base.attackSpeedMs !== undefined
+          ? Math.round(base.attackSpeedMs * attackSpeedMultiplier)
+          : undefined,
+      moveSpeed:
+        base.moveSpeed !== undefined
+          ? Number((base.moveSpeed * moveSpeedMultiplier).toFixed(2))
+          : undefined,
+      cooldownMs: Math.round(base.cooldownMs * cooldownMultiplier),
+    }
+  }
+
+  // Fallback for number level
+  if (levelOrRolls <= 0) return base
+  const scale = 1 + levelOrRolls * 0.15
   return {
     ...base,
     maxHp: Math.round(base.maxHp * scale),

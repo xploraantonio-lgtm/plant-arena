@@ -8,7 +8,6 @@ import jardin from '../../assets/images/jardin.png'
 import coleccion from '../../assets/images/coleccion.png'
 import arena from '../../assets/images/Arena.png'
 import shop from '../../assets/images/shop.png'
-import moneda from '../../assets/ico/moneda.png'
 import gema from '../../assets/ico/gema.png'
 import ranking from '../../assets/ico/Ranking.png'
 import chat from '../../assets/ico/chat.png'
@@ -17,16 +16,23 @@ import ajustes from '../../assets/ico/ajustes.png'
 import { soundManager } from '../../utils/audioManager'
 import { getRemainingTimeString, type FreePackSlot } from '../../utils/freePackManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
+import { BATTLE_PASS_LEVELS } from '../../utils/battlePassManager'
+import { SeasonManager } from '../../utils/seasonManager'
 import './MainMenu.css'
 
 interface MainMenuProps {
   userElo?: number
+  hasVipPass?: boolean
+  claimedVipLevels?: number[]
   freePackSlots?: FreePackSlot[]
   onPlay: () => void
   onOpenCollection?: () => void
   onOpenJardin?: () => void
   onOpenShop?: () => void
   onOpenRanking?: () => void
+  onOpenBattlePass?: () => void
+  onOpenClan?: () => void
+  onOpenMarketplace?: () => void
   onOpenLanding?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onFastUnlockSlot?: (slotId: number) => void
@@ -35,12 +41,17 @@ interface MainMenuProps {
 
 export default function MainMenu({
   userElo = 1000,
+  hasVipPass = false,
+  claimedVipLevels = [],
   freePackSlots = [],
   onPlay,
   onOpenCollection,
   onOpenJardin,
   onOpenShop,
   onOpenRanking,
+  onOpenBattlePass,
+  onOpenClan,
+  onOpenMarketplace,
   onOpenLanding,
   onStartSlotUnlock,
   onFastUnlockSlot,
@@ -48,6 +59,13 @@ export default function MainMenu({
 }: MainMenuProps) {
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [, setTicker] = useState<number>(0)
+
+  const highestLevelReached = BATTLE_PASS_LEVELS.filter((l) => userElo >= l.requiredElo).length
+  const claimableCount = hasVipPass
+    ? BATTLE_PASS_LEVELS.filter(
+        (l) => userElo >= l.requiredElo && !claimedVipLevels.includes(l.level)
+      ).length
+    : 0
 
   useEffect(() => {
     soundManager.playBgm('menu')
@@ -69,44 +87,80 @@ export default function MainMenu({
       style={{ backgroundImage: `url(${background})` }}
     >
       <div className="topbar">
-        <div className="card card--player">
-          <span className="card__title">DRAGONMASTER</span>
-          <span className="card__subtitle">Nivel 25</span>
-        </div>
-        <div className="topbar__right">
-          <div className="card card--stat">
-            <img className="card__icon" src={moneda} alt="" />
-            2,500
+        <div className="topbar__left">
+          <div className="card card--player">
+            <span className="card__title">DRAGONMASTER</span>
+            <span className="card__subtitle">Nivel 25</span>
           </div>
-          <div className="card card--stat">
-            <img className="card__icon" src={gema} alt="" />
-            1,250
-          </div>
+
+          {/* COMPACT VIP BATTLE PASS WIDGET */}
           <div
-            className="card card--stat"
-            style={{ cursor: 'pointer' }}
-            onClick={onOpenRanking}
-            title="Ver Camino de Arenas y Ranking Global"
+            className={`card card--pass-widget ${hasVipPass ? 'card--pass-widget-active' : ''}`}
+            onClick={onOpenBattlePass}
+            title="Ver Pase de Batalla VIP"
           >
-            <img className="card__icon" src={ranking} alt="" />
-            {userElo} 🏆
+            <span className="pass-widget__crown">👑</span>
+            <div className="pass-widget__info">
+              <span className="pass-widget__title">PASE VIP</span>
+              <span className="pass-widget__level-txt">
+                NIVEL {highestLevelReached}/20
+              </span>
+              <div className="pass-widget__progress-wrap">
+                <div
+                  className="pass-widget__progress-bar"
+                  style={{ width: `${Math.min(100, (highestLevelReached / 20) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {claimableCount > 0 && (
+              <span className="pass-widget__claim-badge">
+                ✨ {claimableCount}
+              </span>
+            )}
           </div>
-          <button
-            className="fullscreen-button"
-            type="button"
-            onClick={toggleFullscreen}
-            title="Pantalla Completa (Ocultar navegador)"
-          >
-            ⛶
-          </button>
-          <button
-            className="mute-button"
-            type="button"
-            onClick={() => soundManager.toggleMute()}
-            aria-label={isMuted ? 'Activar música' : 'Silenciar música'}
-          >
-            {isMuted ? '🔇' : '🔊'}
-          </button>
+        </div>
+
+        <div className="topbar__right-wrap">
+          <div className="topbar__right">
+            <div className="card card--stat">
+              <img className="card__icon" src={gema} alt="" />
+              1,250
+            </div>
+            <div
+              className="card card--stat"
+              style={{ cursor: 'pointer' }}
+              onClick={onOpenRanking}
+              title="Ver Camino de Arenas y Ranking Global"
+            >
+              <img className="card__icon" src={ranking} alt="" />
+              {userElo} 🏆
+            </div>
+            <button
+              className="fullscreen-button"
+              type="button"
+              onClick={toggleFullscreen}
+              title="Pantalla Completa (Ocultar navegador)"
+            >
+              ⛶
+            </button>
+            <button
+              className="mute-button"
+              type="button"
+              onClick={() => soundManager.toggleMute()}
+              aria-label={isMuted ? 'Activar música' : 'Silenciar música'}
+            >
+              {isMuted ? '🔇' : '🔊'}
+            </button>
+          </div>
+
+          {/* 30-DAY SEASON TIMER LABEL */}
+          <div className="season-countdown-badge">
+            <span className="season-badge-icon">⏳</span>
+            <span className="season-badge-text">
+              TEMPORADA 1: <strong>{SeasonManager.getSeasonStatus().formattedCountdown}</strong>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -233,13 +287,13 @@ export default function MainMenu({
       </div>
 
       <div className="footer">
-        <button className="footer-button" type="button">
+        <button className="footer-button" type="button" onClick={onOpenClan}>
           <img src={clan} alt="" />
           Clan
         </button>
-        <button className="footer-button" type="button">
+        <button className="footer-button" type="button" onClick={onOpenMarketplace}>
           <img src={chat} alt="" />
-          Chat
+          Comercio
         </button>
         <button className="footer-button" type="button">
           <img src={ajustes} alt="" />

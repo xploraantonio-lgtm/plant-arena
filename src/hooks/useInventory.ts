@@ -9,31 +9,48 @@ import {
 } from '../utils/packDropManager'
 import { getArenaForElo } from '../utils/arenaManager'
 import { createEmptySlots, drawFreePackCard, type FreePackSlot } from '../utils/freePackManager'
+import {
+  getEligibleStatsForPlant,
+  STAT_LABELS,
+  type PlantStatKey,
+} from '../utils/gameConstants'
 
-const DEFAULT_TOKENS = 2500
-const DEFAULT_UNLOCKED_PLANTS: PlantId[] = [
+const ALL_15_PLANTS: PlantId[] = [
   'sunflower',
   'peashooter',
   'wallnut',
   'chomper',
+  'repeater',
+  'garlic',
+  'bonkchoy',
+  'squash',
+  'twinsunflower',
+  'tallnut',
+  'threepeater',
+  'jalapeno',
+  'iceberglettuce',
+  'aloe',
+  'melonpult',
 ]
 
+const DEFAULT_TOKENS = 5000
+
 const DEFAULT_PLANT_COPIES: Record<PlantId, number> = {
-  sunflower: 1,
-  peashooter: 1,
-  wallnut: 1,
-  chomper: 1,
-  repeater: 0,
-  garlic: 0,
-  bonkchoy: 0,
-  squash: 0,
-  twinsunflower: 0,
-  tallnut: 0,
-  threepeater: 0,
-  jalapeno: 0,
-  iceberglettuce: 0,
-  aloe: 0,
-  melonpult: 0,
+  sunflower: 12,
+  peashooter: 12,
+  wallnut: 12,
+  chomper: 12,
+  repeater: 12,
+  garlic: 12,
+  bonkchoy: 12,
+  squash: 12,
+  twinsunflower: 12,
+  tallnut: 12,
+  threepeater: 12,
+  jalapeno: 12,
+  iceberglettuce: 12,
+  aloe: 12,
+  melonpult: 12,
 }
 
 const DEFAULT_PLANT_LEVELS: Record<PlantId, number> = {
@@ -60,6 +77,7 @@ const STORAGE_KEYS = {
   UNLOCKED_PLANTS: 'plant_arena_unlocked_plants',
   PLANT_COPIES: 'plant_arena_plant_copies',
   PLANT_LEVELS: 'plant_arena_plant_levels',
+  PLANT_STAT_ROLLS: 'plant_arena_plant_stat_rolls',
 }
 
 export function useInventory() {
@@ -75,17 +93,67 @@ export function useInventory() {
 
   const [unlockedPlants, setUnlockedPlants] = useState<PlantId[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.UNLOCKED_PLANTS)
-    return saved ? JSON.parse(saved) : DEFAULT_UNLOCKED_PLANTS
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as PlantId[]
+        const set = new Set([...parsed, ...ALL_15_PLANTS])
+        return Array.from(set)
+      } catch {
+        // fallback
+      }
+    }
+    return ALL_15_PLANTS
   })
 
   const [plantCopies, setPlantCopies] = useState<Record<PlantId, number>>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.PLANT_COPIES)
-    return saved ? JSON.parse(saved) : DEFAULT_PLANT_COPIES
+    const base = { ...DEFAULT_PLANT_COPIES }
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as Record<PlantId, number>
+        ALL_15_PLANTS.forEach((id) => {
+          base[id] = Math.max(12, parsed[id] !== undefined ? parsed[id] : 12)
+        })
+      } catch {
+        // fallback
+      }
+    }
+    return base
   })
 
   const [plantLevels, setPlantLevels] = useState<Record<PlantId, number>>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.PLANT_LEVELS)
     return saved ? JSON.parse(saved) : DEFAULT_PLANT_LEVELS
+  })
+
+  const [plantStatRolls, setPlantStatRolls] = useState<Record<PlantId, PlantStatKey[]>>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.PLANT_STAT_ROLLS)
+    const empty: Record<PlantId, PlantStatKey[]> = {
+      sunflower: [],
+      peashooter: [],
+      wallnut: [],
+      chomper: [],
+      repeater: [],
+      garlic: [],
+      bonkchoy: [],
+      squash: [],
+      twinsunflower: [],
+      tallnut: [],
+      threepeater: [],
+      jalapeno: [],
+      iceberglettuce: [],
+      aloe: [],
+      melonpult: [],
+    }
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        return { ...empty, ...parsed }
+      } catch {
+        // fallback
+      }
+    }
+    return empty
   })
 
   // Sync to localStorage
@@ -108,6 +176,10 @@ export function useInventory() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PLANT_LEVELS, JSON.stringify(plantLevels))
   }, [plantLevels])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.PLANT_STAT_ROLLS, JSON.stringify(plantStatRolls))
+  }, [plantStatRolls])
 
   const addTokens = (amount: number) => {
     setUserTokens((prev) => prev + amount)
@@ -198,8 +270,14 @@ export function useInventory() {
     return allDrops
   }
 
-  // FUSES 5 COPIES (BURNS 4, 1 STAYS) & ADDS +1 LEVEL
-  const fuseAndUpgradePlant = (plantId: PlantId): { success: boolean; newLevel?: number; error?: string } => {
+  // FUSES 5 COPIES (BURNS 4, 1 STAYS) & ADDS +1 LEVEL WITH A RANDOM STAT ROLL
+  const fuseAndUpgradePlant = (plantId: PlantId): {
+    success: boolean
+    newLevel?: number
+    rolledStat?: PlantStatKey
+    rolledStatLabel?: string
+    error?: string
+  } => {
     const isLegendary = plantId === 'threepeater' || plantId === 'iceberglettuce'
     const maxLevel = isLegendary ? 3 : 5
     const currentLvl = plantLevels[plantId] || 0
@@ -212,6 +290,10 @@ export function useInventory() {
     if (currentCopies < 5) {
       return { success: false, error: `Se requieren 5 copias para la fusión (Tienes ${currentCopies}/5)` }
     }
+
+    // Pick 1 random eligible stat for this plant
+    const eligible = getEligibleStatsForPlant(plantId)
+    const rolledStat = eligible[Math.floor(Math.random() * eligible.length)]
 
     // Burn 4 copies, 1 stays
     setPlantCopies((prev) => ({
@@ -226,7 +308,21 @@ export function useInventory() {
       [plantId]: nextLvl,
     }))
 
-    return { success: true, newLevel: nextLvl }
+    // Add rolled stat
+    setPlantStatRolls((prev) => {
+      const currentList = prev[plantId] || []
+      return {
+        ...prev,
+        [plantId]: [...currentList, rolledStat],
+      }
+    })
+
+    return {
+      success: true,
+      newLevel: nextLvl,
+      rolledStat,
+      rolledStatLabel: STAT_LABELS[rolledStat].suffix,
+    }
   }
 
   const [hasVipPass, setHasVipPass] = useState<boolean>(() => {
@@ -402,6 +498,58 @@ export function useInventory() {
     }
   }
 
+  // Clan helper methods
+  const deductUserTokens = (amountUsd: number): boolean => {
+    if (userTokens < amountUsd) return false
+    setUserTokens((prev) => {
+      const next = Math.max(0, Number((prev - amountUsd).toFixed(2)))
+      localStorage.setItem(STORAGE_KEYS.TOKENS, String(next))
+      return next
+    })
+    return true
+  }
+
+  const addUserTokens = (amountUsd: number) => {
+    setUserTokens((prev) => {
+      const next = Number((prev + amountUsd).toFixed(2))
+      localStorage.setItem(STORAGE_KEYS.TOKENS, String(next))
+      return next
+    })
+  }
+
+  const donatePlantCopy = (plantId: PlantId): boolean => {
+    const current = plantCopies[plantId] || 0
+    if (current <= 0) return false
+    setPlantCopies((prev) => ({
+      ...prev,
+      [plantId]: prev[plantId] - 1,
+    }))
+    return true
+  }
+
+  const receivePlantCopy = (plantId: PlantId) => {
+    setPlantCopies((prev) => ({
+      ...prev,
+      [plantId]: (prev[plantId] || 0) + 1,
+    }))
+  }
+
+  const addPacksToInventory = (packId: PackId, qty: number) => {
+    const packDef = PACK_DEFINITIONS[packId]
+    const newPacks: InventoryPack[] = []
+    for (let i = 0; i < qty; i++) {
+      newPacks.push({
+        instanceId: `pack-${Date.now()}-${Math.random().toString(36).substr(2, 6)}-${i}`,
+        packId,
+        name: packDef.name,
+        icon: packDef.icon,
+        rarity: packDef.rarity,
+        purchasedAt: Date.now(),
+      })
+    }
+    setInventoryPacks((prev) => [...prev, ...newPacks])
+  }
+
   return {
     userTokens,
     setUserTokens,
@@ -410,6 +558,7 @@ export function useInventory() {
     unlockedPlants,
     plantCopies,
     plantLevels,
+    plantStatRolls,
     hasVipPass,
     claimedVipLevels,
     freePackSlots,
@@ -424,5 +573,10 @@ export function useInventory() {
     startUnlockingSlot,
     fastUnlockSlot,
     openSlotPack,
+    deductUserTokens,
+    addUserTokens,
+    donatePlantCopy,
+    receivePlantCopy,
+    addPacksToInventory,
   }
 }

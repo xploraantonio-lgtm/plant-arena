@@ -8,10 +8,15 @@ import Collection from './components/Collection/Collection'
 import Jardin from './components/Jardin/Jardin'
 import Shop from './components/Shop/Shop'
 import Ranking from './components/Ranking/Ranking'
+import BattlePass from './components/BattlePass/BattlePass'
+import Clan from './components/Clan/Clan'
+import Marketplace from './components/Marketplace/Marketplace'
 import LandingPage from './components/LandingPage/LandingPage'
 import PackOpeningModal from './components/PackOpeningModal/PackOpeningModal'
 import { useInventory } from './hooks/useInventory'
 import type { PackDropResult, PackId } from './utils/packDropManager'
+import background from './assets/images/background.png'
+import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'
 
@@ -25,7 +30,7 @@ const DEFAULT_DECK: PlantId[] = [
 ]
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking'>(() => {
+  const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase()
       const hash = window.location.hash.toLowerCase()
@@ -64,6 +69,7 @@ function App() {
     unlockedPlants,
     plantCopies,
     plantLevels,
+    plantStatRolls,
     hasVipPass,
     claimedVipLevels,
     freePackSlots,
@@ -78,6 +84,11 @@ function App() {
     startUnlockingSlot,
     fastUnlockSlot,
     openSlotPack,
+    deductUserTokens,
+    addUserTokens,
+    donatePlantCopy,
+    receivePlantCopy,
+    addPacksToInventory,
   } = useInventory()
 
   const handleGoToGame = () => {
@@ -205,12 +216,17 @@ function App() {
         {screen === 'menu' && (
           <MainMenu
             userElo={userElo}
+            hasVipPass={hasVipPass}
+            claimedVipLevels={claimedVipLevels}
             freePackSlots={freePackSlots}
             onPlay={handlePlayNormal}
             onOpenCollection={handleOpenCollection}
             onOpenJardin={handleOpenJardin}
             onOpenShop={handleOpenShop}
             onOpenRanking={handleOpenRanking}
+            onOpenBattlePass={() => setScreen('pass')}
+            onOpenClan={() => setScreen('clan')}
+            onOpenMarketplace={() => setScreen('market')}
             onOpenLanding={handleGoToLanding}
             onStartSlotUnlock={startUnlockingSlot}
             onFastUnlockSlot={fastUnlockSlot}
@@ -243,6 +259,7 @@ function App() {
             userTokens={userTokens}
             plantCopies={plantCopies}
             plantLevels={plantLevels}
+            plantStatRolls={plantStatRolls}
             onUpdateDeck={setActiveDeck}
             onBack={() => setScreen('menu')}
             onPlay={handlePlayNormal}
@@ -276,6 +293,117 @@ function App() {
             onBack={() => setScreen('menu')}
             onAddElo={(delta) => setUserElo((prev) => Math.max(0, prev + delta))}
           />
+        )}
+        {screen === 'pass' && (
+          <div
+            className="ranking-screen"
+            style={{ backgroundImage: `url(${background})` }}
+          >
+            <div className="ranking-header">
+              <button
+                type="button"
+                className="ranking-back-btn"
+                onClick={() => setScreen('menu')}
+              >
+                ⬅ VOLVER AL MENÚ
+              </button>
+              <div className="ranking-header__center">
+                <h1 className="ranking-title">👑 PASE DE TEMPORADA VIP</h1>
+                <span className="ranking-subtitle">
+                  Sube copas ELO en la Arena para desbloquear recompensas exclusivas
+                </span>
+              </div>
+              <div className="ranking-header__right">
+                <button
+                  type="button"
+                  className="ranking-mute-btn"
+                  onClick={() => soundManager.toggleMute()}
+                >
+                  🔊
+                </button>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, padding: '6px 0' }}>
+              <BattlePass
+                userElo={userElo}
+                hasVipPass={hasVipPass}
+                claimedVipLevels={claimedVipLevels}
+                onBuyVipPass={() => {
+                  const ok = buyVipPass()
+                  if (ok) {
+                    alert('👑 ¡PASE VIP DE TEMPORADA ACTIVADO! Ahora puedes reclamar todas las recompensas doradas.')
+                  } else {
+                    alert('⚠️ Saldo insuficiente ($10.00 USD requeridos). Recarga saldo en la Tienda.')
+                  }
+                }}
+                onClaimReward={(lvl) => {
+                  claimPassReward(lvl.reward, lvl.level)
+                  alert(`👑 ¡RECOMPENSA VIP DEL NIVEL ${lvl.level} RECLAMADA!\n${lvl.reward.label}`)
+                }}
+                onClaimAllRewards={(levels) => {
+                  levels.forEach((lvl) => claimPassReward(lvl.reward, lvl.level))
+                  alert(`👑 ¡${levels.length} RECOMPENSAS VIP RECLAMADAS CON ÉXITO!`)
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {screen === 'clan' && (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              backgroundImage: `url(${background})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '10px 16px',
+              boxSizing: 'border-box',
+            }}
+          >
+            <Clan
+              userElo={userElo}
+              userTokens={userTokens}
+              plantCopies={plantCopies}
+              onDeductTokens={deductUserTokens}
+              onAddTokens={addUserTokens}
+              onDonatePlant={donatePlantCopy}
+              onAddPacks={addPacksToInventory}
+              onBackToMenu={() => setScreen('menu')}
+            />
+          </div>
+        )}
+
+        {screen === 'market' && (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              backgroundImage: `url(${background})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '10px 16px',
+              boxSizing: 'border-box',
+            }}
+          >
+            <Marketplace
+              userTokens={userTokens}
+              hasVipPass={hasVipPass}
+              plantCopies={plantCopies}
+              plantLevels={plantLevels}
+              plantStatRolls={plantStatRolls}
+              onDeductTokens={deductUserTokens}
+              onDonatePlant={donatePlantCopy}
+              onReceivePlant={receivePlantCopy}
+              onBuyVipPass={buyVipPass}
+              onBackToMenu={() => setScreen('menu')}
+            />
+          </div>
         )}
 
         {/* Global Pack Opening Reveal Modal */}

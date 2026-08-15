@@ -21,6 +21,17 @@ import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import './Battlefield.css'
 
+function getBattlefieldPlantLevel(plantId: string): number {
+  try {
+    const saved = localStorage.getItem('plant_arena_plant_levels')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return parsed[plantId] || 0
+    }
+  } catch {}
+  return 0
+}
+
 interface BaseTowerProps {
   team: 'p1' | 'p2'
   hp: number
@@ -370,13 +381,25 @@ export default function Battlefield({
                 <img src="/game-assets/plants/jalapeno_flame_fx.png" alt="Fuego" />
               </div>
             ) : (
-              <img
-                className={`plant-unit__sprite ${
-                  plant.plantId === 'melonpult' ? 'plant-unit__sprite--melon' : ''
-                } ${plant.spriteOverride?.includes('burst') ? 'plant-unit__sprite--burst' : ''}`}
-                src={plant.spriteOverride || config.sprite}
-                alt={config.name}
-              />
+              <>
+                {/* Subtle Base Ground Aura for Leveled Plants */}
+                {getBattlefieldPlantLevel(plant.plantId) > 0 && (
+                  <div
+                    className={`plant-base-halo ${
+                      getBattlefieldPlantLevel(plant.plantId) >= 3
+                        ? 'plant-base-halo--gold'
+                        : 'plant-base-halo--emerald'
+                    }`}
+                  />
+                )}
+                <img
+                  className={`plant-unit__sprite ${
+                    plant.plantId === 'melonpult' ? 'plant-unit__sprite--melon' : ''
+                  } ${plant.spriteOverride?.includes('burst') ? 'plant-unit__sprite--burst' : ''}`}
+                  src={plant.spriteOverride || config.sprite}
+                  alt={config.name}
+                />
+              </>
             )}
             {plant.isHealingFx && (
               <div className="aloe-heal-cloud">
