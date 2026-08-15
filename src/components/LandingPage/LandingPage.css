@@ -589,9 +589,9 @@
 .landing-demo-player-tree {
   position: absolute;
   left: 2%;
-  top: 14%;
-  height: 68%;
-  width: 12%;
+  top: 20%;
+  height: 54%;
+  width: 10%;
   display: grid;
   place-items: center;
   z-index: 5;
@@ -599,14 +599,15 @@
 }
 .landing-demo-player-tree img {
   max-height: 100%;
+  max-width: 100%;
   object-fit: contain;
 }
 .landing-demo-enemy-tree {
   position: absolute;
   right: 2%;
-  top: 14%;
-  height: 68%;
-  width: 12%;
+  top: 20%;
+  height: 54%;
+  width: 10%;
   display: grid;
   place-items: center;
   z-index: 5;
@@ -614,11 +615,12 @@
 }
 .landing-demo-enemy-tree img {
   max-height: 100%;
+  max-width: 100%;
   object-fit: contain;
 }
 .landing-demo-tree-badge {
   position: absolute;
-  bottom: -4px;
+  bottom: -6px;
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -1279,10 +1281,61 @@
   }
 }
 
-/* MOBILE 2-COLUMN PLANTS GRID & COMPACT CARD CAROUSEL/VIEW */
+/* MOBILE 2-COLUMN PLANTS GRID & COMPACT SIMULATION VIEW */
 @media (max-width: 640px) {
   .landing-container {
     padding: 0 14px;
+  }
+
+  /* Significantly reduced Mother Tree sizes on mobile */
+  .landing-demo-stage {
+    min-height: 200px;
+  }
+  .landing-demo-player-tree,
+  .landing-demo-enemy-tree {
+    height: 38% !important;
+    width: 8.5% !important;
+    top: 30% !important;
+  }
+  .landing-demo-player-tree {
+    left: 1% !important;
+  }
+  .landing-demo-enemy-tree {
+    right: 1% !important;
+  }
+  .landing-demo-tree-badge {
+    font-size: 7px !important;
+    padding: 1px 4px !important;
+    bottom: -9px !important;
+    border-radius: 4px !important;
+  }
+  .landing-demo-sun-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    top: 8px;
+    left: 8px;
+  }
+  .landing-demo-sun-tag img {
+    width: 16px;
+    height: 16px;
+  }
+  .landing-demo-gauge {
+    top: 8px;
+    right: 8px;
+    gap: 2px;
+  }
+  .landing-demo-gauge__lbl {
+    font-size: 8px;
+  }
+  .landing-demo-gauge__bar {
+    width: 80px;
+    height: 7px;
+  }
+  .landing-dmg-float-1,
+  .landing-dmg-float-2,
+  .landing-dmg-float-3 {
+    font-size: 12px !important;
+    top: 2% !important;
   }
 
   /* 2 Columns for Plant Cards on Mobile */
