@@ -326,7 +326,9 @@ export function useInventory() {
   }
 
   const [hasVipPass, setHasVipPass] = useState<boolean>(() => {
-    return localStorage.getItem('plant_arena_has_vip_pass') === 'true'
+    const saved = localStorage.getItem('plant_arena_has_vip_pass')
+    if (saved === 'false') return false
+    return true
   })
 
   const [claimedVipLevels, setClaimedVipLevels] = useState<number[]>(() => {

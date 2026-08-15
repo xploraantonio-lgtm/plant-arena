@@ -114,15 +114,24 @@ export default function Marketplace({
   // BUY A LISTING
   const handleBuyListing = (listing: MarketListing) => {
     if (!hasVipPass) {
-      showModalAlert('EXCLUSIVO VIP', 'El Mercado de Comercio es exclusivo para miembros con Pase VIP.', '👑', 'warning')
+      showModalConfirm(
+        'PASE VIP REQUERIDO',
+        'El Mercado de Comercio es exclusivo para miembros con Pase VIP ($10.00 USD).\n¿Deseas activar tu Pase VIP ahora para comprar y vender cartas libremente?',
+        '👑',
+        () => {
+          onBuyVipPass()
+        },
+        'ACTIVAR VIP ($10.00)',
+        'CANCELAR'
+      )
       return
     }
     if (listing.sellerName === playerName) {
-      showModalAlert('OFERTA PROPIA', 'No puedes comprar tu propia oferta.', '⚠️', 'warning')
+      showModalAlert('OFERTA PROPIA', 'No puedes comprar tu propia oferta puesta en el mercado.', '⚠️', 'warning')
       return
     }
     if (userTokens < listing.priceUsd) {
-      showModalAlert('SALDO INSUFICIENTE', `Saldo insuficiente ($${listing.priceUsd.toFixed(2)} USD requeridos). Recarga saldo en la Tienda.`, '⚠️', 'warning')
+      showModalAlert('SALDO INSUFICIENTE', `Saldo insuficiente ($${listing.priceUsd.toFixed(2)} USD requeridos).\nRecarga saldo en la Tienda o en el banco.`, '⚠️', 'warning')
       return
     }
 
@@ -138,11 +147,11 @@ export default function Marketplace({
         if (bought) {
           onReceivePlant(bought.plantId)
           soundManager.playSound('victory', 1)
-          showModalAlert('¡COMPRA EXITOSA!', `Has adquirido una copia de "${bought.plantName}" por $${bought.priceUsd.toFixed(2)} USD.`, '🎉', 'success')
+          showModalAlert('¡COMPRA EXITOSA!', `Has adquirido una copia de "${bought.plantName}" por $${bought.priceUsd.toFixed(2)} USD.\nSe ha añadido a tu inventario.`, '🎉', 'success')
           refreshListings()
         }
       },
-      'COMPRAR ($USD)',
+      `COMPRAR ($${listing.priceUsd.toFixed(2)} USD)`,
       'CANCELAR'
     )
   }
@@ -151,7 +160,16 @@ export default function Marketplace({
   const handleCreateListing = (e: React.FormEvent) => {
     e.preventDefault()
     if (!hasVipPass) {
-      showModalAlert('EXCLUSIVO VIP', 'El Mercado de Comercio es exclusivo para miembros con Pase VIP.', '👑', 'warning')
+      showModalConfirm(
+        'PASE VIP REQUERIDO',
+        'El Mercado de Comercio es exclusivo para miembros con Pase VIP ($10.00 USD).\n¿Deseas activar tu Pase VIP ahora para vender cartas y builds?',
+        '👑',
+        () => {
+          onBuyVipPass()
+        },
+        'ACTIVAR VIP ($10.00)',
+        'CANCELAR'
+      )
       return
     }
 
@@ -328,7 +346,6 @@ export default function Marketplace({
                       <button
                         type="button"
                         className="market-buy-btn"
-                        disabled={!hasVipPass}
                         onClick={() => handleBuyListing(item)}
                       >
                         COMPRAR
@@ -436,7 +453,7 @@ export default function Marketplace({
 
                 <button
                   type="submit"
-                  disabled={!hasVipPass || (plantCopies[selectedSellPlant] || 0) <= 1}
+                  disabled={(plantCopies[selectedSellPlant] || 0) <= 1}
                   className="market-publish-btn"
                 >
                   {(plantCopies[selectedSellPlant] || 0) <= 1
