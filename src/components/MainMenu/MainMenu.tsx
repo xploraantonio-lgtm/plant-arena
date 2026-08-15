@@ -16,7 +16,7 @@ import clan from '../../assets/ico/clan.png'
 import ajustes from '../../assets/ico/ajustes.png'
 import { soundManager } from '../../utils/audioManager'
 import { getRemainingTimeString, type FreePackSlot } from '../../utils/freePackManager'
-import { toggleFullscreen, isFullscreen } from '../../utils/fullscreen'
+import { toggleFullscreen } from '../../utils/fullscreen'
 import './MainMenu.css'
 
 interface MainMenuProps {
@@ -45,25 +45,12 @@ export default function MainMenu({
   onOpenSlotPack,
 }: MainMenuProps) {
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
-  const [isFullscreenState, setIsFullscreenState] = useState<boolean>(isFullscreen())
   const [, setTicker] = useState<number>(0)
 
   useEffect(() => {
     soundManager.playBgm('menu')
     const unsubscribe = soundManager.subscribe((muted) => setIsMuted(muted))
     return () => unsubscribe()
-  }, [])
-
-  useEffect(() => {
-    const handleFsChange = () => {
-      setIsFullscreenState(isFullscreen())
-    }
-    document.addEventListener('fullscreenchange', handleFsChange)
-    document.addEventListener('webkitfullscreenchange', handleFsChange)
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFsChange)
-      document.removeEventListener('webkitfullscreenchange', handleFsChange)
-    }
   }, [])
 
   // Force tick every second to animate countdown timers
@@ -93,34 +80,23 @@ export default function MainMenu({
             <img className="card__icon" src={gema} alt="" />
             1,250
           </div>
-
-          {/* Columna de Ranking con Botón de Maximizar visible justo debajo */}
-          <div className="topbar__ranking-col">
-            <div
-              className="card card--stat card--ranking"
-              style={{ cursor: 'pointer' }}
-              onClick={onOpenRanking}
-              title="Ver Camino de Arenas y Ranking Global"
-            >
-              <img className="card__icon" src={ranking} alt="" />
-              <span>{userElo} 🏆</span>
-            </div>
-            <button
-              className="maximize-game-btn"
-              type="button"
-              onClick={() => {
-                toggleFullscreen()
-                soundManager.playSound('click', 0.5)
-              }}
-              title={isFullscreenState ? 'Salir de pantalla completa' : 'Maximizar juego a pantalla completa'}
-            >
-              <span className="maximize-game-btn__icon">{isFullscreenState ? '🗗' : '⛶'}</span>
-              <span className="maximize-game-btn__label">
-                {isFullscreenState ? 'VENTANA' : 'MAXIMIZAR'}
-              </span>
-            </button>
+          <div
+            className="card card--stat"
+            style={{ cursor: 'pointer' }}
+            onClick={onOpenRanking}
+            title="Ver Camino de Arenas y Ranking Global"
+          >
+            <img className="card__icon" src={ranking} alt="" />
+            {userElo} 🏆
           </div>
-
+          <button
+            className="fullscreen-button"
+            type="button"
+            onClick={toggleFullscreen}
+            title="Pantalla Completa (Ocultar navegador)"
+          >
+            ⛶
+          </button>
           <button
             className="mute-button"
             type="button"
