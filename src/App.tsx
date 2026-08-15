@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { PlantId } from './types/game'
 import GameFrame from './components/GameFrame/GameFrame'
 import RotateOverlay from './components/RotateOverlay/RotateOverlay'
@@ -8,7 +8,6 @@ import Collection from './components/Collection/Collection'
 import Jardin from './components/Jardin/Jardin'
 import Shop from './components/Shop/Shop'
 import Ranking from './components/Ranking/Ranking'
-import LandingPage from './components/LandingPage/LandingPage'
 import PackOpeningModal from './components/PackOpeningModal/PackOpeningModal'
 import { useInventory } from './hooks/useInventory'
 import type { PackDropResult, PackId } from './utils/packDropManager'
@@ -25,15 +24,7 @@ const DEFAULT_DECK: PlantId[] = [
 ]
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking'>(() => {
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname.toLowerCase()
-      if (path.startsWith('/play') || window.location.hash === '#play') {
-        return 'menu'
-      }
-    }
-    return 'landing'
-  })
+  const [screen, setScreen] = useState<'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking'>('menu')
   const [practicePlantId, setPracticePlantId] = useState<string | null>(null)
   const [activeDeck, setActiveDeck] = useState<PlantId[]>(DEFAULT_DECK)
   const [activeOpeningResult, setActiveOpeningResult] = useState<PackDropResult | PackDropResult[] | null>(null)
@@ -41,19 +32,6 @@ function App() {
 
   const [userElo, setUserElo] = useState<number>(1000)
   const [customArenaBg, setCustomArenaBg] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const path = window.location.pathname.toLowerCase()
-      if (path.startsWith('/play') || window.location.hash === '#play') {
-        setScreen((prev) => (prev === 'landing' ? 'menu' : prev))
-      } else {
-        setScreen('landing')
-      }
-    }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
 
   const {
     userTokens,
@@ -77,28 +55,6 @@ function App() {
     fastUnlockSlot,
     openSlotPack,
   } = useInventory()
-
-  const handleGoToGame = () => {
-    setScreen('menu')
-    try {
-      if (typeof window !== 'undefined' && window.location.protocol !== 'file:' && !window.location.pathname.startsWith('/play')) {
-        window.history.pushState(null, '', '/play')
-      }
-    } catch {
-      // Safe fallback
-    }
-  }
-
-  const handleGoToLanding = () => {
-    setScreen('landing')
-    try {
-      if (typeof window !== 'undefined' && window.location.protocol !== 'file:' && window.location.pathname !== '/') {
-        window.history.pushState(null, '', '/')
-      }
-    } catch {
-      // Safe fallback
-    }
-  }
 
   const handlePlayNormal = () => {
     setPracticePlantId(null)
@@ -193,10 +149,6 @@ function App() {
     ? inventoryPacks.some((p) => p.packId === lastOpenedPackType)
     : false
 
-  if (screen === 'landing') {
-    return <LandingPage onPlayGame={handleGoToGame} />
-  }
-
   return (
     <>
       <GameFrame>
@@ -209,7 +161,6 @@ function App() {
             onOpenJardin={handleOpenJardin}
             onOpenShop={handleOpenShop}
             onOpenRanking={handleOpenRanking}
-            onOpenLanding={handleGoToLanding}
             onStartSlotUnlock={startUnlockingSlot}
             onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}

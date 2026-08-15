@@ -27,7 +27,6 @@ interface MainMenuProps {
   onOpenJardin?: () => void
   onOpenShop?: () => void
   onOpenRanking?: () => void
-  onOpenLanding?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onFastUnlockSlot?: (slotId: number) => void
   onOpenSlotPack?: (slotId: number) => void
@@ -41,7 +40,6 @@ export default function MainMenu({
   onOpenJardin,
   onOpenShop,
   onOpenRanking,
-  onOpenLanding,
   onStartSlotUnlock,
   onFastUnlockSlot,
   onOpenSlotPack,
@@ -134,14 +132,7 @@ export default function MainMenu({
         </div>
       </div>
 
-      <img
-        className="logo"
-        src={logo}
-        alt="Plant Arena"
-        onClick={onOpenLanding}
-        style={{ cursor: onOpenLanding ? 'pointer' : 'default' }}
-        title="Volver a la portada / Landing Page"
-      />
+      <img className="logo" src={logo} alt="Plant Arena" />
 
       <img className="plant plant--left" src={plant1} alt="" />
       <img className="plant plant--right" src={plant2} alt="" />

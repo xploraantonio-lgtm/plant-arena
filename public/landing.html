@@ -1,0 +1,2183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plant Arena — Juego de Estrategia PvP en Tiempo Real</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Luckiest+Guy&display=swap" rel="stylesheet">
+  <style>
+    /* Reset & Base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html {
+      scroll-behavior: smooth;
+      color-scheme: dark;
+    }
+    body {
+      background: #050b12;
+      color: #ffffff;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    img {
+      max-width: 100%;
+      display: block;
+    }
+    button {
+      font-family: inherit;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+
+    /* Keyframe Animations */
+    @keyframes pa-sway-l {
+      0%, 100% { transform: translateY(-50%) rotate(0deg); }
+      50% { transform: translateY(calc(-50% - 12px)) rotate(-4deg); }
+    }
+    @keyframes pa-sway-r {
+      0%, 100% { transform: translateY(-50%) rotate(0deg); }
+      50% { transform: translateY(calc(-50% - 12px)) rotate(4deg); }
+    }
+    @keyframes pa-logo {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(118,216,50,0.4)); }
+      50% { transform: scale(1.04); filter: drop-shadow(0 0 35px rgba(255,210,63,0.7)); }
+    }
+    @keyframes pa-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes pa-pulse-dot {
+      0%, 100% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+    @keyframes pa-pea-fly-1 {
+      0% { left: 24%; opacity: 0; transform: translateY(-50%) scale(0.6); }
+      10% { opacity: 1; transform: translateY(-50%) scale(1); }
+      85% { opacity: 1; }
+      100% { left: 74%; opacity: 0; transform: translateY(-50%) scale(1.3); }
+    }
+    @keyframes pa-pea-fly-2 {
+      0% { left: 24%; opacity: 0; transform: translateY(-50%) scale(0.6); }
+      10% { opacity: 1; transform: translateY(-50%) scale(1); }
+      85% { opacity: 1; }
+      100% { left: 74%; opacity: 0; transform: translateY(-50%) scale(1.3); }
+    }
+    @keyframes pa-pea-fly-3 {
+      0% { left: 24%; opacity: 0; transform: translateY(-50%) scale(0.6); }
+      10% { opacity: 1; transform: translateY(-50%) scale(1); }
+      85% { opacity: 1; }
+      100% { left: 74%; opacity: 0; transform: translateY(-50%) scale(1.3); }
+    }
+    @keyframes pa-recoil {
+      0%, 100% { transform: translateX(0) scale(1); }
+      15% { transform: translateX(-4px) scale(1.08, 0.92); }
+      35% { transform: translateX(2px) scale(0.96, 1.04); }
+    }
+    @keyframes pa-bounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-5px) scale(1.05); }
+    }
+    @keyframes pa-sun-pop {
+      0% { opacity: 0; transform: scale(0.4) translateY(0); }
+      50% { opacity: 1; transform: scale(1.2) translateY(-14px); }
+      100% { opacity: 0; transform: scale(0.8) translateY(-28px); }
+    }
+    @keyframes pa-walk-cactus {
+      0% { left: 20%; }
+      50% { left: 52%; }
+      100% { left: 20%; }
+    }
+    @keyframes pa-walk-bonk {
+      0% { left: 32%; transform: scale(1); }
+      45% { left: 70%; transform: scale(1.1) rotate(-6deg); }
+      55% { left: 70%; transform: scale(1.15) rotate(6deg); }
+      100% { left: 32%; transform: scale(1); }
+    }
+    @keyframes pa-punch {
+      0%, 100% { opacity: 0; transform: scale(0.5); }
+      45%, 55% { opacity: 1; transform: scale(1.4) rotate(12deg); }
+    }
+    @keyframes pa-enemy-shake {
+      0%, 100% { transform: scaleX(-1) translateX(0); filter: hue-rotate(310deg) saturate(1.4); }
+      45% { transform: scaleX(-1) translateX(6px); filter: hue-rotate(340deg) brightness(1.5) saturate(2); }
+      55% { transform: scaleX(-1) translateX(-6px); filter: hue-rotate(340deg) brightness(1.5) saturate(2); }
+    }
+    @keyframes pa-spark {
+      0%, 100% { opacity: 0; transform: scale(0.5); }
+      85% { opacity: 1; transform: scale(1.3); }
+    }
+    @keyframes pa-dmg-1 {
+      0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+      40% { opacity: 1; transform: translate(-10px, -18px) scale(1.2); }
+      70% { opacity: 0; transform: translate(-15px, -32px) scale(0.9); }
+    }
+    @keyframes pa-dmg-2 {
+      0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+      60% { opacity: 1; transform: translate(12px, -20px) scale(1.2); }
+      85% { opacity: 0; transform: translate(16px, -36px) scale(0.9); }
+    }
+    @keyframes pa-dmg-3 {
+      0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+      20% { opacity: 1; transform: translate(0, -16px) scale(1.3); }
+      50% { opacity: 0; transform: translate(4px, -30px) scale(0.8); }
+    }
+    @keyframes pa-hp-gauge {
+      0% { width: 85%; }
+      50% { width: 36%; }
+      100% { width: 85%; }
+    }
+    @keyframes pa-sunfall {
+      0% { top: 6%; opacity: 0; transform: translateY(0) rotate(0deg); }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { top: 78%; opacity: 0; transform: translateY(16px) rotate(180deg); }
+    }
+
+    /* Container & Typography */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .section-title-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 18px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .pill-badge--green { background: #22c55e; color: #052e16; }
+    .pill-badge--gold { background: #fbbf24; color: #451a03; }
+    .pill-badge--red { background: #ef4444; color: #ffffff; }
+
+    .headline-arcade {
+      font-family: 'Luckiest Guy', cursive, sans-serif;
+      letter-spacing: 0.02em;
+      line-height: 1.1;
+      text-shadow: 0 3px 0 rgba(0,0,0,0.7), 0 6px 16px rgba(0,0,0,0.8);
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: linear-gradient(180deg, #86efac 0%, #22c55e 50%, #15803d 100%);
+      color: #052e16;
+      border: 2px solid #bbf7d0;
+      border-radius: 16px;
+      padding: 16px 36px;
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 20px;
+      letter-spacing: 0.05em;
+      box-shadow: 0 8px 0 #14532d, 0 16px 28px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.6);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+    }
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 11px 0 #14532d, 0 20px 32px rgba(34,197,94,0.4), inset 0 2px 0 rgba(255,255,255,0.8);
+      filter: brightness(1.08);
+    }
+    .btn-primary:active {
+      transform: translateY(4px);
+      box-shadow: 0 4px 0 #14532d, 0 8px 14px rgba(0,0,0,0.6);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #ffffff;
+      border: 2px solid rgba(148, 163, 184, 0.4);
+      border-radius: 16px;
+      padding: 15px 30px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-secondary:hover {
+      border-color: #ffd23f;
+      color: #ffd23f;
+      background: rgba(30, 41, 59, 0.95);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+    }
+
+    /* Navbar */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 28px;
+      background: rgba(5, 11, 18, 0.92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(118, 216, 50, 0.3);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .navbar__logo img {
+      height: 44px;
+      width: auto;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+    }
+    .navbar__menu {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+    }
+    .navbar__link {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #d1fae5;
+      transition: color 0.15s ease, transform 0.15s ease;
+    }
+    .navbar__link:hover {
+      color: #ffd23f;
+      transform: translateY(-1px);
+    }
+    .navbar__actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .lang-toggle-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 26, 24, 0.9);
+      border: 2px solid #76d832;
+      color: #ffffff;
+      border-radius: 999px;
+      padding: 7px 16px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .lang-toggle-btn:hover {
+      border-color: #ffd23f;
+      color: #ffd23f;
+      background: rgba(24, 40, 36, 0.95);
+    }
+    .navbar__play-btn {
+      background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%);
+      color: #052e16;
+      border: 1px solid #86efac;
+      border-radius: 999px;
+      padding: 9px 22px;
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 15px;
+      letter-spacing: 0.08em;
+      box-shadow: 0 4px 12px rgba(34,197,94,0.4);
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    .navbar__play-btn:hover {
+      transform: scale(1.05);
+      filter: brightness(1.15);
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      background: url("/src/assets/images/background.png") center/cover no-repeat;
+      min-height: 680px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 24px 120px;
+    }
+    .hero__scrim {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(5,11,18,0.55) 0%, rgba(5,11,18,0.85) 60%, #050b12 100%);
+      pointer-events: none;
+    }
+    .hero__plant-left {
+      position: absolute;
+      left: 2%;
+      top: 50%;
+      width: 240px;
+      z-index: 1;
+      pointer-events: none;
+      animation: pa-sway-l 3.6s ease-in-out infinite;
+      filter: drop-shadow(0 14px 20px rgba(0,0,0,0.6));
+    }
+    .hero__plant-right {
+      position: absolute;
+      right: 2%;
+      top: 50%;
+      width: 240px;
+      z-index: 1;
+      pointer-events: none;
+      animation: pa-sway-r 4.2s ease-in-out infinite;
+      animation-delay: -1.5s;
+      filter: drop-shadow(0 14px 20px rgba(0,0,0,0.6));
+    }
+    .hero__content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      max-width: 860px;
+      text-align: center;
+    }
+    .hero__logo {
+      width: min(440px, 80vw);
+      animation: pa-logo 2.8s ease-in-out infinite;
+      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.7));
+    }
+    .hero__headline {
+      font-size: clamp(34px, 5.5vw, 62px);
+      color: #ffffff;
+      line-height: 1.05;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.9), 0 2px 4px rgba(0,0,0,0.8);
+    }
+    .hero__headline span.highlight {
+      color: #ffd23f;
+      text-shadow: 0 0 20px rgba(255,210,63,0.5), 0 4px 0 #7a4a00;
+    }
+    .hero__desc {
+      max-width: 660px;
+      font-size: 18px;
+      line-height: 1.65;
+      color: #f1f5f9;
+      font-weight: 500;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+    }
+    .hero__ctas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+    .hero__stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      width: 100%;
+      max-width: 680px;
+      margin-top: 24px;
+    }
+    .hero-stat-card {
+      background: rgba(16, 26, 24, 0.88);
+      border: 2px solid rgba(118, 216, 50, 0.7);
+      border-radius: 16px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+      backdrop-filter: blur(6px);
+    }
+    .hero-stat-card__val {
+      font-size: 28px;
+      font-weight: 900;
+      color: #ffd23f;
+      line-height: 1.1;
+      font-family: 'Luckiest Guy', sans-serif;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    }
+    .hero-stat-card__lbl {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #bbf7d0;
+      margin-top: 2px;
+    }
+
+    /* Sections Common */
+    .section-play { padding: 96px 0 64px; }
+    .section-plants {
+      background: #08131c;
+      border-top: 1px solid rgba(118, 216, 50, 0.25);
+      border-bottom: 1px solid rgba(118, 216, 50, 0.25);
+      padding: 96px 0;
+    }
+    .section-arenas { padding: 96px 0; }
+
+    /* Steps Grid */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .step-card {
+      background: #0d1a15;
+      border: 2px solid rgba(118, 216, 50, 0.35);
+      border-radius: 22px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .step-card:hover {
+      transform: translateY(-6px);
+      border-color: #76d832;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.7), 0 0 20px rgba(118,216,50,0.2);
+    }
+    .step-card__bar { height: 8px; width: 100%; }
+    .step-card__body {
+      padding: 30px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .step-card__header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .step-card__num {
+      display: grid;
+      place-items: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      font-size: 24px;
+      font-weight: 900;
+      font-family: 'Luckiest Guy', sans-serif;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .step-card__icon {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+    .step-card__title {
+      font-size: 24px;
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+    .step-card__text {
+      font-size: 15.5px;
+      line-height: 1.65;
+      color: #e2e8f0;
+    }
+
+    /* Simulation Showcase */
+    .demo-wrap { padding: 40px 0 80px; }
+    .demo-card {
+      position: relative;
+      border: 3px solid rgba(118, 216, 50, 0.7);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 0 30px rgba(118,216,50,0.25);
+      background: #0b1a12;
+    }
+    .demo-stage {
+      position: relative;
+      aspect-ratio: 16/9;
+      min-height: 240px;
+      overflow: hidden;
+      background: #0b1a12;
+    }
+    .demo-stage__bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .demo-stage__overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.35));
+    }
+    .demo-suns-tag {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(5, 11, 18, 0.88);
+      border: 2px solid #ffd76b;
+      border-radius: 12px;
+      padding: 6px 14px;
+      font-size: 15px;
+      font-weight: 900;
+      color: #ffffff;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+      z-index: 10;
+    }
+    .demo-suns-tag img { width: 22px; height: 22px; object-fit: contain; }
+    .demo-enemy-gauge {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-end;
+      z-index: 10;
+    }
+    .demo-enemy-gauge__label {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      color: #fca5a5;
+      text-shadow: 0 1px 4px #000;
+    }
+    .demo-enemy-gauge__bar {
+      width: 160px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(5, 11, 18, 0.85);
+      border: 2px solid rgba(255,255,255,0.4);
+      overflow: hidden;
+    }
+    .demo-enemy-gauge__fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ef4444, #f87171);
+      animation: pa-hp-gauge 6s ease-in-out infinite;
+    }
+
+    /* Simulation Trees */
+    .demo-base-player {
+      position: absolute;
+      left: 2%;
+      top: 18%;
+      height: 56%;
+      width: 11%;
+      display: grid;
+      place-items: center;
+      z-index: 5;
+      filter: drop-shadow(0 0 12px rgba(74,222,128,0.4));
+    }
+    .demo-base-player img { max-height: 100%; max-width: 100%; object-fit: contain; }
+    .demo-base-enemy {
+      position: absolute;
+      right: 2%;
+      top: 18%;
+      height: 56%;
+      width: 11%;
+      display: grid;
+      place-items: center;
+      z-index: 5;
+      animation: pa-enemy-shake 2.4s ease-in-out infinite;
+    }
+    .demo-base-enemy img { max-height: 100%; max-width: 100%; object-fit: contain; }
+    .demo-base-badge {
+      position: absolute;
+      bottom: -6px;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      background: rgba(5, 11, 18, 0.9);
+      border-radius: 6px;
+      padding: 2px 7px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      white-space: nowrap;
+    }
+
+    /* Floating Damage in Simulation */
+    .demo-dmg-float-1,
+    .demo-dmg-float-2,
+    .demo-dmg-float-3 {
+      position: absolute;
+      top: 10%;
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 18px;
+      color: #ff3344;
+      text-shadow: 0 0 8px rgba(255,0,0,0.8), 0 2px 2px #000;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .demo-dmg-float-1 { left: 0; animation: pa-dmg-1 2.2s ease-in-out infinite; }
+    .demo-dmg-float-2 { left: 20px; animation: pa-dmg-2 2.2s ease-in-out infinite; animation-delay: 0.7s; }
+    .demo-dmg-float-3 { left: -10px; animation: pa-dmg-3 2.2s ease-in-out infinite; animation-delay: 1.4s; }
+
+    /* Simulation Projectiles and Units */
+    .demo-unit {
+      position: absolute;
+      object-fit: contain;
+      z-index: 6;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.7));
+    }
+    .demo-pea-1, .demo-pea-2, .demo-pea-3 {
+      position: absolute;
+      top: 48%;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #bbf7d0 20%, #4ade80 60%, #15803d 100%);
+      box-shadow: 0 0 12px #4ade80, 0 0 4px #fff;
+      z-index: 8;
+      pointer-events: none;
+    }
+    .demo-pea-1 { animation: pa-pea-fly-1 1.4s linear infinite; }
+    .demo-pea-2 { animation: pa-pea-fly-2 1.4s linear infinite; animation-delay: 0.45s; }
+    .demo-pea-3 { animation: pa-pea-fly-3 1.4s linear infinite; animation-delay: 0.9s; }
+    .demo-spark {
+      position: absolute;
+      right: 22%;
+      top: 45%;
+      font-size: 20px;
+      animation: pa-spark 1.4s ease-out infinite;
+      animation-delay: 1.3s;
+      z-index: 11;
+      pointer-events: none;
+    }
+    .demo-punch {
+      position: absolute;
+      top: 61%;
+      left: 72%;
+      font-size: 22px;
+      animation: pa-punch 6s ease-in-out infinite;
+      z-index: 12;
+    }
+    .demo-sun-pop {
+      position: absolute;
+      left: 19%;
+      top: 20%;
+      font-size: 18px;
+      color: #fbbf24;
+      animation: pa-sun-pop 2.5s ease-out infinite;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .demo-deck-dock {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 17%;
+      background: rgba(5, 11, 18, 0.92);
+      border-top: 2px solid rgba(118, 216, 50, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 10;
+    }
+    .demo-deck-dock img {
+      height: 72%;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));
+    }
+    .demo-footer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(16, 26, 24, 0.95);
+      padding: 14px 24px;
+    }
+    .demo-status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #4ade80;
+    }
+    .demo-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 10px #22c55e;
+      animation: pa-pulse-dot 1.5s infinite ease-in-out;
+    }
+    .demo-info-text {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #cbd5e1;
+      letter-spacing: 0.04em;
+    }
+
+    /* Cards Grid */
+    .plants-filter-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 36px;
+    }
+    .rarity-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #f1f5f9;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      padding: 6px 14px;
+    }
+    .rarity-pill__dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+    .plants-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+      gap: 20px;
+    }
+    .plant-card-wrap {
+      perspective: 1000px;
+      height: 330px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .plant-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .plant-card-inner.flipped {
+      transform: rotateY(180deg);
+    }
+    .plant-card-front,
+    .plant-card-back {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      border-radius: 20px;
+      border-width: 2px;
+      border-style: solid;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.5);
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .plant-card-front {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .plant-card-wrap:hover .plant-card-front {
+      box-shadow: 0 14px 32px rgba(0,0,0,0.7);
+    }
+    .plant-card-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .plant-rarity-badge {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 6px;
+      padding: 3px 8px;
+      border: 1px solid currentColor;
+    }
+    .plant-rarity-initial {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      color: #050b12;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .plant-card-img {
+      max-width: 80%;
+      max-height: 135px;
+      object-fit: contain;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));
+      transition: transform 0.2s ease;
+    }
+    .plant-card-wrap:hover .plant-card-img {
+      transform: scale(1.08);
+    }
+    .plant-card-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+    }
+    .plant-card-name {
+      font-size: 18px;
+      font-weight: 900;
+      text-align: center;
+      color: #ffffff;
+    }
+    .plant-card-role {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .plant-card-cost {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 900;
+      color: #ffd23f;
+    }
+    .plant-card-cost img { width: 18px; height: 18px; object-fit: contain; }
+    .plant-card-hint {
+      font-size: 10px;
+      font-weight: 700;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      opacity: 0.85;
+    }
+
+    .plant-card-back {
+      transform: rotateY(180deg);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 8px;
+      background: linear-gradient(180deg, #0d1f18, #091410);
+    }
+    .plant-back-title {
+      font-size: 18px;
+      font-weight: 900;
+      margin-bottom: 2px;
+    }
+    .plant-stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      padding-bottom: 4px;
+    }
+    .plant-stat-val {
+      font-weight: 900;
+      color: #ffffff;
+    }
+    .plant-back-desc {
+      margin-top: 4px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      color: #f1f5f9;
+    }
+
+    /* Arenas */
+    .ladder-bar-wrap { margin: 24px 0 32px; }
+    .ladder-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #4ade80, #60a5fa, #c084fc, #fde047, #f43f5e);
+      box-shadow: 0 0 16px rgba(118, 216, 50, 0.4);
+    }
+    .arenas-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 18px;
+    }
+    .arena-card {
+      display: flex;
+      flex-direction: column;
+      background: #0d1a15;
+      border-radius: 22px;
+      border-width: 2px;
+      border-style: solid;
+      overflow: hidden;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .arena-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.8);
+    }
+    .arena-card__img-wrap {
+      position: relative;
+      aspect-ratio: 4/3;
+      overflow: hidden;
+      background: #0b1a12;
+    }
+    .arena-card__img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+    .arena-card:hover .arena-card__img { transform: scale(1.06); }
+    .arena-card__scrim {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(5,11,18,0.1) 0%, rgba(5,11,18,0.9) 100%);
+    }
+    .arena-card__tag {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      border-radius: 999px;
+      padding: 4px 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+    .arena-card__num {
+      position: absolute;
+      bottom: 4px;
+      right: 12px;
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 48px;
+      line-height: 1;
+      opacity: 0.85;
+      text-shadow: 0 3px 0 rgba(0,0,0,0.6);
+    }
+    .arena-card__body {
+      padding: 18px 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .arena-card__name {
+      font-size: 18px;
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+    .arena-card__elo {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+    }
+    .arena-card__elo img { width: 16px; height: 16px; object-fit: contain; }
+    .arena-card__desc {
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: #f1f5f9;
+      flex: 1;
+    }
+    .arena-card__payouts {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .payout-pill {
+      font-size: 11.5px;
+      font-weight: 900;
+      border-radius: 6px;
+      padding: 4px 10px;
+    }
+
+    /* Feature Trio */
+    .features-trio {
+      margin-top: 42px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .feature-box {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      background: rgba(16, 26, 24, 0.85);
+      border: 2px solid rgba(255, 215, 107, 0.6);
+      border-radius: 20px;
+      padding: 20px 22px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      backdrop-filter: blur(6px);
+    }
+    .feature-box__img {
+      width: 58px;
+      height: 58px;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6));
+    }
+    .feature-box__title {
+      font-size: 16px;
+      font-weight: 900;
+      color: #ffffff;
+    }
+    .feature-box__desc {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      line-height: 1.45;
+      margin-top: 2px;
+    }
+
+    /* CTA Banner */
+    .cta-banner {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, #b91c1c 0%, #dc2626 40%, #ea580c 100%);
+      padding: 84px 24px;
+      box-shadow: inset 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .cta-banner__wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      text-align: center;
+    }
+    .cta-banner__title {
+      font-size: clamp(32px, 5vw, 52px);
+      color: #ffffff;
+      line-height: 1.05;
+    }
+    .cta-banner__desc {
+      max-width: 600px;
+      font-size: 18px;
+      line-height: 1.6;
+      color: #fef2f2;
+    }
+
+    /* Footer */
+    .footer {
+      background: #050b12;
+      border-top: 1px solid rgba(118, 216, 50, 0.25);
+      padding: 56px 24px 36px;
+    }
+    .footer__grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 36px;
+      align-items: start;
+    }
+    .footer__brand {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .footer__brand img { height: 52px; width: auto; align-self: flex-start; }
+    .footer__brand p { font-size: 14px; line-height: 1.6; color: #94a3b8; }
+    .footer__col {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .footer__col-title {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #4ade80;
+      margin-bottom: 4px;
+    }
+    .footer__link { font-size: 14px; color: #cbd5e1; transition: color 0.15s ease; }
+    .footer__link:hover { color: #ffd23f; }
+    .footer__bottom {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    /* Media Queries */
+    @media (max-width: 1024px) {
+      .arenas-grid { grid-template-columns: repeat(3, 1fr); }
+      .footer__grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .navbar { padding: 10px 16px; }
+      .navbar__menu { display: none; }
+      .hero__plant-left, .hero__plant-right { display: none; }
+      .hero { padding: 50px 16px 70px; min-height: auto; }
+      .hero__stats-row { grid-template-columns: repeat(2, 1fr); }
+      .arenas-grid { grid-template-columns: repeat(2, 1fr); }
+      .footer__grid { grid-template-columns: 1fr; }
+      .demo-footer-bar { flex-direction: column; gap: 8px; align-items: flex-start; }
+    }
+
+    /* Mobile 2-Column Cards and Proportional Trees */
+    @media (max-width: 640px) {
+      .container { padding: 0 14px; }
+      .demo-stage { min-height: 200px; }
+      .demo-base-player, .demo-base-enemy {
+        height: 38% !important;
+        width: 8.5% !important;
+        top: 30% !important;
+      }
+      .demo-base-player { left: 1% !important; }
+      .demo-base-enemy { right: 1% !important; }
+      .demo-base-badge {
+        font-size: 7px !important;
+        padding: 1px 4px !important;
+        bottom: -9px !important;
+      }
+      .demo-suns-tag { font-size: 11px; padding: 3px 8px; top: 8px; left: 8px; }
+      .demo-suns-tag img { width: 16px; height: 16px; }
+      .demo-enemy-gauge { top: 8px; right: 8px; gap: 2px; }
+      .demo-enemy-gauge__label { font-size: 8px; }
+      .demo-enemy-gauge__bar { width: 80px; height: 7px; }
+      .demo-dmg-float-1, .demo-dmg-float-2, .demo-dmg-float-3 {
+        font-size: 12px !important;
+        top: 2% !important;
+      }
+
+      /* 2 Columns Cards */
+      .plants-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+      .plant-card-wrap { height: 270px; }
+      .plant-card-front { padding: 10px 8px; }
+      .plant-rarity-badge { font-size: 8.5px; padding: 2px 5px; }
+      .plant-rarity-initial { width: 20px; height: 20px; font-size: 10px; }
+      .plant-card-img { max-height: 92px; }
+      .plant-card-name { font-size: 14px; line-height: 1.15; }
+      .plant-card-role { font-size: 10px; }
+      .plant-card-cost { font-size: 12px; }
+      .plant-card-cost img { width: 14px; height: 14px; }
+      .plant-card-hint { font-size: 9px; }
+
+      .plant-card-back { padding: 12px 10px; gap: 5px; }
+      .plant-back-title { font-size: 14px; margin-bottom: 2px; }
+      .plant-stat-row { font-size: 11px; padding-bottom: 2px; }
+      .plant-back-desc { font-size: 10.5px; line-height: 1.35; margin-top: 2px; }
+
+      .arenas-grid { grid-template-columns: 1fr; }
+      .btn-primary { width: 100%; font-size: 18px; padding: 14px 20px; }
+      .btn-secondary { width: 100%; padding: 12px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- STICKY NAVBAR -->
+  <header class="navbar">
+    <a href="#" class="navbar__logo">
+      <img src="/src/assets/images/logo.png" alt="Plant Arena">
+    </a>
+    <nav class="navbar__menu">
+      <a href="#como-jugar" class="navbar__link">
+        <span data-l="es">Cómo se Juega</span>
+        <span data-l="en" style="display:none">How to Play</span>
+      </a>
+      <a href="#plantas" class="navbar__link">
+        <span data-l="es">Plantas</span>
+        <span data-l="en" style="display:none">Plants</span>
+      </a>
+      <a href="#arenas" class="navbar__link">
+        <span data-l="es">Arenas</span>
+        <span data-l="en" style="display:none">Arenas</span>
+      </a>
+    </nav>
+    <div class="navbar__actions">
+      <button type="button" class="lang-toggle-btn" id="langToggleBtn" title="Cambiar idioma / Switch language">
+        <span data-l="es">🌐 ES · EN</span>
+        <span data-l="en" style="display:none">🌐 EN · ES</span>
+      </button>
+      <a href="index.html" class="navbar__play-btn">
+        <span data-l="es">🎮 JUGAR</span>
+        <span data-l="en" style="display:none">🎮 PLAY</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- HERO SECTION -->
+  <section class="hero">
+    <div class="hero__scrim"></div>
+    <img src="/src/assets/images/plant1.png" alt="" class="hero__plant-left">
+    <img src="/src/assets/images/plant2.png" alt="" class="hero__plant-right">
+
+    <div class="hero__content">
+      <img src="/src/assets/images/logo.png" alt="Plant Arena" class="hero__logo">
+      <h1 class="headline-arcade hero__headline">
+        <span data-l="es">PLANTA. ATACA.<br><span class="highlight">DOMINA LA ARENA.</span></span>
+        <span data-l="en" style="display:none">PLANT. ATTACK.<br><span class="highlight">CLIMB THE ARENA.</span></span>
+      </h1>
+      <p class="hero__desc">
+        <span data-l="es">Estrategia PvP en tiempo real: recolecta soles, despliega tu mazo de 6 cartas en 3 carriles y derriba el Árbol Madre rival antes de que derribe el tuyo.</span>
+        <span data-l="en" style="display:none">Real-time PvP strategy: collect sun, deploy your 6-plant deck across 3 lanes, and bring down the rival Mother Tree before it takes down yours.</span>
+      </p>
+
+      <div class="hero__ctas">
+        <a href="index.html" class="btn-primary">
+          <span data-l="es">⚔️ ¡JUGAR AHORA!</span>
+          <span data-l="en" style="display:none">⚔️ PLAY NOW!</span>
+        </a>
+        <a href="#como-jugar" class="btn-secondary">
+          <span data-l="es">📖 Ver Cómo se Juega</span>
+          <span data-l="en" style="display:none">📖 How to Play</span>
+        </a>
+        <a href="https://t.me/" target="_blank" rel="noreferrer" class="btn-secondary">
+          <span data-l="es">💬 Telegram</span>
+          <span data-l="en" style="display:none">💬 Telegram</span>
+        </a>
+      </div>
+
+      <div class="hero__stats-row">
+        <div class="hero-stat-card">
+          <span class="hero-stat-card__val">15</span>
+          <span class="hero-stat-card__lbl">
+            <span data-l="es">Plantas</span><span data-l="en" style="display:none">Plants</span>
+          </span>
+        </div>
+        <div class="hero-stat-card">
+          <span class="hero-stat-card__val">5</span>
+          <span class="hero-stat-card__lbl">
+            <span data-l="es">Arenas</span><span data-l="en" style="display:none">Arenas</span>
+          </span>
+        </div>
+        <div class="hero-stat-card">
+          <span class="hero-stat-card__val">3</span>
+          <span class="hero-stat-card__lbl">
+            <span data-l="es">Carriles</span><span data-l="en" style="display:none">Lanes</span>
+          </span>
+        </div>
+        <div class="hero-stat-card">
+          <span class="hero-stat-card__val">600</span>
+          <span class="hero-stat-card__lbl">
+            <span data-l="es">HP Base</span><span data-l="en" style="display:none">Base HP</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW TO PLAY -->
+  <section id="como-jugar" class="section-play">
+    <div class="container">
+      <div class="section-title-wrap">
+        <span class="pill-badge pill-badge--red">
+          <span data-l="es">MECÁNICAS DE JUEGO</span>
+          <span data-l="en" style="display:none">HOW TO PLAY</span>
+        </span>
+        <h2 class="headline-arcade" style="font-size: clamp(32px, 4.5vw, 56px);">
+          <span data-l="es">TRES MINUTOS PARA APRENDER.<br>MESES PARA DOMINAR.</span>
+          <span data-l="en" style="display:none">THREE MINUTES TO LEARN.<br>MONTHS TO MASTER.</span>
+        </h2>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-card__bar" style="background:#fbbf24"></div>
+          <div class="step-card__body">
+            <div class="step-card__header">
+              <span class="step-card__num" style="background:#fbbf24;color:#451a03">01</span>
+              <img src="/game-assets/greenfoot/sun1.png" alt="Soles" class="step-card__icon" style="animation:pa-spin 8s linear infinite">
+            </div>
+            <h3 class="step-card__title">
+              <span data-l="es">Recolecta Soles</span>
+              <span data-l="en" style="display:none">Collect Sun</span>
+            </h3>
+            <p class="step-card__text">
+              <span data-l="es">Los girasoles generan soles de 25 en 25. Cada planta tiene un coste: 25 una Patata Mina, 375 un Melón-pult. Comienzas desde cero, ¡toda la energía se gana en el campo!</span>
+              <span data-l="en" style="display:none">Sunflowers produce sun in 25-point increments. Every card has a cost: 25 for Potato Mine, 375 for Melon-pult. You start from zero — earn it on the field!</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-card__bar" style="background:#22c55e"></div>
+          <div class="step-card__body">
+            <div class="step-card__header">
+              <span class="step-card__num" style="background:#22c55e;color:#052e16">02</span>
+              <img src="/game-assets/greenfoot/peashooterpacket1.png" alt="Mazo" class="step-card__icon">
+            </div>
+            <h3 class="step-card__title">
+              <span data-l="es">Despliega tu Mazo</span>
+              <span data-l="en" style="display:none">Deploy Your Deck</span>
+            </h3>
+            <p class="step-card__text">
+              <span data-l="es">Elige 6 cartas antes de cada batalla: productoras, atacantes a distancia, tanques defensivos y tropas cuerpo a cuerpo. Tu sinergia y tiempos de enfriamiento definirán la partida.</span>
+              <span data-l="en" style="display:none">Equip 6 cards per match: resource producers, ranged snipers, defensive tanks, and frontline melee warriors. Your deck synergy decides the battle.</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-card__bar" style="background:#ef4444"></div>
+          <div class="step-card__body">
+            <div class="step-card__header">
+              <span class="step-card__num" style="background:#ef4444;color:#ffffff">03</span>
+              <img src="/game-assets/greenfoot/bonkchoy1.png" alt="Derribar Base" class="step-card__icon">
+            </div>
+            <h3 class="step-card__title">
+              <span data-l="es">Derriba la Base Rival</span>
+              <span data-l="en" style="display:none">Destroy the Rival Base</span>
+            </h3>
+            <p class="step-card__text">
+              <span data-l="es">Las tropas cuerpo a cuerpo avanzan por su carril hasta impactar el Árbol Madre rival de 600 HP. ¡Quien destruya la base contraria gana copas Elo y sobres de cartas gratis!</span>
+              <span data-l="en" style="display:none">Melee plants march down their lanes to hit the 600 HP enemy Mother Tree. The first to topple the enemy base wins trophies and free reward card packs!</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LIVE BATTLEFIELD SHOWCASE -->
+  <section class="demo-wrap">
+    <div class="container">
+      <div class="demo-card">
+        <div class="demo-stage">
+          <img src="/src/assets/images/battlefield-bg.png" alt="" class="demo-stage__bg">
+          <div class="demo-stage__overlay"></div>
+
+          <!-- Sun Tag -->
+          <div class="demo-suns-tag">
+            <img src="/game-assets/greenfoot/sun1.png" alt=""> 225 ☀
+          </div>
+
+          <!-- Enemy Base HP Bar -->
+          <div class="demo-enemy-gauge">
+            <span class="demo-enemy-gauge__label">
+              <span data-l="es">ÁRBOL MADRE ENEMIGO</span>
+              <span data-l="en" style="display:none">ENEMY MOTHER TREE</span>
+            </span>
+            <div class="demo-enemy-gauge__bar">
+              <div class="demo-enemy-gauge__fill"></div>
+            </div>
+          </div>
+
+          <!-- Player Mother Tree (Left) -->
+          <div class="demo-base-player">
+            <img src="/game-assets/greenfoot/mothertree_whitebg.png" alt="">
+            <span class="demo-base-badge" style="color:#86efac">600 / 600 HP</span>
+          </div>
+
+          <!-- Enemy Mother Tree (Right) -->
+          <div class="demo-base-enemy">
+            <img src="/game-assets/greenfoot/mothertree_whitebg.png" alt="">
+            <span class="demo-base-badge" style="color:#fca5a5">215 / 600 HP</span>
+            <div class="demo-dmg-float-1">-65</div>
+            <div class="demo-dmg-float-2">-25</div>
+            <div class="demo-dmg-float-3">-80</div>
+          </div>
+
+          <!-- 3 Lane Lines -->
+          <div style="position:absolute;left:14%;right:14%;top:22%;height:18%;border-top:1px dashed rgba(255,255,255,0.22);border-bottom:1px dashed rgba(255,255,255,0.22)"></div>
+          <div style="position:absolute;left:14%;right:14%;top:56%;height:18%;border-top:1px dashed rgba(255,255,255,0.22);border-bottom:1px dashed rgba(255,255,255,0.22)"></div>
+
+          <!-- Lane 1: Sunflower + Cactus -->
+          <img src="/game-assets/greenfoot/transparentsunflower.png" alt="" class="demo-unit" style="left:16%;top:23%;height:15%;animation:pa-bounce 2s ease-in-out infinite">
+          <div class="demo-sun-pop">☀</div>
+          <img src="/game-assets/greenfoot/cactus1.png" alt="" class="demo-unit" style="top:22%;height:15%;animation:pa-walk-cactus 8s linear infinite;transform:scaleX(-1)">
+
+          <!-- Lane 2: Peashooter shooting rapid peas -> Enemy Wallnut -->
+          <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="" class="demo-unit" style="left:18%;top:42%;height:15%;animation:pa-recoil 1.4s ease-in-out infinite">
+          <div class="demo-pea-1"></div>
+          <div class="demo-pea-2"></div>
+          <div class="demo-pea-3"></div>
+          <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" class="demo-unit" style="right:18%;top:42%;height:14%;transform:scaleX(-1);filter:hue-rotate(300deg)">
+          <div class="demo-spark">💥</div>
+
+          <!-- Lane 3: Wall-nut + Bonk Choy marching & punching -->
+          <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" class="demo-unit" style="left:26%;top:61%;height:14%">
+          <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" class="demo-unit" style="top:60%;height:15%;animation:pa-walk-bonk 6s ease-in-out infinite">
+          <div class="demo-punch">🥊</div>
+
+          <!-- Falling Suns -->
+          <img src="/game-assets/greenfoot/sun1.png" alt="" style="position:absolute;left:36%;width:34px;height:34px;animation:pa-sunfall 4s linear infinite">
+          <img src="/game-assets/greenfoot/sun1.png" alt="" style="position:absolute;left:58%;width:34px;height:34px;animation:pa-sunfall 4s linear infinite;animation-delay:-2s">
+
+          <!-- Bottom Deck Dock -->
+          <div class="demo-deck-dock">
+            <img src="/game-assets/greenfoot/transparentsunflower.png" alt="">
+            <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="">
+            <img src="/game-assets/greenfoot/transparentwalnut.png" alt="">
+            <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" style="opacity:0.5">
+            <img src="/game-assets/greenfoot/potato1.png" alt="">
+            <img src="/game-assets/greenfoot/threepeater1.png" alt="" style="opacity:0.5">
+          </div>
+        </div>
+
+        <div class="demo-footer-bar">
+          <span class="demo-status-pill">
+            <span class="demo-status-dot"></span>
+            <span data-l="es">Simulación en Vivo · Combate 3 Carriles</span>
+            <span data-l="en" style="display:none">Live Simulation · 3-Lane Battle</span>
+          </span>
+          <span class="demo-info-text">
+            <span data-l="es">⚔️ Tiempo Real · Estrategia PvP</span>
+            <span data-l="en" style="display:none">⚔️ Real-Time · PvP Strategy</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 PLANTS COLLECTION -->
+  <section id="plantas" class="section-plants">
+    <div class="container">
+      <div class="section-title-wrap">
+        <span class="pill-badge pill-badge--green">
+          <span data-l="es">COLECCIÓN DE CARTAS</span>
+          <span data-l="en" style="display:none">CARD COLLECTION</span>
+        </span>
+        <h2 class="headline-arcade" style="font-size: clamp(32px, 4.5vw, 54px);">
+          <span data-l="es">15 PLANTAS, 4 ROLES ESTRATÉGICOS</span>
+          <span data-l="en" style="display:none">15 PLANTS, 4 TACTICAL ROLES</span>
+        </h2>
+        <p style="color:#e2e8f0;font-size:16px;max-width:600px">
+          <span data-l="es">Haz clic o toca cualquier carta para voltearla y ver sus estadísticas oficiales del juego.</span>
+          <span data-l="en" style="display:none">Click or tap any card to flip it and inspect its official in-game stats.</span>
+        </p>
+      </div>
+
+      <div class="plants-filter-pills">
+        <div class="rarity-pill"><span class="rarity-pill__dot" style="background:#4ade80"></span><span data-l="es">Común</span><span data-l="en" style="display:none">Common</span></div>
+        <div class="rarity-pill"><span class="rarity-pill__dot" style="background:#22d3ee"></span><span data-l="es">Poco Común</span><span data-l="en" style="display:none">Uncommon</span></div>
+        <div class="rarity-pill"><span class="rarity-pill__dot" style="background:#60a5fa"></span><span data-l="es">Rara</span><span data-l="en" style="display:none">Rare</span></div>
+        <div class="rarity-pill"><span class="rarity-pill__dot" style="background:#c084fc"></span><span data-l="es">Épica</span><span data-l="en" style="display:none">Epic</span></div>
+        <div class="rarity-pill"><span class="rarity-pill__dot" style="background:#fbbf24"></span><span data-l="es">Legendaria</span><span data-l="en" style="display:none">Legendary</span></div>
+      </div>
+
+      <div class="plants-grid">
+
+        <!-- 1. Sunflower -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(74,222,128,0.22),#0b1612);border-color:#4ade80">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#4ade80;background:rgba(74,222,128,0.2);border-color:#4ade80"><span data-l="es">COMÚN</span><span data-l="en" style="display:none">COMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#4ade80">C</span>
+              </div>
+              <img src="/game-assets/greenfoot/transparentsunflower.png" alt="Sunflower" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Sunflower</span>
+                <span class="plant-card-role" style="color:#4ade80"><span data-l="es">Productora</span><span data-l="en" style="display:none">Producer</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">50 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#4ade80">
+              <span class="plant-back-title" style="color:#4ade80">Sunflower</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">300</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">50 ☀</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Enfriamiento</span><span data-l="en" style="display:none">Cooldown</span></span><span class="plant-stat-val">5 s</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Genera 25 soles de forma periódica para desplegar más tropas en tus carriles.</span>
+                <span data-l="en" style="display:none">Periodically produces 25 sun to help you deploy more troops across your lanes.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Peashooter -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(74,222,128,0.22),#0b1612);border-color:#4ade80">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#4ade80;background:rgba(74,222,128,0.2);border-color:#4ade80"><span data-l="es">COMÚN</span><span data-l="en" style="display:none">COMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#4ade80">C</span>
+              </div>
+              <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="Peashooter" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Peashooter</span>
+                <span class="plant-card-role" style="color:#4ade80"><span data-l="es">A distancia</span><span data-l="en" style="display:none">Ranged</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">100 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#4ade80">
+              <span class="plant-back-title" style="color:#4ade80">Peashooter</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">300</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">25</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Cadencia</span><span data-l="en" style="display:none">Fire rate</span></span><span class="plant-stat-val">1.4 s</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">100 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Dispara guisantes directos a los enemigos que avanzan por su carril.</span>
+                <span data-l="en" style="display:none">Fires straight peas at approaching enemies along its lane.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Wall-nut -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(74,222,128,0.22),#0b1612);border-color:#4ade80">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#4ade80;background:rgba(74,222,128,0.2);border-color:#4ade80"><span data-l="es">COMÚN</span><span data-l="en" style="display:none">COMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#4ade80">C</span>
+              </div>
+              <img src="/game-assets/greenfoot/transparentwalnut.png" alt="Wall-nut" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Wall-nut</span>
+                <span class="plant-card-role" style="color:#4ade80"><span data-l="es">Defensiva</span><span data-l="en" style="display:none">Defensive</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">50 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#4ade80">
+              <span class="plant-back-title" style="color:#4ade80">Wall-nut</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">1,200</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">50 ☀</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Enfriamiento</span><span data-l="en" style="display:none">Cooldown</span></span><span class="plant-stat-val">15 s</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Cáscara blindada ultra resistente que retiene el avance enemigo y absorbe daño masivo.</span>
+                <span data-l="en" style="display:none">Ultra-tough armored shell that holds the line and absorbs heavy damage.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Cactus -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(74,222,128,0.22),#0b1612);border-color:#4ade80">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#4ade80;background:rgba(74,222,128,0.2);border-color:#4ade80"><span data-l="es">COMÚN</span><span data-l="en" style="display:none">COMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#4ade80">C</span>
+              </div>
+              <img src="/game-assets/greenfoot/cactus1.png" alt="Cactus" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Cactus</span>
+                <span class="plant-card-role" style="color:#4ade80"><span data-l="es">Cuerpo a cuerpo</span><span data-l="en" style="display:none">Melee</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">150 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#4ade80">
+              <span class="plant-back-title" style="color:#4ade80">Cactus</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">500</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">35</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Velocidad</span><span data-l="en" style="display:none">Speed</span></span><span class="plant-stat-val">4.5</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">150 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Camina hacia la base enemiga disparando espinas filosas continuamente.</span>
+                <span data-l="en" style="display:none">Marches toward the enemy base firing sharp thorns continuously.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Squash (Uses exact collection garlic1.png) -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(34,211,238,0.22),#08171d);border-color:#22d3ee">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#22d3ee;background:rgba(34,211,238,0.2);border-color:#22d3ee"><span data-l="es">POCO COMÚN</span><span data-l="en" style="display:none">UNCOMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#22d3ee">PC</span>
+              </div>
+              <img src="/game-assets/greenfoot/garlic1.png" alt="Squash" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Squash</span>
+                <span class="plant-card-role" style="color:#22d3ee"><span data-l="es">Cuerpo a cuerpo</span><span data-l="en" style="display:none">Melee</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">50 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#22d3ee">
+              <span class="plant-back-title" style="color:#22d3ee">Squash</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">300</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">600</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Velocidad</span><span data-l="en" style="display:none">Speed</span></span><span class="plant-stat-val">6.0</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">50 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Salta sobre el primer enemigo y lo aplasta en el acto con daño demoledor.</span>
+                <span data-l="en" style="display:none">Leaps onto the first enemy in sight and crushes it instantly.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Bonk Choy -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(34,211,238,0.22),#08171d);border-color:#22d3ee">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#22d3ee;background:rgba(34,211,238,0.2);border-color:#22d3ee"><span data-l="es">POCO COMÚN</span><span data-l="en" style="display:none">UNCOMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#22d3ee">PC</span>
+              </div>
+              <img src="/game-assets/greenfoot/bonkchoy1.png" alt="Bonk Choy" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Bonk Choy</span>
+                <span class="plant-card-role" style="color:#22d3ee"><span data-l="es">Cuerpo a cuerpo</span><span data-l="en" style="display:none">Melee</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">150 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#22d3ee">
+              <span class="plant-back-title" style="color:#22d3ee">Bonk Choy</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">600</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">65</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Velocidad</span><span data-l="en" style="display:none">Speed</span></span><span class="plant-stat-val">5.0</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">150 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Boxeador veloz que reparte ráfagas de puñetazos letales a corta distancia.</span>
+                <span data-l="en" style="display:none">Speedy boxer delivering rapid-fire punches at close range.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Repeater -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(34,211,238,0.22),#08171d);border-color:#22d3ee">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#22d3ee;background:rgba(34,211,238,0.2);border-color:#22d3ee"><span data-l="es">POCO COMÚN</span><span data-l="en" style="display:none">UNCOMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#22d3ee">PC</span>
+              </div>
+              <img src="/game-assets/greenfoot/transparentrepeater.png" alt="Repeater" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Repeater</span>
+                <span class="plant-card-role" style="color:#22d3ee"><span data-l="es">A distancia</span><span data-l="en" style="display:none">Ranged</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">200 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#22d3ee">
+              <span class="plant-back-title" style="color:#22d3ee">Repeater</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">300</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">25 ×2</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Cadencia</span><span data-l="en" style="display:none">Fire rate</span></span><span class="plant-stat-val">1.2 s</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">200 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Dispara dos guisantes continuos duplicando el poder de fuego por carril.</span>
+                <span data-l="en" style="display:none">Fires two consecutive peas, doubling firepower on its lane.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. Melon-pult -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(34,211,238,0.22),#08171d);border-color:#22d3ee">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#22d3ee;background:rgba(34,211,238,0.2);border-color:#22d3ee"><span data-l="es">POCO COMÚN</span><span data-l="en" style="display:none">UNCOMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#22d3ee">PC</span>
+              </div>
+              <img src="/game-assets/images/Plants/melon_pult.png" alt="Melon-pult" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Melon-pult</span>
+                <span class="plant-card-role" style="color:#22d3ee"><span data-l="es">A distancia</span><span data-l="en" style="display:none">Ranged</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">375 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#22d3ee">
+              <span class="plant-back-title" style="color:#22d3ee">Melon-pult</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">350</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">80 (Splash)</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Cadencia</span><span data-l="en" style="display:none">Fire rate</span></span><span class="plant-stat-val">2.4 s</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">375 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Catapulta melones gigantescos que causan daño de área masivo al impactar.</span>
+                <span data-l="en" style="display:none">Lobs giant melons dealing massive splash damage across the impact zone.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. Potato Mine -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(34,211,238,0.22),#08171d);border-color:#22d3ee">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#22d3ee;background:rgba(34,211,238,0.2);border-color:#22d3ee"><span data-l="es">POCO COMÚN</span><span data-l="en" style="display:none">UNCOMMON</span></span>
+                <span class="plant-rarity-initial" style="background:#22d3ee">PC</span>
+              </div>
+              <img src="/game-assets/greenfoot/potato1.png" alt="Potato Mine" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Potato Mine</span>
+                <span class="plant-card-role" style="color:#22d3ee"><span data-l="es">Defensiva</span><span data-l="en" style="display:none">Defensive</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">25 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#22d3ee">
+              <span class="plant-back-title" style="color:#22d3ee">Potato Mine</span>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">1,800</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">25 ☀</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Enfriamiento</span><span data-l="en" style="display:none">Cooldown</span></span><span class="plant-stat-val">20 s</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Tarda unos segundos en armarse. Al ser pisada, detona con daño fulminante de 1,800.</span>
+                <span data-l="en" style="display:none">Takes a few seconds to arm. When stepped on, explodes for an immense 1,800 damage.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10. Twin Sunflower -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(96,165,250,0.22),#081627);border-color:#60a5fa">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#60a5fa;background:rgba(96,165,250,0.2);border-color:#60a5fa"><span data-l="es">RARA</span><span data-l="en" style="display:none">RARE</span></span>
+                <span class="plant-rarity-initial" style="background:#60a5fa">R</span>
+              </div>
+              <img src="/game-assets/greenfoot/twinsunflower1.png" alt="Twin Sunflower" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Twin Sunflower</span>
+                <span class="plant-card-role" style="color:#60a5fa"><span data-l="es">Productora</span><span data-l="en" style="display:none">Producer</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">125 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#60a5fa">
+              <span class="plant-back-title" style="color:#60a5fa">Twin Sunflower</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">300</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">125 ☀</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Enfriamiento</span><span data-l="en" style="display:none">Cooldown</span></span><span class="plant-stat-val">10 s</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Girasol doble que produce el doble de soles para una economía acelerada.</span>
+                <span data-l="en" style="display:none">Twin sunflower that produces double the sun for rapid economy acceleration.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 11. Jalapeño (Uses exact collection jalapeno_hd.png) -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(96,165,250,0.22),#081627);border-color:#60a5fa">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#60a5fa;background:rgba(96,165,250,0.2);border-color:#60a5fa"><span data-l="es">RARA</span><span data-l="en" style="display:none">RARE</span></span>
+                <span class="plant-rarity-initial" style="background:#60a5fa">R</span>
+              </div>
+              <img src="/game-assets/plants/jalapeno_hd.png" alt="Jalapeño" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Jalapeño</span>
+                <span class="plant-card-role" style="color:#60a5fa"><span data-l="es">Defensiva</span><span data-l="en" style="display:none">Defensive</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">125 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#60a5fa">
+              <span class="plant-back-title" style="color:#60a5fa">Jalapeño</span>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">1,000</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">125 ☀</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Alcance</span><span data-l="en" style="display:none">Range</span></span><span class="plant-stat-val">Carril Entero</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Detona en llamas consumiendo el carril completo y aniquilando a las tropas enemigas.</span>
+                <span data-l="en" style="display:none">Explodes in a row of fire, burning the whole lane and annihilating enemies.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 12. Aloe Curandera (Uses exact collection aloe_hd.png) -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(192,132,252,0.22),#170b28);border-color:#c084fc">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#c084fc;background:rgba(192,132,252,0.2);border-color:#c084fc"><span data-l="es">ÉPICA</span><span data-l="en" style="display:none">EPIC</span></span>
+                <span class="plant-rarity-initial" style="background:#c084fc">E</span>
+              </div>
+              <img src="/game-assets/plants/aloe_hd.png" alt="Aloe Curandera" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name"><span data-l="es">Aloe Curandera</span><span data-l="en" style="display:none">Healer Aloe</span></span>
+                <span class="plant-card-role" style="color:#c084fc"><span data-l="es">Productora</span><span data-l="en" style="display:none">Producer</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">75 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#c084fc">
+              <span class="plant-back-title" style="color:#c084fc"><span data-l="es">Aloe Curandera</span><span data-l="en" style="display:none">Healer Aloe</span></span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">300</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Curación</span><span data-l="en" style="display:none">Healing</span></span><span class="plant-stat-val">+150 HP</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">75 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Cura a tus plantas adyacentes heridas manteniendo a tus tropas vivas en batalla.</span>
+                <span data-l="en" style="display:none">Heals damaged adjacent plants, keeping your frontline alive longer.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 13. Tall-nut -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(192,132,252,0.22),#170b28);border-color:#c084fc">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#c084fc;background:rgba(192,132,252,0.2);border-color:#c084fc"><span data-l="es">ÉPICA</span><span data-l="en" style="display:none">EPIC</span></span>
+                <span class="plant-rarity-initial" style="background:#c084fc">E</span>
+              </div>
+              <img src="/game-assets/greenfoot/transparenttallnut.png" alt="Tall-nut" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Tall-nut</span>
+                <span class="plant-card-role" style="color:#c084fc"><span data-l="es">Defensiva</span><span data-l="en" style="display:none">Defensive</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">125 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#c084fc">
+              <span class="plant-back-title" style="color:#c084fc">Tall-nut</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">2,400</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">125 ☀</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Enfriamiento</span><span data-l="en" style="display:none">Cooldown</span></span><span class="plant-stat-val">20 s</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Nuez gigante colosal: muro infranqueable con un colosal escudo de 2,400 HP.</span>
+                <span data-l="en" style="display:none">Colossal wall: an impassable barrier boasting an enormous 2,400 HP.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 14. Lechuga Helada (Uses exact collection iceberglettuce_hd.png) -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(251,191,36,0.22),#241908);border-color:#fbbf24">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#fbbf24;background:rgba(251,191,36,0.2);border-color:#fbbf24"><span data-l="es">LEGENDARIA</span><span data-l="en" style="display:none">LEGENDARY</span></span>
+                <span class="plant-rarity-initial" style="background:#fbbf24">L</span>
+              </div>
+              <img src="/game-assets/plants/iceberglettuce_hd.png" alt="Lechuga Helada" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name"><span data-l="es">Lechuga Helada</span><span data-l="en" style="display:none">Iceberg Lettuce</span></span>
+                <span class="plant-card-role" style="color:#fbbf24"><span data-l="es">Defensiva</span><span data-l="en" style="display:none">Defensive</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">0 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#fbbf24">
+              <span class="plant-back-title" style="color:#fbbf24"><span data-l="es">Lechuga Helada</span><span data-l="en" style="display:none">Iceberg Lettuce</span></span>
+              <div class="plant-stat-row"><span><span data-l="es">Congelación</span><span data-l="en" style="display:none">Freeze</span></span><span class="plant-stat-val">7 s</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">0 ☀ (GRATIS)</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Enfriamiento</span><span data-l="en" style="display:none">Cooldown</span></span><span class="plant-stat-val">12 s</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">¡Coste cero soles! Congela a todas las tropas enemigas en su carril durante 7 segundos completos.</span>
+                <span data-l="en" style="display:none">Zero sun cost! Freezes all lane enemies solid for 7 full seconds.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 15. Threepeater -->
+        <div class="plant-card-wrap" onclick="this.querySelector('.plant-card-inner').classList.toggle('flipped')">
+          <div class="plant-card-inner">
+            <div class="plant-card-front" style="background:linear-gradient(180deg,rgba(251,191,36,0.22),#241908);border-color:#fbbf24">
+              <div class="plant-card-topbar">
+                <span class="plant-rarity-badge" style="color:#fbbf24;background:rgba(251,191,36,0.2);border-color:#fbbf24"><span data-l="es">LEGENDARIA</span><span data-l="en" style="display:none">LEGENDARY</span></span>
+                <span class="plant-rarity-initial" style="background:#fbbf24">L</span>
+              </div>
+              <img src="/game-assets/greenfoot/threepeater1.png" alt="Threepeater" class="plant-card-img">
+              <div class="plant-card-meta">
+                <span class="plant-card-name">Threepeater</span>
+                <span class="plant-card-role" style="color:#fbbf24"><span data-l="es">A distancia</span><span data-l="en" style="display:none">Ranged</span></span>
+                <span class="plant-card-cost"><img src="/game-assets/greenfoot/sun1.png" alt="">325 ☀</span>
+                <span class="plant-card-hint">🔄 <span data-l="es">Toca para ver stats</span><span data-l="en" style="display:none">Tap for stats</span></span>
+              </div>
+            </div>
+            <div class="plant-card-back" style="border-color:#fbbf24">
+              <span class="plant-back-title" style="color:#fbbf24">Threepeater</span>
+              <div class="plant-stat-row"><span>HP</span><span class="plant-stat-val">300</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Daño</span><span data-l="en" style="display:none">Damage</span></span><span class="plant-stat-val">75 (3 Carriles)</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Cadencia</span><span data-l="en" style="display:none">Fire rate</span></span><span class="plant-stat-val">1.4 s</span></div>
+              <div class="plant-stat-row"><span><span data-l="es">Coste</span><span data-l="en" style="display:none">Cost</span></span><span class="plant-stat-val">325 ☀</span></div>
+              <p class="plant-back-desc">
+                <span data-l="es">Dispara guisantes a los 3 carriles simultáneamente, dominando el tablero completo.</span>
+                <span data-l="en" style="display:none">Fires peas into all 3 lanes simultaneously, controlling the whole board.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 ARENAS & ELO -->
+  <section id="arenas" class="section-arenas">
+    <div class="container">
+      <div class="section-title-wrap">
+        <span class="pill-badge pill-badge--gold">
+          <span data-l="es">CAMINO DE ARENAS</span>
+          <span data-l="en" style="display:none">ARENAS ROAD</span>
+        </span>
+        <h2 class="headline-arcade" style="font-size: clamp(32px, 4.5vw, 56px);">
+          <span data-l="es">5 ARENAS. UN SOLO CAMINO A LA GLORIA.</span>
+          <span data-l="en" style="display:none">5 ARENAS. ONE ROAD TO GLORY.</span>
+        </h2>
+        <p style="color:#e2e8f0;font-size:16px;max-width:680px">
+          <span data-l="es">Empiezas con 1000 de Elo en el Jardín Clásico. Cada victoria te otorga copas para ascender y desbloquear nuevas cartas y campos.</span>
+          <span data-l="en" style="display:none">Start at 1000 Elo in the Classic Garden. Every victory earns trophies to climb and unlock new cards and battlegrounds.</span>
+        </p>
+      </div>
+
+      <div class="ladder-bar-wrap">
+        <div class="ladder-bar"></div>
+      </div>
+
+      <div class="arenas-grid">
+        <!-- Arena 1 -->
+        <div class="arena-card" style="border-color:#4ade80">
+          <div class="arena-card__img-wrap">
+            <img src="/src/assets/images/battlefield-bg.png" alt="Arena 1" class="arena-card__img">
+            <div class="arena-card__scrim"></div>
+            <span class="arena-card__tag" style="background:#4ade80;color:#052e16">ARENA 1</span>
+            <span class="arena-card__num" style="color:#4ade80">1</span>
+          </div>
+          <div class="arena-card__body">
+            <h3 class="arena-card__name"><span data-l="es">Jardín Clásico</span><span data-l="en" style="display:none">Classic Garden</span></h3>
+            <span class="arena-card__elo" style="color:#4ade80">
+              <img src="/src/assets/ico/Ranking.png" alt=""> 0 – 1600 ELO
+            </span>
+            <p class="arena-card__desc">
+              <span data-l="es">Campo de césped tradicional bajo un sol resplandeciente.</span>
+              <span data-l="en" style="display:none">Traditional grass field under a bright sun.</span>
+            </p>
+            <div class="arena-card__payouts">
+              <span class="payout-pill" style="background:#4ade80;color:#052e16">🏆 +15 Elo</span>
+              <span class="payout-pill" style="background:rgba(239,68,68,0.85);color:#fff">−8 Elo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arena 2 -->
+        <div class="arena-card" style="border-color:#60a5fa">
+          <div class="arena-card__img-wrap">
+            <img src="/src/assets/images/battlefield-bg2.jpg" alt="Arena 2" class="arena-card__img">
+            <div class="arena-card__scrim"></div>
+            <span class="arena-card__tag" style="background:#60a5fa;color:#082f49">ARENA 2</span>
+            <span class="arena-card__num" style="color:#60a5fa">2</span>
+          </div>
+          <div class="arena-card__body">
+            <h3 class="arena-card__name"><span data-l="es">Desierto Nocturno</span><span data-l="en" style="display:none">Night Desert</span></h3>
+            <span class="arena-card__elo" style="color:#60a5fa">
+              <img src="/src/assets/ico/Ranking.png" alt=""> 1601 – 2000 ELO
+            </span>
+            <p class="arena-card__desc">
+              <span data-l="es">Dunas arenosas con cactus bioluminiscentes bajo la luna llena.</span>
+              <span data-l="en" style="display:none">Sandy dunes with glowing bioluminescent cacti under the full moon.</span>
+            </p>
+            <div class="arena-card__payouts">
+              <span class="payout-pill" style="background:#60a5fa;color:#082f49">🏆 +12 Elo</span>
+              <span class="payout-pill" style="background:rgba(239,68,68,0.85);color:#fff">−8 Elo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arena 3 -->
+        <div class="arena-card" style="border-color:#c084fc">
+          <div class="arena-card__img-wrap">
+            <img src="/src/assets/images/battlefield-bg3.jpg" alt="Arena 3" class="arena-card__img">
+            <div class="arena-card__scrim"></div>
+            <span class="arena-card__tag" style="background:#c084fc;color:#3b0764">ARENA 3</span>
+            <span class="arena-card__num" style="color:#c084fc">3</span>
+          </div>
+          <div class="arena-card__body">
+            <h3 class="arena-card__name"><span data-l="es">Rascacielos Cyberpunk</span><span data-l="en" style="display:none">Cyberpunk Skyline</span></h3>
+            <span class="arena-card__elo" style="color:#c084fc">
+              <img src="/src/assets/ico/Ranking.png" alt=""> 2001 – 3000 ELO
+            </span>
+            <p class="arena-card__desc">
+              <span data-l="es">Azotea futurista iluminada por neones sobre una gran metrópolis.</span>
+              <span data-l="en" style="display:none">Futuristic neon-lit rooftop towering high above the metropolis.</span>
+            </p>
+            <div class="arena-card__payouts">
+              <span class="payout-pill" style="background:#c084fc;color:#3b0764">🏆 +10 Elo</span>
+              <span class="payout-pill" style="background:rgba(239,68,68,0.85);color:#fff">−8 Elo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arena 4 -->
+        <div class="arena-card" style="border-color:#fde047">
+          <div class="arena-card__img-wrap">
+            <img src="/src/assets/images/battlefield-bg4.jpg" alt="Arena 4" class="arena-card__img">
+            <div class="arena-card__scrim"></div>
+            <span class="arena-card__tag" style="background:#fde047;color:#451a03">ARENA 4</span>
+            <span class="arena-card__num" style="color:#fde047">4</span>
+          </div>
+          <div class="arena-card__body">
+            <h3 class="arena-card__name"><span data-l="es">Coliseo Galáctico</span><span data-l="en" style="display:none">Galactic Colosseum</span></h3>
+            <span class="arena-card__elo" style="color:#fde047">
+              <img src="/src/assets/ico/Ranking.png" alt=""> 3001 – 4000 ELO
+            </span>
+            <p class="arena-card__desc">
+              <span data-l="es">Plataforma orbital suspendida entre nebulosas y lluvias de meteoros.</span>
+              <span data-l="en" style="display:none">Orbital platform suspended between nebulas and meteor showers.</span>
+            </p>
+            <div class="arena-card__payouts">
+              <span class="payout-pill" style="background:#fde047;color:#451a03">🏆 +8 Elo</span>
+              <span class="payout-pill" style="background:rgba(239,68,68,0.85);color:#fff">−7 Elo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arena 5 -->
+        <div class="arena-card" style="border-color:#f43f5e">
+          <div class="arena-card__img-wrap">
+            <img src="/src/assets/images/battlefield-bg5.jpg" alt="Arena 5" class="arena-card__img">
+            <div class="arena-card__scrim"></div>
+            <span class="arena-card__tag" style="background:#f43f5e;color:#ffffff">ARENA 5</span>
+            <span class="arena-card__num" style="color:#f43f5e">5</span>
+          </div>
+          <div class="arena-card__body">
+            <h3 class="arena-card__name"><span data-l="es">Olimpo de Leyendas</span><span data-l="en" style="display:none">Olympus of Legends</span></h3>
+            <span class="arena-card__elo" style="color:#f43f5e">
+              <img src="/src/assets/ico/Ranking.png" alt=""> 4001+ ELO
+            </span>
+            <p class="arena-card__desc">
+              <span data-l="es">Templo dorado supremo reservado solo para los campeones mundiales.</span>
+              <span data-l="en" style="display:none">Supreme golden temple reserved only for world champions.</span>
+            </p>
+            <div class="arena-card__payouts">
+              <span class="payout-pill" style="background:#f43f5e;color:#ffffff">🏆 +6 Elo</span>
+              <span class="payout-pill" style="background:rgba(239,68,68,0.85);color:#fff">−6 Elo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature Trio -->
+      <div class="features-trio">
+        <div class="feature-box">
+          <img src="/game-assets/greenfoot/seed_pack_common_whitebg.png" alt="Sobres" class="feature-box__img">
+          <div>
+            <h4 class="feature-box__title"><span data-l="es">Sobres por Victoria</span><span data-l="en" style="display:none">Packs on Win</span></h4>
+            <p class="feature-box__desc"><span data-l="es">Cada partida ganada en la arena te otorga un sobre de semillas gratuito.</span><span data-l="en" style="display:none">Every victory earned awards a free seed reward pack.</span></p>
+          </div>
+        </div>
+        <div class="feature-box">
+          <img src="/game-assets/greenfoot/seed_pack_epic_whitebg.png" alt="Ranuras" class="feature-box__img">
+          <div>
+            <h4 class="feature-box__title"><span data-l="es">4 Ranuras de Sobres</span><span data-l="en" style="display:none">4 Free Pack Slots</span></h4>
+            <p class="feature-box__desc"><span data-l="es">Sistema estilo Clash Royale: desbloquea sobres por tiempo de forma 100% gratuita.</span><span data-l="en" style="display:none">Clash Royale style system: time-unlock packs completely free.</span></p>
+          </div>
+        </div>
+        <div class="feature-box">
+          <img src="/game-assets/greenfoot/seed_pack_legendary_whitebg.png" alt="Mejoras" class="feature-box__img">
+          <div>
+            <h4 class="feature-box__title"><span data-l="es">Fusión & Mejoras</span><span data-l="en" style="display:none">Fusion & Upgrades</span></h4>
+            <p class="feature-box__desc"><span data-l="es">Acumula copias repetidas para fusionar y otorgar +15% de HP y daño por nivel.</span><span data-l="en" style="display:none">Collect duplicate cards to fuse: +15% HP & damage per level.</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BANNER -->
+  <section class="cta-banner">
+    <div class="cta-banner__wrap">
+      <h2 class="headline-arcade cta-banner__title">
+        <span data-l="es">¡TU MAZO TE ESPERA EN LA ARENA!</span>
+        <span data-l="en" style="display:none">YOUR DECK AWAITS IN THE ARENA!</span>
+      </h2>
+      <p class="cta-banner__desc">
+        <span data-l="es">Empieza tu primera partida en menos de 10 segundos directamente desde tu navegador, en PC o móvil.</span>
+        <span data-l="en" style="display:none">Launch your first match in under 10 seconds directly in your browser on PC or mobile.</span>
+      </p>
+      <a href="index.html" class="btn-primary" style="font-size:22px;padding:18px 44px">
+        <span data-l="es">🎮 ¡ENTRAR AL JUEGO AHORA!</span>
+        <span data-l="en" style="display:none">🎮 PLAY THE GAME NOW!</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__grid">
+        <div class="footer__brand">
+          <img src="/src/assets/images/logo.png" alt="Plant Arena">
+          <p>
+            <span data-l="es">Plant Arena es un juego de estrategia en tiempo real 100% web, jugable sin descargas en cualquier dispositivo.</span>
+            <span data-l="en" style="display:none">Plant Arena is a real-time PvP strategy game, instantly playable in your browser without downloads.</span>
+          </p>
+        </div>
+        <div class="footer__col">
+          <span class="footer__col-title"><span data-l="es">Navegación</span><span data-l="en" style="display:none">Navigation</span></span>
+          <a href="#como-jugar" class="footer__link"><span data-l="es">Cómo se Juega</span><span data-l="en" style="display:none">How to Play</span></a>
+          <a href="#plantas" class="footer__link"><span data-l="es">15 Plantas</span><span data-l="en" style="display:none">15 Plants</span></a>
+          <a href="#arenas" class="footer__link"><span data-l="es">5 Arenas & Elo</span><span data-l="en" style="display:none">5 Arenas & Elo</span></a>
+        </div>
+        <div class="footer__col">
+          <span class="footer__col-title"><span data-l="es">Comunidad</span><span data-l="en" style="display:none">Community</span></span>
+          <a href="https://t.me/" target="_blank" rel="noreferrer" class="footer__link">Telegram</a>
+          <a href="index.html" class="footer__link"><span data-l="es">Jugar en Navegador</span><span data-l="en" style="display:none">Play in Browser</span></a>
+        </div>
+        <div class="footer__col">
+          <span class="footer__col-title"><span data-l="es">Proyecto</span><span data-l="en" style="display:none">Project</span></span>
+          <span style="font-size:14px;color:#94a3b8">Fanmade PvZ PvP</span>
+          <span style="font-size:13px;color:#64748b">Vite + TypeScript + React</span>
+        </div>
+      </div>
+      <div class="footer__bottom">
+        <span>© 2026 Plant Arena. Todos los derechos reservados.</span>
+        <span>
+          <span data-l="es">Optimizado para computadoras y dispositivos móviles.</span>
+          <span data-l="en" style="display:none">Optimized for desktop and mobile devices.</span>
+        </span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Bilingual toggle script -->
+  <script>
+    (function() {
+      var currentLang = 'es';
+      function applyLanguage(lang) {
+        currentLang = lang;
+        document.querySelectorAll('[data-l="es"]').forEach(function(el) {
+          el.style.display = (lang === 'es') ? '' : 'none';
+        });
+        document.querySelectorAll('[data-l="en"]').forEach(function(el) {
+          el.style.display = (lang === 'en') ? '' : 'none';
+        });
+        document.documentElement.lang = lang;
+      }
+      var langBtn = document.getElementById('langToggleBtn');
+      if (langBtn) {
+        langBtn.addEventListener('click', function() {
+          applyLanguage(currentLang === 'es' ? 'en' : 'es');
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
