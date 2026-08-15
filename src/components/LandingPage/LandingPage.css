@@ -1,5 +1,112 @@
 /* LandingPage.css */
 
+/* KEYFRAME ANIMATIONS */
+@keyframes pa-sway-l {
+  0%, 100% { transform: translateY(-50%) rotate(0deg); }
+  50% { transform: translateY(calc(-50% - 14px)) rotate(-4deg); }
+}
+@keyframes pa-sway-r {
+  0%, 100% { transform: translateY(-50%) rotate(0deg); }
+  50% { transform: translateY(calc(-50% - 14px)) rotate(4deg); }
+}
+@keyframes pa-logo {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(118,216,50,0.4)); }
+  50% { transform: scale(1.04); filter: drop-shadow(0 0 35px rgba(255,210,63,0.7)); }
+}
+@keyframes pa-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes pa-pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Battle Simulation Animations */
+@keyframes pa-pea-fly-1 {
+  0% { left: 24%; opacity: 0; transform: translateY(-50%) scale(0.6); }
+  10% { opacity: 1; transform: translateY(-50%) scale(1); }
+  85% { opacity: 1; }
+  100% { left: 74%; opacity: 0; transform: translateY(-50%) scale(1.3); }
+}
+@keyframes pa-pea-fly-2 {
+  0% { left: 24%; opacity: 0; transform: translateY(-50%) scale(0.6); }
+  10% { opacity: 1; transform: translateY(-50%) scale(1); }
+  85% { opacity: 1; }
+  100% { left: 74%; opacity: 0; transform: translateY(-50%) scale(1.3); }
+}
+@keyframes pa-pea-fly-3 {
+  0% { left: 24%; opacity: 0; transform: translateY(-50%) scale(0.6); }
+  10% { opacity: 1; transform: translateY(-50%) scale(1); }
+  85% { opacity: 1; }
+  100% { left: 74%; opacity: 0; transform: translateY(-50%) scale(1.3); }
+}
+@keyframes pa-recoil {
+  0%, 100% { transform: translateX(0) scale(1); }
+  15% { transform: translateX(-4px) scale(1.08, 0.92); }
+  35% { transform: translateX(2px) scale(0.96, 1.04); }
+}
+@keyframes pa-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.05); }
+}
+@keyframes pa-sun-pop {
+  0% { opacity: 0; transform: scale(0.4) translateY(0); }
+  50% { opacity: 1; transform: scale(1.2) translateY(-14px); }
+  100% { opacity: 0; transform: scale(0.8) translateY(-28px); }
+}
+@keyframes pa-walk-cactus {
+  0% { left: 20%; }
+  50% { left: 52%; }
+  100% { left: 20%; }
+}
+@keyframes pa-walk-bonk {
+  0% { left: 32%; transform: scale(1); }
+  45% { left: 70%; transform: scale(1.1) rotate(-6deg); }
+  55% { left: 70%; transform: scale(1.15) rotate(6deg); }
+  100% { left: 32%; transform: scale(1); }
+}
+@keyframes pa-punch {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  45%, 55% { opacity: 1; transform: scale(1.4) rotate(12deg); }
+}
+@keyframes pa-enemy-shake {
+  0%, 100% { transform: scaleX(-1) translateX(0); filter: hue-rotate(310deg) saturate(1.4); }
+  45% { transform: scaleX(-1) translateX(6px); filter: hue-rotate(340deg) brightness(1.5) saturate(2); }
+  55% { transform: scaleX(-1) translateX(-6px); filter: hue-rotate(340deg) brightness(1.5) saturate(2); }
+}
+@keyframes pa-spark {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  85% { opacity: 1; transform: scale(1.3); }
+}
+@keyframes pa-dmg-1 {
+  0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  40% { opacity: 1; transform: translate(-10px, -18px) scale(1.2); }
+  70% { opacity: 0; transform: translate(-15px, -32px) scale(0.9); }
+}
+@keyframes pa-dmg-2 {
+  0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  60% { opacity: 1; transform: translate(12px, -20px) scale(1.2); }
+  85% { opacity: 0; transform: translate(16px, -36px) scale(0.9); }
+}
+@keyframes pa-dmg-3 {
+  0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  20% { opacity: 1; transform: translate(0, -16px) scale(1.3); }
+  50% { opacity: 0; transform: translate(4px, -30px) scale(0.8); }
+}
+@keyframes pa-hp-gauge {
+  0% { width: 85%; }
+  50% { width: 36%; }
+  100% { width: 85%; }
+}
+@keyframes pa-sunfall {
+  0% { top: 6%; opacity: 0; transform: translateY(0) rotate(0deg); }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { top: 78%; opacity: 0; transform: translateY(16px) rotate(180deg); }
+}
+
+/* APP WRAPPER */
 .landing-app {
   width: 100%;
   min-height: 100vh;
@@ -59,7 +166,7 @@
   font-family: 'Luckiest Guy', 'Inter', cursive, sans-serif;
   letter-spacing: 0.02em;
   line-height: 1.1;
-  font-size: clamp(32px, 4.5vw, 56px);
+  font-size: clamp(30px, 4.5vw, 54px);
   text-shadow: 0 3px 0 rgba(0,0,0,0.7), 0 6px 16px rgba(0,0,0,0.8);
 }
 
@@ -392,7 +499,9 @@
   color: #e2e8f0;
 }
 
-/* DEMO PREVIEW */
+/* =========================================================
+   LIVE BATTLEFIELD SIMULATION
+   ========================================================= */
 .landing-demo-wrap {
   padding: 40px 0 80px;
 }
@@ -407,6 +516,7 @@
 .landing-demo-stage {
   position: relative;
   aspect-ratio: 16/9;
+  min-height: 240px;
   overflow: hidden;
   background: #0b1a12;
 }
@@ -470,19 +580,22 @@
   overflow: hidden;
 }
 .landing-demo-gauge__fill {
-  width: 46%;
   height: 100%;
   background: linear-gradient(90deg, #ef4444, #f87171);
+  animation: pa-hp-gauge 6s ease-in-out infinite;
 }
+
+/* Trees */
 .landing-demo-player-tree {
   position: absolute;
   left: 2%;
-  top: 16%;
+  top: 14%;
   height: 68%;
   width: 12%;
   display: grid;
   place-items: center;
   z-index: 5;
+  filter: drop-shadow(0 0 12px rgba(74,222,128,0.4));
 }
 .landing-demo-player-tree img {
   max-height: 100%;
@@ -491,83 +604,172 @@
 .landing-demo-enemy-tree {
   position: absolute;
   right: 2%;
-  top: 16%;
+  top: 14%;
   height: 68%;
   width: 12%;
   display: grid;
   place-items: center;
-  animation: pa-hit 1.2s ease-in-out infinite;
   z-index: 5;
+  animation: pa-enemy-shake 2.4s ease-in-out infinite;
 }
 .landing-demo-enemy-tree img {
   max-height: 100%;
   object-fit: contain;
-  transform: scaleX(-1);
-  filter: hue-rotate(310deg) saturate(1.4);
 }
 .landing-demo-tree-badge {
   position: absolute;
   bottom: -4px;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   background: rgba(5, 11, 18, 0.9);
   border-radius: 6px;
   padding: 2px 7px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  white-space: nowrap;
 }
+
+/* Floating Damage */
+.landing-dmg-float-1,
+.landing-dmg-float-2,
+.landing-dmg-float-3 {
+  position: absolute;
+  top: 10%;
+  font-family: 'Luckiest Guy', sans-serif;
+  font-size: 18px;
+  color: #ff3344;
+  text-shadow: 0 0 8px rgba(255,0,0,0.8), 0 2px 2px #000;
+  pointer-events: none;
+  z-index: 20;
+}
+.landing-dmg-float-1 {
+  left: 0;
+  animation: pa-dmg-1 2.2s ease-in-out infinite;
+}
+.landing-dmg-float-2 {
+  left: 20px;
+  animation: pa-dmg-2 2.2s ease-in-out infinite;
+  animation-delay: 0.7s;
+}
+.landing-dmg-float-3 {
+  left: -10px;
+  animation: pa-dmg-3 2.2s ease-in-out infinite;
+  animation-delay: 1.4s;
+}
+
+/* Lane lines */
 .landing-demo-lane-line {
   position: absolute;
   left: 14%;
   right: 14%;
-  height: 19%;
-  border-top: 1px dashed rgba(255,255,255,0.2);
-  border-bottom: 1px dashed rgba(255,255,255,0.2);
+  height: 18%;
+  border-top: 1px dashed rgba(255,255,255,0.22);
+  border-bottom: 1px dashed rgba(255,255,255,0.22);
+  pointer-events: none;
 }
+
+/* Dynamic Animated Units */
 .landing-demo-unit {
   position: absolute;
   object-fit: contain;
+  z-index: 6;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.7));
 }
-.landing-march {
-  animation: pa-walk 7.5s linear infinite;
-  transform: scaleX(-1);
+.landing-bounce {
+  animation: pa-bounce 2s ease-in-out infinite;
 }
-.landing-march-fast {
-  animation: pa-walk 5.5s linear infinite;
-  transform: scaleX(-1);
-}
-.landing-demo-pea {
+.landing-sun-produce {
   position: absolute;
-  top: 49%;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #86efac;
-  box-shadow: 0 0 10px #4ade80;
-  animation: pa-pea 1.6s linear infinite;
+  left: 19%;
+  top: 20%;
+  font-size: 18px;
+  color: #fbbf24;
+  animation: pa-sun-pop 2.5s ease-out infinite;
+  z-index: 10;
+  pointer-events: none;
 }
+.landing-cactus-march {
+  animation: pa-walk-cactus 8s linear infinite;
+  transform: scaleX(-1);
+}
+.landing-peashooter-recoil {
+  animation: pa-recoil 1.4s ease-in-out infinite;
+}
+.landing-bonk-march {
+  animation: pa-walk-bonk 6s ease-in-out infinite;
+}
+.landing-punch-fx {
+  position: absolute;
+  top: 61%;
+  left: 72%;
+  font-size: 22px;
+  animation: pa-punch 6s ease-in-out infinite;
+  z-index: 12;
+}
+
+/* Rapid Green Peas Stream */
+.landing-pea-1,
+.landing-pea-2,
+.landing-pea-3 {
+  position: absolute;
+  top: 48%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #bbf7d0 20%, #4ade80 60%, #15803d 100%);
+  box-shadow: 0 0 12px #4ade80, 0 0 4px #fff;
+  z-index: 8;
+  pointer-events: none;
+}
+.landing-pea-1 {
+  animation: pa-pea-fly-1 1.4s linear infinite;
+}
+.landing-pea-2 {
+  animation: pa-pea-fly-2 1.4s linear infinite;
+  animation-delay: 0.45s;
+}
+.landing-pea-3 {
+  animation: pa-pea-fly-3 1.4s linear infinite;
+  animation-delay: 0.9s;
+}
+.landing-hit-spark {
+  position: absolute;
+  right: 22%;
+  top: 45%;
+  font-size: 20px;
+  animation: pa-spark 1.4s ease-out infinite;
+  animation-delay: 1.3s;
+  z-index: 11;
+  pointer-events: none;
+}
+
+/* Falling Suns */
 .landing-demo-sunfall-1 {
   position: absolute;
-  left: 38%;
+  left: 36%;
   width: 34px;
   height: 34px;
   animation: pa-sunfall 4s linear infinite;
+  z-index: 7;
 }
 .landing-demo-sunfall-2 {
   position: absolute;
-  left: 60%;
+  left: 58%;
   width: 34px;
   height: 34px;
   animation: pa-sunfall 4s linear infinite;
   animation-delay: -2s;
+  z-index: 7;
 }
+
+/* Deck Dock at Bottom */
 .landing-demo-dock {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 17%;
-  background: rgba(5, 11, 18, 0.9);
+  background: rgba(5, 11, 18, 0.92);
   border-top: 2px solid rgba(118, 216, 50, 0.5);
   display: flex;
   align-items: center;
@@ -576,10 +778,16 @@
   z-index: 10;
 }
 .landing-demo-dock img {
-  height: 70%;
+  height: 72%;
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));
+  transition: transform 0.15s ease;
 }
+.landing-demo-dock img:hover {
+  transform: translateY(-4px) scale(1.1);
+}
+
+/* Clean Info Footer */
 .landing-demo-footer {
   display: flex;
   align-items: center;
@@ -591,9 +799,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #4ade80;
 }
@@ -605,8 +813,16 @@
   box-shadow: 0 0 10px #22c55e;
   animation: pa-pulse-dot 1.5s infinite ease-in-out;
 }
+.landing-demo-extra-info {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #cbd5e1;
+  letter-spacing: 0.04em;
+}
 
-/* RARITY & PLANTS */
+/* =========================================================
+   RARITY & PLANTS COLLECTION
+   ========================================================= */
 .landing-rarity-legend {
   display: flex;
   flex-wrap: wrap;
@@ -643,6 +859,7 @@
   perspective: 1000px;
   height: 330px;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .landing-plant-card__inner {
   position: relative;
@@ -702,7 +919,7 @@
 }
 .landing-plant-img {
   max-width: 80%;
-  max-height: 140px;
+  max-height: 135px;
   object-fit: contain;
   filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));
   transition: transform 0.2s ease;
@@ -754,11 +971,11 @@
 
 .landing-plant-card__back {
   transform: rotateY(180deg);
-  padding: 20px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   background: linear-gradient(180deg, #0d1f18, #091410);
 }
 .landing-plant-back-title {
@@ -773,7 +990,7 @@
   font-size: 13px;
   color: #cbd5e1;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  padding-bottom: 5px;
+  padding-bottom: 4px;
 }
 .landing-stat-val {
   font-weight: 900;
@@ -781,12 +998,14 @@
 }
 .landing-plant-back-desc {
   margin-top: 4px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.45;
   color: #f1f5f9;
 }
 
-/* ARENAS */
+/* =========================================================
+   ARENAS
+   ========================================================= */
 .landing-ladder-bar {
   height: 8px;
   border-radius: 999px;
@@ -1017,7 +1236,9 @@
   color: #64748b;
 }
 
-/* RESPONSIVE */
+/* =========================================================
+   RESPONSIVE MEDIA QUERIES (TABLETS & PHONES)
+   ========================================================= */
 @media (max-width: 1024px) {
   .landing-arenas-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -1026,6 +1247,7 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
 @media (max-width: 768px) {
   .landing-navbar {
     padding: 10px 16px;
@@ -1038,7 +1260,7 @@
     display: none;
   }
   .landing-hero {
-    padding: 50px 16px 80px;
+    padding: 50px 16px 70px;
     min-height: auto;
   }
   .landing-hero__stats-row {
@@ -1050,19 +1272,92 @@
   .landing-footer__grid {
     grid-template-columns: 1fr;
   }
+  .landing-demo-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
 }
-@media (max-width: 520px) {
+
+/* MOBILE 2-COLUMN PLANTS GRID & COMPACT CARD CAROUSEL/VIEW */
+@media (max-width: 640px) {
+  .landing-container {
+    padding: 0 14px;
+  }
+
+  /* 2 Columns for Plant Cards on Mobile */
+  .landing-plants-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .landing-plant-card {
+    height: 270px;
+  }
+  .landing-plant-card__front {
+    padding: 10px 8px;
+  }
+  .landing-plant-rarity-tag {
+    font-size: 8.5px;
+    padding: 2px 5px;
+  }
+  .landing-plant-rarity-letter {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  .landing-plant-img {
+    max-height: 92px;
+  }
+  .landing-plant-name {
+    font-size: 14px;
+    line-height: 1.15;
+  }
+  .landing-plant-role {
+    font-size: 10px;
+  }
+  .landing-plant-cost {
+    font-size: 12px;
+  }
+  .landing-plant-cost img {
+    width: 14px;
+    height: 14px;
+  }
+  .landing-plant-hint {
+    font-size: 9px;
+  }
+
+  /* Back of Card Mobile Adjustments */
+  .landing-plant-card__back {
+    padding: 12px 10px;
+    gap: 5px;
+  }
+  .landing-plant-back-title {
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+  .landing-stat-row {
+    font-size: 11px;
+    padding-bottom: 2px;
+  }
+  .landing-plant-back-desc {
+    font-size: 10.5px;
+    line-height: 1.35;
+    margin-top: 2px;
+  }
+
+  /* Arenas on mobile */
   .landing-arenas-grid {
     grid-template-columns: 1fr;
   }
-  .landing-plants-grid {
-    grid-template-columns: 1fr;
-  }
+
+  /* Buttons on mobile */
   .landing-btn-primary {
     width: 100%;
     font-size: 18px;
+    padding: 14px 20px;
   }
   .landing-btn-secondary {
     width: 100%;
+    padding: 12px 18px;
   }
 }

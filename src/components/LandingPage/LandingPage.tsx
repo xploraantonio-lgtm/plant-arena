@@ -541,12 +541,12 @@ export default function LandingPage({ onPlayGame }: LandingPageProps) {
               <img src={arena1Bg} alt="" className="landing-demo-bg" />
               <div className="landing-demo-overlay"></div>
 
-              {/* Sun tag */}
+              {/* Sun count tag */}
               <div className="landing-demo-sun-tag">
-                <img src="/game-assets/greenfoot/sun1.png" alt="" /> 175 ☀
+                <img src="/game-assets/greenfoot/sun1.png" alt="" /> 225 ☀
               </div>
 
-              {/* Enemy Base Gauge */}
+              {/* Enemy Base HP Bar */}
               <div className="landing-demo-gauge">
                 <span className="landing-demo-gauge__lbl">
                   {lang === 'es' ? 'ÁRBOL MADRE ENEMIGO' : 'ENEMY MOTHER TREE'}
@@ -556,61 +556,68 @@ export default function LandingPage({ onPlayGame }: LandingPageProps) {
                 </div>
               </div>
 
-              {/* Player Tree */}
+              {/* Player Mother Tree (Left) */}
               <div className="landing-demo-player-tree">
                 <img src="/game-assets/greenfoot/mothertree_whitebg.png" alt="" />
-                <span className="landing-demo-tree-badge" style={{ color: '#86efac' }}>100% HP</span>
+                <span className="landing-demo-tree-badge" style={{ color: '#86efac' }}>600 / 600 HP</span>
               </div>
 
-              {/* Enemy Tree */}
+              {/* Enemy Mother Tree (Right) */}
               <div className="landing-demo-enemy-tree">
                 <img src="/game-assets/greenfoot/mothertree_whitebg.png" alt="" />
-                <span className="landing-demo-tree-badge" style={{ color: '#fca5a5' }}>46% HP</span>
+                <span className="landing-demo-tree-badge" style={{ color: '#fca5a5' }}>215 / 600 HP</span>
+                {/* Floating Damage Numbers */}
+                <div className="landing-dmg-float-1">-65</div>
+                <div className="landing-dmg-float-2">-25</div>
+                <div className="landing-dmg-float-3">-80</div>
               </div>
 
-              {/* Lane lines */}
-              <div className="landing-demo-lane-line" style={{ top: '20%' }}></div>
-              <div className="landing-demo-lane-line" style={{ top: '58%' }}></div>
+              {/* Lane dashed lines */}
+              <div className="landing-demo-lane-line" style={{ top: '22%' }}></div>
+              <div className="landing-demo-lane-line" style={{ top: '56%' }}></div>
 
-              {/* Animated units */}
-              <img src="/game-assets/greenfoot/transparentsunflower.png" alt="" className="landing-demo-unit" style={{ left: '17%', top: '24%', height: '14%' }} />
-              <img src="/game-assets/greenfoot/cactus1.png" alt="" className="landing-demo-unit landing-march" style={{ top: '23%', height: '14%' }} />
+              {/* Lane 1 (Top): Sunflower producing sun + Cactus marching */}
+              <img src="/game-assets/greenfoot/transparentsunflower.png" alt="" className="landing-demo-unit landing-bounce" style={{ left: '16%', top: '23%', height: '15%' }} />
+              <div className="landing-sun-produce">☀</div>
+              <img src="/game-assets/greenfoot/cactus1.png" alt="" className="landing-demo-unit landing-cactus-march" style={{ top: '22%', height: '15%' }} />
 
-              <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="" className="landing-demo-unit" style={{ left: '22%', top: '43%', height: '14%' }} />
-              <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" className="landing-demo-unit" style={{ right: '18%', top: '43%', height: '13%', transform: 'scaleX(-1)', filter: 'hue-rotate(300deg)' }} />
-              <div className="landing-demo-pea"></div>
+              {/* Lane 2 (Mid): Peashooter shooting rapid peas -> Enemy Wallnut */}
+              <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="" className="landing-demo-unit landing-peashooter-recoil" style={{ left: '18%', top: '42%', height: '15%' }} />
+              <div className="landing-pea-1"></div>
+              <div className="landing-pea-2"></div>
+              <div className="landing-pea-3"></div>
+              <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" className="landing-demo-unit landing-enemy-unit" style={{ right: '18%', top: '42%', height: '14%', transform: 'scaleX(-1)', filter: 'hue-rotate(300deg)' }} />
+              <div className="landing-hit-spark">💥</div>
 
-              <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" className="landing-demo-unit" style={{ left: '30%', top: '62%', height: '13%' }} />
-              <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" className="landing-demo-unit landing-march-fast" style={{ top: '61%', height: '14%' }} />
+              {/* Lane 3 (Bot): Wall-nut defense + Bonk Choy marching & punching */}
+              <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" className="landing-demo-unit" style={{ left: '26%', top: '61%', height: '14%' }} />
+              <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" className="landing-demo-unit landing-bonk-march" style={{ top: '60%', height: '15%' }} />
+              <div className="landing-punch-fx">🥊</div>
 
-              {/* Falling suns */}
+              {/* Falling Sun Drops */}
               <img src="/game-assets/greenfoot/sun1.png" alt="" className="landing-demo-sunfall-1" />
               <img src="/game-assets/greenfoot/sun1.png" alt="" className="landing-demo-sunfall-2" />
 
-              {/* Deck Dock */}
+              {/* Deck Dock at bottom */}
               <div className="landing-demo-dock">
-                <img src="/game-assets/greenfoot/transparentsunflower.png" alt="" />
-                <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="" />
-                <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" />
-                <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" style={{ opacity: 0.45 }} />
-                <img src="/game-assets/greenfoot/potato1.png" alt="" />
-                <img src="/game-assets/greenfoot/threepeater1.png" alt="" style={{ opacity: 0.45 }} />
+                <img src="/game-assets/greenfoot/transparentsunflower.png" alt="" title="Sunflower" />
+                <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="" title="Peashooter" />
+                <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" title="Wall-nut" />
+                <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" style={{ opacity: 0.5 }} title="Bonk Choy (Recarga)" />
+                <img src="/game-assets/greenfoot/potato1.png" alt="" title="Potato Mine" />
+                <img src="/game-assets/greenfoot/threepeater1.png" alt="" style={{ opacity: 0.5 }} title="Threepeater (Recarga)" />
               </div>
             </div>
 
+            {/* Clean Info Footer without redundant play button */}
             <div className="landing-demo-footer">
               <span className="landing-demo-status">
                 <span className="landing-demo-dot"></span>
-                {lang === 'es' ? 'Simulación de Combate en Vivo' : 'Live Battle Simulation'}
+                {lang === 'es' ? 'Simulación en Vivo · Combate 3 Carriles' : 'Live Simulation · 3-Lane Battle'}
               </span>
-              <button
-                type="button"
-                className="landing-btn-primary"
-                style={{ padding: '8px 22px', fontSize: '15px', borderRadius: '12px' }}
-                onClick={handlePlayClick}
-              >
-                🎮 {lang === 'es' ? 'ENTRAR A JUGAR' : 'ENTER BATTLE'}
-              </button>
+              <span className="landing-demo-extra-info">
+                {lang === 'es' ? '⚔️ Tiempo Real · Estrategia PvP' : '⚔️ Real-Time · PvP Strategy'}
+              </span>
             </div>
           </div>
         </div>
