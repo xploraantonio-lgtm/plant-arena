@@ -2,18 +2,34 @@
   box-sizing: border-box;
 }
 
-html,
-body,
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #050b12;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #050b12;
+  font-family: Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 #root {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #000;
-}
-
-body {
-  font-family: Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+  background: #050b12;
+  display: flex;
+  flex-direction: column;
 }
