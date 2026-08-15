@@ -79,17 +79,25 @@ function App() {
   } = useInventory()
 
   const handleGoToGame = () => {
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/play')) {
-      window.history.pushState(null, '', '/play')
-    }
     setScreen('menu')
+    try {
+      if (typeof window !== 'undefined' && window.location.protocol !== 'file:' && !window.location.pathname.startsWith('/play')) {
+        window.history.pushState(null, '', '/play')
+      }
+    } catch {
+      // Safe fallback
+    }
   }
 
   const handleGoToLanding = () => {
-    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-      window.history.pushState(null, '', '/')
-    }
     setScreen('landing')
+    try {
+      if (typeof window !== 'undefined' && window.location.protocol !== 'file:' && window.location.pathname !== '/') {
+        window.history.pushState(null, '', '/')
+      }
+    } catch {
+      // Safe fallback
+    }
   }
 
   const handlePlayNormal = () => {
