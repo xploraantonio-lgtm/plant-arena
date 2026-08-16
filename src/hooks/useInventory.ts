@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { PlantId } from '../types/game'
+import type { PlantCardInstance, PlantId } from '../types/game'
 import {
   PACK_DEFINITIONS,
   openSeedPack,
@@ -72,13 +72,25 @@ const DEFAULT_PLANT_LEVELS: Record<PlantId, number> = {
 }
 
 const STORAGE_KEYS = {
-  TOKENS: 'plant_arena_tokens',
+  TOKENS: 'plant_arena_user_tokens',
   PACKS: 'plant_arena_inventory_packs',
   UNLOCKED_PLANTS: 'plant_arena_unlocked_plants',
   PLANT_COPIES: 'plant_arena_plant_copies',
   PLANT_LEVELS: 'plant_arena_plant_levels',
   PLANT_STAT_ROLLS: 'plant_arena_plant_stat_rolls',
+  PLANT_INSTANCES: 'plant_arena_plant_instances',
+  ACTIVE_DECK: 'plant_arena_active_deck',
+  ACTIVE_DECK_INSTANCES: 'plant_arena_active_deck_instances',
 }
+
+const DEFAULT_DECK: PlantId[] = [
+  'sunflower',
+  'peashooter',
+  'wallnut',
+  'bonkchoy',
+  'squash',
+  'threepeater',
+]
 
 export function useInventory() {
   const [userTokens, setUserTokens] = useState<number>(() => {
@@ -156,6 +168,58 @@ export function useInventory() {
     return empty
   })
 
+  // Distinct plant card instances (Original plants + Bought/Improved builds)
+  const [plantInstances, setPlantInstances] = useState<PlantCardInstance[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.PLANT_INSTANCES)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as PlantCardInstance[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      } catch {
+        // fallback
+      }
+    }
+    // Default base cards
+    return ALL_15_PLANTS.map((id) => ({
+      instanceId: `inst_base_${id}`,
+      plantId: id,
+      level: 0,
+      statRolls: [],
+      isBase: true,
+      obtainedAt: Date.now(),
+    }))
+  })
+
+  // Active Battle Deck (Plant IDs)
+  const [activeDeck, setActiveDeck] = useState<PlantId[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_DECK)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      } catch {}
+    }
+    return DEFAULT_DECK
+  })
+
+  // Active Battle Deck specific card instance IDs
+  const [activeDeckInstances, setActiveDeckInstances] = useState<string[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_DECK_INSTANCES)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      } catch {}
+    }
+    return []
+  })
+
   // Sync to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TOKENS, userTokens.toString())
@@ -180,6 +244,25 @@ export function useInventory() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PLANT_STAT_ROLLS, JSON.stringify(plantStatRolls))
   }, [plantStatRolls])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.PLANT_INSTANCES, JSON.stringify(plantInstances))
+  }, [plantInstances])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_DECK, JSON.stringify(activeDeck))
+  }, [activeDeck])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_DECK_INSTANCES, JSON.stringify(activeDeckInstances))
+  }, [activeDeckInstances])
+
+  const updateActiveDeck = (plantIds: PlantId[], instanceIds?: string[]) => {
+    setActiveDeck(plantIds)
+    if (instanceIds && instanceIds.length > 0) {
+      setActiveDeckInstances(instanceIds)
+    }
+  }
 
   const addTokens = (amount: number) => {
     setUserTokens((prev) => prev + amount)
@@ -270,52 +353,81 @@ export function useInventory() {
     return allDrops
   }
 
-  // FUSES 5 COPIES (BURNS 4, 1 STAYS) & ADDS +1 LEVEL WITH A RANDOM STAT ROLL
-  const fuseAndUpgradePlant = (plantId: PlantId): {
+  // FUSES 5 COPIES & ADDS +1 LEVEL WITH A RANDOM STAT ROLL TO A SPECIFIC INSTANCE CARD
+  const fuseAndUpgradePlant = (plantId: PlantId, targetInstanceId?: string): {
     success: boolean
     newLevel?: number
     rolledStat?: PlantStatKey
     rolledStatLabel?: string
     error?: string
   } => {
-    const isLegendary = plantId === 'threepeater' || plantId === 'iceberglettuce'
+    // Find target instance or default base instance
+    let target = targetInstanceId
+      ? plantInstances.find((i) => i.instanceId === targetInstanceId)
+      : plantInstances.find((i) => i.plantId === plantId && i.isBase)
+
+    if (!target) {
+      target = plantInstances.find((i) => i.plantId === plantId)
+    }
+
+    if (!target) {
+      return { success: false, error: 'Carta no encontrada en el inventario' }
+    }
+
+    const actualPlantId = target.plantId
+    const isLegendary = actualPlantId === 'threepeater' || actualPlantId === 'iceberglettuce'
     const maxLevel = isLegendary ? 3 : 5
-    const currentLvl = plantLevels[plantId] || 0
-    const currentCopies = plantCopies[plantId] || 0
+    const currentLvl = target.level
+    const currentCopies = plantCopies[actualPlantId] || 0
 
     if (currentLvl >= maxLevel) {
-      return { success: false, error: 'Esta planta ya alcanzó el Nivel Máximo' }
+      return { success: false, error: 'Esta carta ya alcanzó el Nivel Máximo' }
     }
 
     if (currentCopies < 5) {
-      return { success: false, error: `Se requieren 5 copias para la fusión (Tienes ${currentCopies}/5)` }
+      return { success: false, error: `Se requieren 5 copias base para la fusión (Tienes ${currentCopies}/5)` }
     }
 
     // Pick 1 random eligible stat for this plant
-    const eligible = getEligibleStatsForPlant(plantId)
+    const eligible = getEligibleStatsForPlant(actualPlantId)
     const rolledStat = eligible[Math.floor(Math.random() * eligible.length)]
 
-    // Burn 4 copies, 1 stays
+    // Deduct 5 copies (burns copies, strengthens the card)
     setPlantCopies((prev) => ({
       ...prev,
-      [plantId]: prev[plantId] - 4,
+      [actualPlantId]: Math.max(0, (prev[actualPlantId] || 0) - 5),
     }))
 
-    // Upgrade level
     const nextLvl = currentLvl + 1
-    setPlantLevels((prev) => ({
-      ...prev,
-      [plantId]: nextLvl,
-    }))
 
-    // Add rolled stat
-    setPlantStatRolls((prev) => {
-      const currentList = prev[plantId] || []
-      return {
+    // Update the specific instance card
+    setPlantInstances((prev) =>
+      prev.map((inst) => {
+        if (inst.instanceId === target!.instanceId) {
+          return {
+            ...inst,
+            level: nextLvl,
+            statRolls: [...inst.statRolls, rolledStat],
+          }
+        }
+        return inst
+      })
+    )
+
+    // Also update base mirrors
+    if (target.isBase) {
+      setPlantLevels((prev) => ({
         ...prev,
-        [plantId]: [...currentList, rolledStat],
-      }
-    })
+        [actualPlantId]: nextLvl,
+      }))
+      setPlantStatRolls((prev) => {
+        const currentList = prev[actualPlantId] || []
+        return {
+          ...prev,
+          [actualPlantId]: [...currentList, rolledStat],
+        }
+      })
+    }
 
     return {
       success: true,
@@ -355,21 +467,30 @@ export function useInventory() {
 
     // Grant reward content
     if (reward.type === 'pack' && reward.packId) {
-      const createdPack: InventoryPack = {
-        instanceId: `pack_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        packId: reward.packId,
-        name: PACK_DEFINITIONS[reward.packId as PackId].name,
-        rarity: PACK_DEFINITIONS[reward.packId as PackId].rarity,
-        icon: PACK_DEFINITIONS[reward.packId as PackId].icon,
-        purchasedAt: Date.now(),
+      const packId = reward.packId as PackId
+      const count = reward.packCount || 1
+      const packDef = PACK_DEFINITIONS[packId]
+      const createdPacks: InventoryPack[] = []
+      for (let i = 0; i < count; i++) {
+        createdPacks.push({
+          instanceId: `pack_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${i}`,
+          packId,
+          name: packDef.name,
+          rarity: packDef.rarity,
+          icon: packDef.icon,
+          purchasedAt: Date.now(),
+        })
       }
-      setInventoryPacks((prev) => [createdPack, ...prev])
+      setInventoryPacks((prev) => [...createdPacks, ...prev])
     } else if (reward.type === 'copies' && reward.plantId) {
       const pId = reward.plantId as PlantId
       const count = reward.copiesCount || 1
-      if (!unlockedPlants.includes(pId)) {
-        setUnlockedPlants((prev) => [...prev, pId])
-      }
+      setUnlockedPlants((prev) => {
+        if (!prev.includes(pId)) {
+          return [...prev, pId]
+        }
+        return prev
+      })
       setPlantCopies((prev) => ({
         ...prev,
         [pId]: (prev[pId] || 0) + count,
@@ -412,14 +533,14 @@ export function useInventory() {
     return () => clearInterval(timer)
   }, [])
 
-  const awardVictoryPack = (playerElo: number): { awarded: boolean; durationHours?: 1 | 2 | 4; arenaLevel?: number; isSlotsFull?: boolean } => {
+  const awardVictoryPack = (playerElo: number): { awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean } => {
     const arenaObj = getArenaForElo(playerElo)
     const emptyIndex = freePackSlots.findIndex((s) => s.status === 'empty')
     if (emptyIndex === -1) {
       return { awarded: false, isSlotsFull: true }
     }
 
-    const durations: (1 | 2 | 4)[] = [1, 2, 4]
+    const durations: (2 | 4 | 8 | 12)[] = [2, 4, 8, 12]
     const randomDuration = durations[Math.floor(Math.random() * durations.length)]
 
     setFreePackSlots((prev) => {
@@ -498,7 +619,6 @@ export function useInventory() {
     }
   }
 
-  // Clan helper methods
   const deductUserTokens = (amountUsd: number): boolean => {
     if (userTokens < amountUsd) return false
     setUserTokens((prev) => {
@@ -528,10 +648,55 @@ export function useInventory() {
   }
 
   const receivePlantCopy = (plantId: PlantId) => {
+    setUnlockedPlants((prev) => {
+      if (!prev.includes(plantId)) {
+        return [...prev, plantId]
+      }
+      return prev
+    })
     setPlantCopies((prev) => ({
       ...prev,
       [plantId]: (prev[plantId] || 0) + 1,
     }))
+  }
+
+  // RECEIVE A FULL PLANT CARD INSTANCE (FROM MARKETPLACE OR CHEST)
+  const receivePlantInstance = (plantId: PlantId, level = 0, statRolls: PlantStatKey[] = []) => {
+    setUnlockedPlants((prev) => {
+      if (!prev.includes(plantId)) {
+        return [...prev, plantId]
+      }
+      return prev
+    })
+
+    setPlantCopies((prev) => ({
+      ...prev,
+      [plantId]: (prev[plantId] || 0) + 1,
+    }))
+
+    const newInstance: PlantCardInstance = {
+      instanceId: `inst_${plantId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      plantId,
+      level,
+      statRolls: [...statRolls],
+      isBase: false,
+      obtainedAt: Date.now(),
+    }
+
+    setPlantInstances((prev) => [...prev, newInstance])
+  }
+
+  // REMOVE A PLANT CARD INSTANCE (WHEN SOLD ON MARKETPLACE)
+  const removePlantInstance = (instanceId: string): boolean => {
+    const target = plantInstances.find((i) => i.instanceId === instanceId)
+    if (!target) return false
+
+    setPlantInstances((prev) => prev.filter((i) => i.instanceId !== instanceId))
+    setPlantCopies((prev) => ({
+      ...prev,
+      [target.plantId]: Math.max(0, (prev[target.plantId] || 1) - 1),
+    }))
+    return true
   }
 
   const addPacksToInventory = (packId: PackId, qty: number) => {
@@ -559,6 +724,10 @@ export function useInventory() {
     plantCopies,
     plantLevels,
     plantStatRolls,
+    plantInstances,
+    activeDeck,
+    activeDeckInstances,
+    updateActiveDeck,
     hasVipPass,
     claimedVipLevels,
     freePackSlots,
@@ -577,6 +746,8 @@ export function useInventory() {
     addUserTokens,
     donatePlantCopy,
     receivePlantCopy,
+    receivePlantInstance,
+    removePlantInstance,
     addPacksToInventory,
   }
 }

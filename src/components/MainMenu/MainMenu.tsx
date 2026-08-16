@@ -9,8 +9,8 @@ import coleccion from '../../assets/images/coleccion.png'
 import arena from '../../assets/images/Arena.png'
 import shop from '../../assets/images/shop.png'
 import gema from '../../assets/ico/gema.png'
+import moneda from '../../assets/ico/moneda.png'
 import ranking from '../../assets/ico/Ranking.png'
-import chat from '../../assets/ico/chat.png'
 import clan from '../../assets/ico/clan.png'
 import ajustes from '../../assets/ico/ajustes.png'
 import { soundManager } from '../../utils/audioManager'
@@ -57,7 +57,6 @@ export default function MainMenu({
   onOpenRanking,
   onOpenBattlePass,
   onOpenClan,
-  onOpenMarketplace,
   onOpenLanding,
   onStartSlotUnlock,
   onFastUnlockSlot,
@@ -69,6 +68,7 @@ export default function MainMenu({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [, setTicker] = useState<number>(0)
+  const [activeAlert, setActiveAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
 
   useEffect(() => {
     const syncProfile = () => setPlayerProfile(UserManager.getProfile())
@@ -125,38 +125,44 @@ export default function MainMenu({
             <span className="card__title">{playerProfile.name}</span>
           </div>
 
-          {/* COMPACT VIP BATTLE PASS WIDGET */}
-          <div
-            className={`card card--pass-widget ${hasVipPass ? 'card--pass-widget-active' : ''}`}
-            onClick={onOpenBattlePass}
-            title="Ver Pase de Batalla VIP"
-          >
-            <span className="pass-widget__crown">👑</span>
-            <div className="pass-widget__info">
-              <span className="pass-widget__title">PASE VIP</span>
-              <span className="pass-widget__level-txt">
-                NIVEL {highestLevelReached}/20
-              </span>
-              <div className="pass-widget__progress-wrap">
-                <div
-                  className="pass-widget__progress-bar"
-                  style={{ width: `${Math.min(100, (highestLevelReached / 20) * 100)}%` }}
-                />
+          {/* COMPACT VIP BATTLE PASS WIDGET - ONLY VISIBLE IF HAS VIP PASS */}
+          {hasVipPass && (
+            <div
+              className="card card--pass-widget card--pass-widget-active"
+              onClick={onOpenBattlePass}
+              title="Ver Pase de Batalla VIP"
+            >
+              <span className="pass-widget__crown">👑</span>
+              <div className="pass-widget__info">
+                <span className="pass-widget__title">PASE VIP</span>
+                <span className="pass-widget__level-txt">
+                  NIVEL {highestLevelReached}/20
+                </span>
+                <div className="pass-widget__progress-wrap">
+                  <div
+                    className="pass-widget__progress-bar"
+                    style={{ width: `${Math.min(100, (highestLevelReached / 20) * 100)}%` }}
+                  />
+                </div>
               </div>
-            </div>
 
-            {claimableCount > 0 && (
-              <span className="pass-widget__claim-badge">
-                ✨ {claimableCount}
-              </span>
-            )}
-          </div>
+              {claimableCount > 0 && (
+                <span className="pass-widget__claim-badge">
+                  ✨ {claimableCount}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="topbar__right-wrap">
           <div className="topbar__right">
-            <div className="card card--stat">
-              <img className="card__icon" src={gema} alt="" />
+            <div className="card card--stat card--stat-gold" title="Monedas de Oro">
+              <img className="card__icon" src={moneda} alt="Monedas" />
+              50,000
+            </div>
+            <div className="card card--stat" title="Gemas Disponibles">
+              <img className="card__icon" src={gema} alt="Gemas" />
               1,250
             </div>
             <div
@@ -167,6 +173,16 @@ export default function MainMenu({
             >
               <img className="card__icon" src={ranking} alt="" />
               {userElo} 🏆
+            </div>
+          </div>
+
+          {/* 30-DAY SEASON TIMER ROW WITH FULLSCREEN & MUTE BUTTONS BESIDE IT */}
+          <div className="season-timer-row">
+            <div className="season-countdown-badge">
+              <span className="season-badge-icon">⏳</span>
+              <span className="season-badge-text">
+                TEMPORADA 1: <strong>{SeasonManager.getSeasonStatus().formattedCountdown}</strong>
+              </span>
             </div>
             <button
               className="fullscreen-button"
@@ -184,14 +200,6 @@ export default function MainMenu({
             >
               {isMuted ? '🔇' : '🔊'}
             </button>
-          </div>
-
-          {/* 30-DAY SEASON TIMER LABEL */}
-          <div className="season-countdown-badge">
-            <span className="season-badge-icon">⏳</span>
-            <span className="season-badge-text">
-              TEMPORADA 1: <strong>{SeasonManager.getSeasonStatus().formattedCountdown}</strong>
-            </span>
           </div>
         </div>
       </div>
@@ -225,7 +233,7 @@ export default function MainMenu({
                 if (slot.status === 'locked' && onStartSlotUnlock) {
                   const res = onStartSlotUnlock(slot.slotId)
                   if (!res.success && res.error) {
-                    alert(res.error)
+                    setActiveAlert({ title: 'SLOT OCUPADO', message: res.error, icon: '⏳' })
                   } else {
                     soundManager.playSound('click', 0.5)
                   }
@@ -319,19 +327,38 @@ export default function MainMenu({
       </div>
 
       <div className="footer">
-        <button className="footer-button" type="button" onClick={onOpenClan}>
-          <img src={clan} alt="" />
-          Clan
+        <button className="footer-button footer-button--clan" type="button" onClick={onOpenClan}>
+          <div className="footer-button__icon-box">
+            <img src={clan} alt="Clan" />
+          </div>
+          <span className="footer-button__title">CLAN</span>
         </button>
-        <button className="footer-button" type="button" onClick={onOpenMarketplace}>
-          <img src={chat} alt="" />
-          Comercio
-        </button>
-        <button className="footer-button" type="button">
-          <img src={ajustes} alt="" />
-          Ajustes
+
+        <button className="footer-button footer-button--settings" type="button">
+          <div className="footer-button__icon-box">
+            <img src={ajustes} alt="Ajustes" />
+          </div>
+          <span className="footer-button__title">AJUSTES</span>
         </button>
       </div>
+
+      {/* IN-GAME THEMED MODAL ALERT */}
+      {activeAlert && (
+        <div className="main-menu-dialog-backdrop" onClick={() => setActiveAlert(null)}>
+          <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
+            <div className="main-menu-dialog-icon">{activeAlert.icon}</div>
+            <h3 className="main-menu-dialog-title">{activeAlert.title}</h3>
+            <p className="main-menu-dialog-msg">{activeAlert.message}</p>
+            <button
+              type="button"
+              className="main-menu-dialog-btn"
+              onClick={() => setActiveAlert(null)}
+            >
+              ENTENDIDO
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* PLAYER PROFILE MODAL */}
       <ProfileModal

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import type { PlantId } from './types/game'
 import GameFrame from './components/GameFrame/GameFrame'
 import RotateOverlay from './components/RotateOverlay/RotateOverlay'
 import MainMenu from './components/MainMenu/MainMenu'
@@ -20,15 +19,6 @@ import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'
 
-const DEFAULT_DECK: PlantId[] = [
-  'sunflower',
-  'peashooter',
-  'wallnut',
-  'bonkchoy',
-  'squash',
-  'threepeater',
-]
-
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
     if (typeof window !== 'undefined') {
@@ -41,9 +31,9 @@ function App() {
     return 'landing'
   })
   const [practicePlantId, setPracticePlantId] = useState<string | null>(null)
-  const [activeDeck, setActiveDeck] = useState<PlantId[]>(DEFAULT_DECK)
   const [activeOpeningResult, setActiveOpeningResult] = useState<PackDropResult | PackDropResult[] | null>(null)
   const [lastOpenedPackType, setLastOpenedPackType] = useState<PackId | null>(null)
+  const [activeAppAlert, setActiveAppAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
 
   const [userElo, setUserElo] = useState<number>(1000)
   const [customArenaBg, setCustomArenaBg] = useState<string | undefined>(undefined)
@@ -70,6 +60,10 @@ function App() {
     plantCopies,
     plantLevels,
     plantStatRolls,
+    plantInstances,
+    activeDeck,
+    activeDeckInstances,
+    updateActiveDeck,
     hasVipPass,
     claimedVipLevels,
     freePackSlots,
@@ -87,7 +81,8 @@ function App() {
     deductUserTokens,
     addUserTokens,
     donatePlantCopy,
-    receivePlantCopy,
+    receivePlantInstance,
+    removePlantInstance,
     addPacksToInventory,
   } = useInventory()
 
@@ -263,7 +258,8 @@ function App() {
             plantCopies={plantCopies}
             plantLevels={plantLevels}
             plantStatRolls={plantStatRolls}
-            onUpdateDeck={setActiveDeck}
+            plantInstances={plantInstances}
+            onUpdateDeck={updateActiveDeck}
             onBack={() => setScreen('menu')}
             onPlay={handlePlayNormal}
             onOpenCollection={handleOpenCollection}
@@ -276,10 +272,12 @@ function App() {
         {screen === 'shop' && (
           <Shop
             userTokens={userTokens}
-            userElo={userElo}
             hasVipPass={hasVipPass}
-            claimedVipLevels={claimedVipLevels}
             inventoryPacks={inventoryPacks}
+            plantCopies={plantCopies}
+            plantLevels={plantLevels}
+            plantStatRolls={plantStatRolls}
+            plantInstances={plantInstances}
             onBack={() => setScreen('menu')}
             onBuyPack={buyPack}
             onOpenJardin={handleOpenJardin}
@@ -287,7 +285,9 @@ function App() {
             onOpenPackImmediately={handleTriggerPackOpenByInstanceId}
             onOpenMultiplePacks={handleOpenMultiplePacks}
             onBuyVipPass={buyVipPass}
-            onClaimPassReward={claimPassReward}
+            onDeductTokens={deductUserTokens}
+            onDonatePlant={donatePlantCopy}
+            onReceivePlant={receivePlantInstance}
           />
         )}
         {screen === 'ranking' && (
@@ -335,18 +335,34 @@ function App() {
                 onBuyVipPass={() => {
                   const ok = buyVipPass()
                   if (ok) {
-                    alert('👑 ¡PASE VIP DE TEMPORADA ACTIVADO! Ahora puedes reclamar todas las recompensas doradas.')
+                    setActiveAppAlert({
+                      title: '¡PASE VIP ACTIVADO!',
+                      message: '👑 ¡PASE VIP DE TEMPORADA ACTIVADO!\nAhora puedes reclamar todas las recompensas doradas.',
+                      icon: '👑',
+                    })
                   } else {
-                    alert('⚠️ Saldo insuficiente ($10.00 USD requeridos). Recarga saldo en la Tienda.')
+                    setActiveAppAlert({
+                      title: 'SALDO INSUFICIENTE',
+                      message: '⚠️ Saldo insuficiente ($10.00 USD requeridos).\nRecarga saldo en la Tienda.',
+                      icon: '⚠️',
+                    })
                   }
                 }}
                 onClaimReward={(lvl) => {
                   claimPassReward(lvl.reward, lvl.level)
-                  alert(`👑 ¡RECOMPENSA VIP DEL NIVEL ${lvl.level} RECLAMADA!\n${lvl.reward.label}`)
+                  setActiveAppAlert({
+                    title: '¡RECOMPENSA RECLAMADA!',
+                    message: `👑 ¡RECOMPENSA VIP DEL NIVEL ${lvl.level} RECLAMADA!\n${lvl.reward.label}\nSe ha añadido a tu inventario de Mi Jardín.`,
+                    icon: '🎉',
+                  })
                 }}
                 onClaimAllRewards={(levels) => {
                   levels.forEach((lvl) => claimPassReward(lvl.reward, lvl.level))
-                  alert(`👑 ¡${levels.length} RECOMPENSAS VIP RECLAMADAS CON ÉXITO!`)
+                  setActiveAppAlert({
+                    title: '¡RECOMPENSAS RECLAMADAS!',
+                    message: `👑 ¡${levels.length} RECOMPENSAS VIP RECLAMADAS CON ÉXITO!\nSe han guardado en tu inventario de Mi Jardín.`,
+                    icon: '🎁',
+                  })
                 }}
               />
             </div>
@@ -400,9 +416,15 @@ function App() {
               plantCopies={plantCopies}
               plantLevels={plantLevels}
               plantStatRolls={plantStatRolls}
+              plantInstances={plantInstances}
+              unlockedPlants={unlockedPlants}
+              activeDeck={activeDeck}
+              activeDeckInstances={activeDeckInstances}
               onDeductTokens={deductUserTokens}
               onDonatePlant={donatePlantCopy}
-              onReceivePlant={receivePlantCopy}
+              onReceivePlant={receivePlantInstance}
+              onRemovePlantInstance={removePlantInstance}
+              onUpdateDeck={updateActiveDeck}
               onBuyVipPass={buyVipPass}
               onBackToMenu={() => setScreen('menu')}
             />
@@ -420,6 +442,24 @@ function App() {
             onOpenAnother={handleOpenAnotherPack}
             hasMorePacks={hasMorePacksOfSameType}
           />
+        )}
+
+        {/* Global Themed Modal Alert */}
+        {activeAppAlert && (
+          <div className="main-menu-dialog-backdrop" onClick={() => setActiveAppAlert(null)}>
+            <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
+              <div className="main-menu-dialog-icon">{activeAppAlert.icon}</div>
+              <h3 className="main-menu-dialog-title">{activeAppAlert.title}</h3>
+              <p className="main-menu-dialog-msg">{activeAppAlert.message}</p>
+              <button
+                type="button"
+                className="main-menu-dialog-btn"
+                onClick={() => setActiveAppAlert(null)}
+              >
+                ENTENDIDO
+              </button>
+            </div>
+          </div>
         )}
       </GameFrame>
       <RotateOverlay />

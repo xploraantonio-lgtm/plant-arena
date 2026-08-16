@@ -23,8 +23,8 @@
   border-radius: 20px;
   width: 100%;
   max-width: 560px;
-  max-height: 490px;
-  height: 470px;
+  max-height: 90vh;
+  height: min(540px, 90vh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -278,7 +278,7 @@
 
 /* BODY */
 .profile-tab-body {
-  padding: 16px 20px 24px 20px;
+  padding: 16px 20px 28px 20px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -287,6 +287,8 @@
   gap: 14px;
   scrollbar-width: thin;
   scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .profile-tab-body::-webkit-scrollbar {
@@ -307,6 +309,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .profile-section-title span {
@@ -329,6 +332,7 @@
   overflow: hidden;
   transition: border-color 0.15s ease;
   margin-top: 4px;
+  flex-shrink: 0;
 }
 
 .profile-collapsible-card:hover {
@@ -370,6 +374,26 @@
   border-top: 1px solid #334155;
   background: rgba(10, 16, 26, 0.6);
   animation: profileFadeIn 0.2s ease;
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.profile-avatar-picker-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.profile-avatar-picker-content::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
+}
+
+.profile-avatar-picker-content::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 10px;
 }
 
 /* AVATAR GRID */

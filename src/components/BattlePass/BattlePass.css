@@ -4,25 +4,9 @@
   height: 100%;
   width: 100%;
   box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   user-select: none;
-  scrollbar-width: thin;
-  scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
-}
-
-.battle-pass-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.battle-pass-container::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 10px;
-}
-
-.battle-pass-container::-webkit-scrollbar-thumb {
-  background: #fbbf24;
-  border-radius: 10px;
+  min-height: 0;
 }
 
 /* Banner */
@@ -36,6 +20,7 @@
   padding: 10px 18px;
   margin-bottom: 10px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(251, 191, 36, 0.15);
+  flex-shrink: 0;
 }
 
 .battle-pass-banner__season-badge {
@@ -152,6 +137,7 @@
   backdrop-filter: blur(10px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   overflow: hidden;
+  min-height: 0;
 }
 
 .pass-selector-header {
@@ -159,6 +145,7 @@
   flex-direction: column;
   gap: 2px;
   margin-bottom: 10px;
+  flex-shrink: 0;
 }
 
 .pass-selector-title {
@@ -181,8 +168,11 @@
   flex: 1;
   min-height: 0;
   padding-right: 6px;
+  padding-bottom: 8px;
   scrollbar-width: thin;
   scrollbar-color: #52b788 rgba(15, 23, 42, 0.6);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .pass-grid-selector::-webkit-scrollbar {

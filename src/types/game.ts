@@ -37,6 +37,11 @@ export interface PlantConfig {
 export interface PlantEntity {
   id: string
   plantId: PlantId
+  instanceId?: string
+  level?: number
+  damage?: number
+  attackSpeedMs?: number
+  moveSpeed?: number
   lane: number // 0, 1, 2
   col?: number // 0..3 for P1 static plants
   x: number // percentage across field (15% to 85%)
@@ -123,3 +128,13 @@ export interface GameStats {
   plantsPlaced: number
   score: number
 }
+
+export interface PlantCardInstance {
+  instanceId: string
+  plantId: PlantId
+  level: number
+  statRolls: import('../utils/gameConstants').PlantStatKey[]
+  isBase?: boolean
+  obtainedAt?: number
+}
+

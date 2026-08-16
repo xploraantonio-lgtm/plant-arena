@@ -7,6 +7,28 @@ export interface ClanMember {
   elo: number
   donatedCount: number
   joinedAt: string
+  consecutiveRoundsMissed?: number // Rondas seguidas sin participar en guerra (mínimo 2 para poder expulsar por inactividad)
+  roundsParticipated?: number // Rondas participadas en la temporada (>= 2 protege contra expulsión hasta fin de temporada)
+  walkoverLosses?: number // Derrotas por W.O. por no presentarse (>= 1 permite expulsar)
+}
+
+export interface ClanSettings {
+  privacy: 'public' | 'request' | 'closed'
+  minElo: number
+  warPermission: 'leaders' | 'all'
+  autoAccept: boolean
+}
+
+export interface KickValidationResult {
+  canKick: boolean
+  isProtected: boolean
+  reasonCode: 'PROTECTED_ACTIVE_WARRIOR' | 'INSUFFICIENT_INFRACTIONS' | 'ELIGIBLE_INACTIVE' | 'ELIGIBLE_WALKOVER' | 'LEADER_CANNOT_BE_KICKED'
+  message: string
+  details: {
+    roundsParticipated: number
+    consecutiveMissed: number
+    walkoverLosses: number
+  }
 }
 
 export interface ClanDonationRequest {
@@ -47,6 +69,7 @@ export interface ClanData {
   createdAt: string
   fullBonusClaimedMembers: string[] // List of player names/IDs that claimed 2 green packs
   seasonPayoutClaimedMembers: string[]
+  settings?: ClanSettings
 }
 
 const STORAGE_KEYS = {
@@ -651,5 +674,125 @@ export class ClanManager {
       wins,
       maxWins: MAX_WEEKLY_WAR_WINS,
     }
+  }
+
+  /**
+   * Validate if a member can be kicked according to competitive clan rules:
+   * 1) Leader cannot be kicked.
+   * 2) If participated in >= 2 war rounds this season -> Protected until end of season.
+   * 3) Eligible for kick IF:
+   *    - Inactive for >= 2 consecutive war rounds (2 weeks), OR
+   *    - Has >= 1 W.O. loss for not attending their scheduled match.
+   */
+  static validateKickMember(_clan: ClanData, member: ClanMember): KickValidationResult {
+    if (member.role === 'Líder') {
+      return {
+        canKick: false,
+        isProtected: true,
+        reasonCode: 'LEADER_CANNOT_BE_KICKED',
+        message: '👑 El Líder del clan no puede ser expulsado.',
+        details: {
+          roundsParticipated: member.roundsParticipated || 0,
+          consecutiveMissed: member.consecutiveRoundsMissed || 0,
+          walkoverLosses: member.walkoverLosses || 0,
+        },
+      }
+    }
+
+    const participated = member.roundsParticipated || 0
+    const missed = member.consecutiveRoundsMissed || 0
+    const wo = member.walkoverLosses || 0
+
+    // Protection rule: Participated in 2 or more war rounds this season
+    if (participated >= 2) {
+      return {
+        canKick: false,
+        isProtected: true,
+        reasonCode: 'PROTECTED_ACTIVE_WARRIOR',
+        message: `🛡️ MIEMBRO BLINDADO: Este jugador ha participado en ${participated} rondas de Guerra de Clanes en la temporada actual. Por reglamento de protección de jugadores activos, NO puede ser eliminado hasta concluir la Temporada.`,
+        details: {
+          roundsParticipated: participated,
+          consecutiveMissed: missed,
+          walkoverLosses: wo,
+        },
+      }
+    }
+
+    // Eligible by Inactivity (>= 2 consecutive missed rounds / 2 weeks)
+    if (missed >= 2) {
+      return {
+        canKick: true,
+        isProtected: false,
+        reasonCode: 'ELIGIBLE_INACTIVE',
+        message: `⚠️ INACTIVIDAD CONFIRMADA: El jugador no ha participado en ${missed} rondas consecutivas de Guerra de Clanes (2 semanas seguidas sin jugar). Expulsión permitida.`,
+        details: {
+          roundsParticipated: participated,
+          consecutiveMissed: missed,
+          walkoverLosses: wo,
+        },
+      }
+    }
+
+    // Eligible by Walkover (>= 1 W.O.)
+    if (wo >= 1) {
+      return {
+        canKick: true,
+        isProtected: false,
+        reasonCode: 'ELIGIBLE_WALKOVER',
+        message: `🚨 DERROTA POR W.O.: El jugador tiene ${wo} derrota(s) por no presentarse al combate de guerra asignado. Expulsión permitida por abandono.`,
+        details: {
+          roundsParticipated: participated,
+          consecutiveMissed: missed,
+          walkoverLosses: wo,
+        },
+      }
+    }
+
+    // Insufficient infractions
+    return {
+      canKick: false,
+      isProtected: false,
+      reasonCode: 'INSUFFICIENT_INFRACTIONS',
+      message: `❌ EXPULSIÓN NO PERMITIDA: Para expulsar a un jugador, debe acumular al menos 2 rondas consecutivas sin participar en guerra (tiene ${missed}/2) o haber perdido al menos 1 vez por W.O. por no presentarse (tiene ${wo}/1).`,
+      details: {
+        roundsParticipated: participated,
+        consecutiveMissed: missed,
+        walkoverLosses: wo,
+      },
+    }
+  }
+
+  /**
+   * Kick member with validation check
+   */
+  static kickMember(clanId: string, memberId: string): { success: boolean; error?: string } {
+    const clans = this.getClans()
+    const clan = clans.find((c) => c.id === clanId)
+    if (!clan) return { success: false, error: 'Clan no encontrado.' }
+
+    const member = clan.members.find((m) => m.id === memberId)
+    if (!member) return { success: false, error: 'Miembro no encontrado.' }
+
+    const validation = this.validateKickMember(clan, member)
+    if (!validation.canKick) {
+      return { success: false, error: validation.message }
+    }
+
+    clan.members = clan.members.filter((m) => m.id !== memberId)
+    this.saveClans(clans)
+    return { success: true }
+  }
+
+  /**
+   * Update clan settings
+   */
+  static updateClanSettings(clanId: string, settings: ClanSettings): boolean {
+    const clans = this.getClans()
+    const clan = clans.find((c) => c.id === clanId)
+    if (!clan) return false
+
+    clan.settings = { ...settings }
+    this.saveClans(clans)
+    return true
   }
 }

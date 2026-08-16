@@ -112,8 +112,10 @@ export default function Battlefield({
     projectiles,
     suns,
     selectedCard,
+    selectedSlotIndex,
     setSelectedCard,
     cooldowns,
+    slotCooldowns,
     waveBanner,
     stats,
     startGame,
@@ -127,7 +129,7 @@ export default function Battlefield({
   const [battleSummaryResult, setBattleSummaryResult] = useState<{
     eloChange?: number
     newElo?: number
-    packResult?: { awarded: boolean; durationHours?: 1 | 2 | 4; arenaLevel?: number; isSlotsFull?: boolean }
+    packResult?: { awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean }
     isSurrendered?: boolean
   } | null>(null)
 
@@ -182,19 +184,25 @@ export default function Battlefield({
     }
   }, [practicePlantId])
 
+  const [showSurrenderModal, setShowSurrenderModal] = useState<boolean>(false)
+
   const handleSurrenderClick = () => {
-    if (window.confirm('🏳️ ¿Estás seguro de que deseas rendirte? Perderás ELO.')) {
-      hasHandledEndRef.current = true
-      surrenderGame()
-      if (onSurrender) {
-        const res = onSurrender()
-        if (res) {
-          setBattleSummaryResult({
-            eloChange: -(res.surrenderElo || 8),
-            newElo: res.newElo,
-            isSurrendered: true,
-          })
-        }
+    soundManager.playSound('click', 0.5)
+    setShowSurrenderModal(true)
+  }
+
+  const handleConfirmSurrender = () => {
+    setShowSurrenderModal(false)
+    hasHandledEndRef.current = true
+    surrenderGame()
+    if (onSurrender) {
+      const res = onSurrender()
+      if (res) {
+        setBattleSummaryResult({
+          eloChange: -(res.surrenderElo || 8),
+          newElo: res.newElo,
+          isSurrendered: true,
+        })
       }
     }
   }
@@ -642,12 +650,46 @@ export default function Battlefield({
         </div>
       )}
 
+      {/* Surrender Confirmation In-Game Modal */}
+      {showSurrenderModal && (
+        <div className="battle-surrender-modal-overlay">
+          <div className="battle-surrender-modal">
+            <div className="battle-surrender-modal__icon">🏳️</div>
+            <h3 className="battle-surrender-modal__title">¿RENDIRTE DE LA BATALLA?</h3>
+            <p className="battle-surrender-modal__desc">
+              Si te rindes ahora, se declarará derrota inmediata y perderás copas de ELO en el ranking.
+            </p>
+            <div className="battle-surrender-modal__actions">
+              <button
+                type="button"
+                className="battle-surrender-modal__btn battle-surrender-modal__btn--cancel"
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setShowSurrenderModal(false)
+                }}
+              >
+                ⚔️ SEGUIR LUCHANDO
+              </button>
+              <button
+                type="button"
+                className="battle-surrender-modal__btn battle-surrender-modal__btn--confirm"
+                onClick={handleConfirmSurrender}
+              >
+                🏳️ SÍ, RENDIRME
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Plant Hand */}
       <PlantHand
         sunBank={sunBank}
         selectedCard={selectedCard}
+        selectedSlotIndex={selectedSlotIndex}
         onSelectCard={setSelectedCard}
         cooldowns={cooldowns}
+        slotCooldowns={slotCooldowns}
         activeDeck={effectiveDeck}
       />
     </div>

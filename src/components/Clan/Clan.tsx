@@ -3,8 +3,10 @@ import { soundManager } from '../../utils/audioManager'
 import {
   ClanManager,
   type ClanData,
+  type ClanMember,
   type ClanDonationRequest,
   type ClanWarLog,
+  type KickValidationResult,
 } from '../../utils/clanManager'
 import type { PlantId } from '../../types/game'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
@@ -56,6 +58,11 @@ export default function Clan({
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [depositAmount, setDepositAmount] = useState<number>(1.0)
   const [activeDialog, setActiveDialog] = useState<ClanModalDialog | null>(null)
+
+  // Kick Member Modal State
+  const [selectedMemberToKick, setSelectedMemberToKick] = useState<ClanMember | null>(null)
+  const [kickValidation, setKickValidation] = useState<KickValidationResult | null>(null)
+  const [showKickModal, setShowKickModal] = useState(false)
 
   // Clan Settings State
   const [clanPrivacy, setClanPrivacy] = useState<'public' | 'request' | 'closed'>('public')
@@ -159,12 +166,82 @@ export default function Clan({
     if (updated) {
       setDonationRequests(ClanManager.getDonationRequests(updated.id))
       setWarLogs(ClanManager.getWarLogs())
+      if (updated.settings) {
+        setClanPrivacy(updated.settings.privacy)
+        setClanMinElo(updated.settings.minElo)
+        setClanWarPermission(updated.settings.warPermission)
+        setClanAutoAccept(updated.settings.autoAccept)
+      }
     }
   }
 
   useEffect(() => {
     refreshClanData()
   }, [])
+
+  // Open Settings Modal & Load Saved Settings
+  const handleOpenSettings = () => {
+    soundManager.playSound('click', 0.4)
+    if (userClan?.settings) {
+      setClanPrivacy(userClan.settings.privacy)
+      setClanMinElo(userClan.settings.minElo)
+      setClanWarPermission(userClan.settings.warPermission)
+      setClanAutoAccept(userClan.settings.autoAccept)
+    }
+    setShowSettingsModal(true)
+  }
+
+  // Save Settings
+  const handleSaveClanSettings = () => {
+    if (!userClan) return
+    soundManager.playSound('plantation', 0.8)
+    const newSettings = {
+      privacy: clanPrivacy,
+      minElo: clanMinElo,
+      warPermission: clanWarPermission,
+      autoAccept: clanAutoAccept,
+    }
+    ClanManager.updateClanSettings(userClan.id, newSettings)
+    refreshClanData()
+    setShowSettingsModal(false)
+    showModalAlert(
+      'AJUSTES ACTUALIZADOS',
+      'Las reglas de privacidad, copas mínimas y permisos de guerra del clan se han guardado con éxito.',
+      '⚙️',
+      'success'
+    )
+  }
+
+  // Open Kick Member Dialog
+  const handleOpenKickDialog = (member: ClanMember) => {
+    if (!userClan) return
+    soundManager.playSound('click', 0.5)
+    const result = ClanManager.validateKickMember(userClan, member)
+    setSelectedMemberToKick(member)
+    setKickValidation(result)
+    setShowKickModal(true)
+  }
+
+  // Execute Kick Action
+  const handleExecuteKick = () => {
+    if (!userClan || !selectedMemberToKick || !kickValidation?.canKick) return
+    soundManager.playSound('surrender', 0.6)
+    const res = ClanManager.kickMember(userClan.id, selectedMemberToKick.id)
+    if (res.success) {
+      refreshClanData()
+      setShowKickModal(false)
+      showModalAlert(
+        'MIEMBRO EXPULSADO',
+        `El jugador "${selectedMemberToKick.name}" ha sido expulsado del clan por infringir el reglamento de guerra.\nLa vacante ha quedado liberada.`,
+        '👢',
+        'success'
+      )
+      setSelectedMemberToKick(null)
+      setKickValidation(null)
+    } else {
+      showModalAlert('ERROR AL EXPULSAR', res.error || 'No se pudo expulsar al miembro.', '❌', 'error')
+    }
+  }
 
   // CREATE CLAN ($5 USD)
   const handleCreateClan = (e: React.FormEvent) => {
@@ -759,7 +836,7 @@ export default function Clan({
         <button
           type="button"
           className="clan-settings-gear-btn"
-          onClick={() => setShowSettingsModal(true)}
+          onClick={handleOpenSettings}
           title="Ajustes y Configuración del Clan"
         >
           ⚙️
@@ -788,32 +865,32 @@ export default function Clan({
                 className="clan-deposit-btn"
                 onClick={() => setShowDepositModal(true)}
               >
-                💰 DEPOSITAR
+                💵 APORTAR AL FONDO
               </button>
             )}
 
-            <button type="button" className="clan-leave-btn" onClick={handleLeaveClan} title="Salir del Clan">
-              🚪 SALIR
+            <button type="button" className="clan-leave-btn" onClick={handleLeaveClan}>
+              SALIR
             </button>
           </div>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* TABS NAVIGATION */}
       <div className="clan-nav-tabs">
         <button
           type="button"
           className={`clan-tab-btn ${activeTab === 'members' ? 'clan-tab-btn--active' : ''}`}
           onClick={() => setActiveTab('members')}
         >
-          🏰 MI CLAN
+          👥 MIEMBROS ({userClan.members.length}/15)
         </button>
         <button
           type="button"
           className={`clan-tab-btn ${activeTab === 'wars' ? 'clan-tab-btn--active' : ''}`}
           onClick={() => setActiveTab('wars')}
         >
-          ⚔️ GUERRA & SAQUEO
+          ⚔️ GUERRA & ASALTOS ({userClan.wins}V - {userClan.losses}D)
         </button>
         <button
           type="button"
@@ -843,29 +920,99 @@ export default function Clan({
                   <th>ROL</th>
                   <th>COPAS ELO</th>
                   <th>DONACIONES</th>
+                  <th>ASISTENCIA A GUERRA</th>
                   <th>ESTADO</th>
+                  <th>GESTIÓN</th>
                 </tr>
               </thead>
               <tbody>
-                {userClan.members.map((member, idx) => (
-                  <tr key={member.id} className={member.name === playerName ? 'clan-row--me' : ''}>
-                    <td>{idx + 1}</td>
-                    <td className="clan-member-name-cell">
-                      <strong>{member.name}</strong>
-                      {member.name === playerName && <span className="clan-me-tag">TÚ</span>}
-                    </td>
-                    <td>
-                      <span className={`clan-role-badge clan-role--${member.role.toLowerCase()}`}>
-                        {member.role}
-                      </span>
-                    </td>
-                    <td>🏆 {member.elo}</td>
-                    <td>🎁 {member.donatedCount} cartas</td>
-                    <td>
-                      <span className="clan-status-dot" /> En línea
-                    </td>
-                  </tr>
-                ))}
+                {userClan.members.map((member, idx) => {
+                  const isMe = member.name === playerName
+                  const isUserLeader = userClan.leader === playerName || userClan.members.find((m) => m.name === playerName)?.role === 'Líder'
+                  const isUserColeader = userClan.members.find((m) => m.name === playerName)?.role === 'Colíder'
+                  const canKickMembers = isUserLeader || isUserColeader
+                  const validation = ClanManager.validateKickMember(userClan, member)
+                  const roundsPart = member.roundsParticipated || 0
+                  const missed = member.consecutiveRoundsMissed || 0
+                  const wo = member.walkoverLosses || 0
+
+                  return (
+                    <tr key={member.id} className={isMe ? 'clan-row--me' : ''}>
+                      <td>{idx + 1}</td>
+                      <td className="clan-member-name-cell">
+                        <strong>{member.name}</strong>
+                        {isMe && <span className="clan-me-tag">TÚ</span>}
+                      </td>
+                      <td>
+                        <span className={`clan-role-badge clan-role--${member.role.toLowerCase()}`}>
+                          {member.role}
+                        </span>
+                      </td>
+                      <td>🏆 {member.elo}</td>
+                      <td>🎁 {member.donatedCount} cartas</td>
+                      <td>
+                        {member.role === 'Líder' ? (
+                          <span className="clan-war-badge clan-war-badge--leader" title="Líder Supremo del Clan">
+                            👑 Líder
+                          </span>
+                        ) : validation.isProtected ? (
+                          <span
+                            className="clan-war-badge clan-war-badge--protected"
+                            title={`Participó en ${roundsPart} rondas de guerra esta temporada. Blindado contra expulsión hasta fin de temporada.`}
+                          >
+                            🛡️ Blindado ({roundsPart} Rondas)
+                          </span>
+                        ) : validation.reasonCode === 'ELIGIBLE_INACTIVE' ? (
+                          <span
+                            className="clan-war-badge clan-war-badge--warning"
+                            title={`No ha participado en ${missed} rondas consecutivas (2 semanas). Expulsión habilitada por inactividad.`}
+                          >
+                            ⚠️ Inactivo ({missed} Semanas)
+                          </span>
+                        ) : validation.reasonCode === 'ELIGIBLE_WALKOVER' ? (
+                          <span
+                            className="clan-war-badge clan-war-badge--danger"
+                            title={`Registra ${wo} derrota(s) por W.O. por no presentarse. Expulsión habilitada por abandono.`}
+                          >
+                            🚨 {wo} Falta W.O.
+                          </span>
+                        ) : (
+                          <span
+                            className="clan-war-badge clan-war-badge--active"
+                            title="Al día con la asistencia de guerra"
+                          >
+                            ✓ Activo ({roundsPart} Rondas)
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="clan-status-dot" /> En línea
+                      </td>
+                      <td>
+                        {!isMe && member.role !== 'Líder' && canKickMembers ? (
+                          <button
+                            type="button"
+                            className={`clan-kick-action-btn ${
+                              validation.canKick
+                                ? 'clan-kick-action-btn--eligible'
+                                : 'clan-kick-action-btn--protected'
+                            }`}
+                            onClick={() => handleOpenKickDialog(member)}
+                            title={
+                              validation.canKick
+                                ? 'Expulsar por faltas comprobadas al reglamento'
+                                : 'Ver motivo de protección o faltas acumuladas'
+                            }
+                          >
+                            {validation.canKick ? '👢 EXPULSAR' : '🛡️ DETALLES'}
+                          </button>
+                        ) : (
+                          <span className="clan-member-na-dash">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1188,113 +1335,351 @@ export default function Clan({
         </div>
       )}
 
-      {/* CLAN SETTINGS MODAL */}
+      {/* REDESIGNED CLAN SETTINGS MODAL */}
       {showSettingsModal && (
         <div className="clan-modal-backdrop" onClick={() => setShowSettingsModal(false)}>
           <div className="clan-modal-box clan-settings-modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3>⚙️ AJUSTES Y CONFIGURACIÓN DEL CLAN</h3>
-            <p>Define las reglas de reclutamiento, privacidad y permisos de guerra.</p>
+            <div className="clan-modal-header-row">
+              <div className="clan-modal-header-title">
+                <span className="clan-modal-header-icon">⚙️</span>
+                <div>
+                  <h3>AJUSTES DEL CLAN</h3>
+                  <p>Reglas de admisión, privacidad y gobernanza de guerra</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="clan-modal-close-btn"
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setShowSettingsModal(false)
+                }}
+                title="Cerrar ajustes"
+              >
+                ✕
+              </button>
+            </div>
 
             <div className="clan-settings-grid">
               {/* Setting 1: Privacy Type */}
-              <div className="clan-setting-group">
-                <label className="clan-setting-label">🔒 Privacidad y Acceso al Clan:</label>
-                <div className="clan-setting-pill-opts">
+              <div className="clan-setting-card">
+                <div className="clan-setting-card__header">
+                  <span className="clan-setting-card__icon">🔒</span>
+                  <div>
+                    <span className="clan-setting-card__title">Privacidad y Admisión</span>
+                    <span className="clan-setting-card__desc">Define cómo ingresan los nuevos miembros</span>
+                  </div>
+                </div>
+                <div className="clan-setting-tiles-grid">
                   <button
                     type="button"
-                    className={`clan-setting-pill ${clanPrivacy === 'public' ? 'clan-setting-pill--active' : ''}`}
-                    onClick={() => setClanPrivacy('public')}
+                    className={`clan-setting-tile ${clanPrivacy === 'public' ? 'clan-setting-tile--active' : ''}`}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.4)
+                      setClanPrivacy('public')
+                    }}
                   >
-                    🟢 ABIERTO (Pagan $2 USD y entran directo)
+                    <div className="clan-setting-tile__indicator" />
+                    <span className="clan-setting-tile__emoji">🟢</span>
+                    <div className="clan-setting-tile__info">
+                      <strong>ABIERTO</strong>
+                      <small>Ingreso directo ($2 USD)</small>
+                    </div>
                   </button>
+
                   <button
                     type="button"
-                    className={`clan-setting-pill ${clanPrivacy === 'request' ? 'clan-setting-pill--active' : ''}`}
-                    onClick={() => setClanPrivacy('request')}
+                    className={`clan-setting-tile ${clanPrivacy === 'request' ? 'clan-setting-tile--active' : ''}`}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.4)
+                      setClanPrivacy('request')
+                    }}
                   >
-                    🟡 CON SOLICITUD (Requiere Aprobación)
+                    <div className="clan-setting-tile__indicator" />
+                    <span className="clan-setting-tile__emoji">🟡</span>
+                    <div className="clan-setting-tile__info">
+                      <strong>CON SOLICITUD</strong>
+                      <small>Requiere aprobación de Líder</small>
+                    </div>
                   </button>
+
                   <button
                     type="button"
-                    className={`clan-setting-pill ${clanPrivacy === 'closed' ? 'clan-setting-pill--active' : ''}`}
-                    onClick={() => setClanPrivacy('closed')}
+                    className={`clan-setting-tile ${clanPrivacy === 'closed' ? 'clan-setting-tile--active' : ''}`}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.4)
+                      setClanPrivacy('closed')
+                    }}
                   >
-                    🔒 CERRADO (Solo Invitación Privada)
+                    <div className="clan-setting-tile__indicator" />
+                    <span className="clan-setting-tile__emoji">🔒</span>
+                    <div className="clan-setting-tile__info">
+                      <strong>CERRADO</strong>
+                      <small>Solo invitación privada</small>
+                    </div>
                   </button>
                 </div>
               </div>
 
               {/* Setting 2: Minimum ELO Cups */}
-              <div className="clan-setting-group">
-                <label className="clan-setting-label">🏆 Copas ELO Mínimas para Ingresar:</label>
-                <div className="clan-setting-pill-opts clan-setting-pill-opts--row">
+              <div className="clan-setting-card">
+                <div className="clan-setting-card__header">
+                  <span className="clan-setting-card__icon">🏆</span>
+                  <div>
+                    <span className="clan-setting-card__title">Requisito ELO Mínimo</span>
+                    <span className="clan-setting-card__desc">Copas necesarias en la Arena para solicitar ingreso</span>
+                  </div>
+                </div>
+                <div className="clan-setting-elo-grid">
                   {[0, 1000, 1500, 2000].map((elo) => (
                     <button
                       key={elo}
                       type="button"
-                      className={`clan-setting-pill ${clanMinElo === elo ? 'clan-setting-pill--active' : ''}`}
-                      onClick={() => setClanMinElo(elo)}
+                      className={`clan-setting-elo-btn ${clanMinElo === elo ? 'clan-setting-elo-btn--active' : ''}`}
+                      onClick={() => {
+                        soundManager.playSound('click', 0.4)
+                        setClanMinElo(elo)
+                      }}
                     >
-                      {elo === 0 ? '0 🏆 (Sin Límite)' : `${elo} 🏆`}
+                      <span className="clan-setting-elo-val">{elo === 0 ? '0' : elo.toLocaleString()}</span>
+                      <span className="clan-setting-elo-tag">{elo === 0 ? 'Sin Límite' : '🏆 Copas'}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Setting 3: War Permissions */}
-              <div className="clan-setting-group">
-                <label className="clan-setting-label">⚔️ Permisos de Declarar / Aceptar Guerra:</label>
-                <div className="clan-setting-pill-opts">
+              <div className="clan-setting-card">
+                <div className="clan-setting-card__header">
+                  <span className="clan-setting-card__icon">⚔️</span>
+                  <div>
+                    <span className="clan-setting-card__title">Permisos de Guerra de Clanes</span>
+                    <span className="clan-setting-card__desc">Quién puede declarar asaltos y aceptar guerras</span>
+                  </div>
+                </div>
+                <div className="clan-setting-tiles-grid clan-setting-tiles-grid--2col">
                   <button
                     type="button"
-                    className={`clan-setting-pill ${clanWarPermission === 'leaders' ? 'clan-setting-pill--active' : ''}`}
-                    onClick={() => setClanWarPermission('leaders')}
+                    className={`clan-setting-tile ${clanWarPermission === 'leaders' ? 'clan-setting-tile--active' : ''}`}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.4)
+                      setClanWarPermission('leaders')
+                    }}
                   >
-                    👑 Solo Líder y Colíderes
+                    <div className="clan-setting-tile__indicator" />
+                    <span className="clan-setting-tile__emoji">👑</span>
+                    <div className="clan-setting-tile__info">
+                      <strong>LÍDER Y COLÍDERES</strong>
+                      <small>Control estratégico exclusivo</small>
+                    </div>
                   </button>
+
                   <button
                     type="button"
-                    className={`clan-setting-pill ${clanWarPermission === 'all' ? 'clan-setting-pill--active' : ''}`}
-                    onClick={() => setClanWarPermission('all')}
+                    className={`clan-setting-tile ${clanWarPermission === 'all' ? 'clan-setting-tile--active' : ''}`}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.4)
+                      setClanWarPermission('all')
+                    }}
                   >
-                    ⚔️ Cualquier Miembro del Clan
+                    <div className="clan-setting-tile__indicator" />
+                    <span className="clan-setting-tile__emoji">⚔️</span>
+                    <div className="clan-setting-tile__info">
+                      <strong>TODOS LOS MIEMBROS</strong>
+                      <small>Cualquiera puede iniciar asaltos</small>
+                    </div>
                   </button>
                 </div>
               </div>
 
               {/* Setting 4: Auto-Accept Toggle */}
-              <div className="clan-setting-group clan-setting-group--row">
-                <div>
-                  <span className="clan-setting-sublabel">Aceptar Solicitudes Automáticamente</span>
-                  <small style={{ color: '#94a3b8', display: 'block', fontSize: '9px' }}>
-                    Si el solicitante cumple las copas ELO requeridas y paga los $2 USD.
-                  </small>
+              <div className="clan-setting-card clan-setting-card--toggle">
+                <div className="clan-setting-card__header">
+                  <span className="clan-setting-card__icon">⚡</span>
+                  <div>
+                    <span className="clan-setting-card__title">Aprobación Instantánea</span>
+                    <span className="clan-setting-card__desc">Acepta automáticamente a jugadores que cumplan el ELO y paguen $2 USD</span>
+                  </div>
                 </div>
                 <button
                   type="button"
-                  className={`clan-setting-toggle ${clanAutoAccept ? 'clan-setting-toggle--on' : ''}`}
-                  onClick={() => setClanAutoAccept((v) => !v)}
+                  className={`clan-setting-switch ${clanAutoAccept ? 'clan-setting-switch--active' : ''}`}
+                  onClick={() => {
+                    soundManager.playSound('click', 0.4)
+                    setClanAutoAccept((v) => !v)
+                  }}
                 >
-                  {clanAutoAccept ? '✓ ACTIVADO' : '✕ MANUAL'}
+                  <span className="clan-setting-switch__thumb" />
+                  <span className="clan-setting-switch__label">
+                    {clanAutoAccept ? 'ACTIVADO' : 'DESACTIVADO'}
+                  </span>
                 </button>
               </div>
             </div>
 
             <div className="clan-modal-actions">
-              <button type="button" className="clan-cancel-btn" onClick={() => setShowSettingsModal(false)}>
+              <button
+                type="button"
+                className="clan-cancel-btn"
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setShowSettingsModal(false)
+                }}
+              >
                 CANCELAR
               </button>
               <button
                 type="button"
                 className="clan-confirm-btn"
+                onClick={handleSaveClanSettings}
+              >
+                💾 GUARDAR AJUSTES
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MEMBER KICK VALIDATION & CONFIRMATION MODAL */}
+      {showKickModal && selectedMemberToKick && kickValidation && (
+        <div className="clan-modal-backdrop" onClick={() => setShowKickModal(false)}>
+          <div className="clan-modal-box clan-kick-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="clan-modal-header-row">
+              <div className="clan-modal-header-title">
+                <span className="clan-modal-header-icon">
+                  {kickValidation.canKick ? '⚠️' : '🛡️'}
+                </span>
+                <div>
+                  <h3>
+                    {kickValidation.canKick
+                      ? 'EXPULSIÓN DE MIEMBRO'
+                      : 'PROTECCIÓN DE JUGADOR'}
+                  </h3>
+                  <p>Reglamento competitivo de Guerra de Clanes</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="clan-modal-close-btn"
                 onClick={() => {
-                  soundManager.playSound('plantation', 0.8)
-                  setShowSettingsModal(false)
-                  showModalAlert('AJUSTES GUARDADOS', 'La configuración del clan se ha actualizado correctamente.', '⚙️', 'success')
+                  soundManager.playSound('click', 0.4)
+                  setShowKickModal(false)
                 }}
               >
-                GUARDAR AJUSTES
+                ✕
               </button>
+            </div>
+
+            <div className="clan-kick-target-card">
+              <div className="clan-kick-target-left">
+                <span className="clan-kick-avatar-badge">👤</span>
+                <div>
+                  <h4>{selectedMemberToKick.name}</h4>
+                  <span className={`clan-role-badge clan-role--${selectedMemberToKick.role.toLowerCase()}`}>
+                    {selectedMemberToKick.role}
+                  </span>
+                </div>
+              </div>
+              <div className="clan-kick-target-elo">
+                <span>COPAS ELO</span>
+                <strong>🏆 {selectedMemberToKick.elo}</strong>
+              </div>
+            </div>
+
+            {/* Attendance breakdown stats */}
+            <div className="clan-kick-stats-grid">
+              <div className="clan-kick-stat-item">
+                <span className="clan-kick-stat-val" style={{ color: '#4ade80' }}>
+                  {kickValidation.details.roundsParticipated}
+                </span>
+                <span className="clan-kick-stat-lbl">Rondas Jugadas</span>
+                <small>(Temporada)</small>
+              </div>
+              <div className="clan-kick-stat-item">
+                <span
+                  className="clan-kick-stat-val"
+                  style={{
+                    color: kickValidation.details.consecutiveMissed >= 2 ? '#f87171' : '#fbbf24',
+                  }}
+                >
+                  {kickValidation.details.consecutiveMissed} / 2
+                </span>
+                <span className="clan-kick-stat-lbl">Semanas Inactivo</span>
+                <small>(Consecutivas)</small>
+              </div>
+              <div className="clan-kick-stat-item">
+                <span
+                  className="clan-kick-stat-val"
+                  style={{
+                    color: kickValidation.details.walkoverLosses >= 1 ? '#ef4444' : '#94a3b8',
+                  }}
+                >
+                  {kickValidation.details.walkoverLosses}
+                </span>
+                <span className="clan-kick-stat-lbl">Faltas por W.O.</span>
+                <small>(No presentado)</small>
+              </div>
+            </div>
+
+            {/* Explanation box */}
+            <div
+              className={`clan-kick-notice-box ${
+                kickValidation.canKick ? 'clan-kick-notice-box--eligible' : 'clan-kick-notice-box--protected'
+              }`}
+            >
+              <div className="clan-kick-notice-icon">
+                {kickValidation.isProtected
+                  ? '🛡️'
+                  : kickValidation.canKick
+                  ? '⚠️'
+                  : 'ℹ️'}
+              </div>
+              <div className="clan-kick-notice-text">
+                <strong>
+                  {kickValidation.isProtected
+                    ? 'JUGADOR BLINDADO HASTA FIN DE TEMPORADA'
+                    : kickValidation.canKick
+                    ? 'MOTIVO VÁLIDO DE EXPULSIÓN DETECTADO'
+                    : 'FALTAS INSUFICIENTES PARA EXPULSIÓN'}
+                </strong>
+                <p>{kickValidation.message}</p>
+              </div>
+            </div>
+
+            <div className="clan-modal-actions">
+              {kickValidation.canKick ? (
+                <>
+                  <button
+                    type="button"
+                    className="clan-cancel-btn"
+                    onClick={() => {
+                      soundManager.playSound('click', 0.4)
+                      setShowKickModal(false)
+                    }}
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    type="button"
+                    className="clan-kick-confirm-btn"
+                    onClick={handleExecuteKick}
+                  >
+                    👢 CONFIRMAR EXPULSIÓN
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="clan-confirm-btn"
+                  style={{ width: '100%' }}
+                  onClick={() => {
+                    soundManager.playSound('click', 0.4)
+                    setShowKickModal(false)
+                  }}
+                >
+                  ENTENDIDO
+                </button>
+              )}
             </div>
           </div>
         </div>

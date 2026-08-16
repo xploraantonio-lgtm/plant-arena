@@ -1,22 +1,30 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { soundManager } from '../../utils/audioManager'
 import {
   MarketplaceManager,
+  getPlantRarityAndMinPrice,
   type MarketListing,
+  type PlantRarity,
 } from '../../utils/marketplaceManager'
-import type { PlantId } from '../../types/game'
+import type { PlantId, PlantCardInstance } from '../../types/game'
 import { PLANT_CONFIGS, STAT_LABELS, type PlantStatKey } from '../../utils/gameConstants'
 import './Marketplace.css'
 
 interface MarketplaceProps {
   userTokens: number
   hasVipPass: boolean
-  plantCopies: Record<PlantId, number>
-  plantLevels: Record<PlantId, number>
-  plantStatRolls: Record<PlantId, PlantStatKey[]>
+  plantCopies: Partial<Record<PlantId, number>>
+  plantLevels: Partial<Record<PlantId, number>>
+  plantStatRolls: Partial<Record<PlantId, PlantStatKey[]>>
+  plantInstances?: PlantCardInstance[]
+  unlockedPlants?: PlantId[]
+  activeDeck?: PlantId[]
+  activeDeckInstances?: string[]
   onDeductTokens: (amountUsd: number) => boolean
-  onDonatePlant: (plantId: PlantId) => boolean // Deducts 1 copy
-  onReceivePlant: (plantId: PlantId) => void // Adds 1 copy
+  onDonatePlant: (plantId: PlantId) => boolean
+  onReceivePlant: (plantId: PlantId, level?: number, statRolls?: PlantStatKey[]) => void
+  onRemovePlantInstance?: (instanceId: string) => boolean
+  onUpdateDeck?: (plantIds: PlantId[], instanceIds?: string[]) => void
   onBuyVipPass: () => boolean
   onBackToMenu: () => void
 }
@@ -34,22 +42,107 @@ interface MarketModalDialog {
 export default function Marketplace({
   userTokens,
   hasVipPass,
-  plantCopies,
-  plantLevels,
-  plantStatRolls,
+  plantCopies: _plantCopies = {},
+  plantLevels = {},
+  plantStatRolls = {},
+  plantInstances = [],
+  unlockedPlants,
+  activeDeck = [],
+  activeDeckInstances = [],
   onDeductTokens,
   onDonatePlant,
   onReceivePlant,
+  onRemovePlantInstance,
+  onUpdateDeck,
   onBuyVipPass,
   onBackToMenu,
 }: MarketplaceProps) {
   const [activeTab, setActiveTab] = useState<'browse' | 'sell'>('browse')
   const [listings, setListings] = useState<MarketListing[]>(() => MarketplaceManager.getListings())
-  const [selectedSellPlant, setSelectedSellPlant] = useState<PlantId>('peashooter')
-  const [sellPriceUsd, setSellPriceUsd] = useState<number>(3.0)
   const [activeDialog, setActiveDialog] = useState<MarketModalDialog | null>(null)
 
   const playerName = 'DRAGONMASTER'
+
+  // Build the list of all individual card builds/instances from Mi Jardín
+  const gardenCards = useMemo(() => {
+    const cards: {
+      instanceId: string
+      plantId: PlantId
+      level: number
+      statRolls: PlantStatKey[]
+      isBase: boolean
+      isUnlocked: boolean
+      rarity: PlantRarity
+      minPrice: number
+      rarityColor: string
+      inDeck: boolean
+    }[] = []
+
+    const unlocked = unlockedPlants || (Object.keys(PLANT_CONFIGS) as PlantId[])
+
+    if (plantInstances && plantInstances.length > 0) {
+      plantInstances.forEach((inst) => {
+        if (!unlocked.includes(inst.plantId)) return
+        const rInfo = getPlantRarityAndMinPrice(inst.plantId)
+        const inDeck = Boolean(
+          activeDeckInstances?.includes(inst.instanceId) ||
+          activeDeck?.includes(inst.plantId)
+        )
+        cards.push({
+          instanceId: inst.instanceId,
+          plantId: inst.plantId,
+          level: inst.level || 0,
+          statRolls: inst.statRolls || [],
+          isBase: inst.isBase ?? false,
+          isUnlocked: true,
+          rarity: rInfo.rarity,
+          minPrice: rInfo.minPrice,
+          rarityColor: rInfo.color,
+          inDeck,
+        })
+      })
+    } else {
+      unlocked.forEach((pId) => {
+        const rInfo = getPlantRarityAndMinPrice(pId)
+        cards.push({
+          instanceId: `inst_base_${pId}`,
+          plantId: pId,
+          level: plantLevels[pId] || 0,
+          statRolls: plantStatRolls[pId] || [],
+          isBase: true,
+          isUnlocked: true,
+          rarity: rInfo.rarity,
+          minPrice: rInfo.minPrice,
+          rarityColor: rInfo.color,
+          inDeck: Boolean(activeDeck?.includes(pId)),
+        })
+      })
+    }
+
+    return cards
+  }, [plantInstances, unlockedPlants, plantLevels, plantStatRolls, activeDeck, activeDeckInstances])
+
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>(() => {
+    return gardenCards[0]?.instanceId || ''
+  })
+
+  useEffect(() => {
+    if (gardenCards.length > 0 && (!selectedInstanceId || !gardenCards.some((c) => c.instanceId === selectedInstanceId))) {
+      setSelectedInstanceId(gardenCards[0].instanceId)
+    }
+  }, [gardenCards, selectedInstanceId])
+
+  const selectedInstance = gardenCards.find((c) => c.instanceId === selectedInstanceId) || gardenCards[0]
+
+  const currentMinPrice = selectedInstance ? selectedInstance.minPrice : 5
+  const [sellPriceUsd, setSellPriceUsd] = useState<number>(currentMinPrice)
+
+  // Ensure sellPrice is at least the minimum allowed for that rarity
+  useEffect(() => {
+    if (selectedInstance) {
+      setSellPriceUsd((prev) => Math.max(selectedInstance.minPrice, prev))
+    }
+  }, [selectedInstance?.instanceId, selectedInstance?.minPrice])
 
   const showModalAlert = (
     title: string,
@@ -145,9 +238,14 @@ export default function Marketplace({
 
         const bought = MarketplaceManager.buyListing(listing.id)
         if (bought) {
-          onReceivePlant(bought.plantId)
+          onReceivePlant(bought.plantId, bought.level, bought.statRolls)
           soundManager.playSound('victory', 1)
-          showModalAlert('¡COMPRA EXITOSA!', `Has adquirido una copia de "${bought.plantName}" por $${bought.priceUsd.toFixed(2)} USD.\nSe ha añadido a tu inventario.`, '🎉', 'success')
+          showModalAlert(
+            '¡COMPRA EXITOSA!',
+            `Has adquirido una instancia de "${bought.plantName}" (Nivel ${bought.level}) por $${bought.priceUsd.toFixed(2)} USD.\nSe ha añadido como una nueva carta a tu inventario de Mi Jardín.`,
+            '🎉',
+            'success'
+          )
           refreshListings()
         }
       },
@@ -156,9 +254,11 @@ export default function Marketplace({
     )
   }
 
-  // SELL A PLANT / BUILD
+  // SELL / LIST A CARD ON MARKETPLACE
   const handleCreateListing = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!selectedInstance) return
+
     if (!hasVipPass) {
       showModalConfirm(
         'PASE VIP REQUERIDO',
@@ -173,66 +273,91 @@ export default function Marketplace({
       return
     }
 
-    const availableCopies = plantCopies[selectedSellPlant] || 0
-    // STRICT VALIDATION: Must keep at least 1 own copy
-    if (availableCopies <= 1) {
+    if (sellPriceUsd < currentMinPrice) {
       showModalAlert(
-        'VALIDACIÓN DE SEGURIDAD',
-        `Debes conservar al menos 1 copia propia de "${PLANT_CONFIGS[selectedSellPlant].name}". Tienes ${availableCopies} copia(s).`,
-        '🛑',
-        'error'
+        'PRECIO INFERIOR AL MÍNIMO',
+        `El precio mínimo de venta para plantas ${selectedInstance.rarity} es de $${currentMinPrice}.00 USD.\nPor favor asigna un precio de $${currentMinPrice}.00 USD o superior.`,
+        '⚠️',
+        'warning'
       )
       return
     }
 
-    if (sellPriceUsd <= 0 || sellPriceUsd > 100) {
-      showModalAlert('PRECIO NO VÁLIDO', 'Ingresa un precio válido entre $0.50 y $100.00 USD.', '⚠️', 'warning')
-      return
-    }
+    const pConfig = PLANT_CONFIGS[selectedInstance.plantId]
 
-    // Deduct 1 copy from player
-    const deducted = onDonatePlant(selectedSellPlant)
-    if (!deducted) {
-      showModalAlert('ERROR', 'Error al descontar la copia del inventario.', '⚠️', 'error')
-      return
-    }
+    showModalConfirm(
+      'PUBLICAR OFERTA EN EL MERCADO',
+      `¿Confirmas poner en venta "${pConfig.name}" (Nivel ${selectedInstance.level}) por $${sellPriceUsd.toFixed(2)} USD?\n\n⚠️ NOTA: Esta carta se retirará de tu Jardín y de tu Mazo de Batalla mientras esté publicada en el mercado.`,
+      '🏷️',
+      () => {
+        // 1. Remove instance from player inventory
+        if (onRemovePlantInstance) {
+          onRemovePlantInstance(selectedInstance.instanceId)
+        } else {
+          onDonatePlant(selectedInstance.plantId)
+        }
 
-    const pConfig = PLANT_CONFIGS[selectedSellPlant]
-    const pLevel = plantLevels[selectedSellPlant] || 0
-    const pRolls = plantStatRolls[selectedSellPlant] || []
+        // 2. Un-equip from battle deck if in deck
+        if (activeDeck && onUpdateDeck) {
+          const nextDeck = activeDeck.filter((_, idx) => {
+            if (activeDeckInstances && activeDeckInstances[idx] === selectedInstance.instanceId) {
+              return false
+            }
+            return true
+          })
+          const nextInstIds = activeDeckInstances
+            ? activeDeckInstances.filter((id) => id !== selectedInstance.instanceId)
+            : undefined
+          onUpdateDeck(nextDeck, nextInstIds)
+        }
 
-    MarketplaceManager.createListing(
-      playerName,
-      selectedSellPlant,
-      pConfig.name,
-      pConfig.packetActive || pConfig.icon,
-      pLevel,
-      pRolls,
-      sellPriceUsd
+        // 3. Create listing
+        MarketplaceManager.createListing(
+          playerName,
+          selectedInstance.plantId,
+          pConfig.name,
+          pConfig.packetActive || pConfig.icon,
+          selectedInstance.level,
+          selectedInstance.statRolls,
+          sellPriceUsd
+        )
+
+        soundManager.playSound('plantation', 0.9)
+        showModalAlert(
+          '¡OFERTA PUBLICADA EN EL MERCADO!',
+          `"${pConfig.name}" (Nivel ${selectedInstance.level}) ha sido publicada exitosamente por $${sellPriceUsd.toFixed(2)} USD.\nLa carta permanecerá en venta y no podrá usarse en batalla hasta que sea vendida o retires la oferta.`,
+          '🏷️',
+          'success'
+        )
+        setActiveTab('browse')
+        refreshListings()
+      },
+      `SÍ, VENDER ($${sellPriceUsd.toFixed(2)} USD)`,
+      'CANCELAR'
     )
-
-    soundManager.playSound('plantation', 0.9)
-    showModalAlert('¡OFERTA PUBLICADA!', `"${pConfig.name}" puesta en venta en el Mercado por $${sellPriceUsd.toFixed(2)} USD.`, '🏷️', 'success')
-    setActiveTab('browse')
-    refreshListings()
   }
 
   // CANCEL MY LISTING
   const handleCancelListing = (listing: MarketListing) => {
     showModalConfirm(
-      'RETIRAR OFERTA',
-      `¿Deseas retirar "${listing.plantName}" del mercado y recuperar tu copia en el inventario?`,
+      'RETIRAR OFERTA DEL MERCADO',
+      `¿Deseas retirar "${listing.plantName}" del mercado y recuperarla en tu Jardín para volver a usarla en batalla?`,
       '📦',
       () => {
         const canceled = MarketplaceManager.cancelListing(listing.id, playerName)
         if (canceled) {
-          onReceivePlant(listing.plantId)
+          onReceivePlant(listing.plantId, listing.level, listing.statRolls)
           soundManager.playSound('plantation', 0.8)
-          showModalAlert('OFERTA RETIRADA', `Has retirado la oferta de "${listing.plantName}" y recuperado tu copia.`, '📦', 'info')
+          showModalAlert(
+            'OFERTA RETIRADA',
+            `Has retirado la oferta de "${listing.plantName}" del mercado. La carta ha vuelto a tu Jardín y ya está disponible para equipar.`,
+            '📦',
+            'info'
+          )
           refreshListings()
         }
       },
-      'RETIRAR OFERTA',
+      'RETIRAR Y RECUPERAR',
       'MANTENER EN VENTA'
     )
   }
@@ -304,7 +429,7 @@ export default function Marketplace({
           className={`market-tab-btn ${activeTab === 'sell' ? 'market-tab-btn--active' : ''}`}
           onClick={() => setActiveTab('sell')}
         >
-          🏷️ PONER EN VENTA MI CARTA
+          🏷️ VENDER
         </button>
       </div>
 
@@ -320,6 +445,7 @@ export default function Marketplace({
               const isMine = item.sellerName === playerName
               const plantDef = PLANT_CONFIGS[item.plantId]
               const itemIcon = plantDef?.packetActive || plantDef?.icon || item.plantIcon
+              const rInfo = getPlantRarityAndMinPrice(item.plantId)
               return (
                 <div key={item.id} className="market-item-card">
                   {/* Card Header */}
@@ -327,14 +453,17 @@ export default function Marketplace({
                     <span className="market-item-level-tag">
                       {item.level > 0 ? `⭐ LVL ${item.level}` : '🌱 BASE'}
                     </span>
+                    <span className="market-item-rarity-badge" style={{ color: rInfo.color, borderColor: rInfo.color }}>
+                      {rInfo.rarity}
+                    </span>
                     <span className="market-item-seller">👤 {isMine ? 'TÚ' : item.sellerName}</span>
                   </div>
 
                   {/* Image and Name */}
                   <div className="market-item-card__img-wrap">
-                    <img src={itemIcon} alt={item.plantName} className="market-item-icon" />
+                    <img src={itemIcon} alt={plantDef?.name || item.plantName} className="market-item-icon" />
                   </div>
-                  <h4 className="market-item-name">{item.plantName}</h4>
+                  <h4 className="market-item-name">{plantDef?.name || item.plantName}</h4>
 
                   {/* Stat Rolls Pills */}
                   <div className="market-item-stats-box">
@@ -379,109 +508,213 @@ export default function Marketplace({
 
       {/* TAB 2: SELL MY PLANT */}
       {activeTab === 'sell' && (
-        <form className="market-sell-pane" onSubmit={handleCreateListing}>
+        <div className="market-sell-pane">
           <div className="market-sell-info-banner">
-            <strong>📋 REGLAS DE COMERCIO:</strong>
-            <ul>
-              <li>Solo puedes vender copias excedentes. <strong>Siempre debes quedarte con al menos 1 copia propia</strong>.</li>
-              <li>La carta se vende con su nivel de mejora y estadísticas actuales.</li>
-              <li>Al venderse, el dinero ($USD) se añade directamente a tu saldo de tokens.</li>
-            </ul>
+            <strong>📋 REGLAS Y PRECIOS MÍNIMOS DE VENTA:</strong>
+            <div className="market-min-prices-row">
+              <span className="market-min-tag" style={{ color: '#4ade80', borderColor: '#4ade80' }}>🌱 Común: Mín $5</span>
+              <span className="market-min-tag" style={{ color: '#38bdf8', borderColor: '#38bdf8' }}>🌿 Poco Común: Mín $8</span>
+              <span className="market-min-tag" style={{ color: '#a855f7', borderColor: '#a855f7' }}>🔮 Rara: Mín $10</span>
+              <span className="market-min-tag" style={{ color: '#ec4899', borderColor: '#ec4899' }}>✨ Épica: Mín $15</span>
+              <span className="market-min-tag" style={{ color: '#fbbf24', borderColor: '#fbbf24' }}>👑 Legendaria: Mín $20</span>
+            </div>
+            <small style={{ color: '#cbd5e1', marginTop: '2px', display: 'block' }}>
+              ⚠️ <strong>Importante:</strong> Mientras una carta esté en oferta en el mercado, se retira de tu Jardín y no podrás usarla en batalla. Puedes retirarla en cualquier momento para recuperarla.
+            </small>
           </div>
 
           <div className="market-sell-form-grid">
-            {/* Step 1: Select Plant */}
+            {/* Column 1: Select Plant from Garden */}
             <div className="market-sell-column">
-              <label className="market-sell-label">1. Selecciona la Planta a Vender</label>
-              <div className="market-sell-picker-grid">
-                {(Object.keys(PLANT_CONFIGS) as PlantId[]).map((pId) => {
-                  const pConfig = PLANT_CONFIGS[pId]
-                  const copies = plantCopies[pId] || 0
-                  const isSelected = selectedSellPlant === pId
-                  const canSell = copies > 1
-
-                  return (
-                    <button
-                      key={pId}
-                      type="button"
-                      disabled={!canSell}
-                      className={`market-picker-btn ${isSelected ? 'market-picker-btn--active' : ''} ${
-                        !canSell ? 'market-picker-btn--disabled' : ''
-                      }`}
-                      onClick={() => setSelectedSellPlant(pId)}
-                    >
-                      <img src={pConfig.packetActive || pConfig.icon} alt={pConfig.name} />
-                      <span className="market-picker-btn__name">{pConfig.name}</span>
-                      <small className={canSell ? 'market-copies--ok' : 'market-copies--low'}>
-                        {copies} copias {canSell ? '✓' : '(Mín 1)'}
-                      </small>
-                    </button>
-                  )
-                })}
+              <label className="market-sell-label">
+                1. Elige la Carta de tu Jardín a Vender ({gardenCards.length} disponibles)
+              </label>
+              <div className="market-garden-cards-list">
+                {gardenCards.length === 0 ? (
+                  <div className="market-empty-state">
+                    <span>No tienes cartas disponibles para vender en tu Jardín.</span>
+                  </div>
+                ) : (
+                  gardenCards.map((card) => {
+                    const pConfig = PLANT_CONFIGS[card.plantId]
+                    const isSelected = selectedInstance?.instanceId === card.instanceId
+                    return (
+                      <div
+                        key={card.instanceId}
+                        role="button"
+                        tabIndex={0}
+                        className={`market-garden-card-item ${isSelected ? 'market-garden-card-item--active' : ''}`}
+                        onClick={() => {
+                          soundManager.playSound('click', 0.4)
+                          setSelectedInstanceId(card.instanceId)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            setSelectedInstanceId(card.instanceId)
+                          }
+                        }}
+                      >
+                        <img
+                          src={pConfig?.packetActive || pConfig?.icon}
+                          alt={pConfig?.name || card.plantId}
+                          className="market-garden-card-item__img"
+                        />
+                        <div className="market-garden-card-item__info">
+                          <div className="market-garden-card-item__header">
+                            <span className="market-item-level-tag">
+                              {card.level > 0 ? `⭐ LVL ${card.level}` : '🌱 BASE'}
+                            </span>
+                            <span
+                              className="market-rarity-pill"
+                              style={{ color: card.rarityColor, borderColor: card.rarityColor }}
+                            >
+                              {card.rarity}
+                            </span>
+                            {card.inDeck && (
+                              <span className="market-deck-tag">⚔️ EN MAZO</span>
+                            )}
+                          </div>
+                          <strong className="market-garden-card-item__name">
+                            {pConfig?.name || card.plantId}
+                          </strong>
+                          <div className="market-garden-card-item__stats">
+                            {card.statRolls.length > 0 ? (
+                              formatStatRolls(card.statRolls)
+                            ) : (
+                              <span className="market-stat-pill market-stat-pill--none">Stats estándar</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="market-garden-card-item__price-badge">
+                          Mín: ${card.minPrice}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
 
-            {/* Step 2: Selected Preview & Price */}
+            {/* Column 2: Configure Price & Publish */}
             <div className="market-sell-column market-sell-column--summary">
-              <label className="market-sell-label">2. Detalles y Precio de Venta</label>
-              
-              <div className="market-sell-preview-card">
-                <div className="market-sell-preview-header">
-                  <span className="market-item-level-tag">
-                    {(plantLevels[selectedSellPlant] || 0) > 0
-                      ? `⭐ LVL ${plantLevels[selectedSellPlant]}`
-                      : '🌱 BASE'}
-                  </span>
-                  <span className="market-preview-copies">
-                    Tienes {plantCopies[selectedSellPlant] || 0} copias (Te quedarán {(plantCopies[selectedSellPlant] || 0) - 1})
-                  </span>
-                </div>
+              <label className="market-sell-label">2. Fijar Precio y Confirmar Venta</label>
 
-                <img
-                  src={PLANT_CONFIGS[selectedSellPlant].packetActive || PLANT_CONFIGS[selectedSellPlant].icon}
-                  alt=""
-                  className="market-preview-icon"
-                />
-                <h4>{PLANT_CONFIGS[selectedSellPlant].name}</h4>
-
-                <div className="market-item-stats-box">
-                  {plantStatRolls[selectedSellPlant] && plantStatRolls[selectedSellPlant].length > 0 ? (
-                    formatStatRolls(plantStatRolls[selectedSellPlant])
-                  ) : (
-                    <span className="market-stat-pill market-stat-pill--none">Stats estándar de fábrica</span>
-                  )}
-                </div>
-
-                <div className="market-price-input-group">
-                  <label>Fijar Precio de Venta ($USD):</label>
-                  <div className="market-price-input-wrap">
-                    <span>$</span>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0.5"
-                      max="100"
-                      value={sellPriceUsd}
-                      onChange={(e) => setSellPriceUsd(Number(e.target.value))}
-                      required
-                    />
-                    <span>USD</span>
+              {selectedInstance && (
+                <form className="market-sell-preview-card" onSubmit={handleCreateListing}>
+                  <div className="market-sell-preview-header">
+                    <span className="market-item-level-tag">
+                      {selectedInstance.level > 0 ? `⭐ LVL ${selectedInstance.level}` : '🌱 BASE'}
+                    </span>
+                    <span
+                      className="market-rarity-pill"
+                      style={{ color: selectedInstance.rarityColor, borderColor: selectedInstance.rarityColor }}
+                    >
+                      {selectedInstance.rarity} (Mín ${selectedInstance.minPrice} USD)
+                    </span>
                   </div>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={(plantCopies[selectedSellPlant] || 0) <= 1}
-                  className="market-publish-btn"
-                >
-                  {(plantCopies[selectedSellPlant] || 0) <= 1
-                    ? '🔒 NO PUEDES VENDER (MÍNIMO 1 COPIA REQUERIDA)'
-                    : `🏷️ PUBLICAR EN VENTA POR $${sellPriceUsd.toFixed(2)} USD`}
-                </button>
-              </div>
+                  <img
+                    src={
+                      PLANT_CONFIGS[selectedInstance.plantId]?.packetActive ||
+                      PLANT_CONFIGS[selectedInstance.plantId]?.icon
+                    }
+                    alt=""
+                    className="market-preview-icon"
+                  />
+                  <h4>{PLANT_CONFIGS[selectedInstance.plantId]?.name}</h4>
+
+                  {selectedInstance.inDeck && (
+                    <div className="market-deck-warning">
+                      ⚠️ Esta carta está equipada en tu Mazo de Batalla. Se desequipará automáticamente al ponerla en venta.
+                    </div>
+                  )}
+
+                  <div className="market-item-stats-box">
+                    {selectedInstance.statRolls && selectedInstance.statRolls.length > 0 ? (
+                      formatStatRolls(selectedInstance.statRolls)
+                    ) : (
+                      <span className="market-stat-pill market-stat-pill--none">Stats estándar de fábrica</span>
+                    )}
+                  </div>
+
+                  {/* Price Setting with Steppers */}
+                  <div className="market-price-input-group">
+                    <label>
+                      Precio de Venta ($USD) — <span style={{ color: '#fde047' }}>Mínimo: ${selectedInstance.minPrice}.00 USD</span>
+                    </label>
+                    <div className="market-price-stepper-wrap">
+                      <button
+                        type="button"
+                        className="market-stepper-btn"
+                        disabled={sellPriceUsd <= selectedInstance.minPrice}
+                        onClick={() => setSellPriceUsd((p) => Math.max(selectedInstance.minPrice, p - 1))}
+                        title="Disminuir $1"
+                      >
+                        -
+                      </button>
+
+                      <div className="market-price-input-wrap">
+                        <span>$</span>
+                        <input
+                          type="number"
+                          step="1"
+                          min={selectedInstance.minPrice}
+                          max="999"
+                          value={sellPriceUsd}
+                          onChange={(e) => setSellPriceUsd(Math.max(0, Number(e.target.value)))}
+                          required
+                        />
+                        <span>USD</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="market-stepper-btn"
+                        onClick={() => setSellPriceUsd((p) => p + 1)}
+                        title="Aumentar $1"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {/* Quick Price Shortcuts */}
+                    <div className="market-price-shortcuts">
+                      <button
+                        type="button"
+                        className="market-shortcut-btn"
+                        onClick={() => setSellPriceUsd(selectedInstance.minPrice)}
+                      >
+                        MÍN (${selectedInstance.minPrice})
+                      </button>
+                      <button
+                        type="button"
+                        className="market-shortcut-btn"
+                        onClick={() => setSellPriceUsd((p) => p + 5)}
+                      >
+                        +$5
+                      </button>
+                      <button
+                        type="button"
+                        className="market-shortcut-btn"
+                        onClick={() => setSellPriceUsd((p) => p + 10)}
+                      >
+                        +$10
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={sellPriceUsd < selectedInstance.minPrice}
+                    className="market-publish-btn"
+                  >
+                    🏷️ PUBLICAR EN EL MERCADO POR ${sellPriceUsd.toFixed(2)} USD
+                  </button>
+                </form>
+              )}
             </div>
           </div>
-        </form>
+        </div>
       )}
 
       {/* CUSTOM IN-GAME POPUP DIALOG */}

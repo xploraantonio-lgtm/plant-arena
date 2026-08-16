@@ -20,6 +20,7 @@ import {
   FIELD_WIDTH_PCT,
   TOTAL_COLUMNS,
   getScaledPlantConfig,
+  getEligibleStatsForPlant,
   type PlantStatKey,
 } from '../utils/gameConstants'
 import { soundManager } from '../utils/audioManager'
@@ -54,7 +55,9 @@ interface GameState {
   projectiles: ProjectileEntity[]
   suns: SunEntity[]
   selectedCard: PlantId | 'shovel' | null
+  selectedSlotIndex: number | null
   cooldowns: Record<PlantId, number>
+  slotCooldowns: Record<number, number>
   wave: number
   waveBanner: string | null
   stats: GameStats
@@ -77,7 +80,9 @@ export function useGameEngine() {
     projectiles: [],
     suns: [],
     selectedCard: null,
+    selectedSlotIndex: null,
     cooldowns: createInitialCooldowns(),
+    slotCooldowns: {},
     wave: 1,
     waveBanner: null,
     stats: {
@@ -111,10 +116,11 @@ export function useGameEngine() {
     soundManager.toggleMute()
   }, [])
 
-  // Select card handler
+  // Select card handler with optional slotIndex
   const setSelectedCard = useCallback(
-    (card: PlantId | 'shovel' | null) => {
+    (card: PlantId | 'shovel' | null, slotIndex: number | null = null) => {
       stateRef.current.selectedCard = card
+      stateRef.current.selectedSlotIndex = slotIndex
       forceRender()
     },
     [forceRender]
@@ -134,7 +140,9 @@ export function useGameEngine() {
       projectiles: [],
       suns: [],
       selectedCard: null,
+      selectedSlotIndex: null,
       cooldowns: createInitialCooldowns(),
+      slotCooldowns: {},
       wave: 1,
       waveBanner: '¡Ola 1 de Plantas Enemigas!',
       stats: {
@@ -225,7 +233,9 @@ export function useGameEngine() {
       projectiles: [],
       suns: [],
       selectedCard: initialCard,
+      selectedSlotIndex: null,
       cooldowns: createInitialCooldowns(),
+      slotCooldowns: {},
       wave: 1,
       waveBanner: `🎯 MODO PRUEBA: ${initialCard ? PLANT_CONFIGS[initialCard].name.toUpperCase() : 'SANDBOX'}`,
       stats: {
@@ -274,15 +284,50 @@ export function useGameEngine() {
     (lane: number, col: number) => {
       const state = stateRef.current
       const card = state.selectedCard
+      const slotIdx = state.selectedSlotIndex
 
       if (!card || card === 'shovel' || state.status !== 'playing') return
 
-      const rolls = getPlantRolls(card)
+      let rolls: PlantStatKey[] = getPlantRolls(card)
+      let cardLevel = 0
+      let instanceId: string | undefined = undefined
+
+      try {
+        const savedDeckInstIds = localStorage.getItem('plant_arena_active_deck_instances')
+        const savedInstances = localStorage.getItem('plant_arena_plant_instances')
+        const parsedDeckInstIds: string[] = savedDeckInstIds ? JSON.parse(savedDeckInstIds) : []
+        const parsedInstances: any[] = savedInstances ? JSON.parse(savedInstances) : []
+
+        if (slotIdx !== null && parsedDeckInstIds[slotIdx]) {
+          const targetInstId = parsedDeckInstIds[slotIdx]
+          const found = parsedInstances.find((i) => i.instanceId === targetInstId)
+          if (found) {
+            rolls = found.statRolls && found.statRolls.length > 0 ? found.statRolls : []
+            cardLevel = found.level || 0
+            instanceId = found.instanceId
+          }
+        }
+      } catch {}
+
+      if (cardLevel > 0 && rolls.length === 0) {
+        const eligible = getEligibleStatsForPlant(card)
+        const mockRolls: PlantStatKey[] = []
+        for (let i = 0; i < cardLevel; i++) {
+          mockRolls.push(eligible[i % eligible.length])
+        }
+        rolls = mockRolls
+      }
+
       const config = getScaledPlantConfig(card, rolls)
       if (!config) return
 
       if (state.sunBank < config.cost) return
-      if (!state.isPracticeMode && state.cooldowns[card] > Date.now()) return
+
+      const now = Date.now()
+      if (!state.isPracticeMode) {
+        if (slotIdx !== null && (state.slotCooldowns[slotIdx] || 0) > now) return
+        if (slotIdx === null && (state.cooldowns[card] || 0) > now) return
+      }
 
       const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
       const cellCenterX = BASE_LEFT_END_X + col * colWidth + colWidth / 2
@@ -297,9 +342,14 @@ export function useGameEngine() {
       // Jalapeño Instant Lane-Clearing Explosion!
       if (card === 'jalapeno') {
         state.sunBank -= config.cost
-        state.cooldowns[card] = Date.now() + config.cooldownMs
+        if (slotIdx !== null) {
+          state.slotCooldowns[slotIdx] = Date.now() + config.cooldownMs
+        } else {
+          state.cooldowns[card] = Date.now() + config.cooldownMs
+        }
         state.stats.plantsPlaced += 1
         state.selectedCard = null
+        state.selectedSlotIndex = null
 
         soundManager.playSound('pea_hit', 1.0)
 
@@ -317,6 +367,8 @@ export function useGameEngine() {
         const tempFlame: PlantEntity = {
           id: `jalapeno-flame-${Date.now()}`,
           plantId: 'jalapeno',
+          instanceId,
+          level: cardLevel,
           lane,
           col,
           x: 50, // Center of lane for full-width flame wave
@@ -340,6 +392,11 @@ export function useGameEngine() {
       const newPlant: PlantEntity = {
         id: `plant-${Date.now()}-${Math.random()}`,
         plantId: card,
+        instanceId,
+        level: cardLevel,
+        damage: config.damage,
+        attackSpeedMs: config.attackSpeedMs,
+        moveSpeed: config.moveSpeed,
         lane,
         col,
         x: cellCenterX,
@@ -352,9 +409,14 @@ export function useGameEngine() {
 
       state.plants.push(newPlant)
       state.sunBank -= config.cost
-      state.cooldowns[card] = Date.now() + config.cooldownMs
+      if (slotIdx !== null) {
+        state.slotCooldowns[slotIdx] = Date.now() + config.cooldownMs
+      } else {
+        state.cooldowns[card] = Date.now() + config.cooldownMs
+      }
       state.stats.plantsPlaced += 1
       state.selectedCard = null
+      state.selectedSlotIndex = null
 
       soundManager.playSound('plantation', 0.6)
       forceRender()
@@ -1082,8 +1144,10 @@ export function useGameEngine() {
     projectiles: state.projectiles,
     suns: state.suns,
     selectedCard: state.selectedCard,
+    selectedSlotIndex: state.selectedSlotIndex,
     setSelectedCard,
     cooldowns: state.cooldowns,
+    slotCooldowns: state.slotCooldowns,
     wave: state.wave,
     waveBanner: state.waveBanner,
     stats: state.stats,

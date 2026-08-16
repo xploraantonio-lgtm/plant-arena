@@ -86,3 +86,11 @@ export function getEloDeltasForElo(elo: number): { winElo: number; loseElo: numb
     return { winElo: 6, loseElo: 6, surrenderElo: 6 }
   }
 }
+
+export function getGoldRewardForElo(elo: number): number {
+  if (elo <= 399) return 50
+  if (elo <= 799) return 70
+  if (elo <= 1199) return 90
+  if (elo <= 1599) return 120
+  return 150
+}

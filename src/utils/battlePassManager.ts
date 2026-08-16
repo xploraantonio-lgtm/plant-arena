@@ -4,6 +4,7 @@ import type { PackId } from './packDropManager'
 export interface PassReward {
   type: 'pack' | 'copies' | 'plant' | 'badge'
   packId?: PackId
+  packCount?: number
   plantId?: PlantId
   copiesCount?: number
   label: string
@@ -22,7 +23,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 1,
     requiredElo: 1150,
     arenaName: 'Jardín Clásico',
-    reward: { type: 'pack', packId: 'basic', label: 'Sobre Gratis de Batalla', icon: '/game-assets/greenfoot/seed_pack_common_whitebg.png' },
+    reward: { type: 'pack', packId: 'basic', packCount: 1, label: 'Sobre Gratis de Batalla', icon: '/game-assets/greenfoot/seed_pack_common_whitebg.png' },
   },
   {
     level: 2,
@@ -70,13 +71,13 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 9,
     requiredElo: 2350,
     arenaName: 'Rascacielos Cyberpunk',
-    reward: { type: 'pack', packId: 'legendary', label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
+    reward: { type: 'pack', packId: 'legendary', packCount: 2, label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
   },
   {
     level: 10,
     requiredElo: 2500,
     arenaName: 'Rascacielos Cyberpunk',
-    reward: { type: 'pack', packId: 'legendary', label: 'Sobre VIP Legendario ($10 USD)', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
+    reward: { type: 'pack', packId: 'legendary', packCount: 1, label: 'Sobre VIP Legendario ($10 USD)', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
   },
   {
     level: 11,
@@ -94,7 +95,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 13,
     requiredElo: 2950,
     arenaName: 'Rascacielos Cyberpunk',
-    reward: { type: 'pack', packId: 'legendary', label: 'Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
+    reward: { type: 'pack', packId: 'legendary', packCount: 1, label: 'Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
   },
   {
     level: 14,
@@ -106,19 +107,19 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 15,
     requiredElo: 3250,
     arenaName: 'Coliseo Galáctico',
-    reward: { type: 'pack', packId: 'legendary', label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
+    reward: { type: 'pack', packId: 'legendary', packCount: 2, label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
   },
   {
     level: 16,
     requiredElo: 3400,
     arenaName: 'Coliseo Galáctico',
-    reward: { type: 'pack', packId: 'legendary', label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
+    reward: { type: 'pack', packId: 'legendary', packCount: 2, label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
   },
   {
     level: 17,
     requiredElo: 3550,
     arenaName: 'Coliseo Galáctico',
-    reward: { type: 'pack', packId: 'legendary', label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
+    reward: { type: 'pack', packId: 'legendary', packCount: 2, label: 'x2 Sobre VIP Legendario', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
   },
   {
     level: 18,
@@ -130,7 +131,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 19,
     requiredElo: 3850,
     arenaName: 'Olimpo de Leyendas',
-    reward: { type: 'pack', packId: 'legendary', label: 'x3 Sobres VIP Legendarios', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
+    reward: { type: 'pack', packId: 'legendary', packCount: 3, label: 'x3 Sobres VIP Legendarios', icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.png' },
   },
   {
     level: 20,

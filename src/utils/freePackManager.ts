@@ -3,17 +3,17 @@ import type { PlantId } from '../types/game'
 export interface FreePackSlot {
   slotId: number // 0, 1, 2, 3
   status: 'empty' | 'locked' | 'unlocking' | 'ready'
-  durationHours: 1 | 2 | 4
+  durationHours: 2 | 4 | 8 | 12
   unlockStartedAt?: number // Timestamp ms
   arenaLevel: number // 1, 2, 3, 4, 5
 }
 
 export function createEmptySlots(): FreePackSlot[] {
   return [
-    { slotId: 0, status: 'empty', durationHours: 1, arenaLevel: 1 },
-    { slotId: 1, status: 'empty', durationHours: 2, arenaLevel: 1 },
-    { slotId: 2, status: 'empty', durationHours: 1, arenaLevel: 1 },
-    { slotId: 3, status: 'empty', durationHours: 4, arenaLevel: 1 },
+    { slotId: 0, status: 'empty', durationHours: 2, arenaLevel: 1 },
+    { slotId: 1, status: 'empty', durationHours: 4, arenaLevel: 1 },
+    { slotId: 2, status: 'empty', durationHours: 8, arenaLevel: 1 },
+    { slotId: 3, status: 'empty', durationHours: 12, arenaLevel: 1 },
   ]
 }
 
@@ -106,4 +106,27 @@ export function getRemainingTimeString(slot: FreePackSlot): string {
     return `${hours}h ${mins}m`
   }
   return `${mins}m ${secs}s`
+}
+
+/**
+ * Calculates the Gold coin cost to unlock a chest slot immediately based on remaining time.
+ * Scaled rate: 75 Gold per hour remaining (~1.25 Gold per minute, min 10 Gold).
+ * - 2h pack = 150 Gold
+ * - 4h pack = 300 Gold
+ * - 8h pack = 600 Gold
+ * - 12h pack = 900 Gold
+ */
+export function calculateInstantUnlockGoldCost(slot: FreePackSlot): number {
+  if (slot.status === 'ready') return 0
+
+  let remainingHours = slot.durationHours
+  if (slot.status === 'unlocking' && slot.unlockStartedAt) {
+    const totalMs = slot.durationHours * 3600 * 1000
+    const elapsedMs = Date.now() - slot.unlockStartedAt
+    const remainingMs = Math.max(0, totalMs - elapsedMs)
+    remainingHours = remainingMs / (3600 * 1000)
+  }
+
+  // 75 Gold per hour remaining, rounded up, minimum 10 Gold
+  return Math.max(10, Math.ceil(remainingHours * 75))
 }

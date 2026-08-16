@@ -24,9 +24,21 @@ interface RankingProps {
   onAddElo?: (delta: number) => void
 }
 
+interface ReferralLeaderboardUser {
+  rank: number
+  username: string
+  clan: string
+  referredCount: number
+  earnedUsd: number
+  tierBadge: string
+  avatar: string
+  isCurrentUser?: boolean
+}
+
 export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
-  const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard'>('arenas')
+  const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
+  const [copiedLink, setCopiedLink] = useState(false)
 
   const currentArena = getArenaForElo(userElo)
   const [previewArenaId, setPreviewArenaId] = useState<number>(currentArena.id)
@@ -43,6 +55,83 @@ export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
         )
       )
     : 100
+
+  // Mocked Referral Leaderboard Data
+  const referralLeaderboard: ReferralLeaderboardUser[] = [
+    {
+      rank: 1,
+      username: 'Satoshi_Nakamoto',
+      clan: '👑 [SOLAR_LEGENDS]',
+      referredCount: 48,
+      earnedUsd: 48.0,
+      tierBadge: '💎 LEYENDA DIAMANTE',
+      avatar: '/game-assets/greenfoot/peashooterpacket1.png',
+    },
+    {
+      rank: 2,
+      username: 'CryptoFarmer_VIP',
+      clan: '⚡ [CYBER_PLANTS]',
+      referredCount: 32,
+      earnedUsd: 32.0,
+      tierBadge: '🥇 MAESTRO ORO',
+      avatar: '/game-assets/greenfoot/sunflowerpacket1.png',
+    },
+    {
+      rank: 3,
+      username: 'Plant_God_Web3',
+      clan: '⚡ [CYBER_PLANTS]',
+      referredCount: 21,
+      earnedUsd: 21.0,
+      tierBadge: '🥈 EMBAJADOR PLATA',
+      avatar: '/game-assets/greenfoot/repeaterpacket1.png',
+    },
+    {
+      rank: 4,
+      username: 'Solar_PvP_Master',
+      clan: '☀️ [SUN_LORDS]',
+      referredCount: 18,
+      earnedUsd: 18.0,
+      tierBadge: '🥉 PROMOTOR BRONCE',
+      avatar: '/game-assets/greenfoot/bonkchoypacket1.png',
+    },
+    {
+      rank: 5,
+      username: 'Jalapeno_Sniper',
+      clan: '🔥 [FIRE_SNIPERS]',
+      referredCount: 15,
+      earnedUsd: 15.0,
+      tierBadge: '🥉 PROMOTOR BRONCE',
+      avatar: '/game-assets/greenfoot/jalapenopacket1.png',
+    },
+    {
+      rank: 6,
+      username: 'Aloe_Healer_PvP',
+      clan: '💚 [HEALER_SQUAD]',
+      referredCount: 11,
+      earnedUsd: 11.0,
+      tierBadge: '🌱 PROMOTOR JUNIOR',
+      avatar: '/game-assets/greenfoot/aloepacket1.png',
+    },
+    {
+      rank: 7,
+      username: 'DragonMaster',
+      clan: '🛡️ [ANTIGRAVITY_GUILD]',
+      referredCount: 3,
+      earnedUsd: 3.0,
+      tierBadge: '🌱 PROMOTOR JUNIOR',
+      avatar: '/game-assets/greenfoot/walnutpacket1.png',
+      isCurrentUser: true,
+    },
+    {
+      rank: 8,
+      username: 'Iceberg_King',
+      clan: '❄️ [FROST_GUILD]',
+      referredCount: 2,
+      earnedUsd: 2.0,
+      tierBadge: '🌱 INICIADO',
+      avatar: '/game-assets/greenfoot/iceberglettucepacket1.png',
+    },
+  ]
 
   // Mocked Global Leaderboard Data with real collection plant sprites
   const leaderboardData: LeaderboardUser[] = [
@@ -220,6 +309,16 @@ export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
         >
           🏆 CLASIFICACIÓN GLOBAL (LEADERBOARD)
         </button>
+        <button
+          type="button"
+          className={`ranking-nav-tab ${activeTab === 'referrals' ? 'ranking-nav-tab--active' : ''}`}
+          onClick={() => {
+            soundManager.playSound('click', 0.5)
+            setActiveTab('referrals')
+          }}
+        >
+          👥 RANKING DE REFERIDOS ($ USD)
+        </button>
       </div>
 
       {/* MAIN CONTENT PANE (ZERO SCROLL) */}
@@ -238,66 +337,82 @@ export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
                     <div className="arena-hero-header">
                       {previewArena.id === currentArena.id ? (
                         <span className="arena-badge arena-badge--current">📍 TU ARENA ACTIVA DE BATALLA</span>
-                      ) : userElo >= previewArena.minElo ? (
-                        <span className="arena-badge arena-badge--unlocked">✨ ARENA DESBLOQUEADA</span>
+                      ) : previewArena.id < currentArena.id ? (
+                        <span className="arena-badge arena-badge--passed">✓ ARENA SUPERADA</span>
                       ) : (
-                        <span className="arena-badge arena-badge--locked">🔒 REQUIERE {previewArena.minElo} 🏆 COPAS</span>
+                        <span className="arena-badge arena-badge--locked">🔒 ARENA BLOQUEADA</span>
                       )}
-                      <span className="arena-hero-range">
-                        🏆 {previewArena.minElo} - {previewArena.maxElo >= 9000 ? '∞' : previewArena.maxElo} Copas
-                      </span>
+                      <span className="arena-badge-elo">{previewArena.minElo}+ 🏆</span>
                     </div>
 
                     <div className="arena-hero-body">
-                      <h2 className="arena-hero-title">{previewArena.name}</h2>
+                      <h2 className="arena-hero-title">
+                        {previewArena.id}. {previewArena.name}
+                      </h2>
                       <p className="arena-hero-tagline">{previewArena.tagline}</p>
-                    </div>
 
-                    {/* TROPHY PROGRESSION BAR */}
-                    <div className="arena-hero-progress-box">
-                      <div className="arena-hero-progress-info">
-                        <span>PROGRESO AL SIGUIENTE NIVEL DE LIGA:</span>
-                        <strong>
-                          🏆 {userElo} / {nextArena ? `${nextArena.minElo} COPAS` : 'MÁXIMO ALCANZADO'}
-                        </strong>
-                      </div>
-                      <div className="arena-hero-progress-bar">
-                        <div
-                          className="arena-hero-progress-fill"
-                          style={{ width: `${eloProgressPct}%` }}
-                        />
-                      </div>
+                      {/* CURRENT ARENA PROGRESS BAR */}
+                      {previewArena.id === currentArena.id && (
+                        <div className="arena-hero-progress-box">
+                          <div className="arena-hero-progress-info">
+                            <span>Progreso de Copas hacia {nextArena ? nextArena.name : 'Máximo'}</span>
+                            <strong>
+                              {userElo} / {nextArena ? nextArena.minElo : currentArena.minElo} 🏆
+                            </strong>
+                          </div>
+                          <div className="arena-hero-progress-bar">
+                            <div
+                              className="arena-hero-progress-fill"
+                              style={{ width: `${eloProgressPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* RIGHT SIDE: ARENA TIMELINE ROAD NODES (1 -> 5) */}
+              {/* RIGHT SIDE: SCROLLABLE ARENA ROAD TIMELINE */}
               <div className="arena-timeline-box">
-                <h3 className="arena-timeline-title">📍 MAPA DE PROGRESIÓN (TOCAR PARA INSPECCIONAR)</h3>
+                <h3 className="arena-timeline-title">🛣️ MAPA DE ESCALADA (6 ARENAS)</h3>
                 <div className="arena-timeline-list">
-                  {ARENAS.map((arena) => {
-                    const isCurrent = arena.id === currentArena.id
-                    const isSelected = arena.id === previewArenaId
-                    const isUnlocked = userElo >= arena.minElo
+                  {ARENAS.map((arenaItem) => {
+                    const isCurrent = arenaItem.id === currentArena.id
+                    const isSelected = arenaItem.id === previewArenaId
+                    const isPassed = arenaItem.id < currentArena.id
+                    const isLocked = arenaItem.id > currentArena.id
 
                     return (
                       <div
-                        key={arena.id}
-                        className={`timeline-node ${isCurrent ? 'timeline-node--current' : isUnlocked ? 'timeline-node--unlocked' : 'timeline-node--locked'} ${isSelected ? 'timeline-node--selected' : ''}`}
+                        key={arenaItem.id}
+                        className={`arena-timeline-node ${
+                          isSelected ? 'arena-timeline-node--selected' : ''
+                        } ${isCurrent ? 'arena-timeline-node--current' : ''} ${
+                          isPassed ? 'arena-timeline-node--passed' : ''
+                        } ${isLocked ? 'arena-timeline-node--locked' : ''}`}
                         onClick={() => {
-                          soundManager.playSound('click', 0.5)
-                          setPreviewArenaId(arena.id)
+                          soundManager.playSound('click', 0.4)
+                          setPreviewArenaId(arenaItem.id)
                         }}
                       >
-                        <div className="timeline-node__num">
-                          {isCurrent ? '📍' : isUnlocked ? '✨' : '🔒'} {arena.id}
+                        <div
+                          className="arena-node-thumb"
+                          style={{ backgroundImage: `url(${arenaItem.bgImage})` }}
+                        >
+                          {isCurrent && <span className="arena-node-pin">📍</span>}
+                          {isPassed && <span className="arena-node-badge-check">✓</span>}
+                          {isLocked && <span className="arena-node-badge-lock">🔒</span>}
                         </div>
-                        <div className="timeline-node__info">
-                          <span className="timeline-node__name">{arena.name}</span>
-                          <span className="timeline-node__elo">🏆 {arena.minElo} Copas</span>
+
+                        <div className="arena-node-info">
+                          <div className="arena-node-top">
+                            <span className="arena-node-num">ARENA {arenaItem.id}</span>
+                            <span className="arena-node-req">{arenaItem.minElo} 🏆</span>
+                          </div>
+                          <strong className="arena-node-name">{arenaItem.name}</strong>
+                          <small className="arena-node-desc">{arenaItem.tagline}</small>
                         </div>
-                        {isCurrent && <span className="timeline-node__badge">ACTIVA</span>}
                       </div>
                     )
                   })}
@@ -395,6 +510,84 @@ export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
                         <td className="col-winrate" style={{ textAlign: 'right' }}>
                           <span className="winrate-badge">{usr.winRate}</span>
                           <span className="winrate-sub">({usr.wins}W / {usr.losses}L)</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: REFERRAL LEADERBOARD */}
+        {activeTab === 'referrals' && (
+          <div className="ranking-tab-pane">
+            <div className="referral-ranking-layout">
+              {/* TOP SUMMARY BANNER */}
+              <div className="referral-summary-banner">
+                <div className="referral-summary-left">
+                  <span className="referral-summary-tag">💰 PROGRAMA DE AFILIADOS & REFERIDOS</span>
+                  <h3 className="referral-summary-title">Gana $1.00 USD por cada amigo que alcance 1000 Copas</h3>
+                  <p className="referral-summary-sub">
+                    Comparte tu enlace de invitación único y escala en la clasificación para obtener insignias exclusivas.
+                  </p>
+                </div>
+                <div className="referral-summary-actions">
+                  <button
+                    type="button"
+                    className="referral-copy-btn"
+                    onClick={() => {
+                      soundManager.playSound('click', 0.5)
+                      navigator.clipboard?.writeText(window.location.origin + '/?ref=DRAGONMASTER')
+                      setCopiedLink(true)
+                      setTimeout(() => setCopiedLink(false), 2000)
+                    }}
+                  >
+                    {copiedLink ? '✅ ¡ENLACE COPIADO!' : '📋 COPIAR MI ENLACE'}
+                  </button>
+                </div>
+              </div>
+
+              {/* REFERRAL LEADERBOARD TABLE */}
+              <div className="leaderboard-table-wrap referral-table-wrap">
+                <table className="leaderboard-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '60px' }}>POS</th>
+                      <th>JUGADOR</th>
+                      <th>CLAN</th>
+                      <th style={{ textAlign: 'center' }}>AMIGOS ACTIVOS</th>
+                      <th style={{ textAlign: 'center' }}>GANANCIAS (USD)</th>
+                      <th style={{ textAlign: 'right' }}>RANGO DE EMBAJADOR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {referralLeaderboard.map((usr) => (
+                      <tr key={usr.rank} className={usr.isCurrentUser ? 'row--user' : ''}>
+                        <td className="col-rank">
+                          {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
+                        </td>
+                        <td className="col-user">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <img
+                              src={usr.avatar}
+                              alt=""
+                              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                            <strong>{usr.username}</strong>
+                            {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
+                          </div>
+                        </td>
+                        <td className="col-clan">{usr.clan}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8' }}>
+                          👥 {usr.referredCount} Amigos
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: 900, color: '#4ade80' }}>
+                          ${usr.earnedUsd.toFixed(2)} USD
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <span className="referral-tier-pill">{usr.tierBadge}</span>
                         </td>
                       </tr>
                     ))}
