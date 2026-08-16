@@ -386,40 +386,94 @@
   justify-content: center;
   margin-top: 10px;
 }
-.landing-hero__stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  width: 100%;
-  max-width: 680px;
+/* RELEASE BANNER (BETA & LAUNCH DATE) */
+.landing-hero__release-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, rgba(16, 26, 24, 0.92) 0%, rgba(20, 45, 30, 0.88) 100%);
+  border: 2px solid rgba(118, 216, 50, 0.65);
+  border-radius: 20px;
+  padding: 16px 28px;
   margin-top: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(118, 216, 50, 0.2);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.landing-stat-card {
-  background: rgba(16, 26, 24, 0.88);
-  border: 2px solid rgba(118, 216, 50, 0.7);
-  border-radius: 16px;
-  padding: 12px 14px;
+
+.landing-hero__release-banner:hover {
+  transform: translateY(-2px);
+  border-color: #76d832;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.7), 0 0 35px rgba(118, 216, 50, 0.35);
+}
+
+.landing-beta-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  padding: 6px 14px;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+  flex-shrink: 0;
+}
+
+.landing-beta-pulse {
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #ffffff;
+  animation: pa-pulse-dot 1.4s infinite ease-in-out;
+}
+
+.landing-beta-tag {
+  font-family: 'Luckiest Guy', sans-serif;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.landing-release-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
-  backdrop-filter: blur(6px);
+  align-items: flex-start;
+  text-align: left;
+  gap: 2px;
 }
-.landing-stat-card__val {
-  font-size: 28px;
-  font-weight: 900;
-  color: #ffd23f;
-  line-height: 1.1;
-  font-family: 'Luckiest Guy', sans-serif;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.6);
-}
-.landing-stat-card__lbl {
+
+.landing-release-subtitle {
   font-size: 11px;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #bbf7d0;
-  margin-top: 2px;
+  color: #86efac;
+  text-shadow: 0 0 8px rgba(134, 239, 172, 0.4);
+}
+
+.landing-release-date {
+  font-family: 'Luckiest Guy', sans-serif;
+  font-size: clamp(20px, 3.2vw, 28px);
+  color: #ffd23f;
+  line-height: 1.1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 16px rgba(255, 210, 63, 0.4);
+}
+
+@media (max-width: 600px) {
+  .landing-hero__release-banner {
+    flex-direction: column;
+    padding: 16px 20px;
+    gap: 12px;
+    text-align: center;
+  }
+  .landing-release-content {
+    align-items: center;
+    text-align: center;
+  }
 }
 
 /* SECTIONS COMMON */
@@ -833,23 +887,49 @@
   margin-bottom: 36px;
 }
 .landing-rarity-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #f1f5f9;
+  color: #94a3b8;
   background: rgba(15, 23, 42, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 999px;
-  padding: 6px 14px;
+  padding: 8px 16px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
-.landing-rarity-pill span {
+.landing-rarity-pill:hover {
+  color: #f8fafc;
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+}
+.landing-rarity-pill.is-active {
+  color: #ffffff;
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #22c55e;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.35);
+  transform: translateY(-1px);
+}
+.landing-rarity-pill span:not(.landing-rarity-count) {
   width: 10px;
   height: 10px;
   border-radius: 3px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.landing-rarity-count {
+  font-size: 11px;
+  opacity: 0.75;
+  font-weight: 700;
 }
 
 .landing-plants-grid {

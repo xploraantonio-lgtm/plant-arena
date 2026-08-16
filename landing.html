@@ -392,40 +392,86 @@
       justify-content: center;
       margin-top: 10px;
     }
-    .hero__stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      width: 100%;
-      max-width: 680px;
+    /* Release Banner (Beta & Launch Date) */
+    .hero__release-banner {
+      display: inline-flex;
+      align-items: center;
+      gap: 20px;
+      background: linear-gradient(135deg, rgba(16, 26, 24, 0.92) 0%, rgba(20, 45, 30, 0.88) 100%);
+      border: 2px solid rgba(118, 216, 50, 0.65);
+      border-radius: 20px;
+      padding: 16px 28px;
       margin-top: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(118, 216, 50, 0.2);
+      backdrop-filter: blur(10px);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    .hero-stat-card {
-      background: rgba(16, 26, 24, 0.88);
-      border: 2px solid rgba(118, 216, 50, 0.7);
-      border-radius: 16px;
-      padding: 12px 14px;
+    .hero__release-banner:hover {
+      transform: translateY(-2px);
+      border-color: #76d832;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.7), 0 0 35px rgba(118, 216, 50, 0.35);
+    }
+    .beta-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      padding: 6px 14px;
+      box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+      flex-shrink: 0;
+    }
+    .beta-pulse {
+      width: 8px;
+      height: 8px;
+      background: #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #ffffff;
+      animation: pulse-dot 1.4s infinite ease-in-out;
+    }
+    .beta-tag {
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 16px;
+      letter-spacing: 0.12em;
+      color: #ffffff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+    .release-content {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.5);
-      backdrop-filter: blur(6px);
+      align-items: flex-start;
+      text-align: left;
+      gap: 2px;
     }
-    .hero-stat-card__val {
-      font-size: 28px;
-      font-weight: 900;
-      color: #ffd23f;
-      line-height: 1.1;
-      font-family: 'Luckiest Guy', sans-serif;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
-    }
-    .hero-stat-card__lbl {
+    .release-subtitle {
       font-size: 11px;
       font-weight: 900;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      color: #bbf7d0;
-      margin-top: 2px;
+      color: #86efac;
+      text-shadow: 0 0 8px rgba(134, 239, 172, 0.4);
+    }
+    .release-date {
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: clamp(20px, 3.2vw, 28px);
+      color: #ffd23f;
+      line-height: 1.1;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 16px rgba(255, 210, 63, 0.4);
+    }
+    @media (max-width: 600px) {
+      .hero__release-banner {
+        flex-direction: column;
+        padding: 16px 20px;
+        gap: 12px;
+        text-align: center;
+      }
+      .release-content {
+        align-items: center;
+        text-align: center;
+      }
     }
 
     /* Sections Common */
@@ -1254,9 +1300,9 @@
           <span data-l="es">⚔️ ¡JUGAR AHORA!</span>
           <span data-l="en" style="display:none">⚔️ PLAY NOW!</span>
         </a>
-        <a href="#como-jugar" class="btn-secondary">
-          <span data-l="es">📖 Ver Cómo se Juega</span>
-          <span data-l="en" style="display:none">📖 How to Play</span>
+        <a href="roadmap.html" target="_blank" rel="noreferrer" class="btn-secondary">
+          <span data-l="es">🗺️ Road Map</span>
+          <span data-l="en" style="display:none">🗺️ Road Map</span>
         </a>
         <a href="https://t.me/" target="_blank" rel="noreferrer" class="btn-secondary">
           <span data-l="es">💬 Telegram</span>
@@ -1264,29 +1310,19 @@
         </a>
       </div>
 
-      <div class="hero__stats-row">
-        <div class="hero-stat-card">
-          <span class="hero-stat-card__val">15</span>
-          <span class="hero-stat-card__lbl">
-            <span data-l="es">Plantas</span><span data-l="en" style="display:none">Plants</span>
-          </span>
+      <div class="hero__release-banner">
+        <div class="beta-badge">
+          <span class="beta-pulse"></span>
+          <span class="beta-tag">BETA</span>
         </div>
-        <div class="hero-stat-card">
-          <span class="hero-stat-card__val">5</span>
-          <span class="hero-stat-card__lbl">
-            <span data-l="es">Arenas</span><span data-l="en" style="display:none">Arenas</span>
+        <div class="release-content">
+          <span class="release-subtitle">
+            <span data-l="es">🚀 FECHA DE LANZAMIENTO</span>
+            <span data-l="en" style="display:none">🚀 LAUNCH DATE</span>
           </span>
-        </div>
-        <div class="hero-stat-card">
-          <span class="hero-stat-card__val">3</span>
-          <span class="hero-stat-card__lbl">
-            <span data-l="es">Carriles</span><span data-l="en" style="display:none">Lanes</span>
-          </span>
-        </div>
-        <div class="hero-stat-card">
-          <span class="hero-stat-card__val">600</span>
-          <span class="hero-stat-card__lbl">
-            <span data-l="es">HP Base</span><span data-l="en" style="display:none">Base HP</span>
+          <span class="release-date">
+            <span data-l="es">Viernes 21 de Agosto</span>
+            <span data-l="en" style="display:none">Friday, August 21</span>
           </span>
         </div>
       </div>

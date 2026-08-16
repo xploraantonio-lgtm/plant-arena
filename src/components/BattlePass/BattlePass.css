@@ -4,8 +4,25 @@
   height: 100%;
   width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
+}
+
+.battle-pass-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.battle-pass-container::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
+}
+
+.battle-pass-container::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 10px;
 }
 
 /* Banner */
@@ -162,16 +179,24 @@
   gap: 8px;
   overflow-y: auto;
   flex: 1;
-  padding-right: 4px;
+  min-height: 0;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #52b788 rgba(15, 23, 42, 0.6);
 }
 
 .pass-grid-selector::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
+}
+
+.pass-grid-selector::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
 }
 
 .pass-grid-selector::-webkit-scrollbar-thumb {
   background: #52b788;
-  border-radius: 3px;
+  border-radius: 10px;
 }
 
 /* LEVEL GRID NODE CARD */
@@ -456,4 +481,20 @@
   background: rgba(0, 0, 0, 0.6);
   color: #94a3b8;
   border: 1.5px solid rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 768px), (max-height: 580px) {
+  .battle-pass-showcase-layout {
+    flex-direction: column;
+    overflow-y: auto;
+    gap: 10px;
+  }
+  .pass-selector-panel {
+    max-height: 240px;
+    flex: none;
+  }
+  .pass-pedestal-showcase {
+    flex: none;
+    min-height: 260px;
+  }
 }

@@ -216,6 +216,7 @@ function App() {
         {screen === 'menu' && (
           <MainMenu
             userElo={userElo}
+            userTokens={userTokens}
             hasVipPass={hasVipPass}
             claimedVipLevels={claimedVipLevels}
             freePackSlots={freePackSlots}
@@ -231,6 +232,8 @@ function App() {
             onStartSlotUnlock={startUnlockingSlot}
             onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}
+            onAddTokens={addTokens}
+            onDeductTokens={deductUserTokens}
           />
         )}
         {screen === 'battle' && (

@@ -18,10 +18,13 @@ import { getRemainingTimeString, type FreePackSlot } from '../../utils/freePackM
 import { toggleFullscreen } from '../../utils/fullscreen'
 import { BATTLE_PASS_LEVELS } from '../../utils/battlePassManager'
 import { SeasonManager } from '../../utils/seasonManager'
+import { UserManager, type PlayerProfile } from '../../utils/userManager'
+import ProfileModal from '../ProfileModal/ProfileModal'
 import './MainMenu.css'
 
 interface MainMenuProps {
   userElo?: number
+  userTokens?: number
   hasVipPass?: boolean
   claimedVipLevels?: number[]
   freePackSlots?: FreePackSlot[]
@@ -37,10 +40,13 @@ interface MainMenuProps {
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onFastUnlockSlot?: (slotId: number) => void
   onOpenSlotPack?: (slotId: number) => void
+  onAddTokens?: (amountUsd: number) => void
+  onDeductTokens?: (amountUsd: number) => boolean
 }
 
 export default function MainMenu({
   userElo = 1000,
+  userTokens = 10,
   hasVipPass = false,
   claimedVipLevels = [],
   freePackSlots = [],
@@ -56,9 +62,19 @@ export default function MainMenu({
   onStartSlotUnlock,
   onFastUnlockSlot,
   onOpenSlotPack,
+  onAddTokens,
+  onDeductTokens,
 }: MainMenuProps) {
+  const [playerProfile, setPlayerProfile] = useState<PlayerProfile>(() => UserManager.getProfile())
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [, setTicker] = useState<number>(0)
+
+  useEffect(() => {
+    const syncProfile = () => setPlayerProfile(UserManager.getProfile())
+    window.addEventListener('player_profile_updated', syncProfile)
+    return () => window.removeEventListener('player_profile_updated', syncProfile)
+  }, [])
 
   const highestLevelReached = BATTLE_PASS_LEVELS.filter((l) => userElo >= l.requiredElo).length
   const claimableCount = hasVipPass
@@ -88,9 +104,25 @@ export default function MainMenu({
     >
       <div className="topbar">
         <div className="topbar__left">
-          <div className="card card--player">
-            <span className="card__title">DRAGONMASTER</span>
-            <span className="card__subtitle">Nivel 25</span>
+          <div
+            className="card card--player"
+            onClick={() => {
+              soundManager.playSound('click', 0.5)
+              setIsProfileModalOpen(true)
+            }}
+            title="Ver y editar perfil, depositar, retirar y referidos"
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="card__player-avatar-circle">
+              <img
+                src={playerProfile.avatar}
+                alt={playerProfile.name}
+                onError={(e) => {
+                  e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                }}
+              />
+            </div>
+            <span className="card__title">{playerProfile.name}</span>
           </div>
 
           {/* COMPACT VIP BATTLE PASS WIDGET */}
@@ -300,6 +332,17 @@ export default function MainMenu({
           Ajustes
         </button>
       </div>
+
+      {/* PLAYER PROFILE MODAL */}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        userElo={userElo}
+        userTokens={userTokens}
+        hasVipPass={hasVipPass}
+        onClose={() => setIsProfileModalOpen(false)}
+        onAddTokens={onAddTokens}
+        onDeductTokens={onDeductTokens}
+      />
     </div>
   )
 }

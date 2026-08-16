@@ -41,7 +41,7 @@ export default function Shop({
   onClaimPassReward,
 }: ShopProps) {
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
-  const [activeTab, setActiveTab] = useState<'packs' | 'pass' | 'tokens'>('packs')
+  const [activeTab, setActiveTab] = useState<'packs' | 'pass'>('packs')
   const [purchasedPacksList, setPurchasedPacksList] = useState<InventoryPack[]>([])
 
   const [buyQuantities, setBuyQuantities] = useState<Record<PackId, number>>({
@@ -146,16 +146,6 @@ export default function Shop({
           }}
         >
           👑 PASE DE BATALLA VIP
-        </button>
-        <button
-          type="button"
-          className={`shop-nav-tab ${activeTab === 'tokens' ? 'shop-nav-tab--active' : ''}`}
-          onClick={() => {
-            soundManager.playSound('click', 0.5)
-            setActiveTab('tokens')
-          }}
-        >
-          💵 RECARGA DE TOKENS ($USD)
         </button>
       </div>
 
@@ -311,81 +301,6 @@ export default function Shop({
                 }
               }}
             />
-          </div>
-        )}
-
-        {/* TAB 3: TOKEN REFILL CHESTS */}
-        {activeTab === 'tokens' && (
-          <div className="shop-tab-pane">
-            <div className="shop-tokens-grid">
-              <div className="shop-token-card">
-                <span className="shop-token-card__badge">BÁSICO</span>
-                <span className="shop-token-card__icon">💰</span>
-                <h4 className="shop-token-card__title">10 TOKENS USD</h4>
-                <span className="shop-token-card__price">$10.00 USD</span>
-                <button
-                  type="button"
-                  className="shop-token-card__btn"
-                  onClick={() => {
-                    onAddTokens(10)
-                    soundManager.playSound('plantation', 0.8)
-                  }}
-                >
-                  + RECARGAR $10
-                </button>
-              </div>
-
-              <div className="shop-token-card shop-token-card--featured">
-                <span className="shop-token-card__badge shop-token-card__badge--popular">POPULAR 🔥</span>
-                <span className="shop-token-card__icon">💎</span>
-                <h4 className="shop-token-card__title">25 TOKENS USD (+1 GRATIS)</h4>
-                <span className="shop-token-card__price">$25.00 USD</span>
-                <button
-                  type="button"
-                  className="shop-token-card__btn shop-token-card__btn--featured"
-                  onClick={() => {
-                    onAddTokens(26)
-                    soundManager.playSound('plantation', 0.8)
-                  }}
-                >
-                  + RECARGAR $25
-                </button>
-              </div>
-
-              <div className="shop-token-card">
-                <span className="shop-token-card__badge">AVANZADO</span>
-                <span className="shop-token-card__icon">👑</span>
-                <h4 className="shop-token-card__title">50 TOKENS USD (+3 GRATIS)</h4>
-                <span className="shop-token-card__price">$50.00 USD</span>
-                <button
-                  type="button"
-                  className="shop-token-card__btn"
-                  onClick={() => {
-                    onAddTokens(53)
-                    soundManager.playSound('plantation', 0.8)
-                  }}
-                >
-                  + RECARGAR $50
-                </button>
-              </div>
-
-              <div className="shop-token-card shop-token-card--legendary">
-                <span className="shop-token-card__badge shop-token-card__badge--gold">MÁXIMO VALOR 🏆</span>
-                <span className="shop-token-card__icon">🚀</span>
-                <h4 className="shop-token-card__title">100 TOKENS USD (+10 GRATIS)</h4>
-                <span className="shop-token-card__price">$100.00 USD</span>
-                <button
-                  type="button"
-                  className="shop-token-card__btn shop-token-card__btn--gold"
-                  onClick={() => {
-                    onAddTokens(110)
-                    soundManager.playSound('plantation', 0.8)
-                  }}
-                >
-                  + RECARGAR $100
-                </button>
-              </div>
-            </div>
           </div>
         )}
 

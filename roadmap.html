@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plant Arena - Roadmap Oficial 2026</title>
+  <meta name="description" content="Roadmap oficial de desarrollo de Plant Arena hasta Diciembre 2026. Conoce las fases de Clanes, Guerras de Saqueo, Torneos, Modos Arcade, 2v2 y Nuevas Plantas Mensuales.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #061018;
+      --bg-card: rgba(16, 26, 24, 0.92);
+      --border-green: #76d832;
+      --gold: #ffd23f;
+      --gold-border: #fbbf24;
+      --text: #ffffff;
+      --text-muted: #cbd5e1;
+      --accent-blue: #38bdf8;
+      --accent-purple: #c084fc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 15% 20%, rgba(34, 197, 94, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 70%, rgba(251, 191, 36, 0.1) 0%, transparent 45%),
+        linear-gradient(180deg, rgba(6, 16, 24, 0.95) 0%, rgba(3, 8, 14, 0.98) 100%);
+      background-attachment: fixed;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* NAV */
+    .roadmap-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 32px;
+      background: rgba(6, 16, 24, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(118, 216, 50, 0.3);
+    }
+
+    .roadmap-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .roadmap-logo img {
+      height: 42px;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
+    }
+
+    .roadmap-logo-text {
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 22px;
+      color: var(--gold);
+      text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+      letter-spacing: 0.05em;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .btn-lang {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid #475569;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-lang:hover {
+      border-color: var(--border-green);
+    }
+
+    .btn-back-game {
+      background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
+      border: 1.5px solid #86efac;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 900;
+      padding: 8px 18px;
+      border-radius: 12px;
+      text-decoration: none;
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.5);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn-back-game:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 22px rgba(34, 197, 94, 0.8);
+    }
+
+    /* HEADER */
+    .roadmap-header {
+      text-align: center;
+      padding: 60px 20px 30px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .roadmap-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(34, 197, 94, 0.15) 100%);
+      border: 1.5px solid var(--gold-border);
+      border-radius: 30px;
+      padding: 6px 18px;
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--gold);
+      margin-bottom: 16px;
+      box-shadow: 0 0 16px rgba(251, 191, 36, 0.25);
+    }
+
+    .roadmap-title {
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: clamp(32px, 5vw, 52px);
+      color: #ffffff;
+      text-shadow: 0 4px 12px rgba(0,0,0,0.8);
+      margin-bottom: 14px;
+      letter-spacing: 0.04em;
+    }
+
+    .roadmap-subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* TIMELINE CONTAINER */
+    .timeline-container {
+      max-width: 1000px;
+      margin: 40px auto 80px;
+      padding: 0 20px;
+      position: relative;
+    }
+
+    /* Center line */
+    .timeline-container::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 20px;
+      bottom: 20px;
+      width: 4px;
+      background: linear-gradient(180deg, #22c55e 0%, #38bdf8 35%, #c084fc 70%, #fbbf24 100%);
+      transform: translateX(-50%);
+      border-radius: 4px;
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.6);
+    }
+
+    @media (max-width: 768px) {
+      .timeline-container::before {
+        left: 28px;
+      }
+    }
+
+    /* TIMELINE ITEM */
+    .timeline-item {
+      display: flex;
+      justify-content: flex-end;
+      padding-right: calc(50% + 40px);
+      position: relative;
+      margin-bottom: 48px;
+    }
+
+    .timeline-item:nth-child(even) {
+      justify-content: flex-start;
+      padding-right: 0;
+      padding-left: calc(50% + 40px);
+    }
+
+    @media (max-width: 768px) {
+      .timeline-item,
+      .timeline-item:nth-child(even) {
+        justify-content: flex-start;
+        padding-left: 64px;
+        padding-right: 0;
+      }
+    }
+
+    /* Milestone Node Icon */
+    .timeline-node {
+      position: absolute;
+      left: 50%;
+      top: 24px;
+      transform: translate(-50%, 0);
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: #0b1522;
+      border: 3px solid var(--border-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      z-index: 2;
+      box-shadow: 0 0 18px rgba(34, 197, 94, 0.7);
+    }
+
+    @media (max-width: 768px) {
+      .timeline-node {
+        left: 28px;
+      }
+    }
+
+    .timeline-item--in-progress .timeline-node {
+      border-color: #38bdf8;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.8);
+      animation: pulseNode 2s infinite;
+    }
+
+    .timeline-item--upcoming .timeline-node {
+      border-color: var(--gold-border);
+      box-shadow: 0 0 16px rgba(251, 191, 36, 0.6);
+    }
+
+    @keyframes pulseNode {
+      0%, 100% { transform: translate(-50%, 0) scale(1); }
+      50% { transform: translate(-50%, 0) scale(1.1); }
+    }
+
+    /* CARD */
+    .roadmap-card {
+      background: var(--bg-card);
+      border: 2px solid rgba(118, 216, 50, 0.6);
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(10px);
+      transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+      position: relative;
+    }
+
+    .roadmap-card:hover {
+      transform: translateY(-4px);
+      border-color: #86efac;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(118, 216, 50, 0.3);
+    }
+
+    .timeline-item--in-progress .roadmap-card {
+      border-color: #38bdf8;
+    }
+
+    .timeline-item--in-progress .roadmap-card:hover {
+      border-color: #7dd3fc;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(56, 189, 248, 0.35);
+    }
+
+    .timeline-item--gold .roadmap-card {
+      border-color: #fbbf24;
+    }
+
+    .timeline-item--gold .roadmap-card:hover {
+      border-color: #fde047;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(251, 191, 36, 0.4);
+    }
+
+    /* CARD HEADER */
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .card-month-tag {
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #86efac;
+    }
+
+    .status-pill {
+      font-size: 9.5px;
+      font-weight: 900;
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-pill--completed {
+      background: rgba(34, 197, 94, 0.2);
+      border: 1px solid #4ade80;
+      color: #4ade80;
+    }
+
+    .status-pill--active {
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+    }
+
+    .status-pill--upcoming {
+      background: rgba(251, 191, 36, 0.2);
+      border: 1px solid #fbbf24;
+      color: #fde047;
+    }
+
+    .card-title {
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 22px;
+      color: var(--gold);
+      margin-bottom: 6px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+      letter-spacing: 0.03em;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      line-height: 1.45;
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .feature-list li {
+      font-size: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: #e2e8f0;
+      line-height: 1.4;
+    }
+
+    .feature-list li strong {
+      color: #ffffff;
+    }
+
+    .feature-list li::before {
+      content: '✓';
+      color: #4ade80;
+      font-weight: 900;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .timeline-item--in-progress .feature-list li::before {
+      content: '⚡';
+      color: #38bdf8;
+    }
+
+    .timeline-item--upcoming .feature-list li::before {
+      content: '🎯';
+      color: #fbbf24;
+    }
+
+    /* FOOTER CTA */
+    .roadmap-footer {
+      text-align: center;
+      padding: 50px 20px;
+      background: linear-gradient(180deg, transparent 0%, rgba(6, 16, 24, 0.9) 100%);
+      border-top: 1px solid rgba(118, 216, 50, 0.2);
+    }
+
+    .footer-ctas {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn-footer-primary {
+      background: linear-gradient(180deg, #ffd23f 0%, #d97706 100%);
+      border: 2px solid #fde047;
+      color: #1a1500;
+      font-family: 'Luckiest Guy', sans-serif;
+      font-size: 18px;
+      letter-spacing: 0.05em;
+      padding: 12px 28px;
+      border-radius: 14px;
+      text-decoration: none;
+      box-shadow: 0 0 20px rgba(255, 210, 63, 0.6);
+      transition: transform 0.15s ease;
+    }
+
+    .btn-footer-primary:hover {
+      transform: scale(1.05);
+    }
+
+    .btn-footer-secondary {
+      background: rgba(30, 41, 59, 0.85);
+      border: 1.5px solid #64748b;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 900;
+      padding: 12px 24px;
+      border-radius: 14px;
+      text-decoration: none;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .btn-footer-secondary:hover {
+      transform: scale(1.05);
+      border-color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <header class="roadmap-nav">
+    <a href="/" class="roadmap-logo">
+      <img src="/src/assets/images/logo.png" alt="Plant Arena Logo" onerror="this.src='/src/assets/ico/clan.png'">
+      <span class="roadmap-logo-text">PLANT ARENA</span>
+    </a>
+    <div class="nav-actions">
+      <button type="button" class="btn-lang" id="langToggle">🌐 EN / ES</button>
+      <a href="/" class="btn-back-game">
+        <span data-l="es">⚔️ JUGAR AHORA</span>
+        <span data-l="en" style="display:none">⚔️ PLAY NOW</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- HEADER -->
+  <section class="roadmap-header">
+    <div class="roadmap-badge">
+      <span>🗺️ ROADMAP OFICIAL 2026</span>
+    </div>
+    <h1 class="roadmap-title">
+      <span data-l="es">EL CAMINO HACIA LA GLORIA</span>
+      <span data-l="en" style="display:none">THE ROAD TO GLORY</span>
+    </h1>
+    <p class="roadmap-subtitle">
+      <span data-l="es">Evolución mensual de Plant Arena: Nuevas cartas cada mes para balancear el meta, Guerras de Saqueo, Torneos, Modos Arcade Extremos y el Modo 2v2 Cooperativo.</span>
+      <span data-l="en" style="display:none">Monthly evolution of Plant Arena: 2 new plants every month to balance the meta, Clan Vault Raids, Tournaments, Extreme Arcade Modes, and 2v2 Co-op Mode.</span>
+    </p>
+  </section>
+
+  <!-- TIMELINE -->
+  <main class="timeline-container">
+
+    <!-- FASE 1: AGOSTO -->
+    <div class="timeline-item timeline-item--completed">
+      <div class="timeline-node">🚀</div>
+      <div class="roadmap-card">
+        <div class="card-top">
+          <span class="card-month-tag">
+            <span data-l="es">FASE 1 • AGOSTO 2026</span>
+            <span data-l="en" style="display:none">PHASE 1 • AUGUST 2026</span>
+          </span>
+          <span class="status-pill status-pill--completed">
+            <span data-l="es">✅ BETA LANZADA</span>
+            <span data-l="en" style="display:none">✅ BETA LAUNCHED</span>
+          </span>
+        </div>
+        <h3 class="card-title">
+          <span data-l="es">LANZAMIENTO BETA & NÚCLEO COMPETITIVO</span>
+          <span data-l="en" style="display:none">BETA LAUNCH & CORE PVP ARENA</span>
+        </h3>
+        <p class="card-desc">
+          <span data-l="es">Despliegue del motor de combate PvP en tiempo real con 3 carriles simultáneos y sistema de economía de cartas.</span>
+          <span data-l="en" style="display:none">Deployment of real-time 3-lane PvP combat engine and player-driven card economy.</span>
+        </p>
+        <ul class="feature-list">
+          <li><strong>15 Plantas Base Balanceadas:</strong> Guisantes, Tanques, Explosivas y Curación (Aloe).</li>
+          <li><strong>5 Arenas de Combate & Sistema ELO:</strong> Rango desde Jardín Novato hasta Cumbre Legendaria.</li>
+          <li><strong>Pase de Batalla VIP & Jardín Zen:</strong> 20 Niveles de recompensas y fusión de stats (+15%).</li>
+          <li><strong>Mercado de Comercio P2P:</strong> Compra y venta libre de copias y builds únicas en $USD.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FASE 2: SEPTIEMBRE -->
+    <div class="timeline-item timeline-item--in-progress">
+      <div class="timeline-node">🏰</div>
+      <div class="roadmap-card">
+        <div class="card-top">
+          <span class="card-month-tag">
+            <span data-l="es">FASE 2 • SEPTIEMBRE 2026</span>
+            <span data-l="en" style="display:none">PHASE 2 • SEPTEMBER 2026</span>
+          </span>
+          <span class="status-pill status-pill--active">
+            <span data-l="es">⚡ EN DESARROLLO</span>
+            <span data-l="en" style="display:none">⚡ IN PROGRESS</span>
+          </span>
+        </div>
+        <h3 class="card-title">
+          <span data-l="es">GUERRAS DE CLANES & SAQUEO DE TESORO</span>
+          <span data-l="en" style="display:none">CLAN WARS & VAULT RAIDS</span>
+        </h3>
+        <p class="card-desc">
+          <span data-l="es">Activación del ecosistema de Clanes (15 miembros) con asaltos de botín real y cooperación diaria de semillas.</span>
+          <span data-l="en" style="display:none">Activation of 15-member Clan guilds with real $USD vault raids and seed donation trading.</span>
+        </p>
+        <ul class="feature-list">
+          <li><strong>Guerras de Clanes 5v5 (Jueves y Viernes):</strong> Duelos colectivos por $5.00 USD del Tesoro rival.</li>
+          <li><strong>Chat Flotante & Ajustes de Privacidad (⚙️):</strong> Roles de Líder, Colíder y Veterano.</li>
+          <li><strong>Petición e Intercambio Diario de Semillas:</strong> Hasta 3 donaciones recibidas por día.</li>
+          <li><strong>Modo Espectador en 3era Persona:</strong> Con emotes y reacciones flotantes en vivo.</li>
+          <li><strong>Cierre de Temporada 1:</strong> Reparto proporcional del Tesoro acumulado en cada Clan tras 30 días.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FASE 3: OCTUBRE -->
+    <div class="timeline-item timeline-item--upcoming">
+      <div class="timeline-node">🎃</div>
+      <div class="roadmap-card">
+        <div class="card-top">
+          <span class="card-month-tag">
+            <span data-l="es">FASE 3 • OCTUBRE 2026</span>
+            <span data-l="en" style="display:none">PHASE 3 • OCTOBER 2026</span>
+          </span>
+          <span class="status-pill status-pill--upcoming">
+            <span data-l="es">🎯 PRÓXIMAMENTE</span>
+            <span data-l="en" style="display:none">🎯 UPCOMING</span>
+          </span>
+        </div>
+        <h3 class="card-title">
+          <span data-l="es">TORNEOS DE FIN DE SEMANA & EVENTO HALLOWEEN</span>
+          <span data-l="en" style="display:none">WEEKEND TOURNAMENTS & HALLOWEEN EVENT</span>
+        </h3>
+        <p class="card-desc">
+          <span data-l="es">Llegada del formato competitivo de llaves de eliminación directa y evento temático con cartas oscuras.</span>
+          <span data-l="en" style="display:none">Arrival of bracket elimination tournament formats and spooky seasonal event with dark plants.</span>
+        </p>
+        <ul class="feature-list">
+          <li><strong>Torneos Flash de Fin de Semana:</strong> Brackets de 16 y 32 jugadores con pozos acumulados en $USD.</li>
+          <li><strong>Evento "La Noche de los Zombis Espectrales":</strong> Arena nocturna de Halloween con niebla.</li>
+          <li><strong>2 Nuevas Cartas Mensuales de Meta:</strong> <em>Calabaza Blindada</em> (Protección en carril) y <em>Seta Venenosa</em> (Daño persistente).</li>
+          <li><strong>Cierre de Temporada 2 (30 Días):</strong> Reinicio de copas ELO y cobro de dividendos del Clan.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FASE 4: NOVIEMBRE -->
+    <div class="timeline-item timeline-item--upcoming">
+      <div class="timeline-node">⚡</div>
+      <div class="roadmap-card">
+        <div class="card-top">
+          <span class="card-month-tag">
+            <span data-l="es">FASE 4 • NOVIEMBRE 2026</span>
+            <span data-l="en" style="display:none">PHASE 4 • NOVEMBER 2026</span>
+          </span>
+          <span class="status-pill status-pill--upcoming">
+            <span data-l="es">🎯 PRÓXIMAMENTE</span>
+            <span data-l="en" style="display:none">🎯 UPCOMING</span>
+          </span>
+        </div>
+        <h3 class="card-title">
+          <span data-l="es">MODOS ARCADE EXTREMOS & CARTAS LEGENDARIAS</span>
+          <span data-l="en" style="display:none">EXTREME ARCADE MODES & LEGENDARY CARDS</span>
+        </h3>
+        <p class="card-desc">
+          <span data-l="es">Nuevas reglas de combate frenético, motor de repeticiones para el clan y 2 cartas legendarias demoledoras.</span>
+          <span data-l="en" style="display:none">Frenetic combat rules, clan replay sharing engine, and 2 game-changing legendary plants.</span>
+        </p>
+        <ul class="feature-list">
+          <li><strong>Modo "Furia Solar" (Soles Ilimitados):</strong> Partidas a máxima velocidad con lluvia de soles y recargas reducidas al 50%.</li>
+          <li><strong>Modo "Monocarril Letal" (1 Solo Carril):</strong> Combate concentrado de máxima tensión y pura colocación táctica.</li>
+          <li><strong>2 Nuevas Plantas Legendarias:</strong> <em>Planta Carnívora Emboscadora</em> (Devora zombis pesados) y <em>Melón Catapulta</em> (Daño masivo de área).</li>
+          <li><strong>Motor de Repeticiones (Replays):</strong> Revive y comparte tus mejores remontadas directamente en el Chat del Clan.</li>
+          <li><strong>Cierre de Temporada 3 (30 Días):</strong> Reparto de fondos y recompensas de ranking.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FASE 5: DICIEMBRE -->
+    <div class="timeline-item timeline-item--gold">
+      <div class="timeline-node">🏆</div>
+      <div class="roadmap-card">
+        <div class="card-top">
+          <span class="card-month-tag">
+            <span data-l="es">FASE 5 • DICIEMBRE 2026</span>
+            <span data-l="en" style="display:none">PHASE 5 • DECEMBER 2026</span>
+          </span>
+          <span class="status-pill status-pill--upcoming" style="border-color:#fbbf24;color:#fde047">
+            <span data-l="es">💎 GRAN FINAL</span>
+            <span data-l="en" style="display:none">💎 GRAND FINALE</span>
+          </span>
+        </div>
+        <h3 class="card-title" style="color:#fde047">
+          <span data-l="es">MODO 2v2 COOPERATIVO & COPA DE CAMPEONES</span>
+          <span data-l="en" style="display:none">2v2 CO-OP DUO & CHAMPIONS CUP</span>
+        </h3>
+        <p class="card-desc">
+          <span data-l="es">Llegada del esperado combate en parejas en tiempo real, mapa de nieve y torneo de fin de año.</span>
+          <span data-l="en" style="display:none">The anticipated 2v2 real-time team battles, winter snow map, and year-end championship.</span>
+        </p>
+        <ul class="feature-list">
+          <li><strong>Modo 2 vs 2 Cooperativo en Tiempo Real:</strong> Comparte el jardín y la estrategia de soles con tu compañero de clan.</li>
+          <li><strong>Gran Torneo "Copa de Campeones Diciembre":</strong> El mayor pozo acumulado del año para los mejores jugadores y clanes.</li>
+          <li><strong>2 Nuevas Cartas de Invierno:</strong> <em>Lanza-Guisantes de Hielo</em> (Ralentización en cadena) y <em>Pino Guardián</em> (Escudo de escarcha).</li>
+          <li><strong>Nueva Arena de Nieve & Pase Invernal:</strong> Escenario gélido especial con nuevas animaciones.</li>
+          <li><strong>Cierre de Temporada 4 (30 Días):</strong> Reparto del Tesoro y premiación anual a los clanes fundadores.</li>
+        </ul>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER CTA -->
+  <footer class="roadmap-footer">
+    <h2 style="font-family:'Luckiest Guy',sans-serif;font-size:28px;color:#ffd23f;margin-bottom:10px;">
+      <span data-l="es">¿LISTO PARA CONQUISTAR LA ARENA?</span>
+      <span data-l="en" style="display:none">READY TO CONQUER THE ARENA?</span>
+    </h2>
+    <p style="font-size:14px;color:#cbd5e1;max-width:550px;margin:0 auto 20px;">
+      <span data-l="es">Únete a la beta hoy, crea tu clan y prepárate para las Guerras de Saqueo.</span>
+      <span data-l="en" style="display:none">Join the beta today, create your clan and get ready for the Vault Raids.</span>
+    </p>
+    <div class="footer-ctas">
+      <a href="/" class="btn-footer-primary">
+        <span data-l="es">⚔️ JUGAR AHORA EN LA ARENA</span>
+        <span data-l="en" style="display:none">⚔️ PLAY NOW IN THE ARENA</span>
+      </a>
+      <a href="https://t.me/" target="_blank" rel="noreferrer" class="btn-footer-secondary">
+        <span data-l="es">💬 ÚNETE A NUESTRO TELEGRAM</span>
+        <span data-l="en" style="display:none">💬 JOIN OUR TELEGRAM</span>
+      </a>
+    </div>
+  </footer>
+
+  <script>
+    let currentLang = 'es';
+    const langBtn = document.getElementById('langToggle');
+
+    function updateLanguage(lang) {
+      currentLang = lang;
+      document.querySelectorAll('[data-l]').forEach(el => {
+        if (el.getAttribute('data-l') === lang) {
+          el.style.display = el.tagName === 'SPAN' ? 'inline' : 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    if (langBtn) {
+      langBtn.addEventListener('click', () => {
+        updateLanguage(currentLang === 'es' ? 'en' : 'es');
+      });
+    }
+  </script>
+</body>
+</html>

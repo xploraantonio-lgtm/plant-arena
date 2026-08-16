@@ -321,9 +321,21 @@ const PLANTS_DATA: PlantCardData[] = [
   },
 ]
 
+type RarityFilter = 'all' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+
+const RARITY_FILTERS: { key: RarityFilter; labelEs: string; labelEn: string; color?: string }[] = [
+  { key: 'all', labelEs: 'Todos', labelEn: 'All' },
+  { key: 'common', labelEs: 'Común', labelEn: 'Common', color: '#4ade80' },
+  { key: 'uncommon', labelEs: 'Poco Común', labelEn: 'Uncommon', color: '#22d3ee' },
+  { key: 'rare', labelEs: 'Rara', labelEn: 'Rare', color: '#60a5fa' },
+  { key: 'epic', labelEs: 'Épica', labelEn: 'Epic', color: '#c084fc' },
+  { key: 'legendary', labelEs: 'Legendaria', labelEn: 'Legendary', color: '#fbbf24' },
+]
+
 export default function LandingPage({ onPlayGame }: LandingPageProps) {
   const [lang, setLang] = useState<'es' | 'en'>('es')
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({})
+  const [selectedRarity, setSelectedRarity] = useState<RarityFilter>('all')
 
   const toggleLang = () => {
     soundManager.playSound('click', 0.4)
@@ -419,8 +431,13 @@ export default function LandingPage({ onPlayGame }: LandingPageProps) {
             >
               ⚔️ {lang === 'es' ? '¡JUGAR AHORA!' : 'PLAY NOW!'}
             </button>
-            <a href="#como-jugar" className="landing-btn-secondary">
-              📖 {lang === 'es' ? 'Ver Cómo se Juega' : 'How to Play'}
+            <a
+              href="/roadmap.html"
+              target="_blank"
+              rel="noreferrer"
+              className="landing-btn-secondary"
+            >
+              🗺️ Road Map
             </a>
             <a
               href="https://t.me/"
@@ -432,29 +449,17 @@ export default function LandingPage({ onPlayGame }: LandingPageProps) {
             </a>
           </div>
 
-          <div className="landing-hero__stats-row">
-            <div className="landing-stat-card">
-              <span className="landing-stat-card__val">15</span>
-              <span className="landing-stat-card__lbl">
-                {lang === 'es' ? 'Plantas' : 'Plants'}
-              </span>
+          <div className="landing-hero__release-banner">
+            <div className="landing-beta-badge">
+              <span className="landing-beta-pulse"></span>
+              <span className="landing-beta-tag">BETA</span>
             </div>
-            <div className="landing-stat-card">
-              <span className="landing-stat-card__val">5</span>
-              <span className="landing-stat-card__lbl">
-                {lang === 'es' ? 'Arenas' : 'Arenas'}
+            <div className="landing-release-content">
+              <span className="landing-release-subtitle">
+                {lang === 'es' ? '🚀 FECHA DE LANZAMIENTO' : '🚀 LAUNCH DATE'}
               </span>
-            </div>
-            <div className="landing-stat-card">
-              <span className="landing-stat-card__val">3</span>
-              <span className="landing-stat-card__lbl">
-                {lang === 'es' ? 'Carriles' : 'Lanes'}
-              </span>
-            </div>
-            <div className="landing-stat-card">
-              <span className="landing-stat-card__val">600</span>
-              <span className="landing-stat-card__lbl">
-                {lang === 'es' ? 'HP Base' : 'Base HP'}
+              <span className="landing-release-date">
+                {lang === 'es' ? 'Viernes 21 de Agosto' : 'Friday, August 21'}
               </span>
             </div>
           </div>
@@ -641,15 +646,54 @@ export default function LandingPage({ onPlayGame }: LandingPageProps) {
           </div>
 
           <div className="landing-rarity-legend">
-            <div className="landing-rarity-pill"><span style={{ background: '#4ade80' }}></span>{lang === 'es' ? 'Común' : 'Common'}</div>
-            <div className="landing-rarity-pill"><span style={{ background: '#22d3ee' }}></span>{lang === 'es' ? 'Poco Común' : 'Uncommon'}</div>
-            <div className="landing-rarity-pill"><span style={{ background: '#60a5fa' }}></span>{lang === 'es' ? 'Rara' : 'Rare'}</div>
-            <div className="landing-rarity-pill"><span style={{ background: '#c084fc' }}></span>{lang === 'es' ? 'Épica' : 'Epic'}</div>
-            <div className="landing-rarity-pill"><span style={{ background: '#fbbf24' }}></span>{lang === 'es' ? 'Legendaria' : 'Legendary'}</div>
+            {RARITY_FILTERS.map((filter) => {
+              const isActive = selectedRarity === filter.key
+              const count =
+                filter.key === 'all'
+                  ? PLANTS_DATA.length
+                  : PLANTS_DATA.filter((p) => p.rarity === filter.key).length
+
+              return (
+                <button
+                  key={filter.key}
+                  type="button"
+                  className={`landing-rarity-pill ${isActive ? 'is-active' : ''}`}
+                  style={
+                    isActive && filter.color
+                      ? {
+                          borderColor: filter.color,
+                          boxShadow: `0 0 16px ${filter.color}55`,
+                          color: '#ffffff',
+                        }
+                      : undefined
+                  }
+                  onClick={() => {
+                    soundManager.playSound('click', 0.3)
+                    setSelectedRarity(filter.key)
+                  }}
+                >
+                  {filter.color ? (
+                    <span style={{ background: filter.color }} />
+                  ) : (
+                    <span
+                      style={{
+                        background:
+                          'linear-gradient(135deg, #4ade80 0%, #22d3ee 25%, #60a5fa 50%, #c084fc 75%, #fbbf24 100%)',
+                      }}
+                    />
+                  )}
+                  {lang === 'es' ? filter.labelEs : filter.labelEn}
+                  <span className="landing-rarity-count">({count})</span>
+                </button>
+              )
+            })}
           </div>
 
           <div className="landing-plants-grid">
-            {PLANTS_DATA.map((plant) => {
+            {(selectedRarity === 'all'
+              ? PLANTS_DATA
+              : PLANTS_DATA.filter((plant) => plant.rarity === selectedRarity)
+            ).map((plant) => {
               const isFlipped = !!flippedCards[plant.id]
               return (
                 <div

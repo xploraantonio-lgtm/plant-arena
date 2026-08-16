@@ -17,7 +17,7 @@ interface MarketplaceProps {
   onDeductTokens: (amountUsd: number) => boolean
   onDonatePlant: (plantId: PlantId) => boolean // Deducts 1 copy
   onReceivePlant: (plantId: PlantId) => void // Adds 1 copy
-  onBuyVipPass: () => void
+  onBuyVipPass: () => boolean
   onBackToMenu: () => void
 }
 
@@ -237,6 +237,24 @@ export default function Marketplace({
     )
   }
 
+  const handleDirectBuyVip = () => {
+    showModalConfirm(
+      'ACTIVAR PASE VIP',
+      '¿Deseas pagar $10.00 USD para activar tu Pase VIP de Temporada?\nDesbloquearás el Mercado de Comercio y todas las recompensas exclusivas del Pase de Batalla.',
+      '👑',
+      () => {
+        const success = onBuyVipPass()
+        if (success) {
+          showModalAlert('¡PASE VIP ACTIVADO!', '¡Bienvenido a la Zona VIP!\nAhora tienes acceso total al Mercado para comprar y vender cartas libremente.', '🎉', 'success')
+        } else {
+          showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente ($10.00 USD requeridos). Recarga saldo en la Tienda.', '⚠️', 'warning')
+        }
+      },
+      'ACTIVAR ($10.00 USD)',
+      'CANCELAR'
+    )
+  }
+
   return (
     <div className="market-container">
       {/* Top Header */}
@@ -261,7 +279,7 @@ export default function Marketplace({
               comerciar builds únicas y comprar plantas en el mercado libre.
             </p>
           </div>
-          <button className="market-vip-buy-btn" type="button" onClick={onBuyVipPass}>
+          <button className="market-vip-buy-btn" type="button" onClick={handleDirectBuyVip}>
             👑 ACTIVAR PASE VIP ($10.00 USD)
           </button>
         </div>

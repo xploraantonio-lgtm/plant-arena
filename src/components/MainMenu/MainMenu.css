@@ -96,7 +96,43 @@
 
 .card--player {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px 5px 8px;
+  background: linear-gradient(135deg, rgba(20, 32, 28, 0.92) 0%, rgba(10, 20, 20, 0.95) 100%);
+  border: 2px solid #76d832;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.card--player:hover {
+  transform: translateY(-2px) scale(1.02);
+  border-color: #86efac;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6), 0 0 14px rgba(118, 216, 50, 0.4);
+}
+
+.card__player-avatar-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, #fbbf24 0%, #22c55e 100%);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card__player-avatar-circle img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0f172a;
 }
 
 /* COMPACT VIP BATTLE PASS WIDGET */
