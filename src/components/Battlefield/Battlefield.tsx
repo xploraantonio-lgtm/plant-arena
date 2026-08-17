@@ -580,8 +580,8 @@ export default function Battlefield({
                     </span>
                     <div className="victory-pack-reward__card">
                       <img
-                        src="/game-assets/greenfoot/seed_pack_common_whitebg.png"
-                        alt="Sobre Gratis"
+                        src="/game-assets/greenfoot/seed_pack_pvp.png"
+                        alt="Sobre de Batalla PvP"
                         className="victory-pack-reward__img"
                       />
                       <div className="victory-pack-reward__info">

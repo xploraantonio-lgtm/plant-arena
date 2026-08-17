@@ -55,6 +55,9 @@ function App() {
   const {
     userTokens,
     addTokens,
+    userGold,
+    addGold,
+    buyGoldWithTokens,
     inventoryPacks,
     unlockedPlants,
     plantCopies,
@@ -212,6 +215,7 @@ function App() {
           <MainMenu
             userElo={userElo}
             userTokens={userTokens}
+            userGold={userGold}
             hasVipPass={hasVipPass}
             claimedVipLevels={claimedVipLevels}
             freePackSlots={freePackSlots}
@@ -272,6 +276,7 @@ function App() {
         {screen === 'shop' && (
           <Shop
             userTokens={userTokens}
+            userGold={userGold}
             hasVipPass={hasVipPass}
             inventoryPacks={inventoryPacks}
             plantCopies={plantCopies}
@@ -280,6 +285,8 @@ function App() {
             plantInstances={plantInstances}
             onBack={() => setScreen('menu')}
             onBuyPack={buyPack}
+            onBuyGold={buyGoldWithTokens}
+            onAddGold={addGold}
             onOpenJardin={handleOpenJardin}
             onAddTokens={addTokens}
             onOpenPackImmediately={handleTriggerPackOpenByInstanceId}

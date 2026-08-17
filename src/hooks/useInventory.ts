@@ -81,7 +81,10 @@ const STORAGE_KEYS = {
   PLANT_INSTANCES: 'plant_arena_plant_instances',
   ACTIVE_DECK: 'plant_arena_active_deck',
   ACTIVE_DECK_INSTANCES: 'plant_arena_active_deck_instances',
+  GOLD: 'plant_arena_user_gold',
 }
+
+const DEFAULT_GOLD = 50000
 
 const DEFAULT_DECK: PlantId[] = [
   'sunflower',
@@ -96,6 +99,11 @@ export function useInventory() {
   const [userTokens, setUserTokens] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.TOKENS)
     return saved ? Number(saved) : DEFAULT_TOKENS
+  })
+
+  const [userGold, setUserGold] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.GOLD)
+    return saved ? Number(saved) : DEFAULT_GOLD
   })
 
   const [inventoryPacks, setInventoryPacks] = useState<InventoryPack[]>(() => {
@@ -224,6 +232,10 @@ export function useInventory() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TOKENS, userTokens.toString())
   }, [userTokens])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.GOLD, userGold.toString())
+  }, [userGold])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PACKS, JSON.stringify(inventoryPacks))
@@ -699,6 +711,25 @@ export function useInventory() {
     return true
   }
 
+  const addGold = (amount: number) => {
+    setUserGold((prev) => prev + amount)
+  }
+
+  const deductGold = (amount: number): boolean => {
+    if (userGold < amount) return false
+    setUserGold((prev) => prev - amount)
+    return true
+  }
+
+  const buyGoldWithTokens = (goldAmount: number, tokenCostUsd: number) => {
+    if (userTokens < tokenCostUsd) {
+      return { success: false, error: 'Saldo insuficiente de tokens USD/USDT' }
+    }
+    setUserTokens((prev) => prev - tokenCostUsd)
+    setUserGold((prev) => prev + goldAmount)
+    return { success: true }
+  }
+
   const addPacksToInventory = (packId: PackId, qty: number) => {
     const packDef = PACK_DEFINITIONS[packId]
     const newPacks: InventoryPack[] = []
@@ -719,6 +750,11 @@ export function useInventory() {
     userTokens,
     setUserTokens,
     addTokens,
+    userGold,
+    setUserGold,
+    addGold,
+    deductGold,
+    buyGoldWithTokens,
     inventoryPacks,
     unlockedPlants,
     plantCopies,

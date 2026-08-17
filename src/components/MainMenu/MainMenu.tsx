@@ -25,6 +25,7 @@ import './MainMenu.css'
 interface MainMenuProps {
   userElo?: number
   userTokens?: number
+  userGold?: number
   hasVipPass?: boolean
   claimedVipLevels?: number[]
   freePackSlots?: FreePackSlot[]
@@ -47,6 +48,7 @@ interface MainMenuProps {
 export default function MainMenu({
   userElo = 1000,
   userTokens = 10,
+  userGold = 50000,
   hasVipPass = false,
   claimedVipLevels = [],
   freePackSlots = [],
@@ -159,7 +161,7 @@ export default function MainMenu({
           <div className="topbar__right">
             <div className="card card--stat card--stat-gold" title="Monedas de Oro">
               <img className="card__icon" src={moneda} alt="Monedas" />
-              50,000
+              {userGold.toLocaleString()}
             </div>
             <div className="card card--stat" title="Gemas Disponibles">
               <img className="card__icon" src={gema} alt="Gemas" />
@@ -258,8 +260,8 @@ export default function MainMenu({
                 <div className="chest-slot__content">
                   <span className="chest-slot__arena-tag">ARENA {slot.arenaLevel}</span>
                   <img
-                    src="/game-assets/greenfoot/seed_pack_common_whitebg.png"
-                    alt="Sobre Gratis"
+                    src="/game-assets/greenfoot/seed_pack_pvp.png"
+                    alt="Sobre PvP"
                     className="chest-slot__pack-img"
                   />
                   <span className="chest-slot__timer">⏳ {slot.durationHours}h</span>
@@ -271,8 +273,8 @@ export default function MainMenu({
                 <div className="chest-slot__content chest-slot__content--unlocking">
                   <span className="chest-slot__arena-tag">DESBLOQUEANDO</span>
                   <img
-                    src="/game-assets/greenfoot/seed_pack_common_whitebg.png"
-                    alt="Sobre Gratis"
+                    src="/game-assets/greenfoot/seed_pack_pvp.png"
+                    alt="Sobre PvP"
                     className="chest-slot__pack-img chest-slot__pack-img--pulsing"
                   />
                   <span className="chest-slot__timer chest-slot__timer--active">
@@ -290,8 +292,8 @@ export default function MainMenu({
                     ¡LISTO!
                   </span>
                   <img
-                    src="/game-assets/greenfoot/seed_pack_common_whitebg.png"
-                    alt="Sobre Gratis"
+                    src="/game-assets/greenfoot/seed_pack_pvp.png"
+                    alt="Sobre PvP"
                     className="chest-slot__pack-img chest-slot__pack-img--glowing"
                   />
                   <span className="chest-slot__btn-hint chest-slot__btn-hint--ready">
