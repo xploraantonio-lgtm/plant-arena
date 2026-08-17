@@ -388,7 +388,7 @@ export default function Clan({
     if (!userClan) return
     if (depositAmount <= 0) return
     if (userTokens < depositAmount) {
-      showModalAlert('SALDO INSUFICIENTE', `Saldo insuficiente ($${depositAmount.toFixed(2)} USD requeridos).`, '⚠️', 'warning')
+      showModalAlert('GEMAS INSUFICIENTES', `Gemas insuficientes (${depositAmount} Gemas 💎 requeridas).`, '⚠️', 'warning')
       return
     }
 
@@ -397,7 +397,24 @@ export default function Clan({
 
     ClanManager.depositToVault(userClan.id, depositAmount, playerName)
     soundManager.playSound('plantation', 0.9)
-    showModalAlert('DEPÓSITO EXITOSO', `¡Has depositado $${depositAmount.toFixed(2)} USD al Tesoro del Clan!`, '💰', 'success')
+
+    // Bonus: +1 Ticket de Coliseo y +1 Tiro Gratis en Ruleta por cada 1 Gema aportada
+    const ticketsEarned = Math.floor(depositAmount)
+    if (ticketsEarned > 0) {
+      try {
+        const curTickets = Number(localStorage.getItem('plant_arena_colosseum_tickets') || '0')
+        localStorage.setItem('plant_arena_colosseum_tickets', (curTickets + ticketsEarned).toString())
+        // Reset last free spin timestamp so they get a free spin immediately in Ruleta
+        localStorage.removeItem('plant_arena_lottery_last_free_spin')
+      } catch {}
+    }
+
+    showModalAlert(
+      '¡DEPÓSITO EXITOSO + BONOS!',
+      `¡Has aportado ${depositAmount} Gemas 💎 al Tesoro del Clan!\n\n🎁 ¡Has recibido de regalo:\n• +${ticketsEarned} Ticket(s) de Coliseo 🎟️\n• +1 Tiro Gratis en la Ruleta de la Suerte 🎡!`,
+      '🎉',
+      'success'
+    )
     setShowDepositModal(false)
     refreshClanData()
   }
@@ -1706,18 +1723,24 @@ export default function Clan({
       {showDepositModal && (
         <div className="clan-modal-backdrop" onClick={() => setShowDepositModal(false)}>
           <div className="clan-modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3>💰 DEPOSITAR FONDOS AL TESORO</h3>
-            <p>Elige cuánto deseas aportar al Tesoro del Clan para sumar fondos de respaldo o salir de la zona de riesgo.</p>
+            <h3>💎 APORTAR GEMAS AL TESORO DEL CLAN</h3>
+            <p>
+              Aporta Gemas al Tesoro de tu Clan para blindar su economía.
+              <br />
+              <strong style={{ color: '#fbbf24' }}>
+                🎁 ¡Por cada 1 Gema aportada recibes +1 Ticket de Coliseo 🎟️ y +1 Tiro Gratis en la Ruleta 🎡!
+              </strong>
+            </p>
 
             <div className="clan-deposit-opts">
-              {[0.5, 1.0, 2.0, 5.0, 10.0].map((amt) => (
+              {[1.0, 2.0, 5.0, 10.0, 20.0].map((amt) => (
                 <button
                   key={amt}
                   type="button"
                   className={`clan-deposit-opt ${depositAmount === amt ? 'clan-deposit-opt--active' : ''}`}
                   onClick={() => setDepositAmount(amt)}
                 >
-                  ${amt.toFixed(2)} USD
+                  {amt} 💎 Gemas
                 </button>
               ))}
             </div>
@@ -1727,7 +1750,7 @@ export default function Clan({
                 CANCELAR
               </button>
               <button type="button" className="clan-confirm-btn" onClick={handleDeposit}>
-                CONFIRMAR DEPÓSITO (${depositAmount.toFixed(2)})
+                CONFIRMAR DEPÓSITO ({depositAmount} 💎)
               </button>
             </div>
           </div>

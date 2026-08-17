@@ -20,6 +20,9 @@ import { BATTLE_PASS_LEVELS } from '../../utils/battlePassManager'
 import { SeasonManager } from '../../utils/seasonManager'
 import { UserManager, type PlayerProfile } from '../../utils/userManager'
 import ProfileModal from '../ProfileModal/ProfileModal'
+import ModeSelectorModal from '../ModeSelector/ModeSelectorModal'
+import ColosseumModal from '../Colosseum/ColosseumModal'
+import type { ColosseumBetAmount } from '../../types/game'
 import './MainMenu.css'
 
 interface MainMenuProps {
@@ -29,7 +32,11 @@ interface MainMenuProps {
   hasVipPass?: boolean
   claimedVipLevels?: number[]
   freePackSlots?: FreePackSlot[]
+  colosseumTickets?: number
+  colosseumCurrentStreak?: number
+  colosseumMaxStreak?: number
   onPlay: () => void
+  onStartColosseumMatch?: (betGems: ColosseumBetAmount, usedTicket: boolean) => void
   onOpenCollection?: () => void
   onOpenJardin?: () => void
   onOpenShop?: () => void
@@ -52,7 +59,11 @@ export default function MainMenu({
   hasVipPass = false,
   claimedVipLevels = [],
   freePackSlots = [],
+  colosseumTickets = 2,
+  colosseumCurrentStreak = 0,
+  colosseumMaxStreak = 0,
   onPlay,
+  onStartColosseumMatch,
   onOpenCollection,
   onOpenJardin,
   onOpenShop,
@@ -68,9 +79,16 @@ export default function MainMenu({
 }: MainMenuProps) {
   const [playerProfile, setPlayerProfile] = useState<PlayerProfile>(() => UserManager.getProfile())
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
+  const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
+  const [isColosseumModalOpen, setIsColosseumModalOpen] = useState(false)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [, setTicker] = useState<number>(0)
   const [activeAlert, setActiveAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
+
+  const handlePlayClick = () => {
+    soundManager.playSound('click', 0.5)
+    setIsModeSelectorOpen(true)
+  }
 
   useEffect(() => {
     const syncProfile = () => setPlayerProfile(UserManager.getProfile())
@@ -168,7 +186,11 @@ export default function MainMenu({
             </div>
             <div className="card card--stat" title="Gemas Disponibles">
               <img className="card__icon" src={gema} alt="Gemas" />
-              1,250
+              {userTokens.toLocaleString()}
+            </div>
+            <div className="card card--stat card--stat-ticket" title="Tickets de Coliseo (1 Ticket = 0.5 💎 de entrada)">
+              <span style={{ fontSize: '1.05rem' }}>🎟️</span>
+              {colosseumTickets}
             </div>
             <div
               className="card card--stat"
@@ -221,9 +243,31 @@ export default function MainMenu({
       <img className="plant plant--left" src={plant1} alt="" />
       <img className="plant plant--right" src={plant2} alt="" />
 
-      <button className="play-button" type="button" onClick={onPlay}>
+      <button
+        className="play-button"
+        type="button"
+        onClick={handlePlayClick}
+        title="Seleccionar Modo: Ranked, Amistoso, Torneos o Coliseo"
+      >
         <img className="play-button__art" src={play} alt="" />
         <span className="play-button__label">PLAY</span>
+        {userElo >= 1601 && (
+          <span style={{
+            position: 'absolute',
+            bottom: '-18px',
+            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+            color: '#000',
+            fontWeight: 800,
+            fontSize: '0.65rem',
+            padding: '2px 8px',
+            borderRadius: '999px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+            border: '1px solid #fde047',
+            whiteSpace: 'nowrap'
+          }}>
+            🏛️ COLISEO DISPONIBLE
+          </span>
+        )}
       </button>
 
       {/* 4 FREE BATTLE PACK SLOTS (CLASH ROYALE STYLE) */}
@@ -374,6 +418,34 @@ export default function MainMenu({
         onClose={() => setIsProfileModalOpen(false)}
         onAddTokens={onAddTokens}
         onDeductTokens={onDeductTokens}
+      />
+
+      {/* MODE SELECTOR MODAL (RANKED VS COLOSSEUM) */}
+      <ModeSelectorModal
+        isOpen={isModeSelectorOpen}
+        onClose={() => setIsModeSelectorOpen(false)}
+        userElo={userElo}
+        userTokens={userTokens}
+        colosseumTickets={colosseumTickets}
+        onSelectRanked={onPlay}
+        onSelectColosseum={() => setIsColosseumModalOpen(true)}
+      />
+
+      {/* COLOSSEUM MODAL */}
+      <ColosseumModal
+        isOpen={isColosseumModalOpen}
+        onClose={() => setIsColosseumModalOpen(false)}
+        userTokens={userTokens}
+        userElo={userElo}
+        colosseumTickets={colosseumTickets}
+        currentStreak={colosseumCurrentStreak}
+        maxStreak={colosseumMaxStreak}
+        onStartColosseumMatch={(betGems, usedTicket) => {
+          if (onStartColosseumMatch) {
+            onStartColosseumMatch(betGems, usedTicket)
+          }
+        }}
+        onOpenShop={onOpenShop}
       />
     </div>
   )

@@ -35,7 +35,7 @@ interface WheelSector {
 const WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'jackpot_20',
-    label: '$20.00 USD',
+    label: '20 Gemas 💎',
     icon: '👑',
     color: '#eab308',
     textColor: '#ffffff',
@@ -66,8 +66,8 @@ const WHEEL_SECTORS: WheelSector[] = [
   },
   {
     id: 'usd_1',
-    label: '$1.00 USD',
-    icon: '💵',
+    label: '1 Gema 💎',
+    icon: '💎',
     color: '#10b981',
     textColor: '#ffffff',
     type: 'token',
@@ -108,8 +108,8 @@ const WHEEL_SECTORS: WheelSector[] = [
   },
   {
     id: 'usd_5',
-    label: '$5.00 USD',
-    icon: '💵',
+    label: '5 Gemas 💎',
+    icon: '💎',
     color: '#22c55e',
     textColor: '#ffffff',
     type: 'token',
@@ -268,7 +268,7 @@ export default function LotteryModal({
 
     if (isFree) {
       if (!canFreeSpin) {
-        alert('Ya has usado tu tiro gratis diario. Puedes girar nuevamente por $1.00 USD.')
+        alert('Ya has usado tu tiro gratis diario. Puedes girar nuevamente por 1 Gema 💎.')
         return
       }
       const now = Date.now()
@@ -276,7 +276,7 @@ export default function LotteryModal({
       localStorage.setItem(STORAGE_KEYS.LAST_FREE_SPIN, now.toString())
     } else {
       if (userTokens < 1.0) {
-        alert('Saldo insuficiente ($1.00 USD requerido para un tiro adicional).')
+        alert('Gemas insuficientes (1 Gema 💎 requerida para un tiro adicional).')
         return
       }
       const deducted = onDeductTokens(1.0)
@@ -294,9 +294,9 @@ export default function LotteryModal({
     const rand = Math.random() * 100
     let targetIndex = 0
     if (rand < 2) {
-      targetIndex = 0 // $20 USD (2%)
+      targetIndex = 0 // 20 Gemas (2%)
     } else if (rand < 6) {
-      targetIndex = 7 // $5 USD (4%)
+      targetIndex = 7 // 5 Gemas (4%)
     } else if (rand < 12) {
       targetIndex = 1 // Sobre Legendario (6%)
     } else if (rand < 22) {
@@ -308,7 +308,7 @@ export default function LotteryModal({
     } else if (rand < 65) {
       targetIndex = 2 // 5,000 Oro (17%)
     } else if (rand < 80) {
-      targetIndex = 3 // $1 USD (15%)
+      targetIndex = 3 // 1 Gema (15%)
     } else if (rand < 90) {
       targetIndex = 6 // 2,500 Oro (10%)
     } else {
@@ -375,7 +375,7 @@ export default function LotteryModal({
 
   const handleBuyCodeAttempts = () => {
     if (userTokens < 1.0) {
-      alert('Saldo insuficiente. Necesitas $1.00 USD para comprar 2 intentos.')
+      alert('Gemas insuficientes. Necesitas 1 Gema 💎 para comprar 2 intentos.')
       return
     }
     const deducted = onDeductTokens(1.0)
@@ -385,7 +385,7 @@ export default function LotteryModal({
     setExtraAttempts(newTotal)
     localStorage.setItem(STORAGE_KEYS.CODE_EXTRA_ATTEMPTS, newTotal.toString())
     soundManager.playSound('plantation', 0.8)
-    setCodeBannerNotice('¡Has comprado 2 Intentos Extra por $1.00 USD! 🎯')
+    setCodeBannerNotice('¡Has comprado 2 Intentos Extra por 1 Gema 💎! 🎯')
     setTimeout(() => setCodeBannerNotice(null), 3000)
   }
 
@@ -484,17 +484,17 @@ export default function LotteryModal({
           <div className="lottery-header__title-box">
             <span className="lottery-header__icon">🎰</span>
             <div>
-              <h2 className="lottery-header__title">LOTERÍA & SORTEO BOTÁNICO</h2>
+              <h2 className="lottery-header__title">RULETA & CÓDIGO BOTÁNICO</h2>
               <p className="lottery-header__subtitle">
-                Gira la Ruleta de la Fortuna y Descifra el Código Secreto para ganar premios en $USD en efectivo
+                Gira la Ruleta de la Suerte y Descifra el Código Secreto para ganar Gemas 💎 y grandes recompensas
               </p>
             </div>
           </div>
 
           <div className="lottery-header__right">
             <div className="lottery-user-balance">
-              <span>💵 Saldo:</span>
-              <strong>${userTokens.toFixed(2)} USD</strong>
+              <span>💎 Saldo:</span>
+              <strong>{userTokens} Gemas</strong>
             </div>
             <button type="button" className="lottery-close-btn" onClick={onClose}>
               ✕
@@ -512,7 +512,7 @@ export default function LotteryModal({
               setActiveTab('wheel')
             }}
           >
-            🎡 SORTEO (RULETA 3D)
+            🎡 RULETA DE LA SUERTE
           </button>
           <button
             type="button"
@@ -522,7 +522,7 @@ export default function LotteryModal({
               setActiveTab('code')
             }}
           >
-            🔐 CODE: SECUENCIA BOTÁNICA (¡GANA $20!)
+            🔐 CÓDIGO SECRETO (¡GANA 20 💎!)
           </button>
         </div>
 
@@ -570,7 +570,7 @@ export default function LotteryModal({
                     className={`lottery-wheel-center-hub ${isSpinning ? 'lottery-hub--spinning' : ''} ${!canFreeSpin ? 'lottery-hub--locked' : ''}`}
                     disabled={isSpinning || !canFreeSpin}
                     onClick={() => handleSpinWheel(true)}
-                    title={canFreeSpin ? 'Girar tiro gratis' : 'Tiro gratis usado. Haz clic en "⚡ GIRAR POR $1.00 USD"'}
+                    title={canFreeSpin ? 'Girar tiro gratis' : 'Tiro gratis usado. Haz clic en "⚡ GIRAR POR 1 GEMA 💎"'}
                   >
                     <span>{isSpinning ? '🌀' : 'GIRAR'}</span>
                   </button>
@@ -580,10 +580,10 @@ export default function LotteryModal({
               {/* RIGHT: WHEEL INFO & ACTION BUTTONS */}
               <div className="lottery-wheel-info-col">
                 <div className="lottery-wheel-hero-card">
-                  <div className="lottery-wheel-hero-badge">⭐ RULETA DE LA FORTUNA</div>
+                  <div className="lottery-wheel-hero-badge">⭐ RULETA DE LA SUERTE</div>
                   <h3>¡PRUEBA TU SUERTE CADA DÍA!</h3>
                   <p>
-                    Tienes <strong>1 Tiro Gratis cada 24 horas</strong> garantizado. También puedes adquirir giros extra ilimitados por tan solo <strong>$1.00 USD</strong>.
+                    Tienes <strong>1 Tiro Gratis cada 24 horas</strong> garantizado. También puedes adquirir giros extra por tan solo <strong>1 Gema 💎</strong>.
                   </p>
                 </div>
 
@@ -617,7 +617,7 @@ export default function LotteryModal({
                       setShowConfirmPaidModal(true)
                     }}
                   >
-                    <span>⚡ GIRAR POR $1.00 USD</span>
+                    <span>⚡ GIRAR POR 1 GEMA 💎</span>
                   </button>
                 </div>
 
@@ -626,13 +626,13 @@ export default function LotteryModal({
                   <span className="lottery-prizes-title">🎁 PREMIOS EN ESTE SORTEO:</span>
                   <div className="lottery-prizes-tags-grid">
                     <div className="lottery-prize-tag lottery-prize-tag--jackpot">
-                      👑 $20.00 USD (Jackpot)
+                      👑 20 Gemas 💎 (Jackpot)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--legendary">
                       📦 Sobre Legendario (5 Plantas)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--usd">
-                      💵 $5.00 USD & $1.00 USD
+                      💎 5 Gemas & 1 Gema
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--epic">
                       📦 Sobre Épico & Plantas x3
@@ -686,10 +686,10 @@ export default function LotteryModal({
               <div className="lottery-code-game-pane">
                 {/* PROMO HERO BANNER */}
                 <div className="lottery-code-promo-banner">
-                  <div className="lottery-promo-badge">🔥 CONVIERTE $1.00 EN $20.00 USD</div>
+                  <div className="lottery-promo-badge">🔥 CONVIERTE 1 GEMA EN 20 GEMAS 💎</div>
                   <h3>¡ADIVINA LA SECUENCIA DE 4 PLANTAS!</h3>
                   <p>
-                    2 intentos gratis diarios. Si descifras las 4 plantas en orden exacto, <strong>¡GANAS $20.00 USD EN EFECTIVO!</strong>
+                    2 intentos gratis diarios. Si descifras las 4 plantas en orden exacto, <strong>¡GANAS 20 GEMAS 💎!</strong>
                   </p>
                 </div>
 
@@ -747,9 +747,9 @@ export default function LotteryModal({
                       setShowConfirmCodeBuyModal(true)
                     }}
                     disabled={userTokens < 1.0}
-                    title="Pagar $1.00 USD por 2 intentos adicionales"
+                    title="Pagar 1 Gema 💎 por 2 intentos adicionales"
                   >
-                    ⚡ +2 INTENTOS ($1.00 USD)
+                    ⚡ +2 INTENTOS (1 💎 Gema)
                   </button>
 
                   <button
@@ -758,13 +758,13 @@ export default function LotteryModal({
                     onClick={() => {
                       if (totalAttemptsAvailable <= 0) {
                         setShowConfirmCodeBuyModal(true)
-                      } else {
-                        handleCheckCode()
+                        return
                       }
+                      handleCheckCode()
                     }}
                     disabled={selectedSequence.some((s) => s === null)}
                   >
-                    🔍 COMPROBAR CÓDIGO
+                    🔮 VERIFICAR CÓDIGO
                   </button>
                 </div>
 
@@ -837,7 +837,7 @@ export default function LotteryModal({
               <h3 className="lottery-prize-name">{winningSector.label}</h3>
               <p className="lottery-prize-desc">
                 {winningSector.type === 'token'
-                  ? `¡Se han acreditado $${winningSector.valueUsd?.toFixed(2)} USD a tu cuenta!`
+                  ? `¡Se han acreditado ${winningSector.valueUsd?.toFixed(0)} Gemas 💎 a tu cuenta!`
                   : winningSector.type === 'gold'
                   ? `¡Has ganado ${winningSector.goldAmount?.toLocaleString()} Monedas de Oro!`
                   : winningSector.type === 'pack'
@@ -866,12 +866,12 @@ export default function LotteryModal({
               <div className="lottery-prize-badge" style={{ background: '#eab308', color: '#000' }}>
                 ¡CÓDIGO BOTÁNICO DESCIFRADO!
               </div>
-              <div className="lottery-prize-icon">💵</div>
+              <div className="lottery-prize-icon">💎</div>
               <h3 className="lottery-prize-name" style={{ color: '#4ade80' }}>
-                +$20.00 USD EN EFECTIVO
+                +20 GEMAS 💎
               </h3>
               <p className="lottery-prize-desc">
-                ¡Increíble deducción! Has acertado las 4 plantas en la posición exacta y ganado el <strong>Gran Premio de $20.00 USD</strong>.
+                ¡Increíble deducción! Has acertado las 4 plantas en la posición exacta y ganado el <strong>Gran Premio de 20 Gemas 💎</strong>.
               </p>
               <button
                 type="button"
@@ -881,7 +881,7 @@ export default function LotteryModal({
                   setCodeWonPrize(false)
                 }}
               >
-                ¡RECLAMAR $20.00 USD!
+                ¡RECLAMAR 20 GEMAS 💎!
               </button>
             </div>
           </div>
@@ -893,10 +893,10 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">⚡</div>
               <h3>CONFIRMAR GIRO DE RULETA</h3>
               <p>
-                ¿Deseas pagar <strong>$1.00 USD</strong> de tu saldo para girar la Ruleta de la Fortuna y probar tu suerte?
+                ¿Deseas pagar <strong>1 Gema 💎</strong> de tu saldo para girar la Ruleta de la Suerte y probar tu suerte?
               </p>
               <div className="lottery-confirm-balance">
-                Saldo actual: <strong>${userTokens.toFixed(2)} USD</strong>
+                Saldo actual: <strong>{userTokens} Gemas 💎</strong>
               </div>
               <div className="lottery-confirm-actions">
                 <button
@@ -914,7 +914,7 @@ export default function LotteryModal({
                     handleSpinWheel(false)
                   }}
                 >
-                  SÍ, GIRAR ($1.00)
+                  SÍ, GIRAR (1 💎)
                 </button>
               </div>
             </div>
@@ -927,10 +927,10 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">🎯</div>
               <h3>COMPRAR INTENTOS DE CÓDIGO</h3>
               <p>
-                ¿Deseas pagar <strong>$1.00 USD</strong> para adquirir <strong>2 INTENTOS ADICIONALES</strong> y descifrar la secuencia para ganar los <strong>$20.00 USD</strong>?
+                ¿Deseas pagar <strong>1 Gema 💎</strong> para adquirir <strong>2 INTENTOS ADICIONALES</strong> y descifrar la secuencia para ganar las <strong>20 Gemas 💎</strong>?
               </p>
               <div className="lottery-confirm-balance">
-                Saldo actual: <strong>${userTokens.toFixed(2)} USD</strong> (Recibes: +2 Intentos)
+                Saldo actual: <strong>{userTokens} Gemas 💎</strong> (Recibes: +2 Intentos)
               </div>
               <div className="lottery-confirm-actions">
                 <button
@@ -948,7 +948,7 @@ export default function LotteryModal({
                     handleBuyCodeAttempts()
                   }}
                 >
-                  SÍ, COMPRAR 2 INTENTOS ($1.00)
+                  SÍ, COMPRAR 2 INTENTOS (1 💎)
                 </button>
               </div>
             </div>

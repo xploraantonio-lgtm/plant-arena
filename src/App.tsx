@@ -88,7 +88,15 @@ function App() {
     receivePlantInstance,
     removePlantInstance,
     addPacksToInventory,
+    colosseumTickets,
+    colosseumCurrentStreak,
+    colosseumMaxStreak,
+    useColosseumTicket,
+    resolveColosseumMatch,
   } = useInventory()
+
+  const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum'>('ranked')
+  const [colosseumConfig, setColosseumConfig] = useState<import('./types/game').ColosseumMatchConfig | null>(null)
 
   const handleGoToGame = () => {
     setScreen('menu')
@@ -113,6 +121,24 @@ function App() {
   }
 
   const handlePlayNormal = () => {
+    setBattleMatchMode('ranked')
+    setColosseumConfig(null)
+    setPracticePlantId(null)
+    setCustomArenaBg(undefined)
+    setScreen('battle')
+  }
+
+  const handleStartColosseumMatch = (betGems: import('./types/game').ColosseumBetAmount, usedTicket: boolean) => {
+    if (usedTicket) {
+      useColosseumTicket()
+    }
+    setBattleMatchMode('colosseum')
+    setColosseumConfig({
+      betGems,
+      usedTicket,
+      payoutGems: Number((betGems * 1.6).toFixed(2)),
+      rakeGems: Number((betGems * 0.4).toFixed(2)),
+    })
     setPracticePlantId(null)
     setCustomArenaBg(undefined)
     setScreen('battle')
@@ -220,7 +246,11 @@ function App() {
             hasVipPass={hasVipPass}
             claimedVipLevels={claimedVipLevels}
             freePackSlots={freePackSlots}
+            colosseumTickets={colosseumTickets}
+            colosseumCurrentStreak={colosseumCurrentStreak}
+            colosseumMaxStreak={colosseumMaxStreak}
             onPlay={handlePlayNormal}
+            onStartColosseumMatch={handleStartColosseumMatch}
             onOpenCollection={handleOpenCollection}
             onOpenJardin={handleOpenJardin}
             onOpenShop={handleOpenShop}
@@ -246,6 +276,14 @@ function App() {
             activeDeck={activeDeck}
             userElo={userElo}
             customBgImage={customArenaBg}
+            matchMode={battleMatchMode}
+            colosseumConfig={colosseumConfig}
+            onColosseumComplete={(won) => {
+              if (colosseumConfig) {
+                return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)
+              }
+              return { payoutGems: 0, newStreak: 0, newMaxStreak: colosseumMaxStreak, isNewRecord: false }
+            }}
           />
         )}
         {screen === 'collection' && (

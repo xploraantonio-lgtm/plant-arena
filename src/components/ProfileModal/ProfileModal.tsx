@@ -121,8 +121,8 @@ export default function ProfileModal({
   // Handle Withdraw
   const handleWithdrawSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (withdrawAmount <= 0) {
-      showFeedback('Ingresa un monto válido.', 'error')
+    if (withdrawAmount < 10) {
+      showFeedback('Mínimo de retiro: 10 Gemas 💎 ($10.00 USD).', 'error')
       return
     }
     if (withdrawAmount > userTokens) {
@@ -315,7 +315,7 @@ export default function ProfileModal({
                 <span className="profile-stat-lbl">Copas ELO Actuales</span>
               </div>
               <div className="profile-stat-box">
-                <span className="profile-stat-val" style={{ color: '#4ade80' }}>$ {userTokens.toFixed(2)} USD</span>
+                <span className="profile-stat-val" style={{ color: '#4ade80' }}>💎 {userTokens} Gemas</span>
                 <span className="profile-stat-lbl">Saldo Disponible</span>
               </div>
               <div className="profile-stat-box">
@@ -468,29 +468,29 @@ export default function ProfileModal({
         {activeTab === 'withdraw' && (
           <form onSubmit={handleWithdrawSubmit} className="profile-tab-body">
             <div className="profile-section-title">
-              <span>💸 RETIRAR FONDOS DE LA CUENTA</span>
-              <small>Retira tus ganancias obtenidas en Guerras de Clanes, Torneos y Comercio P2P.</small>
+              <span>💎 RETIRAR GEMAS A DINERO REAL</span>
+              <small>Mínimo de retiro: 10 Gemas 💎 ($10.00 USD). Retira tus ganancias obtenidas en el Coliseo, Guerras de Clanes y Comercio P2P.</small>
             </div>
 
             <div className="profile-balance-banner">
-              <span>Saldo Disponible para Retirar:</span>
-              <strong>${userTokens.toFixed(2)} USD</strong>
+              <span>Gemas Disponibles para Retirar:</span>
+              <strong>💎 {userTokens} Gemas</strong>
             </div>
 
             <div className="profile-form-row">
-              <label>Monto a Retirar:</label>
+              <label>Gemas a Retirar (Mín. 10 💎):</label>
               <div className="profile-input-wrap">
-                <span>$</span>
+                <span>💎</span>
                 <input
                   type="number"
-                  min={1}
+                  min={10}
                   max={userTokens}
-                  step={0.5}
+                  step={1}
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(Number(e.target.value))}
                   required
                 />
-                <span>USD</span>
+                <span>Gemas</span>
               </div>
             </div>
 

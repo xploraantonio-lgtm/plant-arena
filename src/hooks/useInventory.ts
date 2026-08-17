@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { PlantCardInstance, PlantId } from '../types/game'
+import type { PlantCardInstance, PlantId, ColosseumBetAmount } from '../types/game'
 import {
   PACK_DEFINITIONS,
   openSeedPack,
@@ -77,11 +77,17 @@ const STORAGE_KEYS = {
   UNLOCKED_PLANTS: 'plant_arena_unlocked_plants',
   PLANT_COPIES: 'plant_arena_plant_copies',
   PLANT_LEVELS: 'plant_arena_plant_levels',
+  VIP_PASS: 'plant_arena_vip_pass',
+  CLAIMED_VIP_LEVELS: 'plant_arena_claimed_vip_levels',
+  FREE_PACK_SLOTS: 'plant_arena_free_pack_slots',
   PLANT_STAT_ROLLS: 'plant_arena_plant_stat_rolls',
   PLANT_INSTANCES: 'plant_arena_plant_instances',
   ACTIVE_DECK: 'plant_arena_active_deck',
   ACTIVE_DECK_INSTANCES: 'plant_arena_active_deck_instances',
   GOLD: 'plant_arena_user_gold',
+  COLOSSEUM_TICKETS: 'plant_arena_colosseum_tickets',
+  COLOSSEUM_CURRENT_STREAK: 'plant_arena_colosseum_current_streak',
+  COLOSSEUM_MAX_STREAK: 'plant_arena_colosseum_max_streak',
 }
 
 const DEFAULT_GOLD = 50000
@@ -104,6 +110,21 @@ export function useInventory() {
   const [userGold, setUserGold] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.GOLD)
     return saved ? Number(saved) : DEFAULT_GOLD
+  })
+
+  const [colosseumTickets, setColosseumTickets] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.COLOSSEUM_TICKETS)
+    return saved ? Number(saved) : 2 // 2 tickets gratis de bienvenida
+  })
+
+  const [colosseumCurrentStreak, setColosseumCurrentStreak] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.COLOSSEUM_CURRENT_STREAK)
+    return saved ? Number(saved) : 0
+  })
+
+  const [colosseumMaxStreak, setColosseumMaxStreak] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.COLOSSEUM_MAX_STREAK)
+    return saved ? Number(saved) : 0
   })
 
   const [inventoryPacks, setInventoryPacks] = useState<InventoryPack[]>(() => {
@@ -269,6 +290,75 @@ export function useInventory() {
     localStorage.setItem(STORAGE_KEYS.ACTIVE_DECK_INSTANCES, JSON.stringify(activeDeckInstances))
   }, [activeDeckInstances])
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.COLOSSEUM_TICKETS, colosseumTickets.toString())
+  }, [colosseumTickets])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.COLOSSEUM_CURRENT_STREAK, colosseumCurrentStreak.toString())
+  }, [colosseumCurrentStreak])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.COLOSSEUM_MAX_STREAK, colosseumMaxStreak.toString())
+  }, [colosseumMaxStreak])
+
+  const addColosseumTickets = (qty: number) => {
+    setColosseumTickets((prev) => {
+      const next = Math.max(0, prev + qty)
+      localStorage.setItem(STORAGE_KEYS.COLOSSEUM_TICKETS, next.toString())
+      return next
+    })
+  }
+
+  const useColosseumTicket = (): boolean => {
+    if (colosseumTickets <= 0) return false
+    setColosseumTickets((prev) => {
+      const next = Math.max(0, prev - 1)
+      localStorage.setItem(STORAGE_KEYS.COLOSSEUM_TICKETS, next.toString())
+      return next
+    })
+    return true
+  }
+
+  const resolveColosseumMatch = (
+    won: boolean,
+    betGems: ColosseumBetAmount,
+    usedTicket: boolean
+  ): { payoutGems: number; newStreak: number; newMaxStreak: number; isNewRecord: boolean } => {
+    // 80% payout of total pot (2x bet) = 1.6x bet
+    const payoutMultiplier = 1.6
+    const payoutGems = Number((betGems * payoutMultiplier).toFixed(2))
+
+    let newStreak = colosseumCurrentStreak
+    let newMaxStreak = colosseumMaxStreak
+    let isNewRecord = false
+
+    if (won) {
+      // Award winnings
+      addUserTokens(payoutGems)
+      newStreak = colosseumCurrentStreak + 1
+      setColosseumCurrentStreak(newStreak)
+      localStorage.setItem(STORAGE_KEYS.COLOSSEUM_CURRENT_STREAK, newStreak.toString())
+
+      if (newStreak > colosseumMaxStreak) {
+        newMaxStreak = newStreak
+        isNewRecord = true
+        setColosseumMaxStreak(newMaxStreak)
+        localStorage.setItem(STORAGE_KEYS.COLOSSEUM_MAX_STREAK, newMaxStreak.toString())
+      }
+    } else {
+      // Defeat
+      if (!usedTicket) {
+        deductUserTokens(betGems)
+      }
+      newStreak = 0
+      setColosseumCurrentStreak(0)
+      localStorage.setItem(STORAGE_KEYS.COLOSSEUM_CURRENT_STREAK, '0')
+    }
+
+    return { payoutGems: won ? payoutGems : 0, newStreak, newMaxStreak, isNewRecord }
+  }
+
   const updateActiveDeck = (plantIds: PlantId[], instanceIds?: string[]) => {
     setActiveDeck(plantIds)
     if (instanceIds && instanceIds.length > 0) {
@@ -316,6 +406,11 @@ export function useInventory() {
       })
       return next
     })
+
+    // 15% de probabilidad de dropear un Ticket de Coliseo en sobres
+    if (Math.random() < 0.15) {
+      addColosseumTickets(1)
+    }
   }
 
   const openPackByInstanceId = (instanceId: string): PackDropResult[] | null => {
@@ -623,6 +718,11 @@ export function useInventory() {
         ? '#60a5fa'
         : '#c084fc'
 
+    // 10% de probabilidad de dropear un Ticket de Coliseo en cofres de victoria
+    if (Math.random() < 0.10) {
+      addColosseumTickets(1)
+    }
+
     return {
       plantId,
       isNew: dropData.isNew,
@@ -785,5 +885,13 @@ export function useInventory() {
     receivePlantInstance,
     removePlantInstance,
     addPacksToInventory,
+    // Colosseum Exports
+    colosseumTickets,
+    setColosseumTickets,
+    addColosseumTickets,
+    useColosseumTicket,
+    colosseumCurrentStreak,
+    colosseumMaxStreak,
+    resolveColosseumMatch,
   }
 }

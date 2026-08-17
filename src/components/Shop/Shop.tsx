@@ -248,8 +248,8 @@ export default function Shop({
 
     if (userTokens < totalCost) {
       setThemedAlert({
-        title: 'SALDO INSUFICIENTE',
-        message: `⚠️ Saldo insuficiente ($${userTokens.toFixed(2)} USD disponibles).\nSe requieren $${totalCost.toFixed(2)} USD para comprar ${qty} ${qty === 1 ? 'sobre' : 'sobres'}.`,
+        title: 'GEMAS INSUFICIENTES',
+        message: `⚠️ Gemas insuficientes (${userTokens} Gemas 💎 disponibles).\nSe requieren ${totalCost} Gemas 💎 para comprar ${qty} ${qty === 1 ? 'sobre' : 'sobres'}.`,
         icon: '⚠️',
       })
       return
@@ -272,8 +272,8 @@ export default function Shop({
   const handleBuyGold = (pkg: GoldPackage) => {
     if (userTokens < pkg.priceUsd) {
       setThemedAlert({
-        title: 'SALDO INSUFICIENTE',
-        message: `⚠️ Saldo insuficiente ($${userTokens.toFixed(2)} USD disponibles).\nSe requieren $${pkg.priceUsd.toFixed(2)} USD para comprar ${pkg.goldAmount} Monedas de Oro.`,
+        title: 'GEMAS INSUFICIENTES',
+        message: `⚠️ Gemas insuficientes (${userTokens} Gemas 💎 disponibles).\nSe requieren ${pkg.priceUsd} Gemas 💎 para comprar ${pkg.goldAmount.toLocaleString()} Monedas de Oro.`,
         icon: '⚠️',
       })
       return
@@ -285,7 +285,7 @@ export default function Shop({
         soundManager.playSound('plantation', 0.8)
         setThemedAlert({
           title: '¡COMPRA EXITOSA!',
-          message: `🪙 ¡Has adquirido con éxito +${pkg.goldAmount.toLocaleString()} Monedas de Oro por $${pkg.priceUsd.toFixed(2)} USD/USDT!`,
+          message: `🪙 ¡Has adquirido con éxito +${pkg.goldAmount.toLocaleString()} Monedas de Oro por ${pkg.priceUsd} Gemas 💎!`,
           icon: '🪙',
         })
       } else {
@@ -329,8 +329,8 @@ export default function Shop({
         setActiveTab('packs')
       } else {
         setThemedAlert({
-          title: 'SALDO INSUFICIENTE',
-          message: '⚠️ Saldo insuficiente ($10.00 USD requeridos).\nRecarga saldo usando el botón "+$100 TEST" de la tienda.',
+          title: 'GEMAS INSUFICIENTES',
+          message: '⚠️ Gemas insuficientes (10 Gemas 💎 requeridas).\nRecarga gemas usando el botón "+100 💎 TEST" de la tienda.',
           icon: '⚠️',
         })
       }
@@ -358,17 +358,17 @@ export default function Shop({
             <span className="shop-gold-badge-amount">{userGold.toLocaleString()} ORO</span>
           </div>
           <div className="shop-token-badge">
-            <span className="shop-token-icon">💵</span>
-            <span className="shop-token-amount">${userTokens}.00 USD</span>
+            <span className="shop-token-icon">💎</span>
+            <span className="shop-token-amount">{userTokens} Gemas</span>
           </div>
           <button
             className="shop-back-btn"
             type="button"
             style={{ background: '#16a34a', borderColor: '#4ade80' }}
             onClick={() => onAddTokens(100)}
-            title="Añadir $100.00 USD de prueba para testear compras"
+            title="Añadir 100 Gemas 💎 de prueba para testear compras"
           >
-            +$100 TEST
+            +100 💎 TEST
           </button>
           <button
             className="shop-mute-btn"
@@ -462,7 +462,7 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Básico</h4>
-                  <span className="shop-pack-price-tag">$3.00 USD</span>
+                  <span className="shop-pack-price-tag">3 💎 Gemas</span>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -479,7 +479,7 @@ export default function Shop({
                   type="button"
                   onClick={() => handleBuyPacksBatch('basic')}
                 >
-                  COMPRAR ({getQty('basic')}) — ${(3 * getQty('basic')).toFixed(2)} USD
+                  COMPRAR ({getQty('basic')}) — {3 * getQty('basic')} 💎 Gemas
                 </button>
               </div>
 
@@ -501,7 +501,7 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Épico</h4>
-                  <span className="shop-pack-price-tag shop-pack-price-tag--epic">$5.00 USD</span>
+                  <span className="shop-pack-price-tag shop-pack-price-tag--epic">5 💎 Gemas</span>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -518,7 +518,7 @@ export default function Shop({
                   type="button"
                   onClick={() => handleBuyPacksBatch('epic')}
                 >
-                  COMPRAR ({getQty('epic')}) — ${(5 * getQty('epic')).toFixed(2)} USD
+                  COMPRAR ({getQty('epic')}) — {5 * getQty('epic')} 💎 Gemas
                 </button>
               </div>
 
@@ -540,7 +540,7 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Legendario</h4>
-                  <span className="shop-pack-price-tag shop-pack-price-tag--legendary">$10.00 USD</span>
+                  <span className="shop-pack-price-tag shop-pack-price-tag--legendary">10 💎 Gemas</span>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -557,7 +557,7 @@ export default function Shop({
                   type="button"
                   onClick={() => handleBuyPacksBatch('legendary')}
                 >
-                  COMPRAR ({getQty('legendary')}) — ${(10 * getQty('legendary')).toFixed(2)} USD
+                  COMPRAR ({getQty('legendary')}) — {10 * getQty('legendary')} 💎 Gemas
                 </button>
               </div>
             </div>
@@ -618,7 +618,7 @@ export default function Shop({
                   className="shop-pass-hero-buy-btn"
                   onClick={handleBuyVipFromShop}
                 >
-                  👑 ACTIVAR PASE VIP — $10.00 USD
+                  👑 ACTIVAR PASE VIP — 10 💎 Gemas
                 </button>
               </div>
             </div>
@@ -705,7 +705,7 @@ export default function Shop({
                             onClick={() => handleBuyGold(pkg)}
                           >
                             <span>🛒 COMPRAR</span>
-                            <strong className="shop-epic-buy-price">${pkg.priceUsd}.00 USDT</strong>
+                            <strong className="shop-epic-buy-price">{pkg.priceUsd} 💎 Gemas</strong>
                           </button>
                         </div>
                       ))}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PlantId } from '../../types/game'
+import type { PlantId, ColosseumMatchConfig } from '../../types/game'
 import { useGameEngine } from '../../hooks/useGameEngine'
 import {
   PLANT_CONFIGS,
@@ -86,6 +86,9 @@ interface BattlefieldProps {
   activeDeck?: PlantId[]
   userElo?: number
   customBgImage?: string
+  matchMode?: 'ranked' | 'colosseum'
+  colosseumConfig?: ColosseumMatchConfig | null
+  onColosseumComplete?: (won: boolean) => { payoutGems: number; newStreak: number; newMaxStreak: number; isNewRecord: boolean }
 }
 
 export default function Battlefield({
@@ -97,6 +100,9 @@ export default function Battlefield({
   activeDeck,
   userElo = 1000,
   customBgImage,
+  matchMode = 'ranked',
+  colosseumConfig,
+  onColosseumComplete,
 }: BattlefieldProps) {
   const {
     gameStatus,
@@ -133,20 +139,38 @@ export default function Battlefield({
     isSurrendered?: boolean
   } | null>(null)
 
+  const [colosseumResult, setColosseumResult] = useState<{
+    payoutGems: number
+    newStreak: number
+    newMaxStreak: number
+    isNewRecord: boolean
+  } | null>(null)
+
   const activeArena = useMemo(() => getArenaForElo(userElo), [userElo])
   const activeBgImage = customBgImage || activeArena.bgImage
 
   const allCatalogCards = useMemo(() => Object.keys(PLANT_CONFIGS) as PlantId[], [])
   const effectiveDeck = useMemo(() => {
-    if (isPracticeMode) return allCatalogCards
-    return activeDeck && activeDeck.length > 0 ? activeDeck : allCatalogCards
-  }, [isPracticeMode, activeDeck, allCatalogCards])
+    if (activeDeck && activeDeck.length > 0) {
+      return activeDeck
+    }
+    return allCatalogCards.slice(0, 6)
+  }, [activeDeck, allCatalogCards])
 
   const hasHandledEndRef = useRef<boolean>(false)
 
   useEffect(() => {
-    if ((gameStatus === 'victory' || gameStatus === 'defeat') && !hasHandledEndRef.current) {
+    if (hasHandledEndRef.current) return
+
+    if (gameStatus === 'victory' || gameStatus === 'defeat') {
       hasHandledEndRef.current = true
+
+      // Handle Colosseum match resolution
+      if (matchMode === 'colosseum' && onColosseumComplete) {
+        const coloRes = onColosseumComplete(gameStatus === 'victory')
+        setColosseumResult(coloRes)
+      }
+
       if (gameStatus === 'victory') {
         if (onBattleComplete) {
           const res = onBattleComplete(true)
@@ -170,7 +194,7 @@ export default function Battlefield({
         }
       }
     }
-  }, [gameStatus, onBattleComplete])
+  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete])
 
   useEffect(() => {
     if (practicePlantId) {
@@ -220,6 +244,16 @@ export default function Battlefield({
     >
       {/* Top Controls Bar */}
       <div className="battlefield-top-controls">
+        {matchMode === 'colosseum' && (
+          <div className="battlefield-colosseum-header-pill">
+            <span className="battlefield-colosseum-icon">🏛️</span>
+            <span>COLISEO</span>
+            <span>•</span>
+            <span style={{ color: '#38bdf8' }}>Sala: {colosseumConfig?.betGems || 0.5} 💎</span>
+            <span>•</span>
+            <span style={{ color: '#fbbf24' }}>Pozo: {((colosseumConfig?.betGems || 0.5) * 2).toFixed(1)} 💎</span>
+          </div>
+        )}
         <button
           type="button"
           className="fullscreen-toggle-btn"
@@ -604,6 +638,44 @@ export default function Battlefield({
                     Abre un sobre en el Menú Principal para liberar espacio.
                   </div>
                 ) : null}
+
+                {/* COLOSSEUM MATCH REWARD CARD */}
+                {matchMode === 'colosseum' && colosseumResult && (
+                  <div className="colosseum-battle-payout-box">
+                    {gameStatus === 'victory' ? (
+                      <>
+                        <div className="colosseum-payout-header">
+                          <span>🏛️ ¡VICTORIA EN EL COLISEO!</span>
+                        </div>
+                        <div className="colosseum-payout-gems">
+                          + {colosseumResult.payoutGems} GEMAS 💎
+                        </div>
+                        <div className="colosseum-payout-streak">
+                          🔥 Racha Actual: <strong>{colosseumResult.newStreak} victorias seguidas</strong>
+                        </div>
+                        {colosseumResult.isNewRecord && (
+                          <div className="colosseum-payout-record">
+                            👑 ¡NUEVO RÉCORD DE TEMPORADA! ({colosseumResult.newMaxStreak} Victorias)
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="colosseum-payout-header colosseum-payout-header--defeat">
+                          <span>💀 DERROTA EN EL COLISEO</span>
+                        </div>
+                        <div className="colosseum-payout-loss">
+                          {colosseumConfig?.usedTicket
+                            ? '🎟️ 1 Ticket de Coliseo consumido'
+                            : `💎 -${colosseumConfig?.betGems || 0.5} Gemas`}
+                        </div>
+                        <div className="colosseum-payout-streak" style={{ color: '#ef4444' }}>
+                          🔥 Racha actual reiniciada a 0 (Récord máximo preservado)
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

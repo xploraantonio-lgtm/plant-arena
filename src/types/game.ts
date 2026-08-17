@@ -138,3 +138,22 @@ export interface PlantCardInstance {
   obtainedAt?: number
 }
 
+export type ColosseumBetAmount = 0.5 | 1.0 | 2.0
+
+export interface ColosseumMatchConfig {
+  betGems: ColosseumBetAmount
+  usedTicket: boolean
+  payoutGems: number
+  rakeGems: number
+}
+
+export interface ColosseumLeaderboardEntry {
+  rank: number
+  username: string
+  avatarPlant: PlantId
+  maxStreak: number
+  prizeGems: number
+  isUser?: boolean
+}
+
+
