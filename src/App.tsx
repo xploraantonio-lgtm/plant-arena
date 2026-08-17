@@ -84,6 +84,7 @@ function App() {
     deductUserTokens,
     addUserTokens,
     donatePlantCopy,
+    receivePlantCopy,
     receivePlantInstance,
     removePlantInstance,
     addPacksToInventory,
@@ -259,6 +260,7 @@ function App() {
             unlockedPlants={unlockedPlants}
             inventoryPacks={inventoryPacks}
             userTokens={userTokens}
+            userGold={userGold}
             plantCopies={plantCopies}
             plantLevels={plantLevels}
             plantStatRolls={plantStatRolls}
@@ -271,6 +273,11 @@ function App() {
             onOpenPack={handleTriggerPackOpenByInstanceId}
             onOpenMultiplePacks={handleOpenMultiplePacks}
             onFusePlant={fuseAndUpgradePlant}
+            onDeductTokens={deductUserTokens}
+            onAddTokens={addUserTokens}
+            onAddGold={addGold}
+            onAddPacks={addPacksToInventory}
+            onReceivePlant={receivePlantCopy}
           />
         )}
         {screen === 'shop' && (
@@ -300,6 +307,7 @@ function App() {
         {screen === 'ranking' && (
           <Ranking
             userElo={userElo}
+            hasVipPass={hasVipPass}
             onBack={() => setScreen('menu')}
             onAddElo={(delta) => setUserElo((prev) => Math.max(0, prev + delta))}
           />
@@ -393,6 +401,7 @@ function App() {
             <Clan
               userElo={userElo}
               userTokens={userTokens}
+              hasVipPass={hasVipPass}
               plantCopies={plantCopies}
               onDeductTokens={deductUserTokens}
               onAddTokens={addUserTokens}

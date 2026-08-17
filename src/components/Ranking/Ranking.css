@@ -628,6 +628,18 @@
   font-weight: 900;
 }
 
+.vip-gold-text {
+  color: #fde047 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fde047 50%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 6px rgba(251, 191, 36, 0.6));
+  font-weight: 900 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 .user-self-badge {
   background: #22c55e;
   color: #1a1000;

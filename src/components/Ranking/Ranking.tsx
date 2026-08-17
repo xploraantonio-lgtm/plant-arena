@@ -20,6 +20,7 @@ interface LeaderboardUser {
 
 interface RankingProps {
   userElo: number
+  hasVipPass?: boolean
   onBack: () => void
   onAddElo?: (delta: number) => void
 }
@@ -35,7 +36,7 @@ interface ReferralLeaderboardUser {
   isCurrentUser?: boolean
 }
 
-export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
+export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo }: RankingProps) {
   const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [copiedLink, setCopiedLink] = useState(false)
@@ -461,7 +462,8 @@ export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
                 {leaderboardData[2] && (
                   <div className={`podium-card podium-card--bronze ${leaderboardData[2].isCurrentUser ? 'podium-card--user' : ''}`}>
                     <span className="podium-rank">🥉 #3</span>
-                    <span className="podium-name">
+                    <span className={`podium-name ${leaderboardData[2].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                      {leaderboardData[2].isCurrentUser && hasVipPass && '👑 '}
                       {leaderboardData[2].username} {leaderboardData[2].isCurrentUser && '(TÚ)'}
                     </span>
                     <span className="podium-clan">{leaderboardData[2].clan}</span>
@@ -493,7 +495,10 @@ export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
                       <tr key={usr.rank} className={usr.isCurrentUser ? 'row--user' : ''}>
                         <td className="col-rank">#{usr.rank}</td>
                         <td className="col-user">
-                          <strong>{usr.username}</strong>
+                          <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>
+                            {usr.isCurrentUser && hasVipPass && '👑 '}
+                            {usr.username}
+                          </strong>
                           {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
                         </td>
                         <td className="col-clan">{usr.clan}</td>
@@ -575,7 +580,10 @@ export default function Ranking({ userElo, onBack, onAddElo }: RankingProps) {
                               alt=""
                               style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
                             />
-                            <strong>{usr.username}</strong>
+                            <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>
+                              {usr.isCurrentUser && hasVipPass && '👑 '}
+                              {usr.username}
+                            </strong>
                             {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
                           </div>
                         </td>

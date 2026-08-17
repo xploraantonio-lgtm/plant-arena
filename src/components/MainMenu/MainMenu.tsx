@@ -107,7 +107,7 @@ export default function MainMenu({
       <div className="topbar">
         <div className="topbar__left">
           <div
-            className="card card--player"
+            className={`card card--player ${hasVipPass ? 'card--player-vip' : ''}`}
             onClick={() => {
               soundManager.playSound('click', 0.5)
               setIsProfileModalOpen(true)
@@ -115,7 +115,7 @@ export default function MainMenu({
             title="Ver y editar perfil, depositar, retirar y referidos"
             style={{ cursor: 'pointer' }}
           >
-            <div className="card__player-avatar-circle">
+            <div className={`card__player-avatar-circle ${hasVipPass ? 'card__player-avatar-circle--vip' : ''}`}>
               <img
                 src={playerProfile.avatar}
                 alt={playerProfile.name}
@@ -124,7 +124,10 @@ export default function MainMenu({
                 }}
               />
             </div>
-            <span className="card__title">{playerProfile.name}</span>
+            <span className={`card__title ${hasVipPass ? 'card__title--vip-gold' : ''}`}>
+              {hasVipPass && <span className="nick-vip-crown">👑 </span>}
+              {playerProfile.name}
+            </span>
           </div>
 
           {/* COMPACT VIP BATTLE PASS WIDGET - ONLY VISIBLE IF HAS VIP PASS */}

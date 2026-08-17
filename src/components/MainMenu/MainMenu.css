@@ -147,6 +147,41 @@
   background: #0f172a;
 }
 
+.card--player-vip {
+  background: linear-gradient(135deg, rgba(45, 25, 10, 0.95) 0%, rgba(20, 15, 30, 0.98) 100%);
+  border: 2px solid #fbbf24;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6), 0 0 15px rgba(251, 191, 36, 0.35);
+}
+
+.card--player-vip:hover {
+  border-color: #fef08a;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7), 0 0 20px rgba(251, 191, 36, 0.6);
+}
+
+.card__player-avatar-circle--vip {
+  background: linear-gradient(135deg, #fef08a 0%, #f59e0b 50%, #d97706 100%);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.7);
+}
+
+.card__title--vip-gold {
+  color: #fde047;
+  background: linear-gradient(180deg, #ffffff 0%, #fde047 50%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 8px rgba(251, 191, 36, 0.6));
+}
+
+.nick-vip-crown {
+  font-size: 13px;
+  -webkit-text-fill-color: initial;
+  filter: drop-shadow(0 2px 6px rgba(251, 191, 36, 0.8));
+  display: inline-block;
+  vertical-align: middle;
+}
+
 /* COMPACT VIP BATTLE PASS WIDGET */
 .card--pass-widget {
   position: relative;

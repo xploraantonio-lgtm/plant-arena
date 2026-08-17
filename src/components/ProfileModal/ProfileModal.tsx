@@ -213,7 +213,10 @@ export default function ProfileModal({
                 </form>
               ) : (
                 <div className="profile-nick-row">
-                  <h3 className="profile-nick-title">{profile.name}</h3>
+                  <h3 className={`profile-nick-title ${hasVipPass ? 'profile-nick-title--vip-gold' : ''}`}>
+                    {hasVipPass && <span className="nick-vip-crown">👑 </span>}
+                    {profile.name}
+                  </h3>
                   <button
                     type="button"
                     className="profile-nick-edit-btn"

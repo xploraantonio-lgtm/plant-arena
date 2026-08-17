@@ -43,6 +43,15 @@ export interface ClanDonationRequest {
   createdAt: number
 }
 
+export interface ClanDepositLog {
+  id: string
+  clanId: string
+  depositorName: string
+  amountUsd: number
+  timestamp: number
+  reason: 'deposit' | 'fund' | 'join' | 'repair'
+}
+
 export interface ClanWarLog {
   id: string
   challengerClanName: string
@@ -78,6 +87,7 @@ const STORAGE_KEYS = {
   DONATION_REQUESTS: 'plant_arena_clan_donations',
   WAR_LOGS: 'plant_arena_clan_war_logs',
   ACCOUNT_CLAIMED_FULL_BONUS: 'plant_arena_account_claimed_clan_full_bonus',
+  VAULT_DEPOSITS: 'plant_arena_clan_vault_deposits',
 }
 
 // 10 Initial Pre-configured Competitive Rival Clanes
@@ -305,6 +315,7 @@ export class ClanManager {
     const clans = this.getClans()
     clans.unshift(newClan)
     this.saveClans(clans)
+    this.recordDeposit(newClan.id, playerName, 5.0, 'fund')
     this.setUserClanId(newClan.id)
     return newClan
   }
@@ -332,6 +343,7 @@ export class ClanManager {
     clan.vaultUsd += 2.0
 
     this.saveClans(clans)
+    this.recordDeposit(clan.id, playerName, 2.0, 'join')
     this.setUserClanId(clan.id)
     return true
   }
@@ -355,9 +367,91 @@ export class ClanManager {
   }
 
   /**
+   * Get all vault deposit logs for a clan
+   */
+  static getVaultDeposits(clanId: string): ClanDepositLog[] {
+    const saved = localStorage.getItem(STORAGE_KEYS.VAULT_DEPOSITS)
+    let all: Record<string, ClanDepositLog[]> = {}
+    if (saved) {
+      try {
+        all = JSON.parse(saved)
+      } catch (e) {}
+    }
+    if (!all[clanId] || all[clanId].length === 0) {
+      const clans = this.getClans()
+      const clan = clans.find((c) => c.id === clanId)
+      const starterMembers = clan?.members || []
+      const initialLogs: ClanDepositLog[] = [
+        {
+          id: `dep-init-1`,
+          clanId,
+          depositorName: clan?.leader || 'Fundador',
+          amountUsd: 5.0,
+          timestamp: Date.now() - 86400000 * 3,
+          reason: 'fund',
+        },
+        ...starterMembers.slice(1, 4).map((m, idx) => ({
+          id: `dep-init-${idx + 2}`,
+          clanId,
+          depositorName: m.name,
+          amountUsd: 2.0,
+          timestamp: Date.now() - 86400000 * (2 - idx * 0.5),
+          reason: 'join' as const,
+        })),
+        ...(starterMembers.length > 2
+          ? [
+              {
+                id: `dep-init-extra`,
+                clanId,
+                depositorName: starterMembers[1]?.name || 'Colíder',
+                amountUsd: 10.0,
+                timestamp: Date.now() - 3600000 * 12,
+                reason: 'deposit' as const,
+              },
+            ]
+          : []),
+      ]
+      all[clanId] = initialLogs
+      localStorage.setItem(STORAGE_KEYS.VAULT_DEPOSITS, JSON.stringify(all))
+    }
+    return all[clanId] || []
+  }
+
+  /**
+   * Record a new deposit to clan vault
+   */
+  static recordDeposit(
+    clanId: string,
+    depositorName: string,
+    amountUsd: number,
+    reason: 'deposit' | 'fund' | 'join' | 'repair' = 'deposit'
+  ) {
+    const saved = localStorage.getItem(STORAGE_KEYS.VAULT_DEPOSITS)
+    let all: Record<string, ClanDepositLog[]> = {}
+    if (saved) {
+      try {
+        all = JSON.parse(saved)
+      } catch (e) {}
+    }
+    if (!all[clanId]) {
+      all[clanId] = this.getVaultDeposits(clanId)
+    }
+    const newLog: ClanDepositLog = {
+      id: `dep-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      clanId,
+      depositorName,
+      amountUsd,
+      timestamp: Date.now(),
+      reason,
+    }
+    all[clanId].unshift(newLog)
+    localStorage.setItem(STORAGE_KEYS.VAULT_DEPOSITS, JSON.stringify(all))
+  }
+
+  /**
    * Deposit free amount to clan vault
    */
-  static depositToVault(clanId: string, amountUsd: number): boolean {
+  static depositToVault(clanId: string, amountUsd: number, depositorName = 'Tú'): boolean {
     const clans = this.getClans()
     const clan = clans.find((c) => c.id === clanId)
     if (!clan) return false
@@ -367,13 +461,14 @@ export class ClanManager {
       clan.status = 'active'
     }
     this.saveClans(clans)
+    this.recordDeposit(clanId, depositorName, amountUsd, 'deposit')
     return true
   }
 
   /**
    * Repair Base ($5.00 USD to resurrect defeated clan)
    */
-  static repairBase(clanId: string): boolean {
+  static repairBase(clanId: string, fixerName = 'Líder'): boolean {
     const clans = this.getClans()
     const clan = clans.find((c) => c.id === clanId)
     if (!clan) return false
@@ -381,6 +476,7 @@ export class ClanManager {
     clan.vaultUsd = Math.max(5.0, Number((clan.vaultUsd + 5.0).toFixed(2)))
     clan.status = 'active'
     this.saveClans(clans)
+    this.recordDeposit(clanId, fixerName, 5.0, 'repair')
     return true
   }
 

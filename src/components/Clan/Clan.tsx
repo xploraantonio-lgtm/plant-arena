@@ -6,6 +6,7 @@ import {
   type ClanMember,
   type ClanDonationRequest,
   type ClanWarLog,
+  type ClanDepositLog,
   type KickValidationResult,
 } from '../../utils/clanManager'
 import type { PlantId } from '../../types/game'
@@ -16,6 +17,7 @@ import './Clan.css'
 interface ClanProps {
   userElo: number
   userTokens: number
+  hasVipPass?: boolean
   plantCopies: Record<PlantId, number>
   onDeductTokens: (amountUsd: number) => boolean
   onAddTokens: (amountUsd: number) => void
@@ -39,6 +41,7 @@ interface ClanModalDialog {
 export default function Clan({
   userElo,
   userTokens,
+  hasVipPass = false,
   plantCopies,
   onDeductTokens,
   onAddTokens,
@@ -51,6 +54,12 @@ export default function Clan({
   const [activeTab, setActiveTab] = useState<'members' | 'wars' | 'donations' | 'rewards'>('members')
   const [noClanTab, setNoClanTab] = useState<'browse' | 'create'>('browse')
   const [selectedBrowseClanId, setSelectedBrowseClanId] = useState<string>(() => allClans[0]?.id || '')
+
+  // Mini Sub-tabs state
+  const [warSubTab, setWarSubTab] = useState<'attack' | 'reports' | 'participants' | 'history'>('attack')
+  const [donationSubTab, setDonationSubTab] = useState<'seeds' | 'deposits'>('seeds')
+  const [rivalSearch, setRivalSearch] = useState('')
+  const [rivalFilter, setRivalFilter] = useState<'all' | 'vulnerable' | 'topVault'>('all')
 
   // Modals
   const [showDepositModal, setShowDepositModal] = useState(false)
@@ -79,8 +88,9 @@ export default function Clan({
   // Selected plant for seed request
   const [selectedRequestPlant, setSelectedRequestPlant] = useState<PlantId>('peashooter')
 
-  // Active donations & logs
+  // Active donations, vault logs & war logs
   const [donationRequests, setDonationRequests] = useState<ClanDonationRequest[]>([])
+  const [vaultDeposits, setVaultDeposits] = useState<ClanDepositLog[]>([])
   const [warLogs, setWarLogs] = useState<ClanWarLog[]>([])
 
   // Floating Clan Chat State
@@ -159,12 +169,56 @@ export default function Clan({
     })
   }
 
+  const renderCustomDialog = () => {
+    if (!activeDialog) return null
+    return (
+      <div className="clan-dialog-backdrop" onClick={() => activeDialog.type !== 'confirm' && setActiveDialog(null)}>
+        <div
+          className={`clan-dialog-card clan-dialog-card--${activeDialog.type}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="clan-dialog-icon-ring">
+            <span className="clan-dialog-icon">{activeDialog.icon}</span>
+          </div>
+          <h3 className="clan-dialog-title">{activeDialog.title}</h3>
+          <p className="clan-dialog-msg">{activeDialog.message}</p>
+
+          <div className="clan-dialog-actions">
+            {activeDialog.type === 'confirm' && (
+              <button
+                type="button"
+                className="clan-dialog-btn clan-dialog-btn--cancel"
+                onClick={() => setActiveDialog(null)}
+              >
+                {activeDialog.cancelText || 'CANCELAR'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="clan-dialog-btn clan-dialog-btn--confirm"
+              onClick={() => {
+                const confirmCb = activeDialog.onConfirm
+                setActiveDialog(null)
+                if (confirmCb) {
+                  confirmCb()
+                }
+              }}
+            >
+              {activeDialog.confirmText || 'ENTENDIDO'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const refreshClanData = () => {
     const updated = ClanManager.getUserClan()
     setUserClan(updated)
     setAllClans(ClanManager.getClans())
     if (updated) {
       setDonationRequests(ClanManager.getDonationRequests(updated.id))
+      setVaultDeposits(ClanManager.getVaultDeposits(updated.id))
       setWarLogs(ClanManager.getWarLogs())
       if (updated.settings) {
         setClanPrivacy(updated.settings.privacy)
@@ -278,13 +332,18 @@ export default function Clan({
       return
     }
     if (userTokens < 2.0) {
-      showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente ($2.00 USD requeridos para ingresar al clan). Recarga saldo en la Tienda.', '⚠️', 'warning')
+      showModalAlert(
+        'SALDO INSUFICIENTE',
+        `Saldo insuficiente ($2.00 USD requeridos para ingresar al clan).\nTu saldo actual es de $${userTokens.toFixed(2)} USD.\nPor favor recarga saldo en la Tienda.`,
+        '⚠️',
+        'warning'
+      )
       return
     }
 
     showModalConfirm(
       'UNIRSE AL CLAN',
-      `¿Deseas pagar $2.00 USD de entrada para unirte a "${clan.name}"?\nEl monto irá directo al Tesoro del Clan.`,
+      `¿Deseas pagar $2.00 USD de entrada para unirte a "${clan.name}"?\n\nEl monto se descontará de tu saldo disponible ($${userTokens.toFixed(2)} USD) y se inyectará directamente al Tesoro del Clan.`,
       '⚡',
       () => {
         const deducted = onDeductTokens(2.0)
@@ -293,7 +352,12 @@ export default function Clan({
         soundManager.playSound('plantation', 0.8)
         const success = ClanManager.joinClan(clan.id, playerName, userElo)
         if (success) {
-          showModalAlert('¡BIENVENIDO AL CLAN!', `Te has unido a "${clan.name}".\nTu aporte de $2.00 USD fue sumado al Tesoro.`, '🎉', 'success')
+          showModalAlert(
+            '¡BIENVENIDO AL CLAN!',
+            `Te has unido exitosamente a "${clan.name}".\nTu aporte de $2.00 USD fue sumado al Tesoro del Clan.`,
+            '🎉',
+            'success'
+          )
           refreshClanData()
         }
       },
@@ -331,7 +395,7 @@ export default function Clan({
     const deducted = onDeductTokens(depositAmount)
     if (!deducted) return
 
-    ClanManager.depositToVault(userClan.id, depositAmount)
+    ClanManager.depositToVault(userClan.id, depositAmount, playerName)
     soundManager.playSound('plantation', 0.9)
     showModalAlert('DEPÓSITO EXITOSO', `¡Has depositado $${depositAmount.toFixed(2)} USD al Tesoro del Clan!`, '💰', 'success')
     setShowDepositModal(false)
@@ -354,7 +418,7 @@ export default function Clan({
         const deducted = onDeductTokens(5.0)
         if (!deducted) return
 
-        ClanManager.repairBase(userClan.id)
+        ClanManager.repairBase(userClan.id, playerName)
         soundManager.playSound('victory', 0.8)
         showModalAlert('¡BASE REPARADA!', '¡Base reparada con éxito! El clan vuelve a estar activo y listo para la guerra.', '🛠️', 'success')
         refreshClanData()
@@ -799,6 +863,9 @@ export default function Clan({
             </button>
           </form>
         )}
+
+        {/* CUSTOM IN-GAME POPUP DIALOG */}
+        {renderCustomDialog()}
       </div>
     )
   }
@@ -850,7 +917,7 @@ export default function Clan({
           </div>
 
           <div className="clan-topbar-btns">
-            {isDefeated ? (
+            {isDefeated && (
               <button
                 type="button"
                 className="clan-repair-btn"
@@ -858,14 +925,6 @@ export default function Clan({
                 title="Pagar $5 USD para reactivar la base"
               >
                 🛠️ REPARAR BASE ($5.00)
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="clan-deposit-btn"
-                onClick={() => setShowDepositModal(true)}
-              >
-                💵 APORTAR AL FONDO
               </button>
             )}
 
@@ -940,7 +999,10 @@ export default function Clan({
                     <tr key={member.id} className={isMe ? 'clan-row--me' : ''}>
                       <td>{idx + 1}</td>
                       <td className="clan-member-name-cell">
-                        <strong>{member.name}</strong>
+                        <strong className={isMe && hasVipPass ? 'vip-gold-text' : ''}>
+                          {isMe && hasVipPass && '👑 '}
+                          {member.name}
+                        </strong>
                         {isMe && <span className="clan-me-tag">TÚ</span>}
                       </td>
                       <td>
@@ -1020,173 +1082,551 @@ export default function Clan({
       )}
 
       {/* TAB 2: WARS & RAIDS */}
-      {activeTab === 'wars' && (
-        <div className="clan-wars-pane">
-          <div className="clan-wars-banner">
-            <div className="clan-wars-banner__info">
-              <h4>🔥 DÍAS DE SAQUEO (JUEVES Y VIERNES — 48H DE GUERRA TOTAL)</h4>
-              <p>
-                Durante la ventana de guerra de Jueves y Viernes, los clanes compiten por el botín ($5.00 USD por victoria).
-                Al ser derrotado, el clan recibe <strong>4 horas de Escudo de Protección</strong> para reagruparse y buscar revancha.
-              </p>
+      {activeTab === 'wars' && (() => {
+        // Filtered rivals for attack sub-tab
+        const rivals = allClans.filter((c) => c.id !== userClan.id)
+        const filteredRivals = rivals.filter((rival) => {
+          const matchesSearch =
+            rival.name.toLowerCase().includes(rivalSearch.toLowerCase()) ||
+            rival.tag.toLowerCase().includes(rivalSearch.toLowerCase())
+          if (!matchesSearch) return false
+
+          if (rivalFilter === 'vulnerable') {
+            const isShielded = rival.shieldUntil && rival.shieldUntil > Date.now()
+            const isDefeatedRival = rival.status === 'defeated' || rival.vaultUsd <= 0
+            return !isShielded && !isDefeatedRival
+          }
+          if (rivalFilter === 'topVault') {
+            return rival.vaultUsd >= 50
+          }
+          return true
+        })
+
+        // Challenges / raids received
+        const receivedWarLogs = warLogs.filter(
+          (log) => log.defenderClanName === userClan.name || log.challengerClanName === userClan.name
+        )
+
+        return (
+          <div className="clan-wars-pane">
+            {/* Header Banner & Summary */}
+            <div className="clan-wars-banner">
+              <div className="clan-wars-banner__info">
+                <h4>🔥 DÍAS DE SAQUEO (JUEVES Y VIERNES — 48H DE GUERRA TOTAL)</h4>
+                <p>
+                  Asalta bases rivales por <strong>$5.00 USD por victoria</strong>. Al sufrir un saqueo, se activa un <strong>Escudo de 4 Horas</strong> para planear la revancha.
+                </p>
+              </div>
+              <div className="clan-wars-record">
+                <span className="clan-record-val">{userClan.wins}V - {userClan.losses}D</span>
+                <span className="clan-record-lbl">RÉCORD DE GUERRA</span>
+              </div>
             </div>
-            <div className="clan-wars-record">
-              <span className="clan-record-val">{userClan.wins}V - {userClan.losses}D</span>
-              <span className="clan-record-lbl">RÉCORD DE GUERRA</span>
+
+            {/* Mini Tabs for Wars */}
+            <div className="clan-mini-tabs">
+              <button
+                type="button"
+                className={`clan-mini-tab-btn ${warSubTab === 'attack' ? 'clan-mini-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setWarSubTab('attack')
+                }}
+              >
+                🎯 ATACAR CLANES ({rivals.length})
+              </button>
+              <button
+                type="button"
+                className={`clan-mini-tab-btn ${warSubTab === 'reports' ? 'clan-mini-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setWarSubTab('reports')
+                }}
+              >
+                🛡️ DESAFÍOS & REPORTES
+              </button>
+              <button
+                type="button"
+                className={`clan-mini-tab-btn ${warSubTab === 'participants' ? 'clan-mini-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setWarSubTab('participants')
+                }}
+              >
+                👥 PARTICIPANTES & ESTATUS
+              </button>
+              <button
+                type="button"
+                className={`clan-mini-tab-btn ${warSubTab === 'history' ? 'clan-mini-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setWarSubTab('history')
+                }}
+              >
+                📜 HISTORIAL ({warLogs.length})
+              </button>
             </div>
-          </div>
 
-          <div className="clan-rivals-grid">
-            {allClans
-              .filter((c) => c.id !== userClan.id)
-              .map((rival) => {
-                const rivalDefeated = rival.status === 'defeated' || rival.vaultUsd <= 0
-                const rivalShielded = rival.shieldUntil && rival.shieldUntil > Date.now()
-                const rivalShieldHours = rivalShielded ? Math.ceil((rival.shieldUntil! - Date.now()) / 3600000) : 0
-
-                return (
-                  <div key={rival.id} className="clan-rival-card">
-                    <div className="clan-rival-card__top">
-                      <span className="clan-rival-badge">{rival.badge}</span>
-                      <div>
-                        <h5>{rival.name}</h5>
-                        <span className="clan-rival-tag">{rival.tag}</span>
-                      </div>
-                    </div>
-
-                    <div className="clan-rival-card__stats">
-                      <span>💰 Tesoro: <strong>${rival.vaultUsd.toFixed(2)} USD</strong></span>
-                      <span>👥 {rival.members.length}/15 Miembros</span>
-                      <span>⚔️ {rival.wins}V - {rival.losses}D</span>
-                    </div>
-
-                    <div className="clan-rival-card__action">
-                      {rivalDefeated ? (
-                        <div className="clan-rival-status clan-rival-status--defeated">
-                          🛑 EN ESTADO DE DERROTA ($0)
-                        </div>
-                      ) : rivalShielded ? (
-                        <div className="clan-rival-status clan-rival-status--shield">
-                          🛡️ ESCUDO ACTIVO ({rivalShieldHours}H)
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="clan-raid-btn"
-                          disabled={isDefeated}
-                          onClick={() => handleExecuteRaid(rival)}
-                        >
-                          ⚔️ ASALTAR
-                        </button>
-                      )}
-                    </div>
+            {/* SUBTAB 1: ATTACK CLANS */}
+            {warSubTab === 'attack' && (
+              <div className="clan-war-subpane">
+                {/* Search & Filter Bar */}
+                <div className="clan-war-filter-bar">
+                  <div className="clan-search-input-wrap">
+                    <span className="clan-search-icon">🔍</span>
+                    <input
+                      type="text"
+                      placeholder="Buscar clan rival por nombre o #tag..."
+                      value={rivalSearch}
+                      onChange={(e) => setRivalSearch(e.target.value)}
+                      className="clan-search-input"
+                    />
+                    {rivalSearch && (
+                      <button type="button" className="clan-search-clear" onClick={() => setRivalSearch('')}>
+                        ✕
+                      </button>
+                    )}
                   </div>
-                )
-              })}
-          </div>
 
-          {/* War Logs */}
-          <div className="clan-war-logs-section">
-            <h5 className="clan-logs-title">📜 HISTORIAL RECIENTE DE ASALTOS</h5>
-            <div className="clan-logs-list">
-              {warLogs.map((log) => (
-                <div key={log.id} className="clan-log-item">
-                  <span className="clan-log-badge">⚔️</span>
-                  <div className="clan-log-text">
-                    <strong>{log.winnerClanName}</strong> derrotó a <strong>{log.defenderClanName}</strong> y saqueó{' '}
-                    <span className="clan-log-amount">+${log.stolenUsd.toFixed(2)} USD</span>
+                  <div className="clan-war-filter-pills">
+                    <button
+                      type="button"
+                      className={`clan-filter-pill ${rivalFilter === 'all' ? 'clan-filter-pill--active' : ''}`}
+                      onClick={() => setRivalFilter('all')}
+                    >
+                      Todos ({rivals.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`clan-filter-pill ${rivalFilter === 'vulnerable' ? 'clan-filter-pill--active' : ''}`}
+                      onClick={() => setRivalFilter('vulnerable')}
+                    >
+                      🔓 Sin Escudo
+                    </button>
+                    <button
+                      type="button"
+                      className={`clan-filter-pill ${rivalFilter === 'topVault' ? 'clan-filter-pill--active' : ''}`}
+                      onClick={() => setRivalFilter('topVault')}
+                    >
+                      💰 Top Tesoros (+$50)
+                    </button>
                   </div>
-                  <span className="clan-log-time">Hace {Math.round((Date.now() - log.timestamp) / 3600000)}h</span>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* TAB 3: SEED DONATIONS */}
+                {/* Rivals Grid */}
+                <div className="clan-rivals-grid">
+                  {filteredRivals.length === 0 ? (
+                    <div className="clan-empty-donations">
+                      <span>No se encontraron clanes rivales con los filtros actuales.</span>
+                    </div>
+                  ) : (
+                    filteredRivals.map((rival) => {
+                      const rivalDefeated = rival.status === 'defeated' || rival.vaultUsd <= 0
+                      const rivalShielded = rival.shieldUntil && rival.shieldUntil > Date.now()
+                      const rivalShieldHours = rivalShielded ? Math.ceil((rival.shieldUntil! - Date.now()) / 3600000) : 0
+
+                      return (
+                        <div key={rival.id} className="clan-rival-card">
+                          <div className="clan-rival-card__top">
+                            <span className="clan-rival-badge">{rival.badge}</span>
+                            <div>
+                              <h5>{rival.name}</h5>
+                              <span className="clan-rival-tag">{rival.tag}</span>
+                            </div>
+                          </div>
+
+                          <div className="clan-rival-card__stats">
+                            <span>💰 Tesoro: <strong>${rival.vaultUsd.toFixed(2)} USD</strong></span>
+                            <span>👥 {rival.members.length}/15 Miembros</span>
+                            <span>⚔️ {rival.wins}V - {rival.losses}D</span>
+                          </div>
+
+                          <div className="clan-rival-card__action">
+                            {rivalDefeated ? (
+                              <div className="clan-rival-status clan-rival-status--defeated">
+                                🛑 EN ESTADO DE DERROTA ($0)
+                              </div>
+                            ) : rivalShielded ? (
+                              <div className="clan-rival-status clan-rival-status--shield">
+                                🛡️ ESCUDO ACTIVO ({rivalShieldHours}H)
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="clan-raid-btn"
+                                disabled={isDefeated}
+                                onClick={() => handleExecuteRaid(rival)}
+                              >
+                                ⚔️ ASALTAR BOTÍN ($5.00)
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 2: REPORTS & CHALLENGES */}
+            {warSubTab === 'reports' && (
+              <div className="clan-war-subpane">
+                <div className="clan-reports-header">
+                  <h5>🛡️ REGISTRO DE DESAFÍOS Y ATAQUES RECIBIDOS</h5>
+                  <p>Historial de clanes que han atacado a nuestro clan y reportes defensivos.</p>
+                </div>
+                <div className="clan-reports-list">
+                  {receivedWarLogs.length === 0 ? (
+                    <div className="clan-empty-donations">
+                      <span>🛡️ Ningún clan rival nos ha desafiado recientemente. ¡Base defendida!</span>
+                    </div>
+                  ) : (
+                    receivedWarLogs.map((log) => {
+                      const wasOurDefeat = log.winnerClanName !== userClan.name
+                      const enemyName = log.challengerClanName === userClan.name ? log.defenderClanName : log.challengerClanName
+                      const enemyClan = allClans.find((c) => c.name === enemyName)
+
+                      return (
+                        <div key={log.id} className={`clan-report-card ${wasOurDefeat ? 'clan-report-card--lost' : 'clan-report-card--won'}`}>
+                          <div className="clan-report-icon">
+                            {wasOurDefeat ? '💥' : '🛡️'}
+                          </div>
+                          <div className="clan-report-info">
+                            <div className="clan-report-title">
+                              <strong>{log.challengerClanName}</strong> {wasOurDefeat ? 'asaltó nuestra base y saqueó' : 'desafió a nuestra base y fue repelido'}
+                              <span className={wasOurDefeat ? 'clan-report-stolen-neg' : 'clan-report-stolen-pos'}>
+                                {wasOurDefeat ? ` -$${log.stolenUsd.toFixed(2)} USD` : ' +$0.00 USD (Defendido)'}
+                              </span>
+                            </div>
+                            <div className="clan-report-meta">
+                              <span>Hace {Math.max(1, Math.round((Date.now() - log.timestamp) / 3600000))} horas</span>
+                              {wasOurDefeat && <span className="clan-shield-tag-pill">🛡️ Escudo de 4h activado</span>}
+                            </div>
+                          </div>
+                          {wasOurDefeat && enemyClan && (
+                            <button
+                              type="button"
+                              className="clan-revenge-btn"
+                              disabled={isDefeated || Boolean(enemyClan.shieldUntil && enemyClan.shieldUntil > Date.now())}
+                              onClick={() => handleExecuteRaid(enemyClan)}
+                            >
+                              ⚔️ REVANCHA
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 3: PARTICIPANTS & PERFORMANCE */}
+            {warSubTab === 'participants' && (
+              <div className="clan-war-subpane">
+                <div className="clan-participants-stats-grid">
+                  <div className="clan-pstat-card">
+                    <span className="clan-pstat-val">{userClan.wins}</span>
+                    <span className="clan-pstat-lbl">Victorias en Asaltos</span>
+                  </div>
+                  <div className="clan-pstat-card">
+                    <span className="clan-pstat-val">{userClan.losses}</span>
+                    <span className="clan-pstat-lbl">Derrotas / Saqueos</span>
+                  </div>
+                  <div className="clan-pstat-card">
+                    <span className="clan-pstat-val">
+                      {Math.round((userClan.wins / Math.max(1, userClan.wins + userClan.losses)) * 100)}%
+                    </span>
+                    <span className="clan-pstat-lbl">Tasa de Victoria</span>
+                  </div>
+                  <div className="clan-pstat-card">
+                    <span className="clan-pstat-val" style={{ color: '#4ade80' }}>
+                      +${(userClan.wins * 5).toFixed(0)} USD
+                    </span>
+                    <span className="clan-pstat-lbl">Botín Acumulado Ganado</span>
+                  </div>
+                </div>
+
+                <div className="clan-participants-table-wrap">
+                  <table className="clan-members-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Jugador</th>
+                        <th>Rol</th>
+                        <th>Copas ELO</th>
+                        <th>Rondas Guerra</th>
+                        <th>Donaciones</th>
+                        <th>Estatus Competitivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userClan.members.map((m, idx) => {
+                        const isProtected = (m.roundsParticipated || 0) >= 2
+                        return (
+                          <tr key={m.id}>
+                            <td>#{idx + 1}</td>
+                            <td><strong>{m.name}</strong></td>
+                            <td><span className={`clan-role-badge clan-role--${m.role.toLowerCase()}`}>{m.role}</span></td>
+                            <td>🏆 {m.elo}</td>
+                            <td>⚔️ {m.roundsParticipated || 3} rondas</td>
+                            <td>🌱 {m.donatedCount}</td>
+                            <td>
+                              <span className={isProtected ? 'clan-status-badge--protected' : 'clan-status-badge--active'}>
+                                {isProtected ? '🛡️ Guerrero Protegido' : '⚔️ Activo'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 4: WAR HISTORY */}
+            {warSubTab === 'history' && (
+              <div className="clan-war-subpane">
+                <div className="clan-war-logs-section">
+                  <h5 className="clan-logs-title">📜 HISTORIAL GLOBAL DE ASALTOS & GUERRAS</h5>
+                  <div className="clan-logs-list">
+                    {warLogs.map((log) => {
+                      const isOurClanWinner = log.winnerClanName === userClan.name
+                      return (
+                        <div key={log.id} className="clan-log-item">
+                          <span className="clan-log-badge">{isOurClanWinner ? '🏆' : '⚔️'}</span>
+                          <div className="clan-log-text">
+                            <strong>{log.winnerClanName}</strong> derrotó a <strong>{log.defenderClanName}</strong> y saqueó{' '}
+                            <span className="clan-log-amount">+${log.stolenUsd.toFixed(2)} USD</span>
+                          </div>
+                          <span className="clan-log-time">Hace {Math.max(1, Math.round((Date.now() - log.timestamp) / 3600000))}h</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* TAB 3: SEED DONATIONS & VAULT DEPOSITS */}
       {activeTab === 'donations' && (() => {
         const hasActiveRequestToday = donationRequests.some(
           (r) => r.requesterName === playerName && Date.now() - r.createdAt < 86400000
         )
+        const totalDeposited = vaultDeposits.reduce((acc, d) => acc + d.amountUsd, 0)
+
+        // Aggregate top depositors
+        const depositorTotals: Record<string, number> = {}
+        vaultDeposits.forEach((d) => {
+          depositorTotals[d.depositorName] = (depositorTotals[d.depositorName] || 0) + d.amountUsd
+        })
+        const topDepositors = Object.entries(depositorTotals)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
 
         return (
           <div className="clan-donations-pane">
-            <div className="clan-donations-header">
-              <div>
-                <h4>🔄 PETICIÓN & DONACIÓN DE SEMILLAS</h4>
-                <p>Pide 1 copia diaria de plantas comunes, raras o épicas. Cada petición puede recibir hasta 3 copias de tus compañeros.</p>
-              </div>
+            {/* Header & Mini Tabs */}
+            <div className="clan-mini-tabs">
               <button
                 type="button"
-                className={`clan-request-seed-btn ${hasActiveRequestToday ? 'clan-request-seed-btn--disabled' : ''}`}
-                disabled={isDefeated || hasActiveRequestToday}
+                className={`clan-mini-tab-btn ${donationSubTab === 'seeds' ? 'clan-mini-tab-btn--active' : ''}`}
                 onClick={() => {
-                  if (hasActiveRequestToday) {
-                    showModalAlert('SOLICITUD EN CURSO', 'Ya tienes una solicitud de semillas activa hoy. Podrás pedir otra en 24 horas.', '⏳', 'warning')
-                    return
-                  }
-                  setShowRequestSeedModal(true)
+                  soundManager.playSound('click', 0.4)
+                  setDonationSubTab('seeds')
                 }}
               >
-                {hasActiveRequestToday ? '⏳ SOLICITUD EN CURSO (1/DÍA)' : '🌱 PEDIR SEMILLA (1 COPIA)'}
+                🌱 PETICIONES DE SEMILLAS ({donationRequests.length})
+              </button>
+              <button
+                type="button"
+                className={`clan-mini-tab-btn ${donationSubTab === 'deposits' ? 'clan-mini-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setDonationSubTab('deposits')
+                }}
+              >
+                💰 APORTES AL TESORO ({vaultDeposits.length})
               </button>
             </div>
 
-            <div className="clan-donations-list">
-              {donationRequests.length === 0 ? (
-                <div className="clan-empty-donations">
-                  <span>🌱 No hay solicitudes de semillas activas en este momento. ¡Sé el primero en pedir!</span>
+            {/* SUBTAB 1: SEEDS */}
+            {donationSubTab === 'seeds' && (
+              <div className="clan-donation-subpane">
+                <div className="clan-donations-header">
+                  <div>
+                    <h4>🔄 PETICIÓN & DONACIÓN DE SEMILLAS</h4>
+                    <p>Pide 1 copia diaria de plantas comunes, raras o épicas. Cada petición puede recibir hasta 3 copias de tus compañeros.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`clan-request-seed-btn ${hasActiveRequestToday ? 'clan-request-seed-btn--disabled' : ''}`}
+                    disabled={isDefeated || hasActiveRequestToday}
+                    onClick={() => {
+                      if (hasActiveRequestToday) {
+                        showModalAlert('SOLICITUD EN CURSO', 'Ya tienes una solicitud de semillas activa hoy. Podrás pedir otra en 24 horas.', '⏳', 'warning')
+                        return
+                      }
+                      setShowRequestSeedModal(true)
+                    }}
+                  >
+                    {hasActiveRequestToday ? '⏳ SOLICITUD EN CURSO (1/DÍA)' : '🌱 PEDIR SEMILLA (1 COPIA)'}
+                  </button>
                 </div>
-              ) : (
-                donationRequests.map((req) => {
-                  const donorCount = req.donors.length
-                  const isMax = donorCount >= 3
-                  const hasDonated = req.donors.some((d) => d.donorName === playerName)
-                  const isMe = req.requesterName === playerName
-                  const plantConf = PLANT_CONFIGS[req.plantId]
-                  const plantIconSrc = plantConf?.packetActive || plantConf?.icon || req.plantIcon
 
-                  return (
-                    <div key={req.id} className="clan-donation-card">
-                      <img src={plantIconSrc} alt={req.plantName} className="clan-donation-img" />
-                      <div className="clan-donation-info">
-                        <div className="clan-donation-top">
-                          <span className="clan-donation-requester">👤 {req.requesterName}</span>
-                          <span className="clan-donation-plant">{req.plantName}</span>
-                        </div>
-                        <div className="clan-donation-bar-wrap">
-                          <div
-                            className="clan-donation-bar"
-                            style={{ width: `${(donorCount / 3) * 100}%` }}
-                          />
-                        </div>
-                        <span className="clan-donation-count">{donorCount}/3 Donaciones Recibidas</span>
-                      </div>
-
-                      <div className="clan-donation-actions">
-                        {isMax ? (
-                          <span className="clan-donation-status clan-donation-status--full">✅ COMPLETADO</span>
-                        ) : isMe ? (
-                          <span className="clan-donation-status">TU SOLICITUD</span>
-                        ) : hasDonated ? (
-                          <span className="clan-donation-status clan-donation-status--done">YA DONASTE</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="clan-donate-btn"
-                            disabled={isDefeated || (plantCopies[req.plantId] || 0) <= 0}
-                            onClick={() => handleDonate(req)}
-                          >
-                            🎁 DONAR 1 COPIA (Tienes {plantCopies[req.plantId] || 0})
-                          </button>
-                        )}
-                      </div>
+                <div className="clan-donations-list">
+                  {donationRequests.length === 0 ? (
+                    <div className="clan-empty-donations">
+                      <span>🌱 No hay solicitudes de semillas activas en este momento. ¡Sé el primero en pedir!</span>
                     </div>
-                  )
-                })
-              )}
-            </div>
+                  ) : (
+                    donationRequests.map((req) => {
+                      const donorCount = req.donors.length
+                      const isMax = donorCount >= 3
+                      const hasDonated = req.donors.some((d) => d.donorName === playerName)
+                      const isMe = req.requesterName === playerName
+                      const plantConf = PLANT_CONFIGS[req.plantId]
+                      const plantIconSrc = plantConf?.packetActive || plantConf?.icon || req.plantIcon
+
+                      return (
+                        <div key={req.id} className="clan-donation-card">
+                          <img src={plantIconSrc} alt={req.plantName} className="clan-donation-img" />
+                          <div className="clan-donation-info">
+                            <div className="clan-donation-top">
+                              <span className="clan-donation-requester">👤 {req.requesterName}</span>
+                              <span className="clan-donation-plant">{req.plantName}</span>
+                            </div>
+                            <div className="clan-donation-bar-wrap">
+                              <div
+                                className="clan-donation-bar"
+                                style={{ width: `${(donorCount / 3) * 100}%` }}
+                              />
+                            </div>
+                            <span className="clan-donation-count">{donorCount}/3 Donaciones Recibidas</span>
+                          </div>
+
+                          <div className="clan-donation-actions">
+                            {isMax ? (
+                              <span className="clan-donation-status clan-donation-status--full">✅ COMPLETADO</span>
+                            ) : isMe ? (
+                              <span className="clan-donation-status">TU SOLICITUD</span>
+                            ) : hasDonated ? (
+                              <span className="clan-donation-status clan-donation-status--done">YA DONASTE</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="clan-donate-btn"
+                                disabled={isDefeated || (plantCopies[req.plantId] || 0) <= 0}
+                                onClick={() => handleDonate(req)}
+                              >
+                                🎁 DONAR 1 COPIA (Tienes {plantCopies[req.plantId] || 0})
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 2: DEPOSITS & VAULT CONTRIBUTIONS */}
+            {donationSubTab === 'deposits' && (
+              <div className="clan-donation-subpane">
+                {/* Vault summary banner */}
+                <div className="clan-deposits-summary-row">
+                  <div className="clan-deposit-stat-card">
+                    <span className="clan-deposit-stat-icon">💰</span>
+                    <div>
+                      <span className="clan-deposit-stat-val">${userClan.vaultUsd.toFixed(2)} USD</span>
+                      <span className="clan-deposit-stat-lbl">Tesoro Actual del Clan</span>
+                    </div>
+                  </div>
+                  <div className="clan-deposit-stat-card">
+                    <span className="clan-deposit-stat-icon">📈</span>
+                    <div>
+                      <span className="clan-deposit-stat-val" style={{ color: '#4ade80' }}>
+                        +${totalDeposited.toFixed(2)} USD
+                      </span>
+                      <span className="clan-deposit-stat-lbl">Total Aportado al Tesoro</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="clan-open-deposit-cta"
+                    onClick={() => {
+                      soundManager.playSound('click', 0.4)
+                      setShowDepositModal(true)
+                    }}
+                  >
+                    ➕ DEPOSITAR AL TESORO
+                  </button>
+                </div>
+
+                {/* Dual pane: Top Contributors & Realtime Feed */}
+                <div className="clan-deposits-dual-layout">
+                  {/* Left: Top Donators Podium */}
+                  <div className="clan-top-depositors-box">
+                    <h5>🏆 MAYORES APORTANTES DEL TESORO</h5>
+                    <div className="clan-top-depositors-list">
+                      {topDepositors.map(([name, amount], index) => {
+                        const rankMedal = index === 0 ? '👑' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`
+                        const isMe = name === playerName
+                        return (
+                          <div key={name} className={`clan-depositor-rank-row ${isMe ? 'clan-depositor-rank-row--me' : ''}`}>
+                            <span className="clan-dep-medal">{rankMedal}</span>
+                            <span className="clan-dep-name">
+                              {name} {isMe && <small>(Tú)</small>}
+                            </span>
+                            <span className="clan-dep-amount">${amount.toFixed(2)} USD</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right: Chronological Deposit Logs Feed */}
+                  <div className="clan-deposits-feed-box">
+                    <h5>📜 REGISTRO DE DEPÓSITOS & ACTIVIDAD</h5>
+                    <div className="clan-deposits-feed-list">
+                      {vaultDeposits.map((dep) => {
+                        const reasonLabels = {
+                          deposit: '💰 Aporte Voluntario',
+                          fund: '👑 Fundación de Clan',
+                          join: '⚡ Cuota de Ingreso',
+                          repair: '🛠️ Reparación de Base',
+                        }
+                        const isMe = dep.depositorName === playerName
+                        const timeAgoHours = Math.max(0, Math.round((Date.now() - dep.timestamp) / 3600000))
+                        const timeText = timeAgoHours < 1 ? 'Hace unos instantes' : timeAgoHours < 24 ? `Hace ${timeAgoHours}h` : `Hace ${Math.round(timeAgoHours / 24)}d`
+
+                        return (
+                          <div key={dep.id} className="clan-deposit-feed-item">
+                            <div className="clan-deposit-feed-icon">💵</div>
+                            <div className="clan-deposit-feed-info">
+                              <div className="clan-deposit-feed-top">
+                                <strong>{dep.depositorName} {isMe && '(Tú)'}</strong>
+                                <span className="clan-deposit-feed-tag">{reasonLabels[dep.reason] || 'Aporte'}</span>
+                              </div>
+                              <span className="clan-deposit-feed-time">{timeText}</span>
+                            </div>
+                            <div className="clan-deposit-feed-amount">
+                              +${dep.amountUsd.toFixed(2)} USD
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )
       })()}
@@ -1686,45 +2126,7 @@ export default function Clan({
       )}
 
       {/* CUSTOM IN-GAME POPUP DIALOG */}
-      {activeDialog && (
-        <div className="clan-dialog-backdrop" onClick={() => activeDialog.type !== 'confirm' && setActiveDialog(null)}>
-          <div
-            className={`clan-dialog-card clan-dialog-card--${activeDialog.type}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="clan-dialog-icon-ring">
-              <span className="clan-dialog-icon">{activeDialog.icon}</span>
-            </div>
-            <h3 className="clan-dialog-title">{activeDialog.title}</h3>
-            <p className="clan-dialog-msg">{activeDialog.message}</p>
-
-            <div className="clan-dialog-actions">
-              {activeDialog.type === 'confirm' && (
-                <button
-                  type="button"
-                  className="clan-dialog-btn clan-dialog-btn--cancel"
-                  onClick={() => setActiveDialog(null)}
-                >
-                  {activeDialog.cancelText || 'CANCELAR'}
-                </button>
-              )}
-              <button
-                type="button"
-                className="clan-dialog-btn clan-dialog-btn--confirm"
-                onClick={() => {
-                  const confirmCb = activeDialog.onConfirm
-                  setActiveDialog(null)
-                  if (confirmCb) {
-                    confirmCb()
-                  }
-                }}
-              >
-                {activeDialog.confirmText || 'ENTENDIDO'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderCustomDialog()}
 
       {/* FLOATING MINIMIZABLE CLAN CHAT */}
       {userClan && (
@@ -1732,14 +2134,14 @@ export default function Clan({
           {!isChatOpen ? (
             <button
               type="button"
-              className="clan-chat-toggle-pill"
+              className="clan-chat-toggle-btn"
               onClick={() => setIsChatOpen(true)}
               title="Abrir Chat del Clan"
             >
               <span className="clan-chat-icon">💬</span>
-              <span className="clan-chat-label">CHAT DEL CLAN</span>
-              <span className="clan-chat-unread">{chatMessages.length}</span>
-              <span className="clan-chat-arrow">▲</span>
+              {chatMessages.length > 0 && (
+                <span className="clan-chat-badge">{chatMessages.length}</span>
+              )}
             </button>
           ) : (
             <div className="clan-chat-window">
@@ -1767,7 +2169,10 @@ export default function Clan({
                   return (
                     <div key={msg.id} className={`clan-chat-msg ${isMe ? 'clan-chat-msg--me' : ''}`}>
                       <div className="clan-chat-msg-top">
-                        <span className="clan-chat-sender">{msg.sender}</span>
+                        <span className={`clan-chat-sender ${isMe && hasVipPass ? 'vip-gold-text' : ''}`}>
+                          {isMe && hasVipPass && '👑 '}
+                          {msg.sender}
+                        </span>
                         <span className={`clan-chat-role-tag clan-chat-role-tag--${msg.role.toLowerCase()}`}>
                           {msg.role}
                         </span>

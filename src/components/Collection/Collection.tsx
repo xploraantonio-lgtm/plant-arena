@@ -134,10 +134,7 @@ export default function Collection({
           ⬅️ MENÚ
         </button>
         <div style={{ textAlign: 'center' }}>
-          <h1 className="collection-title">📖 ALMANAQUE DE PLANTAS (GUÍA DE REFERENCIA)</h1>
-          <span style={{ fontSize: '11px', color: '#fde68a' }}>
-            ℹ️ Catálogo y campo de prueba sandbox. Tu verdadero inventario está en 🪴 Mi Jardín.
-          </span>
+          <h1 className="collection-title">📖 Colección de Plantas</h1>
         </div>
         <button
           className="collection-mute-btn"
@@ -300,9 +297,9 @@ export default function Collection({
                   onPracticePlant(selectedPlant.id)
                 }
               }}
-              title="Probar disparos y explosiones en el Campo de Batalla (Sandbox)"
+              title="Probar disparos y explosiones en el Campo de Batalla"
             >
-              🎯 PROBAR EN CAMPO DE BATALLA (SANDBOX)
+              🎯 Probar
             </button>
           </div>
         </div>

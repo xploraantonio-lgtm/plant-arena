@@ -204,21 +204,8 @@ export default function Marketplace({
     })
   }
 
-  // BUY A LISTING
+  // BUY A LISTING (Disponible para todos los usuarios)
   const handleBuyListing = (listing: MarketListing) => {
-    if (!hasVipPass) {
-      showModalConfirm(
-        'PASE VIP REQUERIDO',
-        'El Mercado de Comercio es exclusivo para miembros con Pase VIP ($10.00 USD).\n¿Deseas activar tu Pase VIP ahora para comprar y vender cartas libremente?',
-        '👑',
-        () => {
-          onBuyVipPass()
-        },
-        'ACTIVAR VIP ($10.00)',
-        'CANCELAR'
-      )
-      return
-    }
     if (listing.sellerName === playerName) {
       showModalAlert('OFERTA PROPIA', 'No puedes comprar tu propia oferta puesta en el mercado.', '⚠️', 'warning')
       return
@@ -382,26 +369,14 @@ export default function Marketplace({
 
   return (
     <div className="market-container">
-      {/* Top Header */}
-      <div className="market-header">
-        <button className="market-back-btn" type="button" onClick={onBackToMenu}>
-          ⬅ VOLVER AL MENÚ
-        </button>
-        <h2 className="market-header__title">🤝 MERCADO DE COMERCIO DE PLANTAS & BUILDS</h2>
-        <div className="market-header__tokens">
-          <span>💵 Saldo: ${userTokens.toFixed(2)} USD</span>
-        </div>
-      </div>
-
       {/* VIP PASS LOCK BANNER IF NOT VIP */}
       {!hasVipPass ? (
         <div className="market-vip-lock-banner">
           <div className="market-vip-lock-icon">👑</div>
           <div className="market-vip-lock-info">
-            <h3>MERCADO EXCLUSIVO PARA USUARIOS VIP ($10 USD)</h3>
+            <h3>VENTA EXCLUSIVA PARA USUARIOS VIP ($10 USD)</h3>
             <p>
-              Solo los jugadores con el <strong>Pase de Temporada VIP</strong> activo tienen autorización para vender cartas mejoradas,
-              comerciar builds únicas y comprar plantas en el mercado libre.
+              Todos los jugadores pueden comprar cartas libremente en el mercado. Para <strong>vender tus propias plantas</strong> y monetizar builds, activa el Pase VIP.
             </p>
           </div>
           <button className="market-vip-buy-btn" type="button" onClick={handleDirectBuyVip}>
@@ -410,8 +385,8 @@ export default function Marketplace({
         </div>
       ) : (
         <div className="market-vip-active-banner">
-          <span className="market-vip-badge">👑 PASE VIP ACTIVO — COMERCIO AUTORIZADO</span>
-          <span>Vende copias excedentes y compra builds de otros jugadores con dinero real ($USD).</span>
+          <span className="market-vip-badge">👑 PASE VIP ACTIVO — VENTA Y COMPRA HABILITADAS</span>
+          <span>Puedes comprar y vender cartas libremente con saldo real ($USD).</span>
         </div>
       )}
 
@@ -419,17 +394,47 @@ export default function Marketplace({
       <div className="market-nav-tabs">
         <button
           type="button"
+          className="market-tab-back-btn"
+          onClick={() => {
+            soundManager.playSound('click', 0.5)
+            onBackToMenu()
+          }}
+        >
+          ⬅ MENÚ
+        </button>
+        <button
+          type="button"
           className={`market-tab-btn ${activeTab === 'browse' ? 'market-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('browse')}
+          onClick={() => {
+            soundManager.playSound('click', 0.5)
+            setActiveTab('browse')
+          }}
         >
           🛒 EXPLORAR MERCADO ({listings.length} OFERTAS)
         </button>
         <button
           type="button"
-          className={`market-tab-btn ${activeTab === 'sell' ? 'market-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('sell')}
+          className={`market-tab-btn ${activeTab === 'sell' ? 'market-tab-btn--active' : ''} ${!hasVipPass ? 'market-tab-btn--locked' : ''}`}
+          onClick={() => {
+            soundManager.playSound('click', 0.5)
+            if (!hasVipPass) {
+              showModalConfirm(
+                'PASE VIP REQUERIDO PARA VENDER',
+                'Para poner en venta cartas de tu Jardín y ganar saldo real ($USD) necesitas el Pase de Batalla VIP ($10.00 USD).\n\n¿Deseas activar tu Pase VIP ahora?',
+                '👑',
+                () => {
+                  handleDirectBuyVip()
+                },
+                'ACTIVAR VIP ($10.00 USD)',
+                'CANCELAR'
+              )
+              return
+            }
+            setActiveTab('sell')
+          }}
+          title={!hasVipPass ? 'Requiere Pase VIP para vender plantas' : 'Vender cartas de tu Jardín'}
         >
-          🏷️ VENDER
+          {!hasVipPass ? '🔒 VENDER (PASE VIP)' : '🏷️ VENDER'}
         </button>
       </div>
 
@@ -507,22 +512,8 @@ export default function Marketplace({
       )}
 
       {/* TAB 2: SELL MY PLANT */}
-      {activeTab === 'sell' && (
+      {activeTab === 'sell' && hasVipPass && (
         <div className="market-sell-pane">
-          <div className="market-sell-info-banner">
-            <strong>📋 REGLAS Y PRECIOS MÍNIMOS DE VENTA:</strong>
-            <div className="market-min-prices-row">
-              <span className="market-min-tag" style={{ color: '#4ade80', borderColor: '#4ade80' }}>🌱 Común: Mín $5</span>
-              <span className="market-min-tag" style={{ color: '#38bdf8', borderColor: '#38bdf8' }}>🌿 Poco Común: Mín $8</span>
-              <span className="market-min-tag" style={{ color: '#a855f7', borderColor: '#a855f7' }}>🔮 Rara: Mín $10</span>
-              <span className="market-min-tag" style={{ color: '#ec4899', borderColor: '#ec4899' }}>✨ Épica: Mín $15</span>
-              <span className="market-min-tag" style={{ color: '#fbbf24', borderColor: '#fbbf24' }}>👑 Legendaria: Mín $20</span>
-            </div>
-            <small style={{ color: '#cbd5e1', marginTop: '2px', display: 'block' }}>
-              ⚠️ <strong>Importante:</strong> Mientras una carta esté en oferta en el mercado, se retira de tu Jardín y no podrás usarla en batalla. Puedes retirarla en cualquier momento para recuperarla.
-            </small>
-          </div>
-
           <div className="market-sell-form-grid">
             {/* Column 1: Select Plant from Garden */}
             <div className="market-sell-column">
@@ -705,11 +696,24 @@ export default function Marketplace({
 
                   <button
                     type="submit"
-                    disabled={sellPriceUsd < selectedInstance.minPrice}
-                    className="market-publish-btn"
+                    disabled={!hasVipPass || sellPriceUsd < selectedInstance.minPrice}
+                    className={`market-publish-btn ${!hasVipPass ? 'market-publish-btn--locked' : ''}`}
+                    title={!hasVipPass ? 'Activa el Pase VIP para vender tus plantas en el mercado' : undefined}
                   >
-                    🏷️ PUBLICAR EN EL MERCADO POR ${sellPriceUsd.toFixed(2)} USD
+                    {!hasVipPass
+                      ? '🔒 REQUIERE PASE VIP PARA VENDER'
+                      : `🏷️ PUBLICAR EN EL MERCADO POR $${sellPriceUsd.toFixed(2)} USD`}
                   </button>
+
+                  {!hasVipPass && (
+                    <button
+                      type="button"
+                      className="market-vip-unlock-cta"
+                      onClick={handleDirectBuyVip}
+                    >
+                      👑 Activar Pase VIP ($10.00 USD) para habilitar ventas
+                    </button>
+                  )}
                 </form>
               )}
             </div>

@@ -345,8 +345,7 @@ export default function Shop({
           ⬅️ MENÚ
         </button>
         <div className="shop-header__center">
-          <h1 className="shop-title">🛒 TIENDA GAMING & MERCADO DE CARTAS</h1>
-          <span className="shop-subtitle">Moneda Paridad 1:1 USD ($1 Token = $1.00 USD / USDT)</span>
+          <h1 className="shop-title">🛒 TIENDA</h1>
         </div>
         <div className="shop-header__right">
           <div
@@ -442,14 +441,6 @@ export default function Shop({
               <span className="shop-section-tagline">
                 🎒 Sobres distribuidos con las 15 plantas del catálogo. ¡Haz click en un sobre para ver sus probabilidades!
               </span>
-              <button
-                type="button"
-                className="shop-back-btn"
-                style={{ background: 'linear-gradient(180deg, #2d6a4f 0%, #1b4332 100%)', borderColor: '#52b788', padding: '6px 14px', fontSize: '11px' }}
-                onClick={onOpenJardin}
-              >
-                🌱 IR A MI JARDÍN
-              </button>
             </div>
 
             <div className="shop-packs-grid">
@@ -578,28 +569,47 @@ export default function Shop({
           <div className="shop-tab-pane">
             <div className="shop-pass-purchase-hero">
               <div className="shop-pass-hero-card">
-                <span className="shop-pass-hero-crown">👑</span>
-                <h2 className="shop-pass-hero-title">PASE DE BATALLA VIP — TEMPORADA 1</h2>
+                <div className="shop-pass-hero-badge">⭐ TEMPORADA 1 EXCLUSIVA ⭐</div>
+
+                <div className="shop-pass-hero-header">
+                  <span className="shop-pass-hero-crown">👑</span>
+                  <h2 className="shop-pass-hero-title">PASE DE BATALLA VIP</h2>
+                </div>
+
                 <p className="shop-pass-hero-sub">
-                  Desbloquea el camino completo de <strong>20 niveles de recompensas premium</strong>, multiplicadores de fichas, cartas épicas y legendarias exclusivas, y acceso al Mercado de Comercio.
+                  Desbloquea <strong>20 niveles de recompensas premium</strong>, nick dorado exclusivo, plantas y acceso total al Mercado.
                 </p>
 
                 <div className="shop-pass-perks-grid">
                   <div className="shop-pass-perk">
                     <span className="shop-pass-perk-icon">🎁</span>
-                    <span className="shop-pass-perk-txt">20 Niveles de Recompensas</span>
+                    <div className="shop-pass-perk-info">
+                      <strong className="shop-pass-perk-title">20 Niveles VIP</strong>
+                      <span className="shop-pass-perk-txt">Premios exclusivos</span>
+                    </div>
                   </div>
+
                   <div className="shop-pass-perk">
                     <span className="shop-pass-perk-icon">🏷️</span>
-                    <span className="shop-pass-perk-txt">Acceso al Mercado de Comercio</span>
+                    <div className="shop-pass-perk-info">
+                      <strong className="shop-pass-perk-title">Mercado Libre</strong>
+                      <span className="shop-pass-perk-txt">Compra y venta</span>
+                    </div>
                   </div>
+
                   <div className="shop-pass-perk">
                     <span className="shop-pass-perk-icon">🌟</span>
-                    <span className="shop-pass-perk-txt">Sobres Legendarios Garantizados</span>
+                    <div className="shop-pass-perk-info">
+                      <strong className="shop-pass-perk-title">Sobres PVP</strong>
+                    </div>
                   </div>
+
                   <div className="shop-pass-perk">
-                    <span className="shop-pass-perk-icon">🛡️</span>
-                    <span className="shop-pass-perk-txt">Emblema Dorado en Perfil</span>
+                    <span className="shop-pass-perk-icon">👑</span>
+                    <div className="shop-pass-perk-info">
+                      <strong className="shop-pass-perk-title">Nick Dorado VIP</strong>
+                      <span className="shop-pass-perk-txt">Insignia y brillo real</span>
+                    </div>
                   </div>
                 </div>
 
@@ -651,17 +661,10 @@ export default function Shop({
                         <span className="shop-epic-section__icon">🪙</span>
                         <div>
                           <h2 className="shop-epic-section__title">BÓVEDA DE MONEDAS DE ORO</h2>
-                          <span className="shop-epic-section__subtitle">
-                            Moneda de progresión para fusión y mejoras de nivel. Paridad 1 USDT = $1.00 USD.
-                          </span>
                         </div>
                       </div>
 
                       <div className="shop-epic-section__header-actions">
-                        <div className="shop-epic-balance-badge" title="Saldo disponible">
-                          <img src={monedaImg} alt="Oro" className="shop-epic-coin-ico" />
-                          <span>Tu Saldo: <strong>{userGold.toLocaleString()} ORO</strong></span>
-                        </div>
                         <button
                           type="button"
                           className="shop-slide-nav-btn"

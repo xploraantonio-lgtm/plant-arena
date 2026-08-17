@@ -124,12 +124,33 @@
 /* NAV TABS */
 .market-nav-tabs {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 10px;
   background: rgba(15, 23, 42, 0.8);
   border: 1.5px solid #334155;
   border-radius: 12px;
   padding: 4px;
+}
+
+.market-tab-back-btn {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1.5px solid #475569;
+  color: #f1f5f9;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.market-tab-back-btn:hover {
+  background: #334155;
+  border-color: #fbbf24;
+  color: #fbbf24;
+  transform: scale(1.03);
 }
 
 .market-tab-btn {
@@ -153,6 +174,18 @@
   background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
   color: #ffffff;
   box-shadow: 0 2px 10px rgba(37, 99, 235, 0.5);
+}
+
+.market-tab-btn--locked {
+  color: #cbd5e1;
+  border: 1px dashed rgba(234, 179, 8, 0.5);
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.market-tab-btn--locked:hover {
+  background: rgba(234, 179, 8, 0.18);
+  color: #fde047;
+  border-color: #fbbf24;
 }
 
 /* BROWSE LISTINGS GRID */
@@ -336,6 +369,16 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-right: 4px;
+}
+
+.market-sell-pane::-webkit-scrollbar {
+  width: 6px;
+}
+
+.market-sell-pane::-webkit-scrollbar-thumb {
+  background: #f59e0b;
+  border-radius: 4px;
 }
 
 .market-sell-info-banner {
@@ -358,7 +401,6 @@
   gap: 14px;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
 }
 
 .market-min-prices-row {
@@ -404,13 +446,29 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 280px;
+  max-height: 380px;
+  height: 100%;
+  min-height: 200px;
   overflow-y: auto;
   overflow-x: hidden;
   background: rgba(15, 23, 42, 0.85);
   border: 1.5px solid #334155;
   border-radius: 12px;
   padding: 6px;
+}
+
+.market-garden-cards-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.market-garden-cards-list::-webkit-scrollbar-thumb {
+  background: #f59e0b;
+  border-radius: 4px;
+}
+
+.market-garden-cards-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
 }
 
 .market-garden-card-item {
@@ -676,4 +734,32 @@
   color: #94a3b8;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.market-publish-btn--locked {
+  background: linear-gradient(180deg, #475569 0%, #334155 100%) !important;
+  border: 1.5px dashed #94a3b8 !important;
+  color: #cbd5e1 !important;
+  cursor: not-allowed;
+  letter-spacing: 0.5px;
+}
+
+.market-vip-unlock-cta {
+  width: 100%;
+  margin-top: 8px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: 1.5px solid #fef08a;
+  border-radius: 10px;
+  color: #111827;
+  font-size: 10.5px;
+  font-weight: 900;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.market-vip-unlock-cta:hover {
+  transform: scale(1.02);
+  filter: brightness(1.1);
 }

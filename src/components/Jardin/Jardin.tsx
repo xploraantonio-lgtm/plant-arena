@@ -8,6 +8,7 @@ import {
 import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
 import type { InventoryPack, PackId } from '../../utils/packDropManager'
+import LotteryModal from '../Lottery/LotteryModal'
 import './Jardin.css'
 
 const sunIcon = '/game-assets/greenfoot/sun1.png'
@@ -38,6 +39,7 @@ interface JardinProps {
   unlockedPlants: PlantId[]
   inventoryPacks: InventoryPack[]
   userTokens: number
+  userGold?: number
   plantCopies?: Partial<Record<PlantId, number>>
   plantLevels?: Partial<Record<PlantId, number>>
   plantStatRolls?: Partial<Record<PlantId, PlantStatKey[]>>
@@ -56,6 +58,11 @@ interface JardinProps {
     rolledStatLabel?: string
     error?: string
   }
+  onDeductTokens?: (amountUsd: number) => boolean
+  onAddTokens?: (amountUsd: number) => void
+  onAddGold?: (amount: number) => void
+  onAddPacks?: (packId: 'basic' | 'epic' | 'legendary', qty: number) => void
+  onReceivePlant?: (plantId: PlantId, qty: number) => void
 }
 
 export default function Jardin({
@@ -63,6 +70,7 @@ export default function Jardin({
   unlockedPlants,
   inventoryPacks,
   userTokens,
+  userGold = 0,
   plantCopies = {},
   plantLevels = {},
   plantStatRolls = {},
@@ -75,10 +83,16 @@ export default function Jardin({
   onOpenPack,
   onOpenMultiplePacks,
   onFusePlant,
+  onDeductTokens,
+  onAddTokens,
+  onAddGold,
+  onAddPacks,
+  onReceivePlant,
 }: JardinProps) {
   const [deck, setDeck] = useState<PlantId[]>(activeDeck)
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
+  const [showLotteryModal, setShowLotteryModal] = useState(false)
   const [upgradeModal, setUpgradeModal] = useState<{
     plantId: PlantId
     newLevel: number
@@ -298,7 +312,16 @@ export default function Jardin({
           </span>
         </div>
         <div className="jardin-header__right">
-          <div className="jardin-token-badge">🪙 {userTokens.toLocaleString()} FICHAS</div>
+          <button
+            type="button"
+            className="jardin-btn-lottery"
+            onClick={() => {
+              soundManager.playSound('click', 0.4)
+              setShowLotteryModal(true)
+            }}
+          >
+            🎰 LOTERÍA
+          </button>
           <button type="button" className="jardin-btn-shop" onClick={onOpenShop}>
             🛒 TIENDA
           </button>
@@ -316,27 +339,17 @@ export default function Jardin({
       </div>
 
       <div className="jardin-scroll-area">
-        <div className="jardin-packs-section">
-          <div className="jardin-section-header">
-            <h3 className="jardin-section-title">
-              📦 SOBRES PENDIENTES POR ABRIR ({inventoryPacks.length})
-            </h3>
-            <button type="button" className="jardin-buy-more-btn" onClick={onOpenShop}>
-              + Conseguir más sobres en la Tienda
-            </button>
-          </div>
-
-          {groupedPacks.length === 0 ? (
-            <div className="jardin-empty-packs">
-              <span className="jardin-empty-icon">🌱</span>
-              <div>
-                <p className="jardin-empty-txt">No tienes sobres pendientes de apertura.</p>
-                <span className="jardin-empty-sub">
-                  ¡Gana combates en la Arena o visita la Tienda para conseguir nuevos sobres con cartas!
-                </span>
-              </div>
+        {inventoryPacks.length > 0 && (
+          <div className="jardin-packs-section">
+            <div className="jardin-section-header">
+              <h3 className="jardin-section-title">
+                📦 SOBRES PENDIENTES POR ABRIR ({inventoryPacks.length})
+              </h3>
+              <button type="button" className="jardin-buy-more-btn" onClick={onOpenShop}>
+                + Conseguir más sobres en la Tienda
+              </button>
             </div>
-          ) : (
+
             <div className="jardin-packs-grid">
               {groupedPacks.map((group) => {
                 const maxCount = group.count
@@ -432,8 +445,8 @@ export default function Jardin({
                 )
               })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* ACTIVE BATTLE DECK (3 TO 6 SLOTS) */}
         <div className="jardin-deck-container">
@@ -690,6 +703,21 @@ export default function Jardin({
             </button>
           </div>
         </div>
+      )}
+
+      {/* LOTTERY POPUP MODAL */}
+      {showLotteryModal && (
+        <LotteryModal
+          isOpen={showLotteryModal}
+          onClose={() => setShowLotteryModal(false)}
+          userTokens={userTokens}
+          userGold={userGold}
+          onDeductTokens={onDeductTokens || (() => true)}
+          onAddTokens={onAddTokens || (() => {})}
+          onAddGold={onAddGold}
+          onAddPacks={onAddPacks}
+          onReceivePlant={onReceivePlant}
+        />
       )}
     </div>
   )

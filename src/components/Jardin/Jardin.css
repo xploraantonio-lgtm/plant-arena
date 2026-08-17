@@ -71,14 +71,26 @@
   gap: 10px;
 }
 
-.jardin-token-badge {
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid #fbbf24;
-  color: #fbbf24;
+.jardin-btn-lottery {
+  background: linear-gradient(180deg, #eab308 0%, #ca8a04 100%);
+  border: 2px solid #fef08a;
+  color: #1a1000;
   font-weight: 900;
   font-size: 12px;
-  padding: 6px 12px;
-  border-radius: 14px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(234, 179, 8, 0.6);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.jardin-btn-lottery:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 22px rgba(234, 179, 8, 0.9);
+  filter: brightness(1.1);
 }
 
 .jardin-btn-shop {
