@@ -1,13 +1,13 @@
 -- =============================================================================
 -- PLANT ARENA: MASTER DATABASE SCHEMA & SECURITY POLICIES (SUPABASE / POSTGRESQL)
--- Versión Exhaustiva para Todos los Módulos del Juego
+-- Script 100% Idempotente y Ejecutable en el Editor SQL de Supabase
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- -----------------------------------------------------------------------------
--- 1. PERFILES & ECONOMÍA (Balances, ELO, Rachas, Pase VIP, Referidos)
+-- 1. PERFILES & ECONOMÍA (0 Inicial, 1000 ELO, Pase VIP, Referidos)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -15,9 +15,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     avatar_id TEXT DEFAULT 'peashooter',
     country TEXT DEFAULT 'US',
     elo_rating INTEGER DEFAULT 1000 CHECK (elo_rating >= 0),
-    gems_balance NUMERIC(12, 2) DEFAULT 10.00 CHECK (gems_balance >= 0),
-    gold_balance BIGINT DEFAULT 50000 CHECK (gold_balance >= 0),
-    colosseum_tickets INTEGER DEFAULT 2 CHECK (colosseum_tickets >= 0),
+    gems_balance NUMERIC(12, 2) DEFAULT 0.00 CHECK (gems_balance >= 0),
+    gold_balance BIGINT DEFAULT 0 CHECK (gold_balance >= 0),
+    colosseum_tickets INTEGER DEFAULT 0 CHECK (colosseum_tickets >= 0),
     colosseum_current_streak INTEGER DEFAULT 0,
     colosseum_max_streak INTEGER DEFAULT 0,
     has_vip_pass BOOLEAN DEFAULT FALSE,
@@ -30,8 +30,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Profiles are readable by everyone" ON public.profiles;
 CREATE POLICY "Profiles are readable by everyone" ON public.profiles FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own avatar and name" ON public.profiles;
 CREATE POLICY "Users can update own avatar and name" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- -----------------------------------------------------------------------------
@@ -50,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
 );
 
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own transactions" ON public.transactions;
 CREATE POLICY "Users can view own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id);
 
 -- -----------------------------------------------------------------------------
@@ -72,15 +78,20 @@ CREATE TABLE IF NOT EXISTS public.plant_instances (
 );
 
 ALTER TABLE public.plant_instances ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own or listed plant cards" ON public.plant_instances;
 CREATE POLICY "Users can view own or listed plant cards" ON public.plant_instances 
 FOR SELECT USING (auth.uid() = owner_id OR is_listed_for_sale = true);
+
+DROP POLICY IF EXISTS "Users can insert own plant cards" ON public.plant_instances;
 CREATE POLICY "Users can insert own plant cards" ON public.plant_instances 
 FOR INSERT WITH CHECK (auth.uid() = owner_id);
+
+DROP POLICY IF EXISTS "Users can update own plant deck assignments" ON public.plant_instances;
 CREATE POLICY "Users can update own plant deck assignments" ON public.plant_instances 
 FOR UPDATE USING (auth.uid() = owner_id);
 
 -- -----------------------------------------------------------------------------
--- 4. SLOTS DE COFRES PVP (4 Slots Clash Royale con Desbloqueo por Tiempo)
+-- 4. SLOTS DE COFRES PVP (4 Slots con Desbloqueo por Tiempo)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.pack_slots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -94,6 +105,7 @@ CREATE TABLE IF NOT EXISTS public.pack_slots (
 );
 
 ALTER TABLE public.pack_slots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own pack slots" ON public.pack_slots;
 CREATE POLICY "Users can manage own pack slots" ON public.pack_slots FOR ALL USING (auth.uid() = user_id);
 
 -- -----------------------------------------------------------------------------
@@ -145,12 +157,19 @@ CREATE TABLE IF NOT EXISTS public.clan_war_attacks (
 );
 
 ALTER TABLE public.clans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Clans are public" ON public.clans;
 CREATE POLICY "Clans are public" ON public.clans FOR SELECT USING (true);
+
 ALTER TABLE public.clan_members ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Clan members are public" ON public.clan_members;
 CREATE POLICY "Clan members are public" ON public.clan_members FOR SELECT USING (true);
+
 ALTER TABLE public.clan_donations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Clan donations are public" ON public.clan_donations;
 CREATE POLICY "Clan donations are public" ON public.clan_donations FOR SELECT USING (true);
+
 ALTER TABLE public.clan_war_attacks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Clan war attacks are public" ON public.clan_war_attacks;
 CREATE POLICY "Clan war attacks are public" ON public.clan_war_attacks FOR SELECT USING (true);
 
 -- -----------------------------------------------------------------------------
@@ -168,6 +187,7 @@ CREATE TABLE IF NOT EXISTS public.marketplace_listings (
 );
 
 ALTER TABLE public.marketplace_listings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Marketplace is viewable by all" ON public.marketplace_listings;
 CREATE POLICY "Marketplace is viewable by all" ON public.marketplace_listings FOR SELECT USING (true);
 
 -- -----------------------------------------------------------------------------
@@ -192,12 +212,15 @@ CREATE TABLE IF NOT EXISTS public.user_secret_code (
 );
 
 ALTER TABLE public.user_lottery ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users manage own lottery" ON public.user_lottery;
 CREATE POLICY "Users manage own lottery" ON public.user_lottery FOR ALL USING (auth.uid() = user_id);
+
 ALTER TABLE public.user_secret_code ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users manage own secret code" ON public.user_secret_code;
 CREATE POLICY "Users manage own secret code" ON public.user_secret_code FOR ALL USING (auth.uid() = user_id);
 
 -- -----------------------------------------------------------------------------
--- 8. TORNEOS OFICIALES (1 Hora, Códigos Dev / Gemas, 3 Vidas y Ranking)
+-- 8. TORNEOS OFICIALES
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.tournaments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -225,12 +248,15 @@ CREATE TABLE IF NOT EXISTS public.tournament_participants (
 );
 
 ALTER TABLE public.tournaments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tournaments are public" ON public.tournaments;
 CREATE POLICY "Tournaments are public" ON public.tournaments FOR SELECT USING (true);
+
 ALTER TABLE public.tournament_participants ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tournament participants are public" ON public.tournament_participants;
 CREATE POLICY "Tournament participants are public" ON public.tournament_participants FOR SELECT USING (true);
 
 -- -----------------------------------------------------------------------------
--- 9. TEMPORADAS Y PREMIOS DE TEMPORADA (Configurables por Admin)
+-- 9. TEMPORADAS Y PREMIOS DE TEMPORADA
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.seasons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -250,10 +276,11 @@ CREATE TABLE IF NOT EXISTS public.seasons (
 );
 
 ALTER TABLE public.seasons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Seasons are viewable by all" ON public.seasons;
 CREATE POLICY "Seasons are viewable by all" ON public.seasons FOR SELECT USING (true);
 
 -- -----------------------------------------------------------------------------
--- 9. MATCHMAKING Y SALAS PVP (Ranked, Amistoso, Coliseo y Torneos)
+-- 10. MATCHMAKING Y HISTORIAL DE SALAS PVP
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.matchmaking_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -283,8 +310,11 @@ CREATE TABLE IF NOT EXISTS public.game_rooms (
 );
 
 ALTER TABLE public.matchmaking_queue ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users manage own matchmaking queue" ON public.matchmaking_queue;
 CREATE POLICY "Users manage own matchmaking queue" ON public.matchmaking_queue FOR ALL USING (auth.uid() = user_id);
+
 ALTER TABLE public.game_rooms ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Players can view own game rooms" ON public.game_rooms;
 CREATE POLICY "Players can view own game rooms" ON public.game_rooms 
 FOR SELECT USING (auth.uid() = player1_id OR auth.uid() = player2_id);
 
@@ -411,12 +441,43 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- =============================================================================
--- PUBLICACIONES EN TIEMPO REAL (WEBSOCKETS)
--- =============================================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE public.matchmaking_queue;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.game_rooms;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.tournament_participants;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.marketplace_listings;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.clan_donations;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.clan_war_attacks;
+-- -----------------------------------------------------------------------------
+-- TRIGGER AUTOMÁTICO: CREACIÓN DE PERFIL Y 4 PLANTAS INICIALES AL REGISTRARSE
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, username, avatar_id, elo_rating, gems_balance, gold_balance, colosseum_tickets)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'username', new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1), 'Guerrero'),
+    'peashooter',
+    1000,
+    0.0,
+    0,
+    0
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  -- 4 cartas iniciales oficiales
+  INSERT INTO public.plant_instances (owner_id, plant_id, rarity, star_level, is_in_deck, deck_slot)
+  VALUES
+    (new.id, 'sunflower', 'common', 1, true, 0),
+    (new.id, 'peashooter', 'common', 1, true, 1),
+    (new.id, 'wallnut', 'common', 1, true, 2),
+    (new.id, 'chomper', 'common', 1, true, 3)
+  ON CONFLICT DO NOTHING;
+
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- Insertar Temporada 1 Oficial inicial
+INSERT INTO public.seasons (season_number, name, starts_at, ends_at, status)
+VALUES (1, 'Temporada 1: Cosecha de Gloria', NOW(), NOW() + INTERVAL '30 days', 'active')
+ON CONFLICT DO NOTHING;
