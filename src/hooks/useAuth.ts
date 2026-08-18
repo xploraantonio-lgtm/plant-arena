@@ -10,6 +10,7 @@ export interface AuthState {
   profile: ProfileRow | null
   loading: boolean
   isAdmin: boolean
+  needsPasswordSetup: boolean
 }
 
 const STORAGE_KEYS = {
@@ -59,6 +60,7 @@ export function useAuth() {
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION) === 'true'
   })
+  const [needsPasswordSetup, setNeedsPasswordSetup] = useState<boolean>(false)
 
   // Listen for Supabase Auth changes
   useEffect(() => {
@@ -71,6 +73,7 @@ export function useAuth() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user)
+        checkIfPasswordNeeded(session.user)
         loadUserProfile(session.user.id)
       } else {
         setLoading(false)
@@ -82,9 +85,11 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user)
+        checkIfPasswordNeeded(session.user)
         loadUserProfile(session.user.id)
       } else {
         setUser(null)
+        setNeedsPasswordSetup(false)
         setLoading(false)
       }
     })
@@ -93,6 +98,16 @@ export function useAuth() {
       subscription.unsubscribe()
     }
   }, [])
+
+  const checkIfPasswordNeeded = (u: any) => {
+    const isGoogle = u?.app_metadata?.provider === 'google' || u?.identities?.some((i: any) => i.provider === 'google')
+    if (isGoogle) {
+      const hasSet = localStorage.getItem('plant_arena_pwd_set_' + u.id) === 'true'
+      if (!hasSet) {
+        setNeedsPasswordSetup(true)
+      }
+    }
+  }
 
   const initializeNewUserProfile = async (userId: string, username: string, email?: string) => {
     const existingProf = await SupabaseService.getProfile(userId)
@@ -159,6 +174,25 @@ export function useAuth() {
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e?.message || 'Error al conectar con Google' }
+    }
+  }
+
+  // Set/Register Password for Google Account
+  const setUserPassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured() || !user) {
+      return { success: false, error: 'No hay sesión de usuario activa' }
+    }
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      setLoading(false)
+      if (error) return { success: false, error: error.message }
+      localStorage.setItem('plant_arena_pwd_set_' + user.id, 'true')
+      setNeedsPasswordSetup(false)
+      return { success: true }
+    } catch (e: any) {
+      setLoading(false)
+      return { success: false, error: e?.message || 'Error al registrar contraseña' }
     }
   }
 
@@ -234,91 +268,6 @@ export function useAuth() {
     return { success: true }
   }
 
-  // Step 1: Sign up with Email + Password + Username (triggers OTP verification)
-  const signUpWithEmail = async (email: string, pass: string, username: string): Promise<{ success: boolean; error?: string }> => {
-    if (!isSupabaseConfigured()) {
-      return { success: false, error: 'Supabase no está configurado en el archivo .env' }
-    }
-    setLoading(true)
-    const { error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password: pass,
-      options: {
-        data: { username: username.trim() },
-      },
-    })
-    setLoading(false)
-    if (error) {
-      return { success: false, error: error.message }
-    }
-
-    // Also send an OTP code for instant 6-digit confirmation in app
-    try {
-      await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: { shouldCreateUser: false },
-      })
-    } catch {
-      // safe fallback
-    }
-
-    return { success: true }
-  }
-
-  // Step 2: Validate 6-digit verification code and finalize registration
-  const verifySignupOtp = async (email: string, token: string, pass?: string, username?: string): Promise<{ success: boolean; error?: string }> => {
-    if (!isSupabaseConfigured()) {
-      return { success: false, error: 'Supabase no está configurado en .env' }
-    }
-    setLoading(true)
-    try {
-      // First attempt verifyOtp with type 'signup'
-      let verifyRes = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: token.trim(),
-        type: 'signup',
-      })
-
-      // If signup type failed, attempt type 'email'
-      if (verifyRes.error) {
-        verifyRes = await supabase.auth.verifyOtp({
-          email: email.trim().toLowerCase(),
-          token: token.trim(),
-          type: 'email',
-        })
-      }
-
-      if (verifyRes.error) {
-        setLoading(false)
-        return { success: false, error: 'Código inválido o expirado. Verifica los 6 dígitos.' }
-      }
-
-      if (verifyRes.data.user) {
-        const u = verifyRes.data.user
-        setUser(u)
-
-        // If password was provided, ensure user password is set
-        if (pass) {
-          try {
-            await supabase.auth.updateUser({ password: pass })
-          } catch {
-            // non-fatal
-          }
-        }
-
-        // Initialize user profile with 4 cards, 0 balance, 1000 ELO
-        await initializeNewUserProfile(u.id, username || email.split('@')[0], email)
-        await loadUserProfile(u.id)
-      }
-
-      setLoading(false)
-      return { success: true }
-    } catch (e: any) {
-      setLoading(false)
-      return { success: false, error: e?.message || 'Error al validar código' }
-    }
-  }
-
   // Admin Master Pass Login
   const loginAsAdmin = (masterPass: string): boolean => {
     if (masterPass === '**4253$$' || masterPass === 'PLANT_ADMIN_2026') {
@@ -347,10 +296,10 @@ export function useAuth() {
     profile,
     loading,
     isAdmin,
+    needsPasswordSetup,
     signInWithGoogle,
+    setUserPassword,
     signInWithEmail,
-    signUpWithEmail,
-    verifySignupOtp,
     loginAsAdmin,
     logoutAdmin,
     signOut,

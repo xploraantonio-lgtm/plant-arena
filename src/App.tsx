@@ -102,14 +102,21 @@ function App() {
     user,
     loading,
     isAdmin,
+    needsPasswordSetup,
     signInWithGoogle,
+    setUserPassword,
     signInWithEmail,
-    signUpWithEmail,
-    verifySignupOtp,
   } = useAuth()
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false)
+
+  // Automatically show set password modal if user logged in with Google for first time
+  useEffect(() => {
+    if (needsPasswordSetup) {
+      setIsAuthModalOpen(true)
+    }
+  }, [needsPasswordSetup])
 
   // Verify session when accessing /play route
   useEffect(() => {
@@ -290,10 +297,11 @@ function App() {
         <AuthModal
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
+          userEmail={user?.email}
+          needsPasswordSetup={needsPasswordSetup}
           onSignInGoogle={signInWithGoogle}
           onSignInEmail={signInWithEmail}
-          onSignUpEmail={signUpWithEmail}
-          onVerifySignupOtp={verifySignupOtp}
+          onSetUserPassword={setUserPassword}
           onSuccessRedirect={handleGoToGame}
         />
         <AdminPanel
@@ -595,10 +603,11 @@ function App() {
         <AuthModal
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
+          userEmail={user?.email}
+          needsPasswordSetup={needsPasswordSetup}
           onSignInGoogle={signInWithGoogle}
           onSignInEmail={signInWithEmail}
-          onSignUpEmail={signUpWithEmail}
-          onVerifySignupOtp={verifySignupOtp}
+          onSetUserPassword={setUserPassword}
         />
 
         {/* Central Admin Dashboard Panel (Supabase Database Controller) */}
