@@ -27,6 +27,13 @@ import type { ColosseumBetAmount } from '../../types/game'
 import './MainMenu.css'
 
 interface MainMenuProps {
+  userProfile?: {
+    username?: string
+    avatar_id?: string
+    elo_rating?: number
+    gems_balance?: number
+    gold_balance?: number
+  } | null
   userElo?: number
   userTokens?: number
   userGold?: number
@@ -57,13 +64,14 @@ interface MainMenuProps {
 }
 
 export default function MainMenu({
+  userProfile,
   userElo = 1000,
-  userTokens = 10,
-  userGold = 50000,
+  userTokens = 0,
+  userGold = 0,
   hasVipPass = false,
   claimedVipLevels = [],
   freePackSlots = [],
-  colosseumTickets = 2,
+  colosseumTickets = 0,
   colosseumCurrentStreak = 0,
   colosseumMaxStreak = 0,
   onPlay,
@@ -144,7 +152,7 @@ export default function MainMenu({
             <div className={`card__player-avatar-circle ${hasVipPass ? 'card__player-avatar-circle--vip' : ''}`}>
               <img
                 src={playerProfile.avatar}
-                alt={playerProfile.name}
+                alt={userProfile?.username || playerProfile.name}
                 onError={(e) => {
                   e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
                 }}
@@ -152,7 +160,7 @@ export default function MainMenu({
             </div>
             <span className={`card__title ${hasVipPass ? 'card__title--vip-gold' : ''}`}>
               {hasVipPass && <span className="nick-vip-crown">👑 </span>}
-              {playerProfile.name}
+              {userProfile?.username || playerProfile.name}
             </span>
           </div>
 

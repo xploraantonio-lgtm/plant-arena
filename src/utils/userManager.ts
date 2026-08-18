@@ -48,16 +48,40 @@ export class UserManager {
       } catch (e) {}
     }
     const defaultProfile: PlayerProfile = {
-      name: 'DRAGONMASTER',
+      name: 'Guerrero',
       avatar: '/game-assets/greenfoot/peashooterpacket1.png',
       isCustomAvatar: false,
-      referralCode: 'PA-DRAGON-77',
-      totalReferred: 3,
-      totalReferralBonusUsd: 3.0,
-      joinedDate: 'Agosto 2026',
+      referralCode: 'PA-ARENA',
+      totalReferred: 0,
+      totalReferralBonusUsd: 0.0,
+      joinedDate: '2026',
     }
     this.saveProfile(defaultProfile)
     return defaultProfile
+  }
+
+  static syncWithSupabase(profile: { username?: string | null; avatar_id?: string | null; referral_code?: string | null } | null): void {
+    if (!profile || !profile.username) return
+    const current = this.getProfile()
+    let changed = false
+    if (profile.username && current.name !== profile.username) {
+      current.name = profile.username
+      changed = true
+    }
+    if (profile.referral_code && current.referralCode !== profile.referral_code) {
+      current.referralCode = profile.referral_code
+      changed = true
+    }
+    if (profile.avatar_id) {
+      const found = PRESET_AVATARS.find((a) => a.id === profile.avatar_id)
+      if (found && current.avatar !== found.icon) {
+        current.avatar = found.icon
+        changed = true
+      }
+    }
+    if (changed) {
+      this.saveProfile(current)
+    }
   }
 
   static saveProfile(profile: PlayerProfile): void {
@@ -68,7 +92,7 @@ export class UserManager {
 
   static updateName(name: string): PlayerProfile {
     const profile = this.getProfile()
-    profile.name = name.trim().slice(0, 16) || 'DRAGONMASTER'
+    profile.name = name.trim().slice(0, 16) || 'Guerrero'
     this.saveProfile(profile)
     return profile
   }
@@ -88,42 +112,7 @@ export class UserManager {
         return JSON.parse(saved)
       } catch (e) {}
     }
-    const defaultTx: UserTransaction[] = [
-      {
-        id: 'tx-1',
-        type: 'reward',
-        amountUsd: 5.0,
-        description: 'Premio por Asalto de Guerra de Clan',
-        timestamp: Date.now() - 3600000 * 5,
-        status: 'completed',
-      },
-      {
-        id: 'tx-2',
-        type: 'deposit',
-        amountUsd: 10.0,
-        description: 'Recarga de Saldo con Tarjeta',
-        timestamp: Date.now() - 3600000 * 24,
-        status: 'completed',
-      },
-      {
-        id: 'tx-3',
-        type: 'purchase',
-        amountUsd: 10.0,
-        description: 'Activación de Pase VIP de Temporada',
-        timestamp: Date.now() - 3600000 * 23,
-        status: 'completed',
-      },
-      {
-        id: 'tx-4',
-        type: 'reward',
-        amountUsd: 3.0,
-        description: 'Bono por 3 Amigos Referidos',
-        timestamp: Date.now() - 3600000 * 48,
-        status: 'completed',
-      },
-    ]
-    this.saveTransactions(defaultTx)
-    return defaultTx
+    return []
   }
 
   static saveTransactions(txs: UserTransaction[]): void {

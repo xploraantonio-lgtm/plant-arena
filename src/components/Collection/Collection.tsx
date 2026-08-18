@@ -95,13 +95,21 @@ export const CATALOG: CollectionPlant[] = (Object.keys(PLANT_CONFIGS) as PlantId
   }
 })
 
+interface CollectionProps {
+  onBack: () => void
+  onPracticePlant?: (plantId: string) => void
+  unlockedPlants?: PlantId[]
+  plantCopies?: Record<PlantId, number>
+  plantLevels?: Record<PlantId, number>
+}
+
 export default function Collection({
   onBack,
   onPracticePlant,
-}: {
-  onBack: () => void
-  onPracticePlant?: (plantId: string) => void
-}) {
+  unlockedPlants,
+  plantCopies,
+  plantLevels,
+}: CollectionProps) {
   const [selectedPlant, setSelectedPlant] = useState<CollectionPlant>(CATALOG[0])
   const [activeTab, setActiveTab] = useState<'all' | 'producer' | 'ranged' | 'defensive' | 'special' | 'melee'>('all')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
@@ -187,12 +195,13 @@ export default function Collection({
           {filteredCatalog.map((plant) => {
             const isSelected = selectedPlant.id === plant.id
             const rarity = PLANT_RARITIES[plant.id] || { label: 'COMÚN', short: 'C', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.2)' }
+            const isUnlocked = (plantCopies ? (plantCopies[plant.id as PlantId] ?? 0) > 0 : false) || (unlockedPlants ? unlockedPlants.includes(plant.id as PlantId) : false) || (plant.id === 'sunflower' || plant.id === 'peashooter' || plant.id === 'wallnut' || plant.id === 'chomper')
 
             return (
               <button
                 key={plant.id}
                 type="button"
-                className={`collection-card ${isSelected ? 'collection-card--selected' : ''}`}
+                className={`collection-card ${isSelected ? 'collection-card--selected' : ''} ${!isUnlocked ? 'collection-card--locked' : ''}`}
                 onClick={() => {
                   setSelectedPlant(plant)
                   soundManager.playSound('plantation', 0.4)
@@ -217,6 +226,11 @@ export default function Collection({
                 </div>
 
                 <img src={plant.cardImage} alt={plant.name} className="collection-card__img" />
+                {!isUnlocked && (
+                  <div className="collection-card__lock-badge">
+                    <span>🔒</span> Bloqueada
+                  </div>
+                )}
                 <span className="collection-card__name">{plant.name}</span>
               </button>
             )
@@ -249,6 +263,26 @@ export default function Collection({
             </div>
 
             <span className="collection-inspector__badge">{selectedPlant.categoryLabel}</span>
+
+            {(() => {
+              const isSelectedUnlocked = (plantCopies ? (plantCopies[selectedPlant.id as PlantId] ?? 0) > 0 : false) || (unlockedPlants ? unlockedPlants.includes(selectedPlant.id as PlantId) : false) || (selectedPlant.id === 'sunflower' || selectedPlant.id === 'peashooter' || selectedPlant.id === 'wallnut' || selectedPlant.id === 'chomper')
+              const copies = plantCopies ? (plantCopies[selectedPlant.id as PlantId] ?? 0) : 0
+              const level = plantLevels ? (plantLevels[selectedPlant.id as PlantId] ?? 0) : 0
+
+              if (!isSelectedUnlocked) {
+                return (
+                  <div className="collection-inspector__locked-notice">
+                    <span>🔒</span>
+                    <span>BLOQUEADA (0 Copias) · Desbloquéala en sobres de la arena o en la Tienda</span>
+                  </div>
+                )
+              }
+              return (
+                <div style={{ color: '#86efac', fontSize: '13px', fontWeight: 800, margin: '6px 0' }}>
+                  ✨ DESBLOQUEADA · Nivel {level} · {copies} {copies === 1 ? 'Copia' : 'Copias'}
+                </div>
+              )
+            })()}
 
             {/* Stats Row */}
             <div className="collection-stats">
@@ -299,7 +333,7 @@ export default function Collection({
               }}
               title="Probar disparos y explosiones en el Campo de Batalla"
             >
-              🎯 Probar
+              🎯 Probar en Batalla
             </button>
           </div>
         </div>

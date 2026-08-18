@@ -161,6 +161,49 @@
   background: rgba(45, 70, 30, 0.95) !important;
 }
 
+.collection-card--locked {
+  filter: grayscale(0.85) brightness(0.65);
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.collection-card--locked:hover {
+  filter: grayscale(0.6) brightness(0.8);
+}
+
+.collection-card__lock-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fbbf24;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 10px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.collection-inspector__locked-notice {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 10px 0;
+  color: #fca5a5;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .collection-card__header-row {
   width: 100%;
   display: flex;

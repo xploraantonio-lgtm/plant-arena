@@ -206,8 +206,8 @@ export function useInventory() {
         // fallback
       }
     }
-    // Default base cards
-    return ALL_15_PLANTS.map((id) => ({
+    // Default base cards (Only the 4 starter cards: Sunflower, Peashooter, Wallnut, Cactus)
+    return DEFAULT_DECK.map((id) => ({
       instanceId: `inst_base_${id}`,
       plantId: id,
       level: 0,
@@ -842,7 +842,27 @@ export function useInventory() {
     setInventoryPacks((prev) => [...prev, ...newPacks])
   }
 
+  const syncProfileData = (profile: {
+    gems_balance?: number
+    gold_balance?: number
+    colosseum_tickets?: number
+    colosseum_current_streak?: number
+    colosseum_max_streak?: number
+    has_vip_pass?: boolean
+    claimed_vip_levels?: number[]
+  } | null) => {
+    if (!profile) return
+    if (profile.gems_balance !== undefined) setUserTokens(Number(profile.gems_balance))
+    if (profile.gold_balance !== undefined) setUserGold(Number(profile.gold_balance))
+    if (profile.colosseum_tickets !== undefined) setColosseumTickets(Number(profile.colosseum_tickets))
+    if (profile.colosseum_current_streak !== undefined) setColosseumCurrentStreak(Number(profile.colosseum_current_streak))
+    if (profile.colosseum_max_streak !== undefined) setColosseumMaxStreak(Number(profile.colosseum_max_streak))
+    if (profile.has_vip_pass !== undefined) setHasVipPass(Boolean(profile.has_vip_pass))
+    if (profile.claimed_vip_levels !== undefined) setClaimedVipLevels(profile.claimed_vip_levels || [])
+  }
+
   return {
+    syncProfileData,
     userTokens,
     setUserTokens,
     addTokens,

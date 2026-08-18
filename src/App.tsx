@@ -22,6 +22,8 @@ import { useAuth } from './hooks/useAuth'
 import AuthModal from './components/Auth/AuthModal'
 import AdminPanel from './components/Admin/AdminPanel'
 
+import { UserManager } from './utils/userManager'
+
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
     if (typeof window !== 'undefined') {
@@ -56,6 +58,7 @@ function App() {
   }, [])
 
   const {
+    syncProfileData,
     userTokens,
     addTokens,
     userGold,
@@ -109,6 +112,17 @@ function App() {
     signInWithEmail,
     signOut,
   } = useAuth()
+
+  // Real-time synchronization of authenticated Supabase profile with game state
+  useEffect(() => {
+    if (profile) {
+      syncProfileData(profile)
+      UserManager.syncWithSupabase(profile)
+      if (profile.elo_rating !== undefined && profile.elo_rating !== null) {
+        setUserElo(profile.elo_rating)
+      }
+    }
+  }, [profile])
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false)
@@ -321,6 +335,7 @@ function App() {
       <GameFrame>
         {screen === 'menu' && (
           <MainMenu
+            userProfile={profile}
             userElo={userElo}
             userTokens={userTokens}
             userGold={userGold}
@@ -375,6 +390,9 @@ function App() {
           <Collection
             onBack={() => setScreen('menu')}
             onPracticePlant={handlePracticePlant}
+            unlockedPlants={unlockedPlants}
+            plantCopies={plantCopies}
+            plantLevels={plantLevels}
           />
         )}
         {screen === 'jardin' && (
