@@ -12,6 +12,7 @@ import {
 import type { PlantId } from '../../types/game'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import { SeasonManager } from '../../utils/seasonManager'
+import { UserManager } from '../../utils/userManager'
 import './Clan.css'
 
 interface ClanProps {
@@ -117,7 +118,7 @@ export default function Clan({
     soundManager.playSound('click', 0.5)
   }
 
-  const playerName = 'DRAGONMASTER'
+  const playerName = UserManager.getProfile().name || 'Guerrero'
 
   const showModalAlert = (
     title: string,

@@ -8,6 +8,7 @@ import {
 } from '../../utils/marketplaceManager'
 import type { PlantId, PlantCardInstance } from '../../types/game'
 import { PLANT_CONFIGS, STAT_LABELS, type PlantStatKey } from '../../utils/gameConstants'
+import { UserManager } from '../../utils/userManager'
 import './Marketplace.css'
 
 interface MarketplaceProps {
@@ -61,7 +62,7 @@ export default function Marketplace({
   const [listings, setListings] = useState<MarketListing[]>(() => MarketplaceManager.getListings())
   const [activeDialog, setActiveDialog] = useState<MarketModalDialog | null>(null)
 
-  const playerName = 'DRAGONMASTER'
+  const playerName = UserManager.getProfile().name || 'Guerrero'
 
   // Build the list of all individual card builds/instances from Mi Jardín
   const gardenCards = useMemo(() => {

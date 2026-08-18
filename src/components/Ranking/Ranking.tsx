@@ -3,6 +3,7 @@ import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { SupabaseService } from '../../services/supabaseService'
+import { UserManager } from '../../utils/userManager'
 import './Ranking.css'
 
 interface LeaderboardUser {
@@ -387,7 +388,7 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
                     className="referral-copy-btn"
                     onClick={() => {
                       soundManager.playSound('click', 0.5)
-                      navigator.clipboard?.writeText(window.location.origin + '/?ref=DRAGONMASTER')
+                      navigator.clipboard?.writeText(window.location.origin + '/?ref=' + (UserManager.getProfile().referralCode || 'ARENA'))
                       setCopiedLink(true)
                       setTimeout(() => setCopiedLink(false), 2000)
                     }}
