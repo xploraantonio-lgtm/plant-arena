@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ColosseumBetAmount, ColosseumLeaderboardEntry } from '../../types/game'
 import { soundManager } from '../../utils/audioManager'
+import { SupabaseService } from '../../services/supabaseService'
 import './ColosseumModal.css'
 
 interface ColosseumModalProps {
@@ -15,21 +16,6 @@ interface ColosseumModalProps {
   onOpenShop?: () => void
 }
 
-const RAW_MOCK_LEADERBOARD: ColosseumLeaderboardEntry[] = [
-  { rank: 1, username: 'PlantMaster99', avatarPlant: 'repeater', maxStreak: 12, prizeGems: 20 },
-  { rank: 2, username: 'CactusKing', avatarPlant: 'bonkchoy', maxStreak: 9, prizeGems: 10 },
-  { rank: 3, username: 'PeaShooterPro', avatarPlant: 'threepeater', maxStreak: 7, prizeGems: 5 },
-  { rank: 4, username: 'SolarPower', avatarPlant: 'twinsunflower', maxStreak: 6, prizeGems: 0 },
-  { rank: 5, username: 'ViperSpike', avatarPlant: 'squash', maxStreak: 5, prizeGems: 0 },
-  { rank: 6, username: 'IceQueen', avatarPlant: 'iceberglettuce', maxStreak: 5, prizeGems: 0 },
-  { rank: 7, username: 'FlameStriker', avatarPlant: 'jalapeno', maxStreak: 4, prizeGems: 0 },
-  { rank: 8, username: 'MelonLord', avatarPlant: 'melonpult', maxStreak: 4, prizeGems: 0 },
-]
-
-const MOCK_LEADERBOARD: ColosseumLeaderboardEntry[] = RAW_MOCK_LEADERBOARD.filter(
-  (r) => r.username.toLowerCase() !== 'xplora'
-)
-
 export default function ColosseumModal({
   isOpen,
   onClose,
@@ -41,6 +27,26 @@ export default function ColosseumModal({
   onStartColosseumMatch,
 }: ColosseumModalProps) {
   const [activeTab, setActiveTab] = useState<'rooms' | 'leaderboard'>('rooms')
+  const [realLeaderboard, setRealLeaderboard] = useState<ColosseumLeaderboardEntry[]>([])
+
+  useEffect(() => {
+    if (!isOpen) return
+    let mounted = true
+    SupabaseService.getColosseumLeaderboard(50).then((profiles) => {
+      if (!mounted) return
+      const mapped: ColosseumLeaderboardEntry[] = profiles.map((p, idx) => ({
+        rank: idx + 1,
+        username: p.username,
+        avatarPlant: (p.avatar_id as any) || 'peashooter',
+        maxStreak: p.colosseum_max_streak,
+        prizeGems: idx === 0 ? 20 : idx === 1 ? 10 : idx === 2 ? 5 : 0,
+      }))
+      setRealLeaderboard(mapped)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -307,30 +313,38 @@ export default function ColosseumModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {MOCK_LEADERBOARD.map((row) => (
-                    <tr key={row.rank} className={row.rank <= 3 ? `colosseum-lb-row--top${row.rank}` : ''}>
-                      <td>
-                        <span className="colosseum-lb-rank-badge">
-                          {row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : `#${row.rank}`}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="colosseum-lb-user">
-                          <strong>{row.username}</strong>
-                        </span>
-                      </td>
-                      <td>
-                        <span className="colosseum-lb-streak">🔥 {row.maxStreak} seguidas</span>
-                      </td>
-                      <td>
-                        {row.prizeGems > 0 ? (
-                          <span className="colosseum-lb-prize">+{row.prizeGems} 💎</span>
-                        ) : (
-                          <span style={{ color: '#94a3b8' }}>-</span>
-                        )}
+                  {realLeaderboard.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                        🌱 Aún no hay rachas registradas esta temporada. ¡Sé el primer campeón en la cima!
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    realLeaderboard.map((row) => (
+                      <tr key={row.rank} className={row.rank <= 3 ? `colosseum-lb-row--top${row.rank}` : ''}>
+                        <td>
+                          <span className="colosseum-lb-rank-badge">
+                            {row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : `#${row.rank}`}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="colosseum-lb-user">
+                            <strong>{row.username}</strong>
+                          </span>
+                        </td>
+                        <td>
+                          <span className="colosseum-lb-streak">🔥 {row.maxStreak} seguidas</span>
+                        </td>
+                        <td>
+                          {row.prizeGems > 0 ? (
+                            <span className="colosseum-lb-prize">+{row.prizeGems} 💎</span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                   {/* Fila del usuario */}
                   <tr className="colosseum-lb-row--user">
                     <td>

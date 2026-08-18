@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
+import { SupabaseService } from '../../services/supabaseService'
 import './Ranking.css'
 
 interface LeaderboardUser {
@@ -57,200 +58,37 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
       )
     : 100
 
-  // Mocked Referral Leaderboard Data
-  const referralLeaderboard: ReferralLeaderboardUser[] = [
-    {
-      rank: 1,
-      username: 'Satoshi_Nakamoto',
-      clan: '👑 [SOLAR_LEGENDS]',
-      referredCount: 48,
-      earnedUsd: 48.0,
-      tierBadge: '💎 LEYENDA DIAMANTE',
-      avatar: '/game-assets/greenfoot/peashooterpacket1.png',
-    },
-    {
-      rank: 2,
-      username: 'CryptoFarmer_VIP',
-      clan: '⚡ [CYBER_PLANTS]',
-      referredCount: 32,
-      earnedUsd: 32.0,
-      tierBadge: '🥇 MAESTRO ORO',
-      avatar: '/game-assets/greenfoot/sunflowerpacket1.png',
-    },
-    {
-      rank: 3,
-      username: 'Plant_God_Web3',
-      clan: '⚡ [CYBER_PLANTS]',
-      referredCount: 21,
-      earnedUsd: 21.0,
-      tierBadge: '🥈 EMBAJADOR PLATA',
-      avatar: '/game-assets/greenfoot/repeaterpacket1.png',
-    },
-    {
-      rank: 4,
-      username: 'Solar_PvP_Master',
-      clan: '☀️ [SUN_LORDS]',
-      referredCount: 18,
-      earnedUsd: 18.0,
-      tierBadge: '🥉 PROMOTOR BRONCE',
-      avatar: '/game-assets/greenfoot/bonkchoypacket1.png',
-    },
-    {
-      rank: 5,
-      username: 'Jalapeno_Sniper',
-      clan: '🔥 [FIRE_SNIPERS]',
-      referredCount: 15,
-      earnedUsd: 15.0,
-      tierBadge: '🥉 PROMOTOR BRONCE',
-      avatar: '/game-assets/greenfoot/jalapenopacket1.png',
-    },
-    {
-      rank: 6,
-      username: 'Aloe_Healer_PvP',
-      clan: '💚 [HEALER_SQUAD]',
-      referredCount: 11,
-      earnedUsd: 11.0,
-      tierBadge: '🌱 PROMOTOR JUNIOR',
-      avatar: '/game-assets/greenfoot/aloepacket1.png',
-    },
-    {
-      rank: 7,
-      username: 'DragonMaster',
-      clan: '🛡️ [ANTIGRAVITY_GUILD]',
-      referredCount: 3,
-      earnedUsd: 3.0,
-      tierBadge: '🌱 PROMOTOR JUNIOR',
-      avatar: '/game-assets/greenfoot/walnutpacket1.png',
-      isCurrentUser: true,
-    },
-    {
-      rank: 8,
-      username: 'Iceberg_King',
-      clan: '❄️ [FROST_GUILD]',
-      referredCount: 2,
-      earnedUsd: 2.0,
-      tierBadge: '🌱 INICIADO',
-      avatar: '/game-assets/greenfoot/iceberglettucepacket1.png',
-    },
-  ]
+  const [realLeaderboard, setRealLeaderboard] = useState<LeaderboardUser[]>([])
 
-  // Mocked Global Leaderboard Data with real collection plant sprites
-  const leaderboardData: LeaderboardUser[] = [
-    {
-      rank: 1,
-      username: 'Satoshi_Nakamoto',
-      clan: '👑 [SOLAR_LEGENDS]',
-      elo: 4850,
-      wins: 182,
-      losses: 18,
-      winRate: '91%',
-      arenaName: 'Olimpo de Leyendas',
-      bestPlantName: 'Bonk Choy',
-      bestPlantImg: '/game-assets/greenfoot/bonkchoy1.png',
-    },
-    {
-      rank: 2,
-      username: 'Plant_God_Web3',
-      clan: '⚡ [CYBER_PLANTS]',
-      elo: 4210,
-      wins: 148,
-      losses: 24,
-      winRate: '86%',
-      arenaName: 'Olimpo de Leyendas',
-      bestPlantName: 'Melon-pult',
-      bestPlantImg: '/game-assets/images/Plants/melon_pult.png',
-    },
-    {
-      rank: 3,
-      username: 'DragonMaster',
-      clan: '🛡️ [ANTIGRAVITY_GUILD]',
-      elo: userElo,
-      wins: 58,
-      losses: 12,
-      winRate: '83%',
-      arenaName: currentArena.name,
-      bestPlantName: 'Jalapeño',
-      bestPlantImg: '/game-assets/plants/jalapeno_hd.png',
-      isCurrentUser: true,
-    },
-    {
-      rank: 4,
-      username: 'Jalapeno_Sniper',
-      clan: '🔥 [FIRE_SNIPERS]',
-      elo: 3680,
-      wins: 95,
-      losses: 30,
-      winRate: '76%',
-      arenaName: 'Coliseo Galáctico',
-      bestPlantName: 'Jalapeño',
-      bestPlantImg: '/game-assets/plants/jalapeno_hd.png',
-    },
-    {
-      rank: 5,
-      username: 'Iceberg_King',
-      clan: '❄️ [FROST_GUILD]',
-      elo: 2920,
-      wins: 72,
-      losses: 28,
-      winRate: '72%',
-      arenaName: 'Rascacielos Cyberpunk',
-      bestPlantName: 'Iceberg Lettuce',
-      bestPlantImg: '/game-assets/plants/iceberglettuce_hd.png',
-    },
-    {
-      rank: 6,
-      username: 'Aloe_Healer_PvP',
-      clan: '💚 [HEALER_SQUAD]',
-      elo: 2840,
-      wins: 68,
-      losses: 26,
-      winRate: '72%',
-      arenaName: 'Rascacielos Cyberpunk',
-      bestPlantName: 'Aloe Vera',
-      bestPlantImg: '/game-assets/plants/aloe_hd.png',
-    },
-    {
-      rank: 7,
-      username: 'Sunflower_Queen',
-      clan: '☀️ [SUN_LORDS]',
-      elo: 1810,
-      wins: 42,
-      losses: 25,
-      winRate: '62%',
-      arenaName: 'Desierto Nocturno',
-      bestPlantName: 'Sunflower',
-      bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
-    },
-    {
-      rank: 8,
-      username: 'BonkChoy_Pro',
-      clan: '🥊 [MELEE_KINGS]',
-      elo: 1480,
-      wins: 35,
-      losses: 22,
-      winRate: '61%',
-      arenaName: 'Jardín Clásico',
-      bestPlantName: 'Bonk Choy',
-      bestPlantImg: '/game-assets/greenfoot/bonkchoy1.png',
-    },
-    {
-      rank: 9,
-      username: 'Threepeater_God',
-      clan: '🌿 [TRIPLE_SHOT]',
-      elo: 1250,
-      wins: 28,
-      losses: 20,
-      winRate: '58%',
-      arenaName: 'Jardín Clásico',
-      bestPlantName: 'Threepeater',
-      bestPlantImg: '/game-assets/greenfoot/threepeater1.png',
-    },
-  ]
-    .filter((u) => u.username.toLowerCase() !== 'xplora')
-    .sort((a, b) => b.elo - a.elo)
-    .map((item, idx) => ({ ...item, rank: idx + 1 }))
+  useEffect(() => {
+    let mounted = true
+    SupabaseService.getGlobalLeaderboard(50).then((profiles) => {
+      if (!mounted) return
+      const mapped: LeaderboardUser[] = profiles.map((p, idx) => {
+        const arena = getArenaForElo(p.elo_rating)
+        return {
+          rank: idx + 1,
+          username: p.username,
+          clan: '-',
+          elo: p.elo_rating,
+          wins: 0,
+          losses: 0,
+          winRate: '100%',
+          arenaName: arena.name,
+          bestPlantName: 'Sunflower',
+          bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
+        }
+      })
+      setRealLeaderboard(mapped)
+    })
 
-  const filteredReferralLeaderboard = referralLeaderboard.filter((u) => u.username.toLowerCase() !== 'xplora')
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const leaderboardData = realLeaderboard
+  const filteredReferralLeaderboard: ReferralLeaderboardUser[] = []
 
   return (
     <div className="ranking-screen" style={{ backgroundImage: `url(${background})` }}>

@@ -7,6 +7,8 @@ type PlantInstanceRow = Database['public']['Tables']['plant_instances']['Row']
 type PlantInstanceInsert = Database['public']['Tables']['plant_instances']['Insert']
 type ClanRow = Database['public']['Tables']['clans']['Row']
 type TournamentRow = Database['public']['Tables']['tournaments']['Row']
+type SeasonRow = Database['public']['Tables']['seasons']['Row']
+type MarketplaceRow = Database['public']['Tables']['marketplace_listings']['Row']
 
 export const SupabaseService = {
   // ---------------------------------------------------------------------------
@@ -40,6 +42,58 @@ export const SupabaseService = {
       return !error
     } catch {
       return false
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // GLOBAL RANKING & LEADERBOARDS (REAL DATA)
+  // ---------------------------------------------------------------------------
+  async getGlobalLeaderboard(limit: number = 50): Promise<ProfileRow[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_admin', false)
+        .order('elo_rating', { ascending: false })
+        .limit(limit)
+      return (data || []) as ProfileRow[]
+    } catch {
+      return []
+    }
+  },
+
+  async getColosseumLeaderboard(limit: number = 50): Promise<ProfileRow[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_admin', false)
+        .gt('colosseum_max_streak', 0)
+        .order('colosseum_max_streak', { ascending: false })
+        .limit(limit)
+      return (data || []) as ProfileRow[]
+    } catch {
+      return []
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // SEASONS & OFFICIAL REWARDS (REAL DATA)
+  // ---------------------------------------------------------------------------
+  async getActiveSeason(): Promise<SeasonRow | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data } = await supabase
+        .from('seasons')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      return data as SeasonRow | null
+    } catch {
+      return null
     }
   },
 
@@ -95,8 +149,22 @@ export const SupabaseService = {
   },
 
   // ---------------------------------------------------------------------------
-  // MARKETPLACE P2P BUY (RPC)
+  // MARKETPLACE P2P BUY & LISTINGS
   // ---------------------------------------------------------------------------
+  async getMarketplaceListings(): Promise<MarketplaceRow[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data } = await supabase
+        .from('marketplace_listings')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+      return (data || []) as MarketplaceRow[]
+    } catch {
+      return []
+    }
+  },
+
   async buyMarketplaceCard(listingId: string, buyerId: string): Promise<{ success: boolean; price_gems?: number }> {
     if (!isSupabaseConfigured()) return { success: false }
     try {
@@ -112,7 +180,7 @@ export const SupabaseService = {
   },
 
   // ---------------------------------------------------------------------------
-  // CLAN TREASURY DEPOSIT (RPC)
+  // CLAN TREASURY DEPOSIT (RPC) & CLANS
   // ---------------------------------------------------------------------------
   async depositToClanVault(clanId: string, userId: string, amountGems: number): Promise<{ success: boolean; tickets_awarded?: number }> {
     if (!isSupabaseConfigured()) return { success: false }
@@ -129,9 +197,6 @@ export const SupabaseService = {
     }
   },
 
-  // ---------------------------------------------------------------------------
-  // CLANS & MEMBERS
-  // ---------------------------------------------------------------------------
   async getAllClans(): Promise<ClanRow[]> {
     if (!isSupabaseConfigured()) return []
     try {

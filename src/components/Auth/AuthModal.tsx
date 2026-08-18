@@ -30,6 +30,7 @@ export default function AuthModal({
   // Set Password States (When Google OAuth validates for the first time)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordRegisteredSuccess, setPasswordRegisteredSuccess] = useState(false)
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -94,13 +95,17 @@ export default function AuthModal({
 
     if (res.success) {
       soundManager.playSound('victory', 0.9)
-      alert('¡Contraseña registrada con éxito! Ya puedes entrar con Google o con tu correo y contraseña.')
-      onClose()
-      if (onSuccessRedirect) onSuccessRedirect()
+      setPasswordRegisteredSuccess(true)
     } else {
       soundManager.playSound('error', 0.5)
       setErrorMsg(res.error || 'Error al registrar la contraseña.')
     }
+  }
+
+  const handleFinishPasswordSetup = () => {
+    setPasswordRegisteredSuccess(false)
+    onClose()
+    if (onSuccessRedirect) onSuccessRedirect()
   }
 
   return (
@@ -126,8 +131,20 @@ export default function AuthModal({
 
         {errorMsg && <div className="auth-error-box">{errorMsg}</div>}
 
-        {/* VIEW 1: SET PASSWORD POPUP FOR GOOGLE USER */}
-        {needsPasswordSetup ? (
+        {/* VIEW 1: SUCCESS CONFIRMATION AFTER PASSWORD SET */}
+        {passwordRegisteredSuccess ? (
+          <div className="auth-success-dialog">
+            <div className="auth-success-dialog__icon">🎉</div>
+            <h3 className="auth-success-dialog__title">¡CONTRASEÑA REGISTRADA CON ÉXITO!</h3>
+            <p className="auth-success-dialog__desc">
+              Tu contraseña ha sido guardada de forma segura. Ahora podrás entrar en cualquier momento usando <strong>Google</strong> o tu <strong>correo y contraseña</strong>.
+            </p>
+            <button type="button" className="auth-submit-btn" onClick={handleFinishPasswordSetup}>
+              ⚔️ ENTRAR A LA ARENA ➔
+            </button>
+          </div>
+        ) : needsPasswordSetup ? (
+          /* VIEW 2: SET PASSWORD FORM FOR GOOGLE USER */
           <form className="auth-form" onSubmit={handleSavePassword}>
             <div className="auth-otp-notice">
               <span>Cuenta vinculada:</span>
@@ -166,7 +183,7 @@ export default function AuthModal({
             </button>
           </form>
         ) : (
-          /* VIEW 2: STANDARD LOGIN MODAL */
+          /* VIEW 3: STANDARD LOGIN MODAL */
           <div className="auth-standard-login">
             {/* GOOGLE SIGN IN BUTTON */}
             {onSignInGoogle && (
