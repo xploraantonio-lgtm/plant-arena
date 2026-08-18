@@ -322,7 +322,28 @@ FOR SELECT USING (auth.uid() = player1_id OR auth.uid() = player2_id);
 -- FUNCIONES RPC ATÓMICAS (SEGURIDAD Y TRANSACCIONES DEL SERVIDOR)
 -- =============================================================================
 
--- RPC 1: Liquidación de Apuesta de Coliseo (80% Ganador / 20% Proyecto)
+-- RPC 1: Retener Apuesta de Coliseo (Escrow)
+CREATE OR REPLACE FUNCTION public.place_colosseum_wager(
+    p_user_id UUID,
+    p_bet NUMERIC
+) RETURNS JSONB AS $$
+BEGIN
+    IF (SELECT gems_balance FROM public.profiles WHERE id = p_user_id) < p_bet THEN
+        RAISE EXCEPTION 'Saldo insuficiente de gemas para apostar en el Coliseo';
+    END IF;
+
+    UPDATE public.profiles
+    SET gems_balance = gems_balance - p_bet
+    WHERE id = p_user_id;
+
+    INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
+    VALUES (p_user_id, 'colosseum_bet', p_bet, 'Apuesta Coliseo PvP', 'completed');
+
+    RETURN jsonb_build_object('success', true, 'bet_placed', p_bet);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC 2: Liquidación de Apuesta de Coliseo (80% Ganador / 20% Proyecto)
 CREATE OR REPLACE FUNCTION public.resolve_colosseum_match(
     p_room_id UUID,
     p_winner_id UUID
@@ -342,7 +363,7 @@ BEGIN
     END IF;
     
     v_bet := v_room.colosseum_bet;
-    v_payout := v_bet * 1.6; -- 80% del pozo total
+    v_payout := v_bet * 1.6; -- 80% del pozo acumulado de ambos jugadores (2 * bet * 0.80)
     
     IF p_winner_id = v_room.player1_id THEN
         v_loser_id := v_room.player2_id;
@@ -350,13 +371,16 @@ BEGIN
         v_loser_id := v_room.player1_id;
     END IF;
     
-    -- Acreditar ganador
+    -- Acreditar ganador y registrar transacción
     UPDATE public.profiles 
     SET gems_balance = gems_balance + v_payout,
         colosseum_current_streak = colosseum_current_streak + 1,
         colosseum_max_streak = GREATEST(colosseum_max_streak, colosseum_current_streak + 1),
         elo_rating = elo_rating + 30
     WHERE id = p_winner_id;
+
+    INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
+    VALUES (p_winner_id, 'colosseum_win', v_payout, 'Victoria en Coliseo (80% Pozo)', 'completed');
     
     -- Penalizar perdedor
     UPDATE public.profiles 
@@ -372,7 +396,68 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- RPC 2: Compra P2P Segura en Marketplace
+-- RPC 3: Publicar Carta en el Mercado P2P
+CREATE OR REPLACE FUNCTION public.list_marketplace_card(
+    p_seller_id UUID,
+    p_plant_instance_id UUID,
+    p_price_gems NUMERIC
+) RETURNS JSONB AS $$
+DECLARE
+    v_plant RECORD;
+    v_listing_id UUID;
+BEGIN
+    SELECT * INTO v_plant FROM public.plant_instances 
+    WHERE id = p_plant_instance_id AND owner_id = p_seller_id FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'No eres el propietario de esta planta';
+    END IF;
+
+    IF v_plant.is_listed_for_sale = true THEN
+        RAISE EXCEPTION 'La planta ya se encuentra listada a la venta';
+    END IF;
+
+    -- Quitar de mazo y marcar para venta
+    UPDATE public.plant_instances
+    SET is_listed_for_sale = true, is_in_deck = false, deck_slot = null
+    WHERE id = p_plant_instance_id;
+
+    INSERT INTO public.marketplace_listings (seller_id, plant_instance_id, price_gems, status)
+    VALUES (p_seller_id, p_plant_instance_id, p_price_gems, 'active')
+    RETURNING id INTO v_listing_id;
+
+    RETURN jsonb_build_object('success', true, 'listing_id', v_listing_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC 4: Cancelar Publicación en el Mercado P2P
+CREATE OR REPLACE FUNCTION public.cancel_marketplace_listing(
+    p_seller_id UUID,
+    p_listing_id UUID
+) RETURNS JSONB AS $$
+DECLARE
+    v_list RECORD;
+BEGIN
+    SELECT * INTO v_list FROM public.marketplace_listings
+    WHERE id = p_listing_id AND seller_id = p_seller_id AND status = 'active' FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Publicación no encontrada o inactiva';
+    END IF;
+
+    UPDATE public.plant_instances
+    SET is_listed_for_sale = false
+    WHERE id = v_list.plant_instance_id;
+
+    UPDATE public.marketplace_listings
+    SET status = 'cancelled', closed_at = NOW()
+    WHERE id = p_listing_id;
+
+    RETURN jsonb_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC 5: Compra P2P Segura en Marketplace (Comisión 5% y Transferencia Inmediata)
 CREATE OR REPLACE FUNCTION public.buy_marketplace_card(
     p_listing_id UUID,
     p_buyer_id UUID
@@ -383,25 +468,30 @@ DECLARE
 BEGIN
     SELECT * INTO v_list FROM public.marketplace_listings WHERE id = p_listing_id AND status = 'active' FOR UPDATE;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Listing is no longer active';
+        RAISE EXCEPTION 'Esta carta ya no está disponible';
     END IF;
     IF v_list.seller_id = p_buyer_id THEN
-        RAISE EXCEPTION 'You cannot buy your own listed card';
+        RAISE EXCEPTION 'No puedes comprar tu propia carta';
     END IF;
     
     IF (SELECT gems_balance FROM public.profiles WHERE id = p_buyer_id) < v_list.price_gems THEN
-        RAISE EXCEPTION 'Insufficient gems';
+        RAISE EXCEPTION 'Saldo insuficiente de gemas';
     END IF;
     
-    v_seller_payout := v_list.price_gems * 0.95; -- 5% fee
+    v_seller_payout := v_list.price_gems * 0.95; -- 5% fee de la casa
     
-    -- Transferir balances
+    -- Transferir balances y registrar transacciones
     UPDATE public.profiles SET gems_balance = gems_balance - v_list.price_gems WHERE id = p_buyer_id;
+    INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
+    VALUES (p_buyer_id, 'marketplace_buy', v_list.price_gems, 'Compra de Carta en Mercado P2P', 'completed');
+
     UPDATE public.profiles SET gems_balance = gems_balance + v_seller_payout WHERE id = v_list.seller_id;
+    INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
+    VALUES (v_list.seller_id, 'marketplace_sell', v_seller_payout, 'Venta de Carta en Mercado P2P (95%)', 'completed');
     
-    -- Transferir propiedad de la carta
+    -- Transferir propiedad de la carta al comprador
     UPDATE public.plant_instances 
-    SET owner_id = p_buyer_id, is_listed_for_sale = false 
+    SET owner_id = p_buyer_id, is_listed_for_sale = false, is_in_deck = false, deck_slot = null
     WHERE id = v_list.plant_instance_id;
     
     -- Cerrar listado
@@ -413,7 +503,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- RPC 3: Depósito al Clan con Bono de Tickets de Coliseo
+-- RPC 6: Depósito al Clan con Bono de Tickets de Coliseo
 CREATE OR REPLACE FUNCTION public.deposit_to_clan_vault(
     p_clan_id UUID,
     p_user_id UUID,
@@ -423,7 +513,7 @@ DECLARE
     v_tickets INTEGER;
 BEGIN
     IF (SELECT gems_balance FROM public.profiles WHERE id = p_user_id) < p_amount THEN
-        RAISE EXCEPTION 'Insufficient gems';
+        RAISE EXCEPTION 'Saldo insuficiente de gemas';
     END IF;
     
     v_tickets := FLOOR(p_amount)::INTEGER;
@@ -432,6 +522,9 @@ BEGIN
     SET gems_balance = gems_balance - p_amount,
         colosseum_tickets = colosseum_tickets + v_tickets
     WHERE id = p_user_id;
+
+    INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
+    VALUES (p_user_id, 'clan_deposit', p_amount, 'Donación a la Bóveda del Clan (+' || v_tickets || ' Tickets)', 'completed');
     
     UPDATE public.clans 
     SET vault_gems = vault_gems + p_amount 

@@ -131,6 +131,20 @@ export const SupabaseService = {
   // ---------------------------------------------------------------------------
   // COLOSSEUM MATCH RESOLUTION (RPC)
   // ---------------------------------------------------------------------------
+  async placeColosseumWager(userId: string, betGems: number): Promise<{ success: boolean; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { error } = await (supabase.rpc as any)('place_colosseum_wager', {
+        p_user_id: userId,
+        p_bet: betGems,
+      })
+      if (error) return { success: false, error: error.message }
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
+    }
+  },
+
   async resolveColosseumMatch(roomId: string, winnerId: string): Promise<{ success: boolean; payout?: number }> {
     if (!isSupabaseConfigured()) return { success: false }
     try {
@@ -149,7 +163,7 @@ export const SupabaseService = {
   },
 
   // ---------------------------------------------------------------------------
-  // MARKETPLACE P2P BUY & LISTINGS
+  // MARKETPLACE P2P BUY, LIST & CANCEL (RPC)
   // ---------------------------------------------------------------------------
   async getMarketplaceListings(): Promise<MarketplaceRow[]> {
     if (!isSupabaseConfigured()) return []
@@ -165,17 +179,46 @@ export const SupabaseService = {
     }
   },
 
-  async buyMarketplaceCard(listingId: string, buyerId: string): Promise<{ success: boolean; price_gems?: number }> {
+  async listMarketplaceCard(sellerId: string, plantInstanceId: string, priceGems: number): Promise<{ success: boolean; listing_id?: string; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('list_marketplace_card', {
+        p_seller_id: sellerId,
+        p_plant_instance_id: plantInstanceId,
+        p_price_gems: priceGems,
+      })
+      if (error) return { success: false, error: error.message }
+      return data as { success: boolean; listing_id?: string }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async cancelMarketplaceListing(sellerId: string, listingId: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { error } = await (supabase.rpc as any)('cancel_marketplace_listing', {
+        p_seller_id: sellerId,
+        p_listing_id: listingId,
+      })
+      if (error) return { success: false, error: error.message }
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async buyMarketplaceCard(listingId: string, buyerId: string): Promise<{ success: boolean; price_gems?: number; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false }
     try {
       const { data, error } = await (supabase.rpc as any)('buy_marketplace_card', {
         p_listing_id: listingId,
         p_buyer_id: buyerId,
       })
-      if (error) return { success: false }
+      if (error) return { success: false, error: error.message }
       return data as { success: boolean; price_gems?: number }
-    } catch {
-      return { success: false }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
     }
   },
 
