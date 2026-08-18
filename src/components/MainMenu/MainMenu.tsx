@@ -56,6 +56,7 @@ interface MainMenuProps {
   onOpenLanding?: () => void
   onOpenAdmin?: () => void
   isAdmin?: boolean
+  onSignOut?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onFastUnlockSlot?: (slotId: number) => void
   onOpenSlotPack?: (slotId: number) => void
@@ -86,6 +87,7 @@ export default function MainMenu({
   onOpenLanding,
   onOpenAdmin,
   isAdmin = false,
+  onSignOut,
   onStartSlotUnlock,
   onFastUnlockSlot,
   onOpenSlotPack,
@@ -253,6 +255,17 @@ export default function MainMenu({
             >
               {isMuted ? '🔇' : '🔊'}
             </button>
+            {onSignOut && (
+              <button
+                className="main-menu-logout-btn"
+                type="button"
+                onClick={onSignOut}
+                title="Cerrar Sesión (Salir de la cuenta)"
+                aria-label="Cerrar Sesión"
+              >
+                🚪
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -358,6 +358,10 @@ function App() {
             onOpenLanding={handleGoToLanding}
             onOpenAdmin={() => setIsAdminPanelOpen(true)}
             isAdmin={isAdmin}
+            onSignOut={async () => {
+              await signOut()
+              setScreen('landing')
+            }}
             onStartSlotUnlock={startUnlockingSlot}
             onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}

@@ -337,7 +337,8 @@
 }
 
 .fullscreen-button,
-.mute-button {
+.mute-button,
+.main-menu-logout-btn {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -358,6 +359,17 @@
   transform: scale(1.12);
   background: rgba(24, 40, 36, 1);
   border-color: #86efac;
+}
+
+.main-menu-logout-btn {
+  border-color: #f87171;
+}
+
+.main-menu-logout-btn:hover {
+  transform: scale(1.12);
+  background: rgba(45, 15, 15, 0.95);
+  border-color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
 }
 
 .logo {
