@@ -15,7 +15,7 @@ interface ColosseumModalProps {
   onOpenShop?: () => void
 }
 
-const MOCK_LEADERBOARD: ColosseumLeaderboardEntry[] = [
+const RAW_MOCK_LEADERBOARD: ColosseumLeaderboardEntry[] = [
   { rank: 1, username: 'PlantMaster99', avatarPlant: 'repeater', maxStreak: 12, prizeGems: 20 },
   { rank: 2, username: 'CactusKing', avatarPlant: 'bonkchoy', maxStreak: 9, prizeGems: 10 },
   { rank: 3, username: 'PeaShooterPro', avatarPlant: 'threepeater', maxStreak: 7, prizeGems: 5 },
@@ -25,6 +25,10 @@ const MOCK_LEADERBOARD: ColosseumLeaderboardEntry[] = [
   { rank: 7, username: 'FlameStriker', avatarPlant: 'jalapeno', maxStreak: 4, prizeGems: 0 },
   { rank: 8, username: 'MelonLord', avatarPlant: 'melonpult', maxStreak: 4, prizeGems: 0 },
 ]
+
+const MOCK_LEADERBOARD: ColosseumLeaderboardEntry[] = RAW_MOCK_LEADERBOARD.filter(
+  (r) => r.username.toLowerCase() !== 'xplora'
+)
 
 export default function ColosseumModal({
   isOpen,

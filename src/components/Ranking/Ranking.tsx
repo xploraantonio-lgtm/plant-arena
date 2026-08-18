@@ -245,7 +245,12 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
       bestPlantName: 'Threepeater',
       bestPlantImg: '/game-assets/greenfoot/threepeater1.png',
     },
-  ].sort((a, b) => b.elo - a.elo).map((item, idx) => ({ ...item, rank: idx + 1 }))
+  ]
+    .filter((u) => u.username.toLowerCase() !== 'xplora')
+    .sort((a, b) => b.elo - a.elo)
+    .map((item, idx) => ({ ...item, rank: idx + 1 }))
+
+  const filteredReferralLeaderboard = referralLeaderboard.filter((u) => u.username.toLowerCase() !== 'xplora')
 
   return (
     <div className="ranking-screen" style={{ backgroundImage: `url(${background})` }}>
@@ -568,7 +573,7 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
                     </tr>
                   </thead>
                   <tbody>
-                    {referralLeaderboard.map((usr) => (
+                    {filteredReferralLeaderboard.map((usr) => (
                       <tr key={usr.rank} className={usr.isCurrentUser ? 'row--user' : ''}>
                         <td className="col-rank">
                           {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}

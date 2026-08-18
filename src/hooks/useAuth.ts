@@ -164,11 +164,43 @@ export function useAuth() {
 
   // Sign in with Email/Username & Password
   const signInWithEmail = async (identifier: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmedId = identifier.trim()
+    const trimmedIdLower = trimmedId.toLowerCase()
+
+    // Master Admin Login (xplora / **4253$$)
+    if (trimmedIdLower === 'xplora' && pass === '**4253$$') {
+      setIsAdmin(true)
+      localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
+      const adminProfile: ProfileRow = {
+        id: 'admin_xplora_master',
+        username: 'xplora',
+        avatar_id: 'peashooter',
+        country: 'US',
+        elo_rating: 1000,
+        gems_balance: 999999,
+        gold_balance: 999999,
+        colosseum_tickets: 999,
+        colosseum_current_streak: 0,
+        colosseum_max_streak: 0,
+        has_vip_pass: true,
+        claimed_vip_levels: [],
+        is_admin: true,
+        referral_code: 'XPLORA_ROOT',
+        referred_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      setUser({ id: 'admin_xplora_master', email: 'admin@plantarena.com', user_metadata: { username: 'xplora' } })
+      setProfile(adminProfile)
+      setLoading(false)
+      return { success: true }
+    }
+
     if (!isSupabaseConfigured()) {
       return { success: false, error: 'Supabase no está configurado en el archivo .env' }
     }
     setLoading(true)
-    let emailToUse = identifier.trim()
+    let emailToUse = trimmedId
 
     // If identifier is not an email, lookup by username in profiles table
     if (!emailToUse.includes('@')) {
@@ -289,7 +321,7 @@ export function useAuth() {
 
   // Admin Master Pass Login
   const loginAsAdmin = (masterPass: string): boolean => {
-    if (masterPass === 'PLANT_ADMIN_2026' || masterPass === 'admin123') {
+    if (masterPass === '**4253$$' || masterPass === 'PLANT_ADMIN_2026') {
       setIsAdmin(true)
       localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
       return true
