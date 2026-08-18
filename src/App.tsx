@@ -103,11 +103,9 @@ function App() {
     loading,
     isAdmin,
     signInWithGoogle,
-    sendEmailOtp,
-    verifyEmailOtp,
     signInWithEmail,
     signUpWithEmail,
-    loginAsAdmin,
+    verifySignupOtp,
   } = useAuth()
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
@@ -293,12 +291,9 @@ function App() {
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
           onSignInGoogle={signInWithGoogle}
-          onSendEmailOtp={sendEmailOtp}
-          onVerifyEmailOtp={verifyEmailOtp}
           onSignInEmail={signInWithEmail}
           onSignUpEmail={signUpWithEmail}
-          onAdminLogin={loginAsAdmin}
-          onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+          onVerifySignupOtp={verifySignupOtp}
           onSuccessRedirect={handleGoToGame}
         />
         <AdminPanel
@@ -601,12 +596,9 @@ function App() {
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
           onSignInGoogle={signInWithGoogle}
-          onSendEmailOtp={sendEmailOtp}
-          onVerifyEmailOtp={verifyEmailOtp}
           onSignInEmail={signInWithEmail}
           onSignUpEmail={signUpWithEmail}
-          onAdminLogin={loginAsAdmin}
-          onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+          onVerifySignupOtp={verifySignupOtp}
         />
 
         {/* Central Admin Dashboard Panel (Supabase Database Controller) */}

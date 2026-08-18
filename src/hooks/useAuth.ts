@@ -94,17 +94,12 @@ export function useAuth() {
     }
   }, [])
 
-  const loadUserProfile = async (userId: string) => {
-    setLoading(true)
-    const prof = await SupabaseService.getProfile(userId)
-    if (prof) {
-      setProfile(prof)
-      setIsAdmin(Boolean(prof.is_admin))
-    } else {
-      // If profile doesn't exist yet (e.g. from Google OAuth sign in), create it with 0 balance
+  const initializeNewUserProfile = async (userId: string, username: string, email?: string) => {
+    const existingProf = await SupabaseService.getProfile(userId)
+    if (!existingProf) {
       const newProfile: Database['public']['Tables']['profiles']['Insert'] = {
         id: userId,
-        username: user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guerrero_' + Math.random().toString(36).substring(2, 6),
+        username: username || email?.split('@')[0] || 'Guerrero_' + Math.random().toString(36).substring(2, 6),
         avatar_id: 'peashooter',
         elo_rating: 1000,
         gems_balance: 0.0,
@@ -117,8 +112,31 @@ export function useAuth() {
         is_admin: false,
         referral_code: 'PLANT_' + Math.random().toString(36).substring(2, 7).toUpperCase(),
       }
-
       await (supabase.from('profiles') as any).insert(newProfile)
+
+      // Insert exactly 4 Starter Plant Instances
+      const starterPlants: Database['public']['Tables']['plant_instances']['Insert'][] = [
+        { owner_id: userId, plant_id: 'sunflower', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 0 },
+        { owner_id: userId, plant_id: 'peashooter', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 1 },
+        { owner_id: userId, plant_id: 'wallnut', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 2 },
+        { owner_id: userId, plant_id: 'chomper', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 3 }, // Cactus
+      ]
+      await (supabase.from('plant_instances') as any).insert(starterPlants)
+    }
+  }
+
+  const loadUserProfile = async (userId: string) => {
+    setLoading(true)
+    const prof = await SupabaseService.getProfile(userId)
+    if (prof) {
+      setProfile(prof)
+      setIsAdmin(Boolean(prof.is_admin))
+    } else {
+      await initializeNewUserProfile(
+        userId,
+        user?.user_metadata?.username || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guerrero',
+        user?.email
+      )
       const freshProf = await SupabaseService.getProfile(userId)
       if (freshProf) setProfile(freshProf)
     }
@@ -144,17 +162,38 @@ export function useAuth() {
     }
   }
 
-  // Sign in with Email & Password
-  const signInWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  // Sign in with Email/Username & Password
+  const signInWithEmail = async (identifier: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: 'Supabase no está configurado en el archivo .env' }
     }
     setLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass })
+    let emailToUse = identifier.trim()
+
+    // If identifier is not an email, lookup by username in profiles table
+    if (!emailToUse.includes('@')) {
+      const { data: profData } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('username', emailToUse)
+        .maybeSingle()
+
+      if (!profData) {
+        setLoading(false)
+        return { success: false, error: 'Usuario no encontrado' }
+      }
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: emailToUse,
+      password: pass,
+    })
+
     if (error) {
       setLoading(false)
-      return { success: false, error: error.message }
+      return { success: false, error: 'Credenciales inválidas. Verifica tu correo y contraseña.' }
     }
+
     if (data.user) {
       setUser(data.user)
       await loadUserProfile(data.user.id)
@@ -163,119 +202,83 @@ export function useAuth() {
     return { success: true }
   }
 
-  // Sign up with Email & Password (0 initial balances, 1000 ELO only)
+  // Step 1: Sign up with Email + Password + Username (triggers OTP verification)
   const signUpWithEmail = async (email: string, pass: string, username: string): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: 'Supabase no está configurado en el archivo .env' }
     }
     setLoading(true)
-    const { data, error } = await supabase.auth.signUp({
-      email,
+    const { error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
       password: pass,
       options: {
-        data: { username },
+        data: { username: username.trim() },
       },
     })
+    setLoading(false)
     if (error) {
-      setLoading(false)
       return { success: false, error: error.message }
     }
-    if (data.user) {
-      // Create initial profile in database with ZERO balances and 1000 ELO
-      const newProfile: Database['public']['Tables']['profiles']['Insert'] = {
-        id: data.user.id,
-        username: username || email.split('@')[0],
-        avatar_id: 'peashooter',
-        elo_rating: 1000,
-        gems_balance: 0.0,
-        gold_balance: 0,
-        colosseum_tickets: 0,
-        colosseum_current_streak: 0,
-        colosseum_max_streak: 0,
-        has_vip_pass: false,
-        claimed_vip_levels: [],
-        is_admin: false,
-        referral_code: 'PLANT_' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-      }
 
-      await (supabase.from('profiles') as any).insert(newProfile)
-      await loadUserProfile(data.user.id)
+    // Also send an OTP code for instant 6-digit confirmation in app
+    try {
+      await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: { shouldCreateUser: false },
+      })
+    } catch {
+      // safe fallback
     }
-    setLoading(false)
+
     return { success: true }
   }
 
-  // Send OTP verification code to Email
-  const sendEmailOtp = async (email: string): Promise<{ success: boolean; error?: string }> => {
+  // Step 2: Validate 6-digit verification code and finalize registration
+  const verifySignupOtp = async (email: string, token: string, pass?: string, username?: string): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: 'Supabase no está configurado en .env' }
     }
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: {
-          shouldCreateUser: true,
-        },
-      })
-      setLoading(false)
-      if (error) return { success: false, error: error.message }
-      return { success: true }
-    } catch (e: any) {
-      setLoading(false)
-      return { success: false, error: e?.message || 'Error al enviar código' }
-    }
-  }
-
-  // Verify OTP code entered by user
-  const verifyEmailOtp = async (email: string, token: string, username?: string): Promise<{ success: boolean; error?: string }> => {
-    if (!isSupabaseConfigured()) {
-      return { success: false, error: 'Supabase no está configurado en .env' }
-    }
-    setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
+      // First attempt verifyOtp with type 'signup'
+      let verifyRes = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
         token: token.trim(),
-        type: 'email',
+        type: 'signup',
       })
-      if (error) {
-        setLoading(false)
-        return { success: false, error: 'Código inválido o expirado. Por favor verifica los 6 dígitos.' }
-      }
-      if (data.user) {
-        setUser(data.user)
-        // Check if profile exists, otherwise create it with 0 balances & 1000 ELO
-        const existingProf = await SupabaseService.getProfile(data.user.id)
-        if (!existingProf) {
-          const newProfile: Database['public']['Tables']['profiles']['Insert'] = {
-            id: data.user.id,
-            username: username || email.split('@')[0],
-            avatar_id: 'peashooter',
-            elo_rating: 1000,
-            gems_balance: 0.0,
-            gold_balance: 0,
-            colosseum_tickets: 0,
-            colosseum_current_streak: 0,
-            colosseum_max_streak: 0,
-            has_vip_pass: false,
-            claimed_vip_levels: [],
-            is_admin: false,
-            referral_code: 'PLANT_' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-          }
-          await (supabase.from('profiles') as any).insert(newProfile)
 
-          // Insert 4 Starter Plant Instances
-          const starterPlants: Database['public']['Tables']['plant_instances']['Insert'][] = [
-            { owner_id: data.user.id, plant_id: 'sunflower', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 0 },
-            { owner_id: data.user.id, plant_id: 'peashooter', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 1 },
-            { owner_id: data.user.id, plant_id: 'wallnut', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 2 },
-            { owner_id: data.user.id, plant_id: 'chomper', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 3 }, // Cactus
-          ]
-          await (supabase.from('plant_instances') as any).insert(starterPlants)
-        }
-        await loadUserProfile(data.user.id)
+      // If signup type failed, attempt type 'email'
+      if (verifyRes.error) {
+        verifyRes = await supabase.auth.verifyOtp({
+          email: email.trim().toLowerCase(),
+          token: token.trim(),
+          type: 'email',
+        })
       }
+
+      if (verifyRes.error) {
+        setLoading(false)
+        return { success: false, error: 'Código inválido o expirado. Verifica los 6 dígitos.' }
+      }
+
+      if (verifyRes.data.user) {
+        const u = verifyRes.data.user
+        setUser(u)
+
+        // If password was provided, ensure user password is set
+        if (pass) {
+          try {
+            await supabase.auth.updateUser({ password: pass })
+          } catch {
+            // non-fatal
+          }
+        }
+
+        // Initialize user profile with 4 cards, 0 balance, 1000 ELO
+        await initializeNewUserProfile(u.id, username || email.split('@')[0], email)
+        await loadUserProfile(u.id)
+      }
+
       setLoading(false)
       return { success: true }
     } catch (e: any) {
@@ -313,10 +316,9 @@ export function useAuth() {
     loading,
     isAdmin,
     signInWithGoogle,
-    sendEmailOtp,
-    verifyEmailOtp,
     signInWithEmail,
     signUpWithEmail,
+    verifySignupOtp,
     loginAsAdmin,
     logoutAdmin,
     signOut,
