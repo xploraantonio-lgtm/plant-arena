@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import logo from '../../assets/images/logo.png'
 import plant1 from '../../assets/images/plant1.png'
 import plant2 from '../../assets/images/plant2.png'
@@ -10,6 +10,8 @@ import arena4Bg from '../../assets/images/battlefield-bg4.jpg'
 import arena5Bg from '../../assets/images/battlefield-bg5.jpg'
 import rankingIco from '../../assets/ico/Ranking.png'
 import { soundManager } from '../../utils/audioManager'
+import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
+import { SupabaseService } from '../../services/supabaseService'
 import LandingAccessModal from './LandingAccessModal'
 import './LandingPage.css'
 
@@ -341,6 +343,25 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
   const [selectedRarity, setSelectedRarity] = useState<RarityFilter>('all')
   const [isAccessModalOpen, setIsAccessModalOpen] = useState<boolean>(false)
 
+  // Real data from Supabase
+  const [totalPlayers, setTotalPlayers] = useState<number>(0)
+  const [seasonInfo, setSeasonInfo] = useState<any>(null)
+
+  useEffect(() => {
+    let mounted = true
+    if (isSupabaseConfigured()) {
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).then(({ count }) => {
+        if (mounted && count !== null) setTotalPlayers(count)
+      })
+      SupabaseService.getActiveSeason().then((s) => {
+        if (mounted && s) setSeasonInfo(s)
+      })
+    }
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const toggleLang = () => {
     soundManager.playSound('click', 0.4)
     setLang((prev) => (prev === 'es' ? 'en' : 'es'))
@@ -457,14 +478,18 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
           <div className="landing-hero__release-banner">
             <div className="landing-beta-badge">
               <span className="landing-beta-pulse"></span>
-              <span className="landing-beta-tag">BETA</span>
+              <span className="landing-beta-tag">{seasonInfo ? 'TEMPORADA 1' : 'BETA'}</span>
             </div>
             <div className="landing-release-content">
               <span className="landing-release-subtitle">
-                {lang === 'es' ? '🚀 FECHA DE LANZAMIENTO' : '🚀 LAUNCH DATE'}
+                {lang === 'es' ? '⚔️ TEMPORADA OFICIAL EN VIVO' : '⚔️ OFFICIAL SEASON LIVE'}
               </span>
               <span className="landing-release-date">
-                {lang === 'es' ? 'Viernes 21 de Agosto' : 'Friday, August 21'}
+                {seasonInfo
+                  ? `${seasonInfo.name} · ${totalPlayers} Jugadores Activos`
+                  : lang === 'es'
+                  ? `Servidor Activo · ${totalPlayers} Jugadores Conectados`
+                  : `Server Online · ${totalPlayers} Connected Players`}
               </span>
             </div>
           </div>

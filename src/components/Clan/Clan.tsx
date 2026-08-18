@@ -98,29 +98,7 @@ export default function Clan({
   const [chatInput, setChatInput] = useState('')
   const [chatMessages, setChatMessages] = useState<
     Array<{ id: string; sender: string; role: string; text: string; time: string }>
-  >([
-    {
-      id: 'c1',
-      sender: 'BlizzardKing',
-      role: 'Líder',
-      text: '¡Equipo, jueves y viernes hay Guerra! ¿Quiénes se apuntan a la línea de 5?',
-      time: '12:30',
-    },
-    {
-      id: 'c2',
-      sender: 'IcebergElite',
-      role: 'Colíder',
-      text: 'Tengo mi Aloe al máximo y Nuez nivel 3 lista 🛡️',
-      time: '12:35',
-    },
-    {
-      id: 'c3',
-      sender: 'FrostbitePea',
-      role: 'Miembro',
-      text: 'Yo voy de ofensivo. ¡Vamos a saquear esos $5 USD para el tesoro! ⚔️',
-      time: '12:40',
-    },
-  ])
+  >([])
 
   const handleSendChatMessage = (e: React.FormEvent) => {
     e.preventDefault()
