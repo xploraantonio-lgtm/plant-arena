@@ -18,7 +18,15 @@ import './LandingPage.css'
 interface LandingPageProps {
   onPlayGame: () => void
   isLoggedIn?: boolean
+  userProfile?: {
+    username?: string
+    avatar_id?: string
+    elo_rating?: number
+    gems_balance?: number
+    gold_balance?: number
+  } | null
   onOpenAuth?: () => void
+  onSignOut?: () => void
 }
 
 interface PlantCardData {
@@ -100,7 +108,7 @@ const PLANTS_DATA: PlantCardData[] = [
     hp: 1200,
     cooldown: '15 s',
     descEs: 'Cáscara blindada ultra resistente que retiene el avance enemigo y absorbe daño masivo.',
-    descEn: 'Ultra-tough armored shell that holds the line and absorbs massive damage.',
+    descEn: 'Ultra-tough shell that stalls advancing enemies and absorbs massive damage.',
   },
   {
     id: 'cactus',
@@ -113,20 +121,39 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityLabelEn: 'COMMON',
     rarityColor: '#4ade80',
     rarityInitial: 'C',
-    cost: 150,
+    cost: 175,
     img: '/game-assets/greenfoot/cactus1.png',
-    hp: 500,
-    damage: 35,
-    speed: 4.5,
-    descEs: 'Camina hacia la base enemiga disparando espinas filosas continuamente.',
-    descEn: 'Marches toward the enemy base firing sharp thorns continuously.',
+    hp: 350,
+    damage: 30,
+    speed: 1,
+    descEs: 'Avanza por su carril disparando espinas directas a corta y media distancia.',
+    descEn: 'Marches down its lane firing piercing spines at short to mid range.',
   },
   {
-    id: 'squash',
-    nameEs: 'Squash',
-    nameEn: 'Squash',
-    roleEs: 'Cuerpo a cuerpo',
-    roleEn: 'Melee',
+    id: 'potato',
+    nameEs: 'Patata Mina',
+    nameEn: 'Potato Mine',
+    roleEs: 'Defensiva',
+    roleEn: 'Defensive',
+    rarity: 'uncommon',
+    rarityLabelEs: 'POCO COMÚN',
+    rarityLabelEn: 'UNCOMMON',
+    rarityColor: '#22d3ee',
+    rarityInitial: 'PC',
+    cost: 25,
+    img: '/game-assets/greenfoot/potato1.png',
+    hp: 100,
+    damage: 300,
+    cooldown: '10 s',
+    descEs: 'Tarda unos segundos en armarse. Al contacto con un enemigo, ¡detona causando daño devastador!',
+    descEn: 'Takes a few seconds to arm. On contact with enemies, it detonates for devastating area damage!',
+  },
+  {
+    id: 'garlic',
+    nameEs: 'Ajo Desviador',
+    nameEn: 'Garlic',
+    roleEs: 'Defensiva',
+    roleEn: 'Defensive',
     rarity: 'uncommon',
     rarityLabelEs: 'POCO COMÚN',
     rarityLabelEn: 'UNCOMMON',
@@ -134,11 +161,9 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityInitial: 'PC',
     cost: 50,
     img: '/game-assets/greenfoot/garlic1.png',
-    hp: 300,
-    damage: 600,
-    speed: 6.0,
-    descEs: 'Salta sobre el primer enemigo y lo aplasta en el acto con daño demoledor.',
-    descEn: 'Leaps onto the first enemy in sight and crushes it instantly with massive impact.',
+    hp: 800,
+    descEs: 'Obliga a las tropas enemigas que lo muerden a cambiar de carril inmediatamente.',
+    descEn: 'Forces attacking enemy troops to redirect to an adjacent lane upon taking a bite.',
   },
   {
     id: 'bonkchoy',
@@ -153,15 +178,16 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityInitial: 'PC',
     cost: 150,
     img: '/game-assets/greenfoot/bonkchoy1.png',
-    hp: 600,
-    damage: 65,
-    speed: 5.0,
-    descEs: 'Boxeador veloz que reparte ráfagas de puñetazos letales a corta distancia.',
-    descEn: 'Fast boxer throwing rapid-fire punches at close range.',
+    hp: 450,
+    damage: 40,
+    speed: 1,
+    fireRate: '0.8 s',
+    descEs: 'Avanza hacia la base contraria golpeando con puñetazos rápidos y demoledores.',
+    descEn: 'Marches towards the enemy base landing rapid, devastating punches.',
   },
   {
     id: 'repeater',
-    nameEs: 'Repeater',
+    nameEs: 'Repetidora',
     nameEn: 'Repeater',
     roleEs: 'A distancia',
     roleEn: 'Ranged',
@@ -171,36 +197,17 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#22d3ee',
     rarityInitial: 'PC',
     cost: 200,
-    img: '/game-assets/greenfoot/transparentrepeater.png',
+    img: '/game-assets/greenfoot/repeaterpacket1.png',
     hp: 300,
-    damage: '25 × 2',
-    fireRate: '1.2 s',
-    descEs: 'Dispara dos guisantes continuos duplicando el poder de fuego por carril.',
-    descEn: 'Fires two consecutive peas, doubling firepower on its lane.',
+    damage: '2x 25',
+    fireRate: '1.4 s',
+    descEs: 'Dispara 2 guisantes por ráfaga, duplicando la presión en el carril.',
+    descEn: 'Fires 2 peas per burst, doubling firepower along its lane.',
   },
   {
-    id: 'melonpult',
-    nameEs: 'Melon-pult',
-    nameEn: 'Melon-pult',
-    roleEs: 'A distancia',
-    roleEn: 'Ranged',
-    rarity: 'uncommon',
-    rarityLabelEs: 'POCO COMÚN',
-    rarityLabelEn: 'UNCOMMON',
-    rarityColor: '#22d3ee',
-    rarityInitial: 'PC',
-    cost: 375,
-    img: '/game-assets/images/Plants/melon_pult.png',
-    hp: 350,
-    damage: '80 (Área)',
-    fireRate: '2.4 s',
-    descEs: 'Catapulta melones gigantescos que causan daño de área masivo al impactar.',
-    descEn: 'Lobs giant melons dealing massive splash damage across the impact zone.',
-  },
-  {
-    id: 'potatomine',
-    nameEs: 'Potato Mine',
-    nameEn: 'Potato Mine',
+    id: 'squash',
+    nameEs: 'Apisonaflor',
+    nameEn: 'Squash',
     roleEs: 'Defensiva',
     roleEn: 'Defensive',
     rarity: 'uncommon',
@@ -208,16 +215,17 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityLabelEn: 'UNCOMMON',
     rarityColor: '#22d3ee',
     rarityInitial: 'PC',
-    cost: 25,
-    img: '/game-assets/greenfoot/potato1.png',
-    damage: 1800,
-    cooldown: '20 s',
-    descEs: 'Tarda unos segundos en armarse. Al ser pisada, detona con daño fulminante de 1,800.',
-    descEn: 'Takes a few seconds to arm. When stepped on, explodes for an immense 1,800 damage.',
+    cost: 100,
+    img: '/game-assets/greenfoot/transparentsquash.png',
+    hp: 300,
+    damage: 400,
+    cooldown: '12 s',
+    descEs: 'Salta y aplasta al primer enemigo que entra en su rango, aniquilándolo al instante.',
+    descEn: 'Jumps and squashes the first enemy entering its range, instantly destroying it.',
   },
   {
     id: 'twinsunflower',
-    nameEs: 'Twin Sunflower',
+    nameEs: 'Birrasol',
     nameEn: 'Twin Sunflower',
     roleEs: 'Productora',
     roleEn: 'Producer',
@@ -227,18 +235,18 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#60a5fa',
     rarityInitial: 'R',
     cost: 125,
-    img: '/game-assets/greenfoot/twinsunflower1.png',
+    img: '/game-assets/greenfoot/transparenttwinsunflower.png',
     hp: 300,
-    cooldown: '10 s',
-    descEs: 'Girasol doble que produce el doble de soles para una economía acelerada.',
-    descEn: 'Twin sunflower that produces double the sun for rapid economy acceleration.',
+    cooldown: '8 s',
+    descEs: 'Genera 50 soles por ciclo, acelerando tu economía para jugar plantas pesadas.',
+    descEn: 'Generates 50 sun per cycle, supercharging your economy for heavy plants.',
   },
   {
     id: 'jalapeno',
     nameEs: 'Jalapeño',
-    nameEn: 'Jalapeño',
-    roleEs: 'Defensiva',
-    roleEn: 'Defensive',
+    nameEn: 'Jalapeno',
+    roleEs: 'A distancia',
+    roleEn: 'Ranged',
     rarity: 'rare',
     rarityLabelEs: 'RARA',
     rarityLabelEn: 'RARE',
@@ -246,9 +254,9 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityInitial: 'R',
     cost: 125,
     img: '/game-assets/plants/jalapeno_hd.png',
-    damage: 1000,
-    range: 'Carril Entero',
-    descEs: 'Detona en llamas consumiendo el carril completo y aniquilando a las tropas enemigas.',
+    damage: 450,
+    cooldown: '15 s',
+    descEs: 'Explota en una columna de fuego que arrasa toda la fila enemiga por completo.',
     descEn: 'Explodes in a row of fire, burning the whole lane and annihilating enemies.',
   },
   {
@@ -337,15 +345,22 @@ const RARITY_FILTERS: { key: RarityFilter; labelEs: string; labelEn: string; col
   { key: 'legendary', labelEs: 'Legendaria', labelEn: 'Legendary', color: '#fbbf24' },
 ]
 
-export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth }: LandingPageProps) {
+export default function LandingPage({
+  onPlayGame,
+  isLoggedIn = false,
+  userProfile,
+  onOpenAuth,
+  onSignOut,
+}: LandingPageProps) {
   const [lang, setLang] = useState<'es' | 'en'>('es')
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({})
   const [selectedRarity, setSelectedRarity] = useState<RarityFilter>('all')
   const [isAccessModalOpen, setIsAccessModalOpen] = useState<boolean>(false)
 
-  // Real data from Supabase
+  // Real live data from Supabase
   const [totalPlayers, setTotalPlayers] = useState<number>(0)
   const [seasonInfo, setSeasonInfo] = useState<any>(null)
+  const [totalClansCount, setTotalClansCount] = useState<number>(0)
 
   useEffect(() => {
     let mounted = true
@@ -356,11 +371,18 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
       SupabaseService.getActiveSeason().then((s) => {
         if (mounted && s) setSeasonInfo(s)
       })
+      supabase.from('clans').select('*', { count: 'exact', head: true }).then(({ count }) => {
+        if (mounted && count !== null) setTotalClansCount(count)
+      })
     }
     return () => {
       mounted = false
     }
   }, [])
+
+  const userElo = userProfile?.elo_rating ?? 1000
+  const userGems = userProfile?.gems_balance ?? 0
+  const userName = userProfile?.username || 'Guerrero'
 
   const toggleLang = () => {
     soundManager.playSound('click', 0.4)
@@ -378,7 +400,11 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
   const handlePlayClick = (e?: React.MouseEvent) => {
     if (e) e.preventDefault()
     soundManager.playSound('click', 0.6)
-    setIsAccessModalOpen(true)
+    if (isLoggedIn) {
+      onPlayGame()
+    } else {
+      setIsAccessModalOpen(true)
+    }
   }
 
   return (
@@ -408,13 +434,53 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
           >
             🌐 {lang === 'es' ? 'ES · EN' : 'EN · ES'}
           </button>
-          <button
-            type="button"
-            className="landing-navbar__play-btn"
-            onClick={handlePlayClick}
-          >
-            🎮 {lang === 'es' ? 'JUGAR' : 'PLAY'}
-          </button>
+
+          {isLoggedIn ? (
+            <div className="landing-user-badge">
+              <div className="landing-user-info" onClick={onPlayGame} title="Entrar al juego">
+                <span className="landing-user-avatar">🌱</span>
+                <span className="landing-user-name">{userName}</span>
+                <span className="landing-user-elo">🏆 {userElo} ELO</span>
+                <span className="landing-user-gems">💎 {userGems}</span>
+              </div>
+              <button
+                type="button"
+                className="landing-navbar__play-btn"
+                onClick={onPlayGame}
+              >
+                🎮 {lang === 'es' ? 'ENTRAR' : 'ENTER'}
+              </button>
+              {onSignOut && (
+                <button
+                  type="button"
+                  className="landing-logout-btn"
+                  onClick={onSignOut}
+                  title="Cerrar sesión"
+                >
+                  🚪
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {onOpenAuth && (
+                <button
+                  type="button"
+                  className="landing-login-btn"
+                  onClick={onOpenAuth}
+                >
+                  🔑 {lang === 'es' ? 'INICIAR SESIÓN' : 'LOGIN'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="landing-navbar__play-btn"
+                onClick={handlePlayClick}
+              >
+                🎮 {lang === 'es' ? 'JUGAR' : 'PLAY'}
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -450,13 +516,23 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
           </p>
 
           <div className="landing-hero__ctas">
-            <button
-              type="button"
-              className="landing-btn-primary"
-              onClick={handlePlayClick}
-            >
-              ⚔️ {lang === 'es' ? '¡JUGAR AHORA!' : 'PLAY NOW!'}
-            </button>
+            {isLoggedIn ? (
+              <button
+                type="button"
+                className="landing-btn-primary"
+                onClick={onPlayGame}
+              >
+                ⚔️ {lang === 'es' ? `CONTINUAR COMO ${userName.toUpperCase()} (${userElo} 🏆)` : `PLAY AS ${userName.toUpperCase()} (${userElo} 🏆)`} ➔
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="landing-btn-primary"
+                onClick={handlePlayClick}
+              >
+                ⚔️ {lang === 'es' ? '¡JUGAR AHORA!' : 'PLAY NOW!'}
+              </button>
+            )}
             <a
               href="/roadmap.html"
               target="_blank"
@@ -478,19 +554,55 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
           <div className="landing-hero__release-banner">
             <div className="landing-beta-badge">
               <span className="landing-beta-pulse"></span>
-              <span className="landing-beta-tag">{seasonInfo ? 'TEMPORADA 1' : 'BETA'}</span>
+              <span className="landing-beta-tag">{seasonInfo ? 'TEMPORADA 1' : 'EN VIVO'}</span>
             </div>
             <div className="landing-release-content">
               <span className="landing-release-subtitle">
-                {lang === 'es' ? '⚔️ TEMPORADA OFICIAL EN VIVO' : '⚔️ OFFICIAL SEASON LIVE'}
+                {lang === 'es' ? '⚔️ SERVIDOR OFICIAL CONECTADO A SUPABASE' : '⚔️ OFFICIAL SERVER CONNECTED TO SUPABASE'}
               </span>
               <span className="landing-release-date">
                 {seasonInfo
-                  ? `${seasonInfo.name} · ${totalPlayers} Jugadores Activos`
+                  ? `${seasonInfo.name} · ${totalPlayers} Jugadores Registrados`
                   : lang === 'es'
-                  ? `Servidor Activo · ${totalPlayers} Jugadores Conectados`
-                  : `Server Online · ${totalPlayers} Connected Players`}
+                  ? `Servidor Activo · ${totalPlayers} Jugadores Registrados`
+                  : `Server Online · ${totalPlayers} Registered Players`}
               </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* LIVE SERVER STATS STRIP */}
+      <section className="landing-stats-strip">
+        <div className="landing-container">
+          <div className="landing-stats-row">
+            <div className="landing-stat-item">
+              <span className="landing-stat-item__icon">👥</span>
+              <div>
+                <strong>{totalPlayers > 0 ? totalPlayers : 1}</strong>
+                <span>{lang === 'es' ? 'Guerreros Registrados' : 'Registered Warriors'}</span>
+              </div>
+            </div>
+            <div className="landing-stat-item">
+              <span className="landing-stat-item__icon">🏆</span>
+              <div>
+                <strong>{seasonInfo ? `${seasonInfo.top1_elo_reward + seasonInfo.top2_elo_reward + seasonInfo.top3_elo_reward} 💎` : '175 💎'}</strong>
+                <span>{lang === 'es' ? 'Bote de Premios Temporada' : 'Season Prize Pool'}</span>
+              </div>
+            </div>
+            <div className="landing-stat-item">
+              <span className="landing-stat-item__icon">🛡️</span>
+              <div>
+                <strong>{totalClansCount}</strong>
+                <span>{lang === 'es' ? 'Clanes Activos' : 'Active Clans'}</span>
+              </div>
+            </div>
+            <div className="landing-stat-item">
+              <span className="landing-stat-item__icon">⚡</span>
+              <div>
+                <strong>100% Web PvP</strong>
+                <span>{lang === 'es' ? 'Sin Descargas en PC / Móvil' : 'No Downloads on PC / Mobile'}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -644,7 +756,7 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
               </div>
             </div>
 
-            {/* Clean Info Footer without redundant play button */}
+            {/* Clean Info Footer */}
             <div className="landing-demo-footer">
               <span className="landing-demo-status">
                 <span className="landing-demo-dot"></span>
@@ -854,9 +966,13 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
               {lang === 'es' ? '5 ARENAS. UN SOLO CAMINO A LA GLORIA.' : '5 ARENAS. ONE ROAD TO GLORY.'}
             </h2>
             <p style={{ color: '#e2e8f0', fontSize: '16px', maxWidth: '680px' }}>
-              {lang === 'es'
-                ? 'Empiezas con 1000 de Elo en el Jardín Clásico. Cada victoria te otorga copas para ascender y desbloquear nuevas cartas y campos.'
-                : 'Start at 1000 Elo in the Classic Garden. Every victory earns trophies to climb and unlock new cards and battlegrounds.'}
+              {isLoggedIn
+                ? (lang === 'es'
+                    ? `Actualmente tienes ${userElo} Copas en tu perfil. ¡Compite para desbloquear las siguientes arenas!`
+                    : `You currently have ${userElo} Trophies in your profile. Battle to climb higher arenas!`)
+                : (lang === 'es'
+                    ? 'Empiezas con 1000 de Elo en el Jardín Clásico. Cada victoria te otorga copas para ascender y desbloquear nuevas cartas y campos.'
+                    : 'Start at 1000 Elo in the Classic Garden. Every victory earns trophies to climb and unlock new cards and battlegrounds.')}
             </p>
           </div>
 
@@ -864,11 +980,13 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
 
           <div className="landing-arenas-grid">
             {/* Arena 1 */}
-            <div className="landing-arena-card" style={{ borderColor: '#4ade80' }}>
+            <div className={`landing-arena-card ${isLoggedIn && userElo <= 1600 ? 'landing-arena-card--user-current' : ''}`} style={{ borderColor: '#4ade80' }}>
               <div className="landing-arena-img-wrap">
                 <img src={arena1Bg} alt="Arena 1" />
                 <div className="landing-arena-scrim"></div>
-                <span className="landing-arena-tag" style={{ background: '#4ade80', color: '#052e16' }}>ARENA 1</span>
+                <span className="landing-arena-tag" style={{ background: '#4ade80', color: '#052e16' }}>
+                  {isLoggedIn && userElo <= 1600 ? '📍 TU ARENA ACTUAL' : 'ARENA 1'}
+                </span>
                 <span className="landing-arena-num" style={{ color: '#4ade80' }}>1</span>
               </div>
               <div className="landing-arena-body">
@@ -887,11 +1005,13 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
             </div>
 
             {/* Arena 2 */}
-            <div className="landing-arena-card" style={{ borderColor: '#60a5fa' }}>
+            <div className={`landing-arena-card ${isLoggedIn && userElo > 1600 && userElo <= 2000 ? 'landing-arena-card--user-current' : ''}`} style={{ borderColor: '#60a5fa' }}>
               <div className="landing-arena-img-wrap">
                 <img src={arena2Bg} alt="Arena 2" />
                 <div className="landing-arena-scrim"></div>
-                <span className="landing-arena-tag" style={{ background: '#60a5fa', color: '#082f49' }}>ARENA 2</span>
+                <span className="landing-arena-tag" style={{ background: '#60a5fa', color: '#082f49' }}>
+                  {isLoggedIn && userElo > 1600 && userElo <= 2000 ? '📍 TU ARENA ACTUAL' : 'ARENA 2'}
+                </span>
                 <span className="landing-arena-num" style={{ color: '#60a5fa' }}>2</span>
               </div>
               <div className="landing-arena-body">
@@ -910,11 +1030,13 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
             </div>
 
             {/* Arena 3 */}
-            <div className="landing-arena-card" style={{ borderColor: '#c084fc' }}>
+            <div className={`landing-arena-card ${isLoggedIn && userElo > 2000 && userElo <= 3000 ? 'landing-arena-card--user-current' : ''}`} style={{ borderColor: '#c084fc' }}>
               <div className="landing-arena-img-wrap">
                 <img src={arena3Bg} alt="Arena 3" />
                 <div className="landing-arena-scrim"></div>
-                <span className="landing-arena-tag" style={{ background: '#c084fc', color: '#3b0764' }}>ARENA 3</span>
+                <span className="landing-arena-tag" style={{ background: '#c084fc', color: '#3b0764' }}>
+                  {isLoggedIn && userElo > 2000 && userElo <= 3000 ? '📍 TU ARENA ACTUAL' : 'ARENA 3'}
+                </span>
                 <span className="landing-arena-num" style={{ color: '#c084fc' }}>3</span>
               </div>
               <div className="landing-arena-body">
@@ -933,11 +1055,13 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
             </div>
 
             {/* Arena 4 */}
-            <div className="landing-arena-card" style={{ borderColor: '#fde047' }}>
+            <div className={`landing-arena-card ${isLoggedIn && userElo > 3000 && userElo <= 4000 ? 'landing-arena-card--user-current' : ''}`} style={{ borderColor: '#fde047' }}>
               <div className="landing-arena-img-wrap">
                 <img src={arena4Bg} alt="Arena 4" />
                 <div className="landing-arena-scrim"></div>
-                <span className="landing-arena-tag" style={{ background: '#fde047', color: '#451a03' }}>ARENA 4</span>
+                <span className="landing-arena-tag" style={{ background: '#fde047', color: '#451a03' }}>
+                  {isLoggedIn && userElo > 3000 && userElo <= 4000 ? '📍 TU ARENA ACTUAL' : 'ARENA 4'}
+                </span>
                 <span className="landing-arena-num" style={{ color: '#fde047' }}>4</span>
               </div>
               <div className="landing-arena-body">
@@ -956,11 +1080,13 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
             </div>
 
             {/* Arena 5 */}
-            <div className="landing-arena-card" style={{ borderColor: '#f43f5e' }}>
+            <div className={`landing-arena-card ${isLoggedIn && userElo > 4000 ? 'landing-arena-card--user-current' : ''}`} style={{ borderColor: '#f43f5e' }}>
               <div className="landing-arena-img-wrap">
                 <img src={arena5Bg} alt="Arena 5" />
                 <div className="landing-arena-scrim"></div>
-                <span className="landing-arena-tag" style={{ background: '#f43f5e', color: '#ffffff' }}>ARENA 5</span>
+                <span className="landing-arena-tag" style={{ background: '#f43f5e', color: '#ffffff' }}>
+                  {isLoggedIn && userElo > 4000 ? '📍 TU ARENA ACTUAL' : 'ARENA 5'}
+                </span>
                 <span className="landing-arena-num" style={{ color: '#f43f5e' }}>5</span>
               </div>
               <div className="landing-arena-body">
@@ -1010,12 +1136,18 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
         <div className="landing-container">
           <div className="landing-cta-box">
             <h2 className="landing-arcade-title" style={{ fontSize: 'clamp(34px, 5vw, 54px)' }}>
-              {lang === 'es' ? '¡TU MAZO TE ESPERA EN LA ARENA!' : 'YOUR DECK AWAITS IN THE ARENA!'}
+              {isLoggedIn
+                ? (lang === 'es' ? `¡TU MAZO TE ESPERA, ${userName.toUpperCase()}!` : `YOUR DECK AWAITS, ${userName.toUpperCase()}!`)
+                : (lang === 'es' ? '¡TU MAZO TE ESPERA EN LA ARENA!' : 'YOUR DECK AWAITS IN THE ARENA!')}
             </h2>
             <p style={{ fontSize: '18px', maxWidth: '600px', color: '#fef2f2' }}>
-              {lang === 'es'
-                ? 'Empieza tu primera partida en menos de 10 segundos directamente desde tu navegador, en PC o móvil.'
-                : 'Launch your first match in under 10 seconds directly in your browser on PC or mobile.'}
+              {isLoggedIn
+                ? (lang === 'es'
+                    ? `Tienes ${userElo} Copas registradas y ${userGems} Gemas en tu inventario. ¡Entra a jugar!`
+                    : `You have ${userElo} Trophies and ${userGems} Gems registered in your account. Jump into battle!`)
+                : (lang === 'es'
+                    ? 'Empieza tu primera partida en menos de 10 segundos directamente desde tu navegador, en PC o móvil.'
+                    : 'Launch your first match in under 10 seconds directly in your browser on PC or mobile.')}
             </p>
             <button
               type="button"
@@ -1023,7 +1155,7 @@ export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth
               style={{ fontSize: '22px', padding: '18px 44px' }}
               onClick={handlePlayClick}
             >
-              🎮 {lang === 'es' ? '¡ENTRAR AL JUEGO AHORA!' : 'PLAY THE GAME NOW!'}
+              🎮 {isLoggedIn ? (lang === 'es' ? '¡ENTRAR A LA ARENA AHORA!' : 'ENTER THE ARENA NOW!') : (lang === 'es' ? '¡ENTRAR AL JUEGO AHORA!' : 'PLAY THE GAME NOW!')}
             </button>
           </div>
         </div>

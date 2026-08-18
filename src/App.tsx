@@ -100,12 +100,14 @@ function App() {
 
   const {
     user,
+    profile,
     loading,
     isAdmin,
     needsPasswordSetup,
     signInWithGoogle,
     setUserPassword,
     signInWithEmail,
+    signOut,
   } = useAuth()
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
@@ -292,7 +294,9 @@ function App() {
         <LandingPage
           onPlayGame={handleGoToGame}
           isLoggedIn={Boolean(user)}
+          userProfile={profile}
           onOpenAuth={() => setIsAuthModalOpen(true)}
+          onSignOut={signOut}
         />
         <AuthModal
           isOpen={isAuthModalOpen}
