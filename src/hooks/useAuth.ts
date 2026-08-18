@@ -80,6 +80,11 @@ export function useAuth() {
       }
     })
 
+    // Clean up any stale error parameters in URL from previous failed attempts
+    if (typeof window !== 'undefined' && window.location.search.includes('error=')) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -87,6 +92,9 @@ export function useAuth() {
         setUser(session.user)
         checkIfPasswordNeeded(session.user)
         loadUserProfile(session.user.id)
+        if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+          window.history.replaceState(null, '', window.location.pathname)
+        }
       } else {
         setUser(null)
         setNeedsPasswordSetup(false)

@@ -8,7 +8,7 @@ export const isSupabaseConfigured = (): boolean => {
   return Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl !== 'https://your-project.supabase.co')
 }
 
-// Create the typed Supabase Client
+// Create the typed Supabase Client with robust implicit OAuth session handling
 export const supabase = createClient<Database>(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',
@@ -17,6 +17,8 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      flowType: 'implicit',
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     },
     realtime: {
       params: {
