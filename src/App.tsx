@@ -337,10 +337,8 @@ function App() {
             onOpenClan={() => setScreen('clan')}
             onOpenMarketplace={() => setScreen('market')}
             onOpenLanding={handleGoToLanding}
-            onOpenAuth={() => setIsAuthModalOpen(true)}
             onOpenAdmin={() => setIsAdminPanelOpen(true)}
             isAdmin={isAdmin}
-            isLoggedIn={Boolean(user)}
             onStartSlotUnlock={startUnlockingSlot}
             onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}

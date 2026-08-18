@@ -47,10 +47,8 @@ interface MainMenuProps {
   onOpenClan?: () => void
   onOpenMarketplace?: () => void
   onOpenLanding?: () => void
-  onOpenAuth?: () => void
   onOpenAdmin?: () => void
   isAdmin?: boolean
-  isLoggedIn?: boolean
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onFastUnlockSlot?: (slotId: number) => void
   onOpenSlotPack?: (slotId: number) => void
@@ -78,10 +76,8 @@ export default function MainMenu({
   onOpenBattlePass,
   onOpenClan,
   onOpenLanding,
-  onOpenAuth,
   onOpenAdmin,
   isAdmin = false,
-  isLoggedIn = false,
   onStartSlotUnlock,
   onFastUnlockSlot,
   onOpenSlotPack,
@@ -227,14 +223,6 @@ export default function MainMenu({
                 🛡️ Admin
               </button>
             )}
-            <button
-              type="button"
-              className="main-menu-auth-btn"
-              onClick={onOpenAuth}
-              title={isLoggedIn ? 'Gestionar Cuenta' : 'Iniciar Sesión / Registrarse'}
-            >
-              {isLoggedIn ? '👤 Cuenta' : '🔑 Login'}
-            </button>
             <div className="season-countdown-badge">
               <span className="season-badge-icon">⏳</span>
               <span className="season-badge-text">
