@@ -47,7 +47,7 @@ export function useAuth() {
       if (session?.user) {
         setUser(session.user)
         checkIfPasswordNeeded(session.user)
-        loadUserProfile(session.user.id)
+        loadUserProfile(session.user.id, session.user)
       } else {
         setLoading(false)
       }
@@ -64,7 +64,7 @@ export function useAuth() {
       if (session?.user) {
         setUser(session.user)
         checkIfPasswordNeeded(session.user)
-        loadUserProfile(session.user.id)
+        loadUserProfile(session.user.id, session.user)
         if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
           window.history.replaceState(null, '', window.location.pathname)
         }
@@ -130,22 +130,31 @@ export function useAuth() {
   const loadUserProfile = async (userId: string, currentUser?: any) => {
     setLoading(true)
     let prof = await SupabaseService.getProfile(userId)
-    if (!prof) {
-      const authUser = currentUser || user
-      const candidateName =
-        authUser?.user_metadata?.username ||
-        authUser?.user_metadata?.full_name ||
-        authUser?.user_metadata?.name ||
-        authUser?.email?.split('@')[0] ||
-        'Guerrero'
-
-      await initializeNewUserProfile(userId, candidateName, authUser?.email)
-      prof = await SupabaseService.getProfile(userId)
-    }
+    const authUser = currentUser || user
+    const candidateName =
+      authUser?.user_metadata?.username ||
+      authUser?.user_metadata?.full_name ||
+      authUser?.user_metadata?.name ||
+      authUser?.email?.split('@')[0]
 
     if (prof) {
+      // Auto-heal placeholder username if user has a real Google/Email name
+      if ((prof.username === 'Guerrero' || !prof.username) && candidateName && candidateName !== 'Guerrero') {
+        const cleanName = candidateName.replace(/[^a-zA-Z0-9_\s-]/g, '').slice(0, 16)
+        if (cleanName) {
+          await (supabase.from('profiles') as any).update({ username: cleanName }).eq('id', userId)
+          prof.username = cleanName
+        }
+      }
       setProfile(prof)
       setIsAdmin(Boolean(prof.is_admin))
+    } else {
+      await initializeNewUserProfile(userId, candidateName || 'Guerrero', authUser?.email)
+      prof = await SupabaseService.getProfile(userId)
+      if (prof) {
+        setProfile(prof)
+        setIsAdmin(Boolean(prof.is_admin))
+      }
     }
     setLoading(false)
   }
