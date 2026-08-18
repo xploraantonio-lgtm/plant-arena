@@ -88,19 +88,6 @@ export const TOURNAMENT_CATALOG: TournamentDefinition[] = [
   },
 ]
 
-const BOT_PLAYERS = [
-  { name: 'SpikeMaster', avatar: 'repeater', baseWins: 5, losses: 1 },
-  { name: 'FloraStrike', avatar: 'bonkchoy', baseWins: 4, losses: 2 },
-  { name: 'CactusNinja', avatar: 'threepeater', baseWins: 4, losses: 1 },
-  { name: 'SolarisGamer', avatar: 'twinsunflower', baseWins: 3, losses: 2 },
-  { name: 'VineReaper', avatar: 'squash', baseWins: 3, losses: 3 },
-  { name: 'IceBlaster', avatar: 'iceberglettuce', baseWins: 2, losses: 2 },
-  { name: 'ChompHero', avatar: 'chomper', baseWins: 2, losses: 3 },
-  { name: 'PeaSharpshooter', avatar: 'peashooter', baseWins: 1, losses: 2 },
-  { name: 'MelonKing', avatar: 'melonpult', baseWins: 1, losses: 3 },
-  { name: 'WallNutDefender', avatar: 'wallnut', baseWins: 0, losses: 3 },
-]
-
 export const TournamentManager = {
   getAccessCode(tournamentId: string): string {
     try {
@@ -170,15 +157,6 @@ export const TournamentManager = {
         losses: 0,
         isEliminated: false,
       },
-      ...BOT_PLAYERS.map((bot, idx) => ({
-        rank: idx + 2,
-        name: bot.name,
-        avatar: bot.avatar,
-        isUser: false,
-        wins: 0,
-        losses: 0,
-        isEliminated: false,
-      })),
     ]
 
     const session: ActiveTournamentSession = {

@@ -10,27 +10,36 @@ export interface SeasonStatus {
 }
 
 const SEASON_KEY = 'plant_arena_season_start'
-const SEASON_DAYS = 30
-const SEASON_MS = SEASON_DAYS * 24 * 60 * 60 * 1000
+const SEASON_END_KEY = 'plant_arena_season_end'
+const SEASON_NUM_KEY = 'plant_arena_season_num'
+const DEFAULT_SEASON_DAYS = 30
 
 export class SeasonManager {
-  static getSeasonStart(): number {
-    const saved = localStorage.getItem(SEASON_KEY)
-    if (saved) {
-      const parsed = parseInt(saved, 10)
-      if (!isNaN(parsed)) return parsed
+  static updateFromSupabase(season: { season_number?: number; starts_at?: string; ends_at?: string } | null) {
+    if (!season) return
+    if (season.starts_at) {
+      localStorage.setItem(SEASON_KEY, new Date(season.starts_at).getTime().toString())
     }
-    // Set season start to 6 days ago so there are ~24 days left in the 30-day demo season
-    const defaultStart = Date.now() - 6 * 24 * 60 * 60 * 1000
-    localStorage.setItem(SEASON_KEY, defaultStart.toString())
-    return defaultStart
+    if (season.ends_at) {
+      localStorage.setItem(SEASON_END_KEY, new Date(season.ends_at).getTime().toString())
+    }
+    if (season.season_number) {
+      localStorage.setItem(SEASON_NUM_KEY, season.season_number.toString())
+    }
   }
 
   static getSeasonStatus(): SeasonStatus {
-    const start = this.getSeasonStart()
     const now = Date.now()
-    const elapsed = now - start
-    const remainingMs = Math.max(0, SEASON_MS - elapsed)
+    const savedEnd = localStorage.getItem(SEASON_END_KEY)
+    const savedStart = localStorage.getItem(SEASON_KEY)
+    const savedNum = localStorage.getItem(SEASON_NUM_KEY)
+
+    const endMs = savedEnd ? parseInt(savedEnd, 10) : now + DEFAULT_SEASON_DAYS * 86400 * 1000
+    const startMs = savedStart ? parseInt(savedStart, 10) : now
+    const seasonNumber = savedNum ? parseInt(savedNum, 10) : 1
+
+    const remainingMs = Math.max(0, endMs - now)
+    const totalDays = Math.max(1, Math.ceil((endMs - startMs) / (86400 * 1000)))
 
     const totalSeconds = Math.floor(remainingMs / 1000)
     const days = Math.floor(totalSeconds / 86400)
@@ -47,23 +56,14 @@ export class SeasonManager {
     }
 
     return {
-      seasonNumber: 1,
-      totalDays: SEASON_DAYS,
+      seasonNumber,
+      totalDays,
       daysLeft: days,
       hoursLeft: hours,
       minutesLeft: minutes,
       secondsLeft: seconds,
       isEnded,
       formattedCountdown,
-    }
-  }
-
-  // Force end season for testing
-  static setSeasonEndedForTest(ended: boolean) {
-    if (ended) {
-      localStorage.setItem(SEASON_KEY, (Date.now() - SEASON_MS - 1000).toString())
-    } else {
-      localStorage.setItem(SEASON_KEY, (Date.now() - 6 * 24 * 60 * 60 * 1000).toString())
     }
   }
 }

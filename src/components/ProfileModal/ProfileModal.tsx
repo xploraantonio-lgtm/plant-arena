@@ -7,6 +7,7 @@ import {
   type UserTransaction,
 } from '../../utils/userManager'
 import { soundManager } from '../../utils/audioManager'
+import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import './ProfileModal.css'
 
 interface ProfileModalProps {
@@ -60,7 +61,7 @@ export default function ProfileModal({
   }
 
   // Handle Nick Change
-  const handleSaveNick = (e: React.FormEvent) => {
+  const handleSaveNick = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nickInput.trim()) return
     const updated = UserManager.updateName(nickInput)
@@ -68,14 +69,31 @@ export default function ProfileModal({
     setIsEditingNick(false)
     soundManager.playSound('click', 0.5)
     showFeedback('¡Nick actualizado correctamente!')
+
+    if (isSupabaseConfigured()) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        await (supabase.from('profiles') as any).update({ username: nickInput.trim() }).eq('id', session.user.id)
+      }
+    }
   }
 
   // Handle Preset Avatar Select
-  const handleSelectPresetAvatar = (iconUrl: string) => {
+  const handleSelectPresetAvatar = async (iconUrl: string) => {
     const updated = UserManager.updateAvatar(iconUrl, false)
     setProfile(updated)
     soundManager.playSound('click', 0.5)
     showFeedback('¡Foto de perfil actualizada!')
+
+    if (isSupabaseConfigured()) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        const found = PRESET_AVATARS.find((a) => a.icon === iconUrl)
+        if (found) {
+          await (supabase.from('profiles') as any).update({ avatar_id: found.id }).eq('id', session.user.id)
+        }
+      }
+    }
   }
 
   // Handle Custom File Upload with Compression

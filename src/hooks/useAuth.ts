@@ -26,36 +26,9 @@ export const WHITELISTED_DEVELOPER_IPS = [
   'localhost',
 ]
 
-const DEFAULT_GUEST_PROFILE: ProfileRow = {
-  id: 'guest_local_' + Math.random().toString(36).substring(2, 9),
-  username: 'PlantWarrior',
-  avatar_id: 'peashooter',
-  country: 'US',
-  elo_rating: 1000,
-  gems_balance: 0.0,
-  gold_balance: 0,
-  colosseum_tickets: 0,
-  colosseum_current_streak: 0,
-  colosseum_max_streak: 0,
-  has_vip_pass: false,
-  claimed_vip_levels: [],
-  is_admin: false,
-  referral_code: 'PLANT_' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-  referred_by: null,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-}
-
 export function useAuth() {
   const [user, setUser] = useState<any | null>(null)
-  const [profile, setProfile] = useState<ProfileRow | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.GUEST_USER)
-      return saved ? JSON.parse(saved) : DEFAULT_GUEST_PROFILE
-    } catch {
-      return DEFAULT_GUEST_PROFILE
-    }
-  })
+  const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION) === 'true'
