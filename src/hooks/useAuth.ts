@@ -91,11 +91,14 @@ export function useAuth() {
   }
 
   const initializeNewUserProfile = async (userId: string, username: string, email?: string) => {
-    const existingProf = await SupabaseService.getProfile(userId)
-    if (!existingProf) {
+    try {
+      const cleanName = (username || email?.split('@')[0] || 'Guerrero')
+        .replace(/[^a-zA-Z0-9_\s-]/g, '')
+        .slice(0, 16) || 'Guerrero'
+
       const newProfile: Database['public']['Tables']['profiles']['Insert'] = {
         id: userId,
-        username: username || email?.split('@')[0] || 'Guerrero_' + Math.random().toString(36).substring(2, 6),
+        username: cleanName,
         avatar_id: 'peashooter',
         elo_rating: 1000,
         gems_balance: 0.0,
@@ -108,7 +111,8 @@ export function useAuth() {
         is_admin: false,
         referral_code: 'PLANT_' + Math.random().toString(36).substring(2, 7).toUpperCase(),
       }
-      await (supabase.from('profiles') as any).insert(newProfile)
+
+      await (supabase.from('profiles') as any).upsert(newProfile, { onConflict: 'id' })
 
       // Insert exactly 4 Starter Plant Instances
       const starterPlants: Database['public']['Tables']['plant_instances']['Insert'][] = [
@@ -118,23 +122,30 @@ export function useAuth() {
         { owner_id: userId, plant_id: 'chomper', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 3 }, // Cactus
       ]
       await (supabase.from('plant_instances') as any).insert(starterPlants)
+    } catch (e) {
+      console.warn('[useAuth] Exception in initializeNewUserProfile:', e)
     }
   }
 
-  const loadUserProfile = async (userId: string) => {
+  const loadUserProfile = async (userId: string, currentUser?: any) => {
     setLoading(true)
-    const prof = await SupabaseService.getProfile(userId)
+    let prof = await SupabaseService.getProfile(userId)
+    if (!prof) {
+      const authUser = currentUser || user
+      const candidateName =
+        authUser?.user_metadata?.username ||
+        authUser?.user_metadata?.full_name ||
+        authUser?.user_metadata?.name ||
+        authUser?.email?.split('@')[0] ||
+        'Guerrero'
+
+      await initializeNewUserProfile(userId, candidateName, authUser?.email)
+      prof = await SupabaseService.getProfile(userId)
+    }
+
     if (prof) {
       setProfile(prof)
       setIsAdmin(Boolean(prof.is_admin))
-    } else {
-      await initializeNewUserProfile(
-        userId,
-        user?.user_metadata?.username || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guerrero',
-        user?.email
-      )
-      const freshProf = await SupabaseService.getProfile(userId)
-      if (freshProf) setProfile(freshProf)
     }
     setLoading(false)
   }

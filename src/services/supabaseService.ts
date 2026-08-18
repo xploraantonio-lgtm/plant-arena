@@ -21,12 +21,12 @@ export const SupabaseService = {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
       if (error) {
         console.warn('[SupabaseService] getProfile error:', error.message)
         return null
       }
-      return data as ProfileRow
+      return data as ProfileRow | null
     } catch (e) {
       console.warn('[SupabaseService] getProfile exception:', e)
       return null
@@ -120,9 +120,9 @@ export const SupabaseService = {
       const { data, error } = await (supabase.from('plant_instances') as any)
         .insert(plant)
         .select()
-        .single()
+        .maybeSingle()
       if (error) return null
-      return data as PlantInstanceRow
+      return data as PlantInstanceRow | null
     } catch {
       return null
     }
@@ -242,7 +242,7 @@ export const SupabaseService = {
           status: 'searching',
         })
         .select('id')
-        .single()
+        .maybeSingle()
       if (error || !data) return null
       return data.id as string
     } catch {

@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Profiles are readable by everyone" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own avatar and name" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- -----------------------------------------------------------------------------
@@ -73,6 +74,8 @@ CREATE TABLE IF NOT EXISTS public.plant_instances (
 ALTER TABLE public.plant_instances ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own or listed plant cards" ON public.plant_instances 
 FOR SELECT USING (auth.uid() = owner_id OR is_listed_for_sale = true);
+CREATE POLICY "Users can insert own plant cards" ON public.plant_instances 
+FOR INSERT WITH CHECK (auth.uid() = owner_id);
 CREATE POLICY "Users can update own plant deck assignments" ON public.plant_instances 
 FOR UPDATE USING (auth.uid() = owner_id);
 
