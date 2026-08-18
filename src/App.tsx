@@ -100,6 +100,7 @@ function App() {
 
   const {
     user,
+    loading,
     isAdmin,
     signInWithGoogle,
     sendEmailOtp,
@@ -111,6 +112,26 @@ function App() {
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false)
+
+  // Verify session when accessing /play route
+  useEffect(() => {
+    if (loading) return
+
+    const isPlayRoute = typeof window !== 'undefined' && (
+      window.location.pathname.toLowerCase().startsWith('/play') ||
+      window.location.hash.toLowerCase().includes('play')
+    )
+
+    if (isPlayRoute) {
+      if (user) {
+        setScreen('menu')
+      } else {
+        // No active session found -> redirect to landing and pop up login/register
+        setScreen('landing')
+        setIsAuthModalOpen(true)
+      }
+    }
+  }, [loading, user])
 
   const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum' | 'tournament'>('ranked')
   const [colosseumConfig, setColosseumConfig] = useState<import('./types/game').ColosseumMatchConfig | null>(null)
