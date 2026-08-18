@@ -10,10 +10,13 @@ import arena4Bg from '../../assets/images/battlefield-bg4.jpg'
 import arena5Bg from '../../assets/images/battlefield-bg5.jpg'
 import rankingIco from '../../assets/ico/Ranking.png'
 import { soundManager } from '../../utils/audioManager'
+import LandingAccessModal from './LandingAccessModal'
 import './LandingPage.css'
 
 interface LandingPageProps {
   onPlayGame: () => void
+  isLoggedIn?: boolean
+  onOpenAuth?: () => void
 }
 
 interface PlantCardData {
@@ -332,10 +335,11 @@ const RARITY_FILTERS: { key: RarityFilter; labelEs: string; labelEn: string; col
   { key: 'legendary', labelEs: 'Legendaria', labelEn: 'Legendary', color: '#fbbf24' },
 ]
 
-export default function LandingPage({ onPlayGame }: LandingPageProps) {
+export default function LandingPage({ onPlayGame, isLoggedIn = false, onOpenAuth }: LandingPageProps) {
   const [lang, setLang] = useState<'es' | 'en'>('es')
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({})
   const [selectedRarity, setSelectedRarity] = useState<RarityFilter>('all')
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState<boolean>(false)
 
   const toggleLang = () => {
     soundManager.playSound('click', 0.4)
@@ -350,9 +354,10 @@ export default function LandingPage({ onPlayGame }: LandingPageProps) {
     }))
   }
 
-  const handlePlayClick = () => {
+  const handlePlayClick = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault()
     soundManager.playSound('click', 0.6)
-    onPlayGame()
+    setIsAccessModalOpen(true)
   }
 
   return (
@@ -1034,6 +1039,18 @@ export default function LandingPage({ onPlayGame }: LandingPageProps) {
           </div>
         </div>
       </footer>
+
+      {/* Giant Production Access Modal (Secret Code arena$$**) */}
+      <LandingAccessModal
+        isOpen={isAccessModalOpen}
+        onClose={() => setIsAccessModalOpen(false)}
+        isLoggedIn={Boolean(isLoggedIn)}
+        onOpenAuth={() => {
+          setIsAccessModalOpen(false)
+          if (onOpenAuth) onOpenAuth()
+        }}
+        onProceedToGame={onPlayGame}
+      />
     </div>
   )
 }

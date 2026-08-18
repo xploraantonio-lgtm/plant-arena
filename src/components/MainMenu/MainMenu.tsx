@@ -22,6 +22,7 @@ import { UserManager, type PlayerProfile } from '../../utils/userManager'
 import ProfileModal from '../ProfileModal/ProfileModal'
 import ModeSelectorModal from '../ModeSelector/ModeSelectorModal'
 import ColosseumModal from '../Colosseum/ColosseumModal'
+import TournamentModal from '../Tournament/TournamentModal'
 import type { ColosseumBetAmount } from '../../types/game'
 import './MainMenu.css'
 
@@ -37,6 +38,7 @@ interface MainMenuProps {
   colosseumMaxStreak?: number
   onPlay: () => void
   onStartColosseumMatch?: (betGems: ColosseumBetAmount, usedTicket: boolean) => void
+  onStartTournamentMatch?: (opponentName: string, tournamentId: string) => void
   onOpenCollection?: () => void
   onOpenJardin?: () => void
   onOpenShop?: () => void
@@ -45,6 +47,10 @@ interface MainMenuProps {
   onOpenClan?: () => void
   onOpenMarketplace?: () => void
   onOpenLanding?: () => void
+  onOpenAuth?: () => void
+  onOpenAdmin?: () => void
+  isAdmin?: boolean
+  isLoggedIn?: boolean
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onFastUnlockSlot?: (slotId: number) => void
   onOpenSlotPack?: (slotId: number) => void
@@ -64,6 +70,7 @@ export default function MainMenu({
   colosseumMaxStreak = 0,
   onPlay,
   onStartColosseumMatch,
+  onStartTournamentMatch,
   onOpenCollection,
   onOpenJardin,
   onOpenShop,
@@ -71,6 +78,10 @@ export default function MainMenu({
   onOpenBattlePass,
   onOpenClan,
   onOpenLanding,
+  onOpenAuth,
+  onOpenAdmin,
+  isAdmin = false,
+  isLoggedIn = false,
   onStartSlotUnlock,
   onFastUnlockSlot,
   onOpenSlotPack,
@@ -81,6 +92,7 @@ export default function MainMenu({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
   const [isColosseumModalOpen, setIsColosseumModalOpen] = useState(false)
+  const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [, setTicker] = useState<number>(0)
   const [activeAlert, setActiveAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
@@ -205,6 +217,24 @@ export default function MainMenu({
 
           {/* 30-DAY SEASON TIMER ROW WITH FULLSCREEN & MUTE BUTTONS BESIDE IT */}
           <div className="season-timer-row">
+            {isAdmin && (
+              <button
+                type="button"
+                className="main-menu-admin-btn"
+                onClick={onOpenAdmin}
+                title="Abrir Panel de Administrador (Supabase)"
+              >
+                🛡️ Admin
+              </button>
+            )}
+            <button
+              type="button"
+              className="main-menu-auth-btn"
+              onClick={onOpenAuth}
+              title={isLoggedIn ? 'Gestionar Cuenta' : 'Iniciar Sesión / Registrarse'}
+            >
+              {isLoggedIn ? '👤 Cuenta' : '🔑 Login'}
+            </button>
             <div className="season-countdown-badge">
               <span className="season-badge-icon">⏳</span>
               <span className="season-badge-text">
@@ -420,7 +450,7 @@ export default function MainMenu({
         onDeductTokens={onDeductTokens}
       />
 
-      {/* MODE SELECTOR MODAL (RANKED VS COLOSSEUM) */}
+      {/* MODE SELECTOR MODAL (RANKED VS COLOSSEUM VS TOURNAMENT) */}
       <ModeSelectorModal
         isOpen={isModeSelectorOpen}
         onClose={() => setIsModeSelectorOpen(false)}
@@ -429,6 +459,7 @@ export default function MainMenu({
         colosseumTickets={colosseumTickets}
         onSelectRanked={onPlay}
         onSelectColosseum={() => setIsColosseumModalOpen(true)}
+        onSelectTournament={() => setIsTournamentModalOpen(true)}
       />
 
       {/* COLOSSEUM MODAL */}
@@ -446,6 +477,22 @@ export default function MainMenu({
           }
         }}
         onOpenShop={onOpenShop}
+      />
+
+      {/* TOURNAMENT MODAL */}
+      <TournamentModal
+        isOpen={isTournamentModalOpen}
+        onClose={() => setIsTournamentModalOpen(false)}
+        userTokens={userTokens}
+        onDeductTokens={(amount) => {
+          if (onDeductTokens) return onDeductTokens(amount)
+          return false
+        }}
+        onStartTournamentMatch={(oppName, tourneyId) => {
+          if (onStartTournamentMatch) {
+            onStartTournamentMatch(oppName, tourneyId)
+          }
+        }}
       />
     </div>
   )

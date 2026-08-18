@@ -18,6 +18,9 @@ import background from './assets/images/background.png'
 import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'
+import { useAuth } from './hooks/useAuth'
+import AuthModal from './components/Auth/AuthModal'
+import AdminPanel from './components/Admin/AdminPanel'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -95,8 +98,23 @@ function App() {
     resolveColosseumMatch,
   } = useInventory()
 
-  const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum'>('ranked')
+  const {
+    user,
+    isAdmin,
+    signInWithGoogle,
+    sendEmailOtp,
+    verifyEmailOtp,
+    signInWithEmail,
+    signUpWithEmail,
+    loginAsAdmin,
+  } = useAuth()
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false)
+
+  const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum' | 'tournament'>('ranked')
   const [colosseumConfig, setColosseumConfig] = useState<import('./types/game').ColosseumMatchConfig | null>(null)
+  const [tournamentOpponent, setTournamentOpponent] = useState<{ name: string; tournamentId: string } | null>(null)
 
   const handleGoToGame = () => {
     setScreen('menu')
@@ -123,6 +141,7 @@ function App() {
   const handlePlayNormal = () => {
     setBattleMatchMode('ranked')
     setColosseumConfig(null)
+    setTournamentOpponent(null)
     setPracticePlantId(null)
     setCustomArenaBg(undefined)
     setScreen('battle')
@@ -133,12 +152,22 @@ function App() {
       useColosseumTicket()
     }
     setBattleMatchMode('colosseum')
+    setTournamentOpponent(null)
     setColosseumConfig({
       betGems,
       usedTicket,
       payoutGems: Number((betGems * 1.6).toFixed(2)),
       rakeGems: Number((betGems * 0.4).toFixed(2)),
     })
+    setPracticePlantId(null)
+    setCustomArenaBg(undefined)
+    setScreen('battle')
+  }
+
+  const handleStartTournamentMatch = (opponentName: string, tournamentId: string) => {
+    setBattleMatchMode('tournament')
+    setColosseumConfig(null)
+    setTournamentOpponent({ name: opponentName, tournamentId })
     setPracticePlantId(null)
     setCustomArenaBg(undefined)
     setScreen('battle')
@@ -232,7 +261,31 @@ function App() {
     : false
 
   if (screen === 'landing') {
-    return <LandingPage onPlayGame={handleGoToGame} />
+    return (
+      <>
+        <LandingPage
+          onPlayGame={handleGoToGame}
+          isLoggedIn={Boolean(user)}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+        />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSignInGoogle={signInWithGoogle}
+          onSendEmailOtp={sendEmailOtp}
+          onVerifyEmailOtp={verifyEmailOtp}
+          onSignInEmail={signInWithEmail}
+          onSignUpEmail={signUpWithEmail}
+          onAdminLogin={loginAsAdmin}
+          onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+          onSuccessRedirect={handleGoToGame}
+        />
+        <AdminPanel
+          isOpen={isAdminPanelOpen}
+          onClose={() => setIsAdminPanelOpen(false)}
+        />
+      </>
+    )
   }
 
   return (
@@ -251,6 +304,7 @@ function App() {
             colosseumMaxStreak={colosseumMaxStreak}
             onPlay={handlePlayNormal}
             onStartColosseumMatch={handleStartColosseumMatch}
+            onStartTournamentMatch={handleStartTournamentMatch}
             onOpenCollection={handleOpenCollection}
             onOpenJardin={handleOpenJardin}
             onOpenShop={handleOpenShop}
@@ -259,6 +313,10 @@ function App() {
             onOpenClan={() => setScreen('clan')}
             onOpenMarketplace={() => setScreen('market')}
             onOpenLanding={handleGoToLanding}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
+            onOpenAdmin={() => setIsAdminPanelOpen(true)}
+            isAdmin={isAdmin}
+            isLoggedIn={Boolean(user)}
             onStartSlotUnlock={startUnlockingSlot}
             onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}
@@ -278,6 +336,7 @@ function App() {
             customBgImage={customArenaBg}
             matchMode={battleMatchMode}
             colosseumConfig={colosseumConfig}
+            tournamentOpponent={tournamentOpponent}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)
@@ -515,6 +574,25 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Supabase Auth Modal */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSignInGoogle={signInWithGoogle}
+          onSendEmailOtp={sendEmailOtp}
+          onVerifyEmailOtp={verifyEmailOtp}
+          onSignInEmail={signInWithEmail}
+          onSignUpEmail={signUpWithEmail}
+          onAdminLogin={loginAsAdmin}
+          onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+        />
+
+        {/* Central Admin Dashboard Panel (Supabase Database Controller) */}
+        <AdminPanel
+          isOpen={isAdminPanelOpen}
+          onClose={() => setIsAdminPanelOpen(false)}
+        />
       </GameFrame>
       <RotateOverlay />
     </>

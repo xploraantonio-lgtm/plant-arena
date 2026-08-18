@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PlantId, ColosseumMatchConfig } from '../../types/game'
+import { TournamentManager, type ActiveTournamentSession } from '../../utils/tournamentManager'
 import { useGameEngine } from '../../hooks/useGameEngine'
 import {
   PLANT_CONFIGS,
@@ -86,8 +87,9 @@ interface BattlefieldProps {
   activeDeck?: PlantId[]
   userElo?: number
   customBgImage?: string
-  matchMode?: 'ranked' | 'colosseum'
+  matchMode?: 'ranked' | 'colosseum' | 'tournament'
   colosseumConfig?: ColosseumMatchConfig | null
+  tournamentOpponent?: { name: string; tournamentId: string } | null
   onColosseumComplete?: (won: boolean) => { payoutGems: number; newStreak: number; newMaxStreak: number; isNewRecord: boolean }
 }
 
@@ -102,6 +104,7 @@ export default function Battlefield({
   customBgImage,
   matchMode = 'ranked',
   colosseumConfig,
+  tournamentOpponent,
   onColosseumComplete,
 }: BattlefieldProps) {
   const {
@@ -146,6 +149,8 @@ export default function Battlefield({
     isNewRecord: boolean
   } | null>(null)
 
+  const [tournamentResult, setTournamentResult] = useState<ActiveTournamentSession | null>(null)
+
   const activeArena = useMemo(() => getArenaForElo(userElo), [userElo])
   const activeBgImage = customBgImage || activeArena.bgImage
 
@@ -169,6 +174,13 @@ export default function Battlefield({
       if (matchMode === 'colosseum' && onColosseumComplete) {
         const coloRes = onColosseumComplete(gameStatus === 'victory')
         setColosseumResult(coloRes)
+      }
+
+      // Handle Tournament match resolution
+      if (matchMode === 'tournament') {
+        const tourneyId = tournamentOpponent?.tournamentId || 'tourney_free_1'
+        const resolved = TournamentManager.resolveMatch(tourneyId, gameStatus === 'victory')
+        setTournamentResult(resolved)
       }
 
       if (gameStatus === 'victory') {
@@ -252,6 +264,14 @@ export default function Battlefield({
             <span style={{ color: '#38bdf8' }}>Sala: {colosseumConfig?.betGems || 0.5} 💎</span>
             <span>•</span>
             <span style={{ color: '#fbbf24' }}>Pozo: {((colosseumConfig?.betGems || 0.5) * 2).toFixed(1)} 💎</span>
+          </div>
+        )}
+        {matchMode === 'tournament' && (
+          <div className="battlefield-colosseum-header-pill" style={{ borderColor: '#a855f7', boxShadow: '0 0 15px rgba(168, 85, 247, 0.4)' }}>
+            <span className="battlefield-colosseum-icon">🎪</span>
+            <span>TORNEO EN VIVO</span>
+            <span>•</span>
+            <span style={{ color: '#d8b4fe' }}>vs {tournamentOpponent?.name || 'Rival'}</span>
           </div>
         )}
         <button
@@ -671,6 +691,44 @@ export default function Battlefield({
                         </div>
                         <div className="colosseum-payout-streak" style={{ color: '#ef4444' }}>
                           🔥 Racha actual reiniciada a 0 (Récord máximo preservado)
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* TOURNAMENT ROUND REWARD CARD */}
+                {matchMode === 'tournament' && tournamentResult && (
+                  <div
+                    className="colosseum-battle-payout-box"
+                    style={{ borderColor: '#a855f7', boxShadow: '0 0 20px rgba(168, 85, 247, 0.35)' }}
+                  >
+                    {gameStatus === 'victory' ? (
+                      <>
+                        <div className="colosseum-payout-header" style={{ color: '#d8b4fe' }}>
+                          🏆 ¡VICTORIA EN EL TORNEO!
+                        </div>
+                        <div className="colosseum-payout-gems" style={{ color: '#4ade80' }}>
+                          +1 VICTORIA (Total: 🔥 {tournamentResult.userWins})
+                        </div>
+                        <div className="colosseum-payout-streak">
+                          📊 Posición Actual: <strong>#{TournamentManager.getUserRank(tournamentResult)}</strong> | Vidas: {Array.from({ length: 3 }).map((_, i) => (
+                            <span key={i}>{i < 3 - tournamentResult.userLosses ? '❤️' : '💔'}</span>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="colosseum-payout-header colosseum-payout-header--defeat">
+                          💔 DERROTA EN EL TORNEO
+                        </div>
+                        <div className="colosseum-payout-loss">
+                          Perdiste 1 vida ({Math.max(0, 3 - tournamentResult.userLosses)}/3 restantes)
+                        </div>
+                        <div className="colosseum-payout-streak" style={{ color: tournamentResult.isEliminated ? '#ef4444' : '#fdba74' }}>
+                          {tournamentResult.isEliminated
+                            ? '💀 ¡HAS SIDO ELIMINADO DEL TORNEO! (3/3 derrotas)'
+                            : `⚠️ Aún tienes ${3 - tournamentResult.userLosses} vida(s) para seguir buscando partidas.`}
                         </div>
                       </>
                     )}

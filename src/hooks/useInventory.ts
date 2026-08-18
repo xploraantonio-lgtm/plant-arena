@@ -33,24 +33,25 @@ const ALL_15_PLANTS: PlantId[] = [
   'melonpult',
 ]
 
-const DEFAULT_TOKENS = 5000
+const DEFAULT_TOKENS = 0
+const DEFAULT_GOLD = 0
 
 const DEFAULT_PLANT_COPIES: Record<PlantId, number> = {
-  sunflower: 12,
-  peashooter: 12,
-  wallnut: 12,
-  chomper: 12,
-  repeater: 12,
-  garlic: 12,
-  bonkchoy: 12,
-  squash: 12,
-  twinsunflower: 12,
-  tallnut: 12,
-  threepeater: 12,
-  jalapeno: 12,
-  iceberglettuce: 12,
-  aloe: 12,
-  melonpult: 12,
+  sunflower: 1,
+  peashooter: 1,
+  wallnut: 1,
+  chomper: 1, // Cactus
+  repeater: 0,
+  garlic: 0,
+  bonkchoy: 0,
+  squash: 0,
+  twinsunflower: 0,
+  tallnut: 0,
+  threepeater: 0,
+  jalapeno: 0,
+  iceberglettuce: 0,
+  aloe: 0,
+  melonpult: 0,
 }
 
 const DEFAULT_PLANT_LEVELS: Record<PlantId, number> = {
@@ -90,15 +91,11 @@ const STORAGE_KEYS = {
   COLOSSEUM_MAX_STREAK: 'plant_arena_colosseum_max_streak',
 }
 
-const DEFAULT_GOLD = 50000
-
 const DEFAULT_DECK: PlantId[] = [
   'sunflower',
   'peashooter',
   'wallnut',
-  'bonkchoy',
-  'squash',
-  'threepeater',
+  'chomper',
 ]
 
 export function useInventory() {
@@ -114,7 +111,7 @@ export function useInventory() {
 
   const [colosseumTickets, setColosseumTickets] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.COLOSSEUM_TICKETS)
-    return saved ? Number(saved) : 2 // 2 tickets gratis de bienvenida
+    return saved ? Number(saved) : 0
   })
 
   const [colosseumCurrentStreak, setColosseumCurrentStreak] = useState<number>(() => {
@@ -137,13 +134,12 @@ export function useInventory() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as PlantId[]
-        const set = new Set([...parsed, ...ALL_15_PLANTS])
-        return Array.from(set)
+        return parsed
       } catch {
         // fallback
       }
     }
-    return ALL_15_PLANTS
+    return ['sunflower', 'peashooter', 'wallnut', 'chomper']
   })
 
   const [plantCopies, setPlantCopies] = useState<Record<PlantId, number>>(() => {
@@ -153,7 +149,7 @@ export function useInventory() {
       try {
         const parsed = JSON.parse(saved) as Record<PlantId, number>
         ALL_15_PLANTS.forEach((id) => {
-          base[id] = Math.max(12, parsed[id] !== undefined ? parsed[id] : 12)
+          base[id] = parsed[id] !== undefined ? parsed[id] : (DEFAULT_PLANT_COPIES[id] || 0)
         })
       } catch {
         // fallback

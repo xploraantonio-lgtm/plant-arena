@@ -10,6 +10,7 @@ interface ModeSelectorModalProps {
   colosseumTickets: number
   onSelectRanked: () => void
   onSelectColosseum: () => void
+  onSelectTournament?: () => void
   onSelectFriendly?: () => void
 }
 
@@ -21,9 +22,10 @@ export default function ModeSelectorModal({
   colosseumTickets,
   onSelectRanked,
   onSelectColosseum,
+  onSelectTournament,
   onSelectFriendly,
 }: ModeSelectorModalProps) {
-  const [subModal, setSubModal] = useState<'none' | 'friendly' | 'tournament'>('none')
+  const [subModal, setSubModal] = useState<'none' | 'friendly'>('none')
   const [friendlyCode, setFriendlyCode] = useState<string>('')
   const [generatedRoomCode, setGeneratedRoomCode] = useState<string | null>(null)
   const [copiedCode, setCopiedCode] = useState(false)
@@ -42,7 +44,10 @@ export default function ModeSelectorModal({
 
   const handleOpenTournament = () => {
     soundManager.playSound('click', 0.4)
-    setSubModal('tournament')
+    onClose()
+    if (onSelectTournament) {
+      onSelectTournament()
+    }
   }
 
   const handleStartFriendlyMatch = () => {
@@ -231,61 +236,6 @@ export default function ModeSelectorModal({
                 </button>
                 <button type="button" className="mode-submodal-btn--confirm" onClick={handleStartFriendlyMatch}>
                   ⚔️ INICIAR DUELO AMISTOSO
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* SUBMODAL: TORNEOS OFICIALES */}
-        {subModal === 'tournament' && (
-          <div className="mode-submodal-overlay" onClick={() => setSubModal('none')}>
-            <div className="mode-submodal-box mode-submodal-box--wide" onClick={(e) => e.stopPropagation()}>
-              <div className="mode-submodal-icon">🎪</div>
-              <h3>TORNEOS OFICIALES DEL DESARROLLADOR</h3>
-              <p>Eventos competitivos organizados para la comunidad con inscripción gratuita o por tickets:</p>
-
-              <div className="tournament-list">
-                <div className="tournament-item tournament-item--active">
-                  <div className="tournament-item__header">
-                    <span className="tournament-tag tournament-tag--live">🔴 EN CURSO</span>
-                    <strong className="tournament-name">🏆 Gran Copa Botánica #1</strong>
-                  </div>
-                  <p className="tournament-desc">
-                    Bracket de 64 jugadores. Formato eliminación directa a 3 rondas.
-                  </p>
-                  <div className="tournament-meta-row">
-                    <span>🎁 Pozo de Premios: <strong>50 Gemas 💎</strong></span>
-                    <span>👥 Inscritos: <strong>42 / 64</strong></span>
-                  </div>
-                  <button type="button" className="tournament-join-btn" onClick={handleStartFriendlyMatch}>
-                    ⚡ PARTICIPAR EN LA COPA
-                  </button>
-                </div>
-
-                <div className="tournament-item tournament-item--upcoming">
-                  <div className="tournament-item__header">
-                    <span className="tournament-tag tournament-tag--soon">⏳ ESTE SÁBADO</span>
-                    <strong className="tournament-name">🌱 Torneo Relámpago de Clanes</strong>
-                  </div>
-                  <p className="tournament-desc">
-                    Guerra interclanes de fin de semana. Los 3 mejores clanes reciben inyección directa al Tesoro.
-                  </p>
-                  <div className="tournament-meta-row">
-                    <span>🎁 Pozo del Clan: <strong>100 Gemas 💎</strong></span>
-                    <span>🏰 Clanes: <strong>12 Confirmados</strong></span>
-                  </div>
-                  <button type="button" className="tournament-join-btn tournament-join-btn--notify" onClick={() => {
-                    alert('¡Recordatorio activado! Te notificaremos cuando comience la fase de llaves.')
-                  }}>
-                    🔔 RECORDARME
-                  </button>
-                </div>
-              </div>
-
-              <div className="mode-submodal-actions">
-                <button type="button" className="mode-submodal-btn--cancel" onClick={() => setSubModal('none')}>
-                  VOLVER
                 </button>
               </div>
             </div>

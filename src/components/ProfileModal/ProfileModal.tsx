@@ -446,7 +446,7 @@ export default function ProfileModal({
                   className={`profile-method-btn ${depositMethod === 'crypto' ? 'profile-method-btn--active' : ''}`}
                   onClick={() => setDepositMethod('crypto')}
                 >
-                  ⚡ Cripto (USDT / World ID)
+                  ⚡ Cripto (USDT / Web3 Wallet)
                 </button>
                 <button
                   type="button"
