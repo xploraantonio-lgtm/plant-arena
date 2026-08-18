@@ -71,7 +71,7 @@ export default function LandingAccessModal({
           <div className="landing-access-input-box">
             <input
               type="text"
-              placeholder="Ingresa el código de acceso (ej: arena$$**)"
+              placeholder="Ingresa el código de acceso"
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value)}
               autoFocus
