@@ -123,10 +123,16 @@ export function useInventory() {
     return saved ? Number(saved) : DEFAULT_GOLD
   })
 
-  const [colosseumTickets, setColosseumTickets] = useState<number>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.COLOSSEUM_TICKETS)
-    return saved ? Number(saved) : 0
-  })
+  /**
+   * Arranca en 0, igual que el pase VIP y por el mismo motivo: el número de
+   * verdad es profiles.colosseum_tickets y llega al sincronizar el perfil.
+   *
+   * El ticket vale una entrada al coliseo, así que mostrarlo desde localStorage
+   * era enseñar un saldo que cualquiera podía escribir a mano. El gasto siempre
+   * lo valida place_colosseum_wager contra la columna del servidor, así que no
+   * había robo posible — pero sí un número mentiroso en pantalla.
+   */
+  const [colosseumTickets, setColosseumTickets] = useState<number>(0)
 
   const [colosseumCurrentStreak, setColosseumCurrentStreak] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.COLOSSEUM_CURRENT_STREAK)
@@ -283,9 +289,9 @@ export function useInventory() {
     localStorage.setItem(STORAGE_KEYS.ACTIVE_DECK_INSTANCES, JSON.stringify(activeDeckInstances))
   }, [activeDeckInstances])
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.COLOSSEUM_TICKETS, colosseumTickets.toString())
-  }, [colosseumTickets])
+  // Ya no se guardan los tickets en localStorage: el saldo de verdad es
+  // profiles.colosseum_tickets. Guardarlos sólo dejaba una copia obsoleta que
+  // nadie lee y que confundía al depurar.
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.COLOSSEUM_CURRENT_STREAK, colosseumCurrentStreak.toString())
@@ -296,20 +302,27 @@ export function useInventory() {
   }, [colosseumMaxStreak])
 
   const addColosseumTickets = (qty: number) => {
-    setColosseumTickets((prev) => {
-      const next = Math.max(0, prev + qty)
-      localStorage.setItem(STORAGE_KEYS.COLOSSEUM_TICKETS, next.toString())
-      return next
-    })
+    setColosseumTickets((prev) => Math.max(0, prev + qty))
   }
 
+  /**
+   * PENDIENTE DE LA FASE DE EMPAREJAMIENTO — descuento sólo visual.
+   *
+   * El ticket se resta aquí en el navegador, pero el servidor no se entera: al
+   * recargar vuelve, así que entrar al coliseo con ticket es gratis de hecho.
+   *
+   * Quien lo cobra de verdad es place_colosseum_wager(apuesta, usarTicket), ya
+   * disponible en el servidor. No se conecta todavía a propósito: el coliseo
+   * necesita el flujo completo —retener, entrar en cola, esperar rival, y
+   * devolver si no aparece en cuatro minutos— y la cola no existe aún. Cobrar
+   * ahora dejaría al jugador pagando por partidas contra la IA local, con el
+   * importe retenido hasta que el barrido lo devolviera.
+   *
+   * Se conecta en el paso 10 del plan, cuando el coliseo se active de verdad.
+   */
   const useColosseumTicket = (): boolean => {
     if (colosseumTickets <= 0) return false
-    setColosseumTickets((prev) => {
-      const next = Math.max(0, prev - 1)
-      localStorage.setItem(STORAGE_KEYS.COLOSSEUM_TICKETS, next.toString())
-      return next
-    })
+    setColosseumTickets((prev) => Math.max(0, prev - 1))
     return true
   }
 
@@ -438,18 +451,24 @@ export function useInventory() {
     return await fusePlantOnServer(target.instanceId)
   }
 
-  const [hasVipPass, setHasVipPass] = useState<boolean>(() => {
-    return localStorage.getItem('plant_arena_has_vip_pass') === 'true'
-  })
+  /**
+   * Arranca en false, no en lo que diga localStorage.
+   *
+   * El valor de verdad es profiles.has_vip_pass, y llega unos milisegundos
+   * después al sincronizar el perfil. Leer localStorage aquí sólo servía para
+   * pintar antes ese primer instante, y a cambio: cualquiera podía poner la
+   * marca a mano y ver la interfaz de VIP hasta que el servidor le corrigiera,
+   * y si la sincronización fallaba se quedaba así. Es mejor un instante sin
+   * insignia que un instante con una insignia que no es tuya.
+   */
+  const [hasVipPass, setHasVipPass] = useState<boolean>(false)
 
   const [claimedVipLevels, setClaimedVipLevels] = useState<number[]>(() => {
     const saved = localStorage.getItem('plant_arena_claimed_vip_pass')
     return saved ? JSON.parse(saved) : []
   })
 
-  useEffect(() => {
-    localStorage.setItem('plant_arena_has_vip_pass', String(hasVipPass))
-  }, [hasVipPass])
+  // Tampoco se guarda el pase VIP: lo dice profiles.has_vip_pass.
 
   useEffect(() => {
     localStorage.setItem('plant_arena_claimed_vip_pass', JSON.stringify(claimedVipLevels))

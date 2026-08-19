@@ -34,11 +34,31 @@ export interface PlantConfig {
   description: string
 }
 
+/**
+ * Las mejoras que un jugador ha tirado para una carta. Vive aquí y no en
+ * gameConstants porque PlantEntity la necesita, y gameConstants ya importa de
+ * este fichero: al revés habría un ciclo.
+ */
+export type PlantStatKey = 'hp' | 'damage' | 'attackSpeed' | 'moveSpeed' | 'cooldown'
+
 export interface PlantEntity {
   id: string
   plantId: PlantId
   instanceId?: string
   level?: number
+  /**
+   * Las mejoras de esta planta, fijadas al plantarla.
+   *
+   * Antes el bucle las volvía a leer de localStorage en CADA tic y para CADA
+   * planta. Eso las hacía depender del navegador y no de la partida: si el
+   * jugador cambiaba de mazo a mitad de batalla, las plantas ya plantadas
+   * cambiaban de estadísticas, y una repetición en servidor —que no tiene
+   * localStorage— las habría calculado todas a cero.
+   *
+   * Al vivir en la entidad quedan congeladas desde que se planta, que es lo que
+   * el jugador ve, y viajan con la partida cuando se serializa.
+   */
+  statRolls?: PlantStatKey[]
   damage?: number
   attackSpeedMs?: number
   moveSpeed?: number

@@ -232,22 +232,214 @@ export const SupabaseService = {
   // ---------------------------------------------------------------------------
   // COLOSSEUM MATCH RESOLUTION (RPC)
   // ---------------------------------------------------------------------------
-  /** Retiene la apuesta del jugador con sesión. El servidor ya no acepta un id
-   *  de usuario: lo saca de auth.uid(). */
-  async placeColosseumWager(betGems: number): Promise<{ success: boolean; escrowId?: string; error?: string }> {
+  /**
+   * Retiene la apuesta del coliseo, con gemas o con ticket.
+   *
+   * El ticket antes se descontaba sólo en el navegador con useColosseumTicket(),
+   * así que el servidor no se enteraba y al recargar volvía: se jugaba gratis.
+   * Ahora el servidor descuenta lo que corresponda y anota con qué se pagó, para
+   * poder devolver exactamente lo mismo si no aparece rival.
+   */
+  async placeColosseumWager(
+    betGems: number,
+    useTicket: boolean
+  ): Promise<{
+    success: boolean
+    escrowId?: string
+    paidWith?: 'gems' | 'ticket'
+    expiresIn?: number
+    error?: string
+  }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
       const { data, error } = await (supabase.rpc as any)('place_colosseum_wager', {
         p_bet: betGems,
+        p_use_ticket: useTicket,
       })
       if (error) {
         logError('placeColosseumWager', error)
         return { success: false, error: error.message }
       }
-      return { success: true, escrowId: data?.escrow_id }
+      return {
+        success: true,
+        escrowId: data?.escrowId,
+        paidWith: data?.paidWith,
+        expiresIn: data?.expiresIn,
+      }
     } catch (e: any) {
       logError('placeColosseumWager', e)
       return { success: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Devuelve la apuesta retenida si no llegó a haber partida.
+   *
+   * Hay que llamarla al cancelar la búsqueda y al vencer el plazo de cuatro
+   * minutos. Sin esto, las gemas se quedaban cobradas para siempre: el jugador
+   * pagaba por una partida que nunca ocurrió.
+   *
+   * Sólo devuelve retenciones sin sala asignada. Si ya hay partida, el importe
+   * está en juego y lo liquida la resolución.
+   */
+  async refundColosseumWager(): Promise<{
+    refunded: boolean
+    paidWith?: 'gems' | 'ticket'
+    amount?: number
+    reason?: string
+  }> {
+    if (!isSupabaseConfigured()) return { refunded: false, reason: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('refund_colosseum_wager')
+      if (error) {
+        logError('refundColosseumWager', error)
+        return { refunded: false, reason: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('refundColosseumWager', e)
+      return { refunded: false, reason: e?.message }
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // EMPAREJAMIENTO
+  //
+  // El cliente no manda mazo, ni semilla, ni ELO: los pone el servidor. Lo único
+  // que dice es el modo y, en coliseo, cuánto apuesta y si paga con ticket.
+  //
+  // El flujo es: enterMatchmaking una vez, luego pollMatchmaking cada pocos
+  // segundos hasta que devuelva matched. El sondeo hace de latido: si se deja de
+  // llamar, el barrido del servidor saca al jugador de la cola y le devuelve la
+  // entrada del coliseo.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Entra a buscar partida. Devuelve `matched` en el mismo momento si ya había
+   * alguien esperando.
+   *
+   * En coliseo cobra la entrada ANTES de encolar, para que haya una retención
+   * concreta que devolver si no aparece rival. Si no hay saldo, lanza y no se
+   * encola nada.
+   */
+  async enterMatchmaking(
+    mode: 'ranked' | 'friendly' | 'colosseum' | 'tournament',
+    opts: { betGems?: number; useTicket?: boolean; roomCode?: string } = {}
+  ): Promise<{
+    matched: boolean
+    roomId?: string
+    searching?: boolean
+    resumed?: boolean
+    message?: string
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { matched: false, error: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('enter_matchmaking', {
+        p_mode: mode,
+        p_bet: opts.betGems ?? 0,
+        p_use_ticket: opts.useTicket ?? false,
+        p_room_code: opts.roomCode ?? null,
+      })
+      if (error) {
+        logError('enterMatchmaking', error)
+        return { matched: false, error: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('enterMatchmaking', e)
+      return { matched: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Sondea el estado de la búsqueda. Llamar cada 2-3 segundos.
+   *
+   * Hace tres cosas de golpe: refresca el latido, intenta emparejar, y en coliseo
+   * comprueba el plazo. Si el plazo vence devuelve `timedOut` y ya ha devuelto la
+   * entrada — el cliente no tiene que pedir la devolución por su cuenta.
+   *
+   * `ghostAvailable` sólo se pone en ranked, y hoy no hace nada: marca el momento
+   * en que tocaría ofrecer un fantasma, que llegará con las repeticiones.
+   */
+  async pollMatchmaking(): Promise<{
+    matched: boolean
+    roomId?: string
+    searching?: boolean
+    waitedSeconds?: number
+    mode?: string
+    timeoutSeconds?: number | null
+    ghostAvailable?: boolean
+    timedOut?: boolean
+    refund?: unknown
+    message?: string
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { matched: false, error: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('poll_matchmaking')
+      if (error) {
+        logError('pollMatchmaking', error)
+        return { matched: false, error: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('pollMatchmaking', e)
+      return { matched: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Deja de buscar. En coliseo devuelve lo cobrado — gemas si se pagó con gemas,
+   * un ticket si se pagó con ticket.
+   */
+  async cancelMatchmaking(): Promise<{ cancelled: boolean; refund?: unknown; reason?: string }> {
+    if (!isSupabaseConfigured()) return { cancelled: false, reason: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('cancel_matchmaking')
+      if (error) {
+        logError('cancelMatchmaking', error)
+        return { cancelled: false, reason: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('cancelMatchmaking', e)
+      return { cancelled: false, reason: e?.message }
+    }
+  },
+
+  /**
+   * Los datos de la sala: la semilla y los dos mazos.
+   *
+   * La semilla es lo que hace que los dos jugadores simulen exactamente la misma
+   * partida — se le pasa a startGame(seed). RLS sólo deja leer las salas propias.
+   */
+  async getGameRoom(roomId: string): Promise<{
+    id: string
+    mode: string
+    player1_id: string
+    player2_id: string
+    seed: number
+    p1_deck: unknown
+    p2_deck: unknown
+    colosseum_bet: number
+    status: string
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await supabase
+        .from('game_rooms')
+        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status')
+        .eq('id', roomId)
+        .single()
+      if (error) {
+        logError('getGameRoom', error)
+        return null
+      }
+      return data as any
+    } catch (e) {
+      logError('getGameRoom', e)
+      return null
     }
   },
 
@@ -1057,6 +1249,8 @@ export const SupabaseService = {
     plantId?: string
     rarity?: string
     isNew?: boolean
+    /** Oro extra del cofre, según su duración (2h→10 … 12h→60). */
+    gold?: number
     error?: string
   }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }

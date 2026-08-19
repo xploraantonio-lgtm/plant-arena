@@ -335,7 +335,7 @@ export default function Battlefield({
               <br />
               Recolecta soles haciendo click en ellos y despliega tu ejército de plantas.
             </p>
-            <button className="game-button" type="button" onClick={startGame}>
+            <button className="game-button" type="button" onClick={() => startGame()}>
               ¡EMPEZAR COMBATE!
             </button>
           </div>

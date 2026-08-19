@@ -1,4 +1,9 @@
-import type { PlantConfig, PlantId, EnemyPlantConfig, EnemyPlantType } from '../types/game'
+import type { PlantConfig, PlantId, EnemyPlantConfig, EnemyPlantType, PlantStatKey } from '../types/game'
+
+// PlantStatKey se declaraba aquí. Se movió a types/game.ts para que PlantEntity
+// pueda usarlo sin crear un ciclo de importaciones. Se re-exporta para no tocar
+// a los ficheros que ya lo importan de aquí.
+export type { PlantStatKey }
 
 export const PLANT_CONFIGS: Record<PlantId, PlantConfig> = {
   sunflower: {
@@ -294,7 +299,6 @@ export const TOTAL_COLUMNS = 12
 export const P1_COLUMNS = 6
 export const P2_COLUMNS = 6
 
-export type PlantStatKey = 'hp' | 'damage' | 'attackSpeed' | 'moveSpeed' | 'cooldown'
 
 export const STAT_LABELS: Record<PlantStatKey, { label: string; icon: string; suffix: string; color: string }> = {
   hp: { label: 'Vida Máxima (HP)', icon: '💚', suffix: '+15% HP', color: '#4ade80' },
