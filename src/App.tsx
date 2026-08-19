@@ -316,6 +316,7 @@ function App() {
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
           userEmail={user?.email}
+          initialUsername={profile?.username || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0]}
           needsPasswordSetup={needsPasswordSetup}
           onSignInGoogle={signInWithGoogle}
           onSignInEmail={signInWithEmail}

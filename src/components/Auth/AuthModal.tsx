@@ -6,10 +6,11 @@ interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
   userEmail?: string | null
+  initialUsername?: string | null
   needsPasswordSetup?: boolean
   onSignInGoogle?: () => Promise<{ success: boolean; error?: string }>
   onSignInEmail: (identifier: string, pass: string) => Promise<{ success: boolean; error?: string }>
-  onSetUserPassword?: (newPassword: string) => Promise<{ success: boolean; error?: string }>
+  onSetUserPassword?: (newPassword: string, newUsername?: string) => Promise<{ success: boolean; error?: string }>
   onSuccessRedirect?: () => void
 }
 
@@ -17,6 +18,7 @@ export default function AuthModal({
   isOpen,
   onClose,
   userEmail,
+  initialUsername,
   needsPasswordSetup = false,
   onSignInGoogle,
   onSignInEmail,
@@ -27,7 +29,12 @@ export default function AuthModal({
   const [loginIdentifier, setLoginIdentifier] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
 
-  // Set Password States (When Google OAuth validates for the first time)
+  // Set Password & Custom Nick States (When Google OAuth validates for the first time)
+  const [customUsername, setCustomUsername] = useState(() => {
+    if (initialUsername && initialUsername !== 'Guerrero') return initialUsername
+    if (userEmail) return userEmail.split('@')[0].replace(/[^a-zA-Z0-9_\s-]/g, '').slice(0, 16)
+    return ''
+  })
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordRegisteredSuccess, setPasswordRegisteredSuccess] = useState(false)
@@ -73,10 +80,16 @@ export default function AuthModal({
     }
   }
 
-  // Handle Set Password (for Google User)
+  // Handle Set Password & Username (for Google/New User)
   const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg(null)
+
+    const trimmedNick = customUsername.trim()
+    if (!trimmedNick || trimmedNick.length < 3) {
+      setErrorMsg('Por favor elige un Nick para tu jugador (mínimo 3 caracteres).')
+      return
+    }
 
     if (newPassword.length < 6) {
       setErrorMsg('La contraseña debe tener al menos 6 caracteres.')
@@ -90,7 +103,7 @@ export default function AuthModal({
 
     if (!onSetUserPassword) return
     setLoading(true)
-    const res = await onSetUserPassword(newPassword)
+    const res = await onSetUserPassword(newPassword, trimmedNick)
     setLoading(false)
 
     if (res.success) {
@@ -98,7 +111,7 @@ export default function AuthModal({
       setPasswordRegisteredSuccess(true)
     } else {
       soundManager.playSound('error', 0.5)
-      setErrorMsg(res.error || 'Error al registrar la contraseña.')
+      setErrorMsg(res.error || 'Error al registrar la contraseña y el Nick.')
     }
   }
 
@@ -116,10 +129,10 @@ export default function AuthModal({
           <div className="auth-header__title-row">
             <span className="auth-header__icon">🌱</span>
             <div>
-              <h2>{needsPasswordSetup ? 'REGISTRAR CONTRASEÑA' : 'INICIAR SESIÓN'}</h2>
+              <h2>{needsPasswordSetup ? 'REGISTRA TU NICK Y CONTRASEÑA' : 'INICIAR SESIÓN'}</h2>
               <p className="auth-header__subtitle">
                 {needsPasswordSetup
-                  ? 'Crea una contraseña para ingresar con tu correo o Google'
+                  ? 'Elige tu nombre público y crea tu contraseña para ingresar con correo o Google'
                   : 'Ingresa a Plant Arena para guardar tu progreso'}
               </p>
             </div>
@@ -131,44 +144,53 @@ export default function AuthModal({
 
         {errorMsg && <div className="auth-error-box">{errorMsg}</div>}
 
-        {/* VIEW 1: SUCCESS CONFIRMATION AFTER PASSWORD SET */}
+        {/* VIEW 1: SUCCESS CONFIRMATION AFTER PASSWORD & NICK SET */}
         {passwordRegisteredSuccess ? (
           <div className="auth-success-dialog">
             <div className="auth-success-dialog__icon">🎉</div>
-            <h3 className="auth-success-dialog__title">¡CONTRASEÑA REGISTRADA CON ÉXITO!</h3>
+            <h3 className="auth-success-dialog__title">¡PERFIL REGISTRADO CON ÉXITO!</h3>
             <p className="auth-success-dialog__desc">
-              Tu contraseña ha sido guardada de forma segura. Ahora podrás entrar en cualquier momento usando <strong>Google</strong> o tu <strong>correo y contraseña</strong>.
+              Bienvenido a la arena, <strong>{customUsername || 'Guerrero'}</strong>. Tu Nick y tu contraseña han sido guardados de forma segura. Ahora podrás entrar usando <strong>Google</strong> o tu <strong>correo/usuario y contraseña</strong>.
             </p>
             <button type="button" className="auth-submit-btn" onClick={handleFinishPasswordSetup}>
               ⚔️ ENTRAR A LA ARENA ➔
             </button>
           </div>
         ) : needsPasswordSetup ? (
-          /* VIEW 2: SET PASSWORD FORM FOR GOOGLE USER */
+          /* VIEW 2: SET USERNAME & PASSWORD FORM FOR GOOGLE/NEW USER */
           <form className="auth-form" onSubmit={handleSavePassword}>
             <div className="auth-otp-notice">
               <span>Cuenta vinculada:</span>
               <strong>{userEmail || 'Tu cuenta de Google'}</strong>
             </div>
 
-            <div className="auth-terms-hint">
-              🔑 <strong>Registra una contraseña:</strong> Con ella podrás iniciar sesión directamente con tu correo o seguir usando Google con 1 clic.
+            <div className="auth-input-group">
+              <label>🏷️ Elige tu Nick / Nombre de Jugador:</label>
+              <input
+                type="text"
+                placeholder="Ej: DragonSlayer, PlantKing..."
+                value={customUsername}
+                onChange={(e) => setCustomUsername(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, '').slice(0, 16))}
+                required
+                maxLength={16}
+                autoFocus
+              />
+              <span className="auth-input-hint">Este será tu nombre oficial en rankings, batallas PvP y clanes.</span>
             </div>
 
             <div className="auth-input-group">
-              <label>Nueva Contraseña:</label>
+              <label>🔑 Crea tu Contraseña:</label>
               <input
                 type="password"
                 placeholder="Mínimo 6 caracteres"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                autoFocus
               />
             </div>
 
             <div className="auth-input-group">
-              <label>Confirmar Contraseña:</label>
+              <label>🔁 Confirma tu Contraseña:</label>
               <input
                 type="password"
                 placeholder="Repite la contraseña"
@@ -179,7 +201,7 @@ export default function AuthModal({
             </div>
 
             <button type="submit" className="auth-submit-btn" disabled={loading}>
-              {loading ? 'GUARDANDO...' : 'GUARDAR CONTRASEÑA Y ENTRAR AL JUEGO ➔'}
+              {loading ? 'GUARDANDO...' : 'GUARDAR NICK Y CONTRASEÑA ➔'}
             </button>
           </form>
         ) : (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { SupabaseService } from '../services/supabaseService'
+import { UserManager } from '../utils/userManager'
 import type { Database } from '../types/database.types'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
@@ -178,18 +179,31 @@ export function useAuth() {
     }
   }
 
-  // Set/Register Password for Google Account
-  const setUserPassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+  // Set/Register Password and Custom Username for Account
+  const setUserPassword = async (newPassword: string, newUsername?: string): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured() || !user) {
       return { success: false, error: 'No hay sesión de usuario activa' }
     }
     setLoading(true)
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword })
-      setLoading(false)
-      if (error) return { success: false, error: error.message }
+      if (error) {
+        setLoading(false)
+        return { success: false, error: error.message }
+      }
+
+      if (newUsername && newUsername.trim()) {
+        const cleanName = newUsername.trim().replace(/[^a-zA-Z0-9_\s-]/g, '').slice(0, 16)
+        if (cleanName) {
+          await (supabase.from('profiles') as any).update({ username: cleanName }).eq('id', user.id)
+          setProfile((prev) => (prev ? { ...prev, username: cleanName } : prev))
+          UserManager.syncWithSupabase({ username: cleanName })
+        }
+      }
+
       localStorage.setItem('plant_arena_pwd_set_' + user.id, 'true')
       setNeedsPasswordSetup(false)
+      setLoading(false)
       return { success: true }
     } catch (e: any) {
       setLoading(false)
