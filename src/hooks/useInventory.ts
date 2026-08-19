@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { PlantCardInstance, PlantId, ColosseumBetAmount } from '../types/game'
 import {
   PACK_DEFINITIONS,
@@ -9,6 +9,7 @@ import {
 } from '../utils/packDropManager'
 import { getArenaForElo } from '../utils/arenaManager'
 import { createEmptySlots, drawFreePackCard, type FreePackSlot } from '../utils/freePackManager'
+import { SupabaseService } from '../services/supabaseService'
 import {
   getEligibleStatsForPlant,
   STAT_LABELS,
@@ -601,6 +602,8 @@ export function useInventory() {
     }
   }
 
+  const currentUserIdRef = useRef<string | null>(null)
+
   const [freePackSlots, setFreePackSlots] = useState<FreePackSlot[]>(() => {
     const saved = localStorage.getItem('plant_arena_free_pack_slots')
     if (saved) {
@@ -615,23 +618,29 @@ export function useInventory() {
 
   useEffect(() => {
     localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(freePackSlots))
+    if (currentUserIdRef.current) {
+      SupabaseService.saveUserPackSlots(currentUserIdRef.current, freePackSlots)
+    }
   }, [freePackSlots])
 
   // Check timers periodically
   useEffect(() => {
     const timer = setInterval(() => {
-      setFreePackSlots((prev) =>
-        prev.map((slot) => {
+      setFreePackSlots((prev) => {
+        let changed = false
+        const next = prev.map((slot) => {
           if (slot.status === 'unlocking' && slot.unlockStartedAt) {
             const totalMs = slot.durationHours * 3600 * 1000
             const elapsedMs = Date.now() - slot.unlockStartedAt
             if (elapsedMs >= totalMs) {
-              return { ...slot, status: 'ready' }
+              changed = true
+              return { ...slot, status: 'ready' as const }
             }
           }
           return slot
         })
-      )
+        return changed ? next : prev
+      })
     }, 1000)
     return () => clearInterval(timer)
   }, [])
@@ -843,6 +852,7 @@ export function useInventory() {
   }
 
   const syncProfileData = (profile: {
+    id?: string
     gems_balance?: number
     gold_balance?: number
     colosseum_tickets?: number
@@ -852,6 +862,14 @@ export function useInventory() {
     claimed_vip_levels?: number[]
   } | null) => {
     if (!profile) return
+    if (profile.id) {
+      currentUserIdRef.current = profile.id
+      SupabaseService.getUserPackSlots(profile.id).then((remoteSlots) => {
+        if (remoteSlots && remoteSlots.length > 0) {
+          setFreePackSlots(remoteSlots)
+        }
+      }).catch(() => {})
+    }
     if (profile.gems_balance !== undefined) setUserTokens(Number(profile.gems_balance))
     if (profile.gold_balance !== undefined) setUserGold(Number(profile.gold_balance))
     if (profile.colosseum_tickets !== undefined) setColosseumTickets(Number(profile.colosseum_tickets))

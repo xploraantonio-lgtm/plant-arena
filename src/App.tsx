@@ -23,6 +23,7 @@ import AuthModal from './components/Auth/AuthModal'
 import AdminPanel from './components/Admin/AdminPanel'
 
 import { UserManager } from './utils/userManager'
+import { SupabaseService } from './services/supabaseService'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -85,7 +86,6 @@ function App() {
     claimPassReward,
     awardVictoryPack,
     startUnlockingSlot,
-    fastUnlockSlot,
     openSlotPack,
     deductUserTokens,
     addUserTokens,
@@ -145,7 +145,8 @@ function App() {
 
     if (isPlayRoute) {
       if (user) {
-        setScreen('menu')
+        // Only set screen to menu if currently on landing
+        setScreen((prev) => (prev === 'landing' ? 'menu' : prev))
       } else {
         // No active session found -> redirect to landing and pop up login/register
         setScreen('landing')
@@ -282,11 +283,17 @@ function App() {
     if (isVictory) {
       const newElo = userElo + deltas.winElo
       setUserElo(newElo)
+      if (user?.id) {
+        SupabaseService.updateProfile(user.id, { elo_rating: newElo })
+      }
       const packResult = awardVictoryPack(newElo)
       return { winElo: deltas.winElo, newElo, packResult }
     } else {
       const newElo = Math.max(0, userElo - deltas.loseElo)
       setUserElo(newElo)
+      if (user?.id) {
+        SupabaseService.updateProfile(user.id, { elo_rating: newElo })
+      }
       return { loseElo: deltas.loseElo, newElo }
     }
   }
@@ -295,6 +302,9 @@ function App() {
     const deltas = getEloDeltasForElo(userElo)
     const newElo = Math.max(0, userElo - deltas.surrenderElo)
     setUserElo(newElo)
+    if (user?.id) {
+      SupabaseService.updateProfile(user.id, { elo_rating: newElo })
+    }
     return { surrenderElo: deltas.surrenderElo, newElo }
   }
 
@@ -364,7 +374,6 @@ function App() {
               setScreen('landing')
             }}
             onStartSlotUnlock={startUnlockingSlot}
-            onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}
             onAddTokens={addTokens}
             onDeductTokens={deductUserTokens}
@@ -453,9 +462,18 @@ function App() {
         {screen === 'ranking' && (
           <Ranking
             userElo={userElo}
+            userProfile={profile}
             hasVipPass={hasVipPass}
             onBack={() => setScreen('menu')}
-            onAddElo={(delta) => setUserElo((prev) => Math.max(0, prev + delta))}
+            onAddElo={(delta) => {
+              setUserElo((prev) => {
+                const next = Math.max(0, prev + delta)
+                if (user?.id) {
+                  SupabaseService.updateProfile(user.id, { elo_rating: next })
+                }
+                return next
+              })
+            }}
           />
         )}
         {screen === 'pass' && (

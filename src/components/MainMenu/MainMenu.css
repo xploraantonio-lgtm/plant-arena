@@ -818,15 +818,18 @@
   letter-spacing: 0.3px;
 }
 
-.chest-slot__btn-hint--test {
-  background: #3b82f6;
-  color: #fff;
+.chest-slot__btn-hint--unlocking {
+  background: rgba(59, 130, 246, 0.4);
+  border: 1px solid #3b82f6;
+  color: #93c5fd;
+  cursor: default;
 }
 
 .chest-slot__btn-hint--ready {
   background: #22c55e;
   color: #fff;
   box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+  animation: pulse-ready 1.5s infinite;
 }
 
 /* THEMED IN-GAME MODAL ALERT BACKDROP & CARD */

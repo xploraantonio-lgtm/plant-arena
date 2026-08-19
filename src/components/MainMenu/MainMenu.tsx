@@ -58,7 +58,6 @@ interface MainMenuProps {
   isAdmin?: boolean
   onSignOut?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
-  onFastUnlockSlot?: (slotId: number) => void
   onOpenSlotPack?: (slotId: number) => void
   onAddTokens?: (amountUsd: number) => void
   onDeductTokens?: (amountUsd: number) => boolean
@@ -89,7 +88,6 @@ export default function MainMenu({
   isAdmin = false,
   onSignOut,
   onStartSlotUnlock,
-  onFastUnlockSlot,
   onOpenSlotPack,
   onAddTokens,
   onDeductTokens,
@@ -325,11 +323,6 @@ export default function MainMenu({
                   } else {
                     soundManager.playSound('click', 0.5)
                   }
-                } else if (slot.status === 'unlocking') {
-                  // If clicking on unlocking slot, fast-unlock for demo
-                  if (onFastUnlockSlot) {
-                    onFastUnlockSlot(slot.slotId)
-                  }
                 } else if (slot.status === 'ready' && onOpenSlotPack) {
                   onOpenSlotPack(slot.slotId)
                 }
@@ -351,7 +344,7 @@ export default function MainMenu({
                     className="chest-slot__pack-img"
                   />
                   <span className="chest-slot__timer">⏳ {slot.durationHours}h</span>
-                  <span className="chest-slot__btn-hint">INICIAR</span>
+                  <span className="chest-slot__btn-hint">DESBLOQUEAR</span>
                 </div>
               )}
 
@@ -366,8 +359,8 @@ export default function MainMenu({
                   <span className="chest-slot__timer chest-slot__timer--active">
                     ⏱️ {remainingText}
                   </span>
-                  <span className="chest-slot__btn-hint chest-slot__btn-hint--test">
-                    ⚡ ABRIR (TEST)
+                  <span className="chest-slot__btn-hint chest-slot__btn-hint--unlocking">
+                    ⏳ EN PROCESO
                   </span>
                 </div>
               )}

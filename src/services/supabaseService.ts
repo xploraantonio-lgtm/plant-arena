@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import type { Database } from '../types/database.types'
+import type { FreePackSlot } from '../utils/freePackManager'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -54,12 +55,24 @@ export const SupabaseService = {
       const { data } = await supabase
         .from('profiles')
         .select('*')
-        .eq('is_admin', false)
         .order('elo_rating', { ascending: false })
         .limit(limit)
       return (data || []) as ProfileRow[]
     } catch {
       return []
+    }
+  },
+
+  async getUserRank(userElo: number): Promise<number> {
+    if (!isSupabaseConfigured()) return 1
+    try {
+      const { count } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .gt('elo_rating', userElo)
+      return (count ?? 0) + 1
+    } catch {
+      return 1
     }
   },
 
@@ -69,7 +82,6 @@ export const SupabaseService = {
       const { data } = await supabase
         .from('profiles')
         .select('*')
-        .eq('is_admin', false)
         .gt('colosseum_max_streak', 0)
         .order('colosseum_max_streak', { ascending: false })
         .limit(limit)
@@ -329,6 +341,50 @@ export const SupabaseService = {
 
     return () => {
       supabase.removeChannel(channel)
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // PACK SLOTS (CHESTS) PERSISTENCE
+  // ---------------------------------------------------------------------------
+  async getUserPackSlots(userId: string): Promise<FreePackSlot[] | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await supabase
+        .from('pack_slots')
+        .select('*')
+        .eq('user_id', userId)
+        .order('slot_index', { ascending: true })
+      if (error || !data || data.length === 0) return null
+      return data.map((row: any) => ({
+        slotId: Number(row.slot_index),
+        status: row.status as FreePackSlot['status'],
+        durationHours: Number(row.duration_hours) as FreePackSlot['durationHours'],
+        arenaLevel: Number(row.arena_level || 1),
+        unlockStartedAt: row.unlock_started_at ? new Date(row.unlock_started_at).getTime() : undefined,
+      }))
+    } catch {
+      return null
+    }
+  },
+
+  async saveUserPackSlots(userId: string, slots: FreePackSlot[]): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false
+    try {
+      const rows = slots.map((s) => ({
+        user_id: userId,
+        slot_index: s.slotId,
+        status: s.status,
+        duration_hours: s.durationHours,
+        arena_level: s.arenaLevel,
+        unlock_started_at: s.unlockStartedAt ? new Date(s.unlockStartedAt).toISOString() : null,
+      }))
+      const { error } = await (supabase.from('pack_slots') as any).upsert(rows, {
+        onConflict: 'user_id,slot_index',
+      })
+      return !error
+    } catch {
+      return false
     }
   },
 }

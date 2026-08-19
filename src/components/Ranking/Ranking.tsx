@@ -6,6 +6,8 @@ import { SupabaseService } from '../../services/supabaseService'
 import { UserManager } from '../../utils/userManager'
 import './Ranking.css'
 
+import type { Database } from '../../types/database.types'
+
 interface LeaderboardUser {
   rank: number
   username: string
@@ -22,6 +24,7 @@ interface LeaderboardUser {
 
 interface RankingProps {
   userElo: number
+  userProfile?: Database['public']['Tables']['profiles']['Row'] | null
   hasVipPass?: boolean
   onBack: () => void
   onAddElo?: (delta: number) => void
@@ -38,7 +41,7 @@ interface ReferralLeaderboardUser {
   isCurrentUser?: boolean
 }
 
-export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo }: RankingProps) {
+export default function Ranking({ userElo, userProfile, hasVipPass = false, onBack, onAddElo }: RankingProps) {
   const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [copiedLink, setCopiedLink] = useState(false)
@@ -60,13 +63,21 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
     : 100
 
   const [realLeaderboard, setRealLeaderboard] = useState<LeaderboardUser[]>([])
+  const [userRank, setUserRank] = useState<number | null>(null)
 
   useEffect(() => {
     let mounted = true
+    const myId = userProfile?.id
+    const myUsername = (userProfile?.username || UserManager.getProfile().name || 'Guerrero').trim().toLowerCase()
+
     SupabaseService.getGlobalLeaderboard(50).then((profiles) => {
       if (!mounted) return
       const mapped: LeaderboardUser[] = profiles.map((p, idx) => {
         const arena = getArenaForElo(p.elo_rating)
+        const isMe = Boolean(
+          (myId && p.id === myId) ||
+          (p.username && p.username.trim().toLowerCase() === myUsername)
+        )
         return {
           rank: idx + 1,
           username: p.username,
@@ -78,15 +89,20 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
           arenaName: arena.name,
           bestPlantName: 'Sunflower',
           bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
+          isCurrentUser: isMe,
         }
       })
       setRealLeaderboard(mapped)
     })
 
+    SupabaseService.getUserRank(userElo).then((r) => {
+      if (mounted) setUserRank(r)
+    }).catch(() => {})
+
     return () => {
       mounted = false
     }
-  }, [])
+  }, [userProfile, userElo])
 
   const leaderboardData = realLeaderboard
   const filteredReferralLeaderboard: ReferralLeaderboardUser[] = []
@@ -275,9 +291,12 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
               <div className="leaderboard-podium">
                 {/* 2nd Place */}
                 {leaderboardData[1] && (
-                  <div className="podium-card podium-card--silver">
+                  <div className={`podium-card podium-card--silver ${leaderboardData[1].isCurrentUser ? 'podium-card--user' : ''}`}>
                     <span className="podium-rank">🥈 #2</span>
-                    <span className="podium-name">{leaderboardData[1].username}</span>
+                    <span className={`podium-name ${leaderboardData[1].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                      {leaderboardData[1].isCurrentUser && hasVipPass && '👑 '}
+                      {leaderboardData[1].username} {leaderboardData[1].isCurrentUser && '(TÚ)'}
+                    </span>
                     <span className="podium-clan">{leaderboardData[1].clan}</span>
                     <span className="podium-elo">🏆 {leaderboardData[1].elo} Copas</span>
                     <div className="podium-best-plant">
@@ -289,10 +308,13 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
 
                 {/* 1st Place */}
                 {leaderboardData[0] && (
-                  <div className="podium-card podium-card--gold">
+                  <div className={`podium-card podium-card--gold ${leaderboardData[0].isCurrentUser ? 'podium-card--user' : ''}`}>
                     <span className="podium-crown">👑</span>
                     <span className="podium-rank">🥇 #1 CAMPEÓN</span>
-                    <span className="podium-name">{leaderboardData[0].username}</span>
+                    <span className={`podium-name ${leaderboardData[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                      {leaderboardData[0].isCurrentUser && hasVipPass && '👑 '}
+                      {leaderboardData[0].username} {leaderboardData[0].isCurrentUser && '(TÚ)'}
+                    </span>
                     <span className="podium-clan">{leaderboardData[0].clan}</span>
                     <span className="podium-elo">🏆 {leaderboardData[0].elo} Copas</span>
                     <div className="podium-best-plant">
@@ -365,6 +387,28 @@ export default function Ranking({ userElo, hasVipPass = false, onBack, onAddElo 
                   </tbody>
                 </table>
               </div>
+
+              {/* STICKY BOTTOM USER POSITION (IF NOT IN TOP LIST) */}
+              {!leaderboardData.some((u) => u.isCurrentUser) && (
+                <div className="leaderboard-my-rank-banner">
+                  <div className="my-rank-left">
+                    <span className="my-rank-pos">#{userRank ?? '50+'}</span>
+                    <div className="my-rank-user">
+                      <strong className={hasVipPass ? 'vip-gold-text' : ''}>
+                        {hasVipPass && '👑 '}
+                        {userProfile?.username || UserManager.getProfile().name || 'Guerrero'}
+                      </strong>
+                      <span className="user-self-badge">TÚ</span>
+                    </div>
+                  </div>
+                  <div className="my-rank-mid">
+                    <span className="my-rank-arena">📍 {currentArena.name}</span>
+                  </div>
+                  <div className="my-rank-right">
+                    <span className="my-rank-elo">🏆 {userElo} Copas</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

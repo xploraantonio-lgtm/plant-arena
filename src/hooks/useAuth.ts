@@ -148,13 +148,25 @@ export function useAuth() {
         }
       }
       setProfile(prof)
-      setIsAdmin(Boolean(prof.is_admin))
+      const userIsAdmin = Boolean(prof.is_admin)
+      setIsAdmin(userIsAdmin)
+      if (!userIsAdmin) {
+        localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION)
+      } else {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
+      }
     } else {
       await initializeNewUserProfile(userId, candidateName || 'Guerrero', authUser?.email)
       prof = await SupabaseService.getProfile(userId)
       if (prof) {
         setProfile(prof)
-        setIsAdmin(Boolean(prof.is_admin))
+        const userIsAdmin = Boolean(prof.is_admin)
+        setIsAdmin(userIsAdmin)
+        if (!userIsAdmin) {
+          localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION)
+        } else {
+          localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
+        }
       }
     }
     setLoading(false)

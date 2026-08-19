@@ -1094,17 +1094,22 @@ export function useGameEngine() {
       const handleVisibilityChange = () => {
         if (document.hidden) {
           if (animationFrameId) cancelAnimationFrame(animationFrameId)
-          if (!bgIntervalId) {
-            bgIntervalId = setInterval(() => {
-              tickEngine(performance.now())
-            }, 50)
+          if (bgIntervalId) {
+            clearInterval(bgIntervalId)
+            bgIntervalId = null
           }
         } else {
           if (bgIntervalId) {
             clearInterval(bgIntervalId)
             bgIntervalId = null
           }
-          lastTickRef.current = performance.now()
+          // Reset tick timing so no background time jump or enemy rush happens
+          const now = performance.now()
+          lastTickRef.current = now
+          lastEnemySpawnRef.current = now
+          lastP2PassiveSunRef.current = now
+          lastSkySunRef.current = now
+          waveTimerRef.current = now
           animationFrameId = requestAnimationFrame(gameLoop)
         }
       }
