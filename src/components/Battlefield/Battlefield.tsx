@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PlantId, ColosseumMatchConfig } from '../../types/game'
 import { TournamentManager, type ActiveTournamentSession } from '../../utils/tournamentManager'
 import { useGameEngine } from '../../hooks/useGameEngine'
+import { useAuth } from '../../hooks/useAuth'
+import { SupabaseService } from '../../services/supabaseService'
 import {
   PLANT_CONFIGS,
   ENEMY_PLANT_CONFIGS,
@@ -91,6 +93,24 @@ interface BattlefieldProps {
   colosseumConfig?: ColosseumMatchConfig | null
   tournamentOpponent?: { name: string; tournamentId: string } | null
   onColosseumComplete?: (won: boolean) => { payoutGems: number; newStreak: number; newMaxStreak: number; isNewRecord: boolean }
+  /**
+   * La sala de la partida, si es contra otro jugador de verdad.
+   *
+   * Con sala: el resultado lo liquida el servidor (report_match_result), que
+   * exige que AMBOS reporten el mismo ganador. Sin sala la partida es contra el
+   * bot local y no cuenta: ni ELO real ni reporte.
+   */
+  roomId?: string | null
+  /**
+   * La semilla del azar, que viene de game_rooms.seed.
+   *
+   * Es la MISMA para los dos jugadores: es lo que hace que ambos simulen
+   * exactamente la misma partida (engine/simulate.ts). Sin ella se usa la de por
+   * defecto, que sirve para jugar en solitario.
+   */
+  seed?: number
+  /** El rival, para poder decirle al servidor quién ganó. */
+  opponentId?: string | null
 }
 
 export default function Battlefield({
@@ -103,6 +123,9 @@ export default function Battlefield({
   userElo = 1000,
   customBgImage,
   matchMode = 'ranked',
+  roomId = null,
+  seed,
+  opponentId = null,
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -134,6 +157,26 @@ export default function Battlefield({
     placePlant,
     digPlant,
   } = useGameEngine()
+
+  const { user } = useAuth()
+  const currentUserId = user?.id ?? null
+
+  /**
+   * Lo que dijo el servidor al liquidar la partida real.
+   *
+   * Tres estados que importan y hay que enseñar tal cual:
+   *   'esperando_al_rival'   → tu reporte está registrado, falta el del otro
+   *   'resultado_en_disputa' → cada uno dijo algo distinto; no cobra nadie
+   *   'liquidada'            → repartido, con su ELO y su pago
+   */
+  const [resultadoServidor, setResultadoServidor] = useState<{
+    success?: boolean
+    status?: string
+    eloGained?: number
+    eloLost?: number
+    payout?: number
+    error?: string
+  } | null>(null)
 
   const [battleSummaryResult, setBattleSummaryResult] = useState<{
     eloChange?: number
@@ -170,6 +213,22 @@ export default function Battlefield({
     if (gameStatus === 'victory' || gameStatus === 'defeat') {
       hasHandledEndRef.current = true
 
+      // ── PARTIDA REAL: LO LIQUIDA EL SERVIDOR ───────────────────────────────
+      //
+      // Con sala, quien reparte ELO, cofres y gemas es report_match_result, y
+      // exige que AMBOS jugadores reporten el mismo ganador. Si no coinciden, no
+      // cobra nadie. El cliente no calcula nada: sólo dice lo que vio.
+      //
+      // Se reporta tanto al ganar como al perder — hace falta el reporte de los
+      // dos para que se liquide, así que callarse al perder dejaría al rival sin
+      // su premio.
+      if (roomId && opponentId && currentUserId) {
+        const ganador = gameStatus === 'victory' ? currentUserId : opponentId
+        void SupabaseService.reportMatchResult(roomId, ganador).then((r) => {
+          setResultadoServidor(r)
+        })
+      }
+
       // Handle Colosseum match resolution
       if (matchMode === 'colosseum' && onColosseumComplete) {
         const coloRes = onColosseumComplete(gameStatus === 'victory')
@@ -183,8 +242,15 @@ export default function Battlefield({
         setTournamentResult(resolved)
       }
 
+      // Con sala, el reparto es del servidor y ya se pidió arriba. Si además se
+      // ejecutara el camino del cliente, se llamaría a award_victory_chest por
+      // segunda vez y se pintaría un ELO calculado aquí que no tiene por qué
+      // coincidir con el que aplicó el servidor: dos cifras distintas para la
+      // misma partida.
+      const reparteElCliente = !roomId
+
       if (gameStatus === 'victory') {
-        if (onBattleComplete) {
+        if (reparteElCliente && onBattleComplete) {
           const res = onBattleComplete(true)
           if (res) {
             setBattleSummaryResult({
@@ -195,7 +261,7 @@ export default function Battlefield({
           }
         }
       } else if (gameStatus === 'defeat') {
-        if (onBattleComplete) {
+        if (reparteElCliente && onBattleComplete) {
           const res = onBattleComplete(false)
           if (res) {
             setBattleSummaryResult({
@@ -206,7 +272,7 @@ export default function Battlefield({
         }
       }
     }
-  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete])
+  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete, roomId, opponentId, currentUserId, tournamentOpponent?.tournamentId])
 
   useEffect(() => {
     if (practicePlantId) {
@@ -216,9 +282,11 @@ export default function Battlefield({
       }
     } else if (gameStatus === 'ready') {
       hasHandledEndRef.current = false
-      startGame()
+      // La semilla de la sala, si la hay. Con la misma semilla los dos jugadores
+      // simulan exactamente la misma partida; sin ella se juega en solitario.
+      startGame(seed)
     }
-  }, [practicePlantId])
+  }, [practicePlantId, seed])
 
   const [showSurrenderModal, setShowSurrenderModal] = useState<boolean>(false)
 
@@ -246,6 +314,8 @@ export default function Battlefield({
   const handlePlayAgain = () => {
     hasHandledEndRef.current = false
     setBattleSummaryResult(null)
+    // Sin semilla a propósito: volver a jugar es una partida NUEVA. Reutilizar la
+    // de la sala daría exactamente la misma partida otra vez, enemigos incluidos.
     startGame()
   }
 
@@ -597,6 +667,48 @@ export default function Battlefield({
                 ? '🏳️ ¡TE HAS RENDIDO!'
                 : '¡DERROTA!'}
             </h2>
+
+            {/* PARTIDA REAL: LO QUE DICE EL SERVIDOR
+                Sólo aparece cuando hay sala. El premio no se da por hecho: hasta
+                que el rival reporta, no hay nada repartido, y el jugador tiene que
+                verlo en lugar de creer que ya cobró. */}
+            {roomId && (
+              <div className="resultado-servidor">
+                {!resultadoServidor && (
+                  <p className="resultado-servidor__esperando">
+                    Enviando el resultado…
+                  </p>
+                )}
+                {resultadoServidor?.status === 'esperando_al_rival' && (
+                  <p className="resultado-servidor__esperando">
+                    ⏳ Tu resultado está registrado. Falta que tu rival confirme para
+                    repartir las recompensas.
+                  </p>
+                )}
+                {resultadoServidor?.status === 'resultado_en_disputa' && (
+                  <p className="resultado-servidor__disputa">
+                    ⚠️ Tu rival dijo otra cosa. La partida queda en revisión y no se
+                    reparte nada a ninguno de los dos.
+                  </p>
+                )}
+                {resultadoServidor?.status === 'liquidada' && (
+                  <p className="resultado-servidor__ok">
+                    ✅ Partida confirmada por los dos.
+                    {typeof resultadoServidor.eloGained === 'number' &&
+                      gameStatus === 'victory' &&
+                      ` +${resultadoServidor.eloGained} 🏆`}
+                    {typeof resultadoServidor.payout === 'number' &&
+                      resultadoServidor.payout > 0 &&
+                      ` · +${resultadoServidor.payout} 💎`}
+                  </p>
+                )}
+                {resultadoServidor?.error && (
+                  <p className="resultado-servidor__disputa">
+                    No se pudo enviar el resultado: {resultadoServidor.error}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* ELO BADGE */}
             {battleSummaryResult?.eloChange !== undefined && (

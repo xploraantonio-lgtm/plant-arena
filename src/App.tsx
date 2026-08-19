@@ -18,6 +18,9 @@ import background from './assets/images/background.png'
 import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'
+import MatchmakingScreen from './components/Matchmaking/MatchmakingScreen'
+import { useMatchmaking, type ModoPartida } from './hooks/useMatchmaking'
+import { SupabaseService } from './services/supabaseService'
 import { useAuth } from './hooks/useAuth'
 import AuthModal from './components/Auth/AuthModal'
 import AdminPanel from './components/Admin/AdminPanel'
@@ -25,7 +28,7 @@ import AdminPanel from './components/Admin/AdminPanel'
 import { UserManager } from './utils/userManager'
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
+  const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase()
       const hash = window.location.hash.toLowerCase()
@@ -96,7 +99,6 @@ function App() {
     colosseumTickets,
     colosseumCurrentStreak,
     colosseumMaxStreak,
-    useColosseumTicket,
     resolveColosseumMatch,
   } = useInventory()
 
@@ -163,6 +165,66 @@ function App() {
   const [colosseumConfig, setColosseumConfig] = useState<import('./types/game').ColosseumMatchConfig | null>(null)
   const [tournamentOpponent, setTournamentOpponent] = useState<{ name: string; tournamentId: string } | null>(null)
 
+  // ── EMPAREJAMIENTO ────────────────────────────────────────────────────────
+  // La sala la crea el servidor (migración 17) y trae la semilla, que es lo que
+  // hace que los dos jugadores simulen exactamente la misma partida. Si roomId es
+  // null, la partida es contra el bot local y no cuenta para el servidor.
+  const { estado: estadoCola, encontrada, buscar, cancelar } = useMatchmaking()
+  const [modoBuscando, setModoBuscando] = useState<ModoPartida>('ranked')
+  const [salaId, setSalaId] = useState<string | null>(null)
+  const [semillaPartida, setSemillaPartida] = useState<number | undefined>(undefined)
+  const [rivalId, setRivalId] = useState<string | null>(null)
+
+  /**
+   * Cuando el servidor empareja, se leen la semilla y los jugadores de la sala y
+   * se entra a la batalla. La semilla NO la elige el cliente.
+   */
+  useEffect(() => {
+    if (!encontrada) return
+    let cancelado = false
+    ;(async () => {
+      const sala = await SupabaseService.getGameRoom(encontrada.roomId)
+      if (cancelado) return
+      if (!sala) {
+        // Sin sala no se puede jugar la partida real: se vuelve al menú en lugar
+        // de arrancar una partida con semilla inventada, que sería otra partida.
+        setScreen('menu')
+        return
+      }
+      setSalaId(sala.id)
+      setSemillaPartida(Number(sala.seed))
+      setRivalId(sala.player1_id === user?.id ? sala.player2_id : sala.player1_id)
+      setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
+      setPracticePlantId(null)
+      setScreen('battle')
+    })()
+    return () => { cancelado = true }
+  }, [encontrada, user?.id])
+
+  /** Cancelar la búsqueda y volver al menú. */
+  const salirDeLaCola = async () => {
+    await cancelar()
+    setScreen('menu')
+  }
+
+  /**
+   * Ranked sin nadie al otro lado: se juega contra el bot local, que es lo que el
+   * ranked hace hoy. Sin sala, así que el servidor no interviene — ni ELO real ni
+   * reporte. Cuando existan las repeticiones, esto se sustituye por un fantasma.
+   */
+  const jugarContraRelleno = async () => {
+    await cancelar()
+    setSalaId(null)
+    setSemillaPartida(undefined)
+    setRivalId(null)
+    setBattleMatchMode('ranked')
+    setColosseumConfig(null)
+    setTournamentOpponent(null)
+    setPracticePlantId(null)
+    setCustomArenaBg(undefined)
+    setScreen('battle')
+  }
+
   const handleGoToGame = () => {
     setScreen('menu')
     try {
@@ -191,24 +253,52 @@ function App() {
     setTournamentOpponent(null)
     setPracticePlantId(null)
     setCustomArenaBg(undefined)
-    setScreen('battle')
+    setSalaId(null)
+    setSemillaPartida(undefined)
+    // Se busca rival de verdad. Si no aparece nadie, a los 30 s la pantalla
+    // ofrece jugar contra el relleno, que es lo que había antes.
+    setModoBuscando('ranked')
+    setScreen('searching')
+    void buscar('ranked')
   }
 
-  const handleStartColosseumMatch = (betGems: import('./types/game').ColosseumBetAmount, usedTicket: boolean) => {
-    if (usedTicket) {
-      useColosseumTicket()
-    }
+  /**
+   * COLISEO
+   *
+   * Ya no se descuenta el ticket aquí: lo hace el servidor dentro de
+   * enter_matchmaking, junto con la retención de la apuesta. Antes se restaba en
+   * el cliente, así que el número bailaba y la siguiente sincronización lo
+   * corregía; y si el jugador cerraba la pestaña, se quedaba sin ticket sin haber
+   * jugado.
+   *
+   * Si no aparece rival en 4 minutos, el servidor devuelve lo cobrado solo.
+   */
+  const handleStartColosseumMatch = async (betGems: import('./types/game').ColosseumBetAmount, usedTicket: boolean) => {
     setBattleMatchMode('colosseum')
     setTournamentOpponent(null)
     setColosseumConfig({
       betGems,
       usedTicket,
+      // Informativo: el pago real lo calcula report_match_result sobre el pozo
+      // efectivamente retenido, no sobre esta cuenta.
       payoutGems: Number((betGems * 1.6).toFixed(2)),
       rakeGems: Number((betGems * 0.4).toFixed(2)),
     })
     setPracticePlantId(null)
     setCustomArenaBg(undefined)
-    setScreen('battle')
+    setSalaId(null)
+    setSemillaPartida(undefined)
+    setModoBuscando('colosseum')
+    setScreen('searching')
+    const r = await buscar('colosseum', { betGems, useTicket: usedTicket })
+    if (!r.ok) {
+      // No se cobró nada: enter_matchmaking cobra dentro de la misma transacción
+      // que encola, así que si falla no hay retención que devolver.
+      setScreen('menu')
+      return
+    }
+    // El saldo lo pone el servidor, que ya cobró.
+    void refreshFromServer()
   }
 
   const handleStartTournamentMatch = (opponentName: string, tournamentId: string) => {
@@ -391,6 +481,22 @@ function App() {
             onDeductTokens={deductUserTokens}
           />
         )}
+        {screen === 'searching' && (
+          <MatchmakingScreen
+            modo={modoBuscando}
+            estado={estadoCola}
+            apuesta={
+              modoBuscando === 'colosseum' && colosseumConfig
+                ? { gemas: colosseumConfig.betGems, conTicket: colosseumConfig.usedTicket }
+                : null
+            }
+            onCancelar={() => { void salirDeLaCola() }}
+            /* El relleno sólo en ranked: en coliseo no hay bots, es la regla. */
+            onJugarRelleno={
+              modoBuscando === 'ranked' ? () => { void jugarContraRelleno() } : undefined
+            }
+          />
+        )}
         {screen === 'battle' && (
           <Battlefield
             onBackToMenu={() => setScreen('menu')}
@@ -404,6 +510,11 @@ function App() {
             matchMode={battleMatchMode}
             colosseumConfig={colosseumConfig}
             tournamentOpponent={tournamentOpponent}
+            /* Con sala, la partida es real: misma semilla para los dos y el
+               resultado lo liquida el servidor. Sin sala es contra el bot local. */
+            roomId={salaId}
+            seed={semillaPartida}
+            opponentId={rivalId}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)

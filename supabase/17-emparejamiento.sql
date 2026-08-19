@@ -59,45 +59,46 @@ BEGIN
   -- Migración 01: blindaje
   IF NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                   WHERE n.nspname='public' AND p.proname='current_user_is_admin') THEN
-    v_faltan := v_faltan || 'la 01 (falta current_user_is_admin)';
+    v_faltan := array_append(v_faltan, 'la 01 (falta current_user_is_admin)');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                   WHERE table_schema='public' AND table_name='game_rooms'
                     AND column_name='p1_reported_winner') THEN
-    v_faltan := v_faltan || 'la 01 (falta game_rooms.p1_reported_winner)';
+    v_faltan := array_append(v_faltan, 'la 01 (falta game_rooms.p1_reported_winner)');
   END IF;
 
   -- Migración 04: plant_instances con el modelo level + stat_rolls
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                   WHERE table_schema='public' AND table_name='plant_instances'
                     AND column_name='stat_rolls') THEN
-    v_faltan := v_faltan || 'la 04 (falta plant_instances.stat_rolls)';
+    v_faltan := array_append(v_faltan, 'la 04 (falta plant_instances.stat_rolls)');
   END IF;
 
   -- Migración 05: tabla de ajustes
   IF NOT EXISTS (SELECT 1 FROM information_schema.tables
                   WHERE table_schema='public' AND table_name='shop_config') THEN
-    v_faltan := v_faltan || 'la 05 (falta la tabla shop_config)';
+    v_faltan := array_append(v_faltan, 'la 05 (falta la tabla shop_config)');
   END IF;
 
   -- Migración 07: el cofre de victoria marca cuándo se concedió
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                   WHERE table_schema='public' AND table_name='pack_slots'
                     AND column_name='awarded_at') THEN
-    v_faltan := v_faltan || 'la 07 (falta pack_slots.awarded_at)';
+    v_faltan := array_append(v_faltan, 'la 07 (falta pack_slots.awarded_at)');
   END IF;
 
   -- Migración 15: coliseo con devolución y ticket
   IF NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                   WHERE n.nspname='public' AND p.proname='refund_colosseum_wager') THEN
-    v_faltan := v_faltan || 'la 15 (falta refund_colosseum_wager)';
+    v_faltan := array_append(v_faltan, 'la 15 (falta refund_colosseum_wager)');
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-     WHERE n.nspname='public' AND p.proname='place_colosseum_wager'
-       AND pg_get_function_identity_arguments(p.oid) = 'numeric, boolean'
-  ) THEN
-    v_faltan := v_faltan || 'la 15 (falta place_colosseum_wager(numeric, boolean))';
+  -- to_regprocedure y no pg_get_function_identity_arguments: esa función
+  -- devuelve los NOMBRES de los parámetros además de los tipos
+  -- ("p_bet numeric, p_use_ticket boolean"), así que comparar con
+  -- "numeric, boolean" no coincide nunca y la comprobación daba un falso
+  -- negativo. to_regprocedure resuelve por firma exacta de tipos.
+  IF to_regprocedure('public.place_colosseum_wager(numeric,boolean)') IS NULL THEN
+    v_faltan := array_append(v_faltan, 'la 15 (falta place_colosseum_wager(numeric, boolean))');
   END IF;
 
   IF array_length(v_faltan, 1) > 0 THEN
@@ -256,30 +257,75 @@ LANGUAGE sql
 STABLE
 SET search_path = public, pg_temp
 AS $$
+  -- UNA carta por hueco, y como mucho 6.
+  --
+  -- No es paranoia: la prueba local encontró perfiles con DOS cartas marcadas en
+  -- el hueco 0 a la vez, porque nada lo impedía. El trigger de registro reparte
+  -- 4 cartas en los huecos 0..3, y cualquier otro camino que marque is_in_deck
+  -- puede volver a marcar el mismo hueco. Un mazo de 8 cartas para 6 huecos
+  -- llegaría deformado a la partida.
+  --
+  -- Se queda la más nueva de cada hueco (id más alto), que es lo que el jugador
+  -- puso el último. Es determinista, que es lo que importa: los dos jugadores y
+  -- el servidor tienen que ver el mismo mazo.
+  WITH una_por_hueco AS (
+    SELECT DISTINCT ON (COALESCE(pi.deck_slot, -1))
+           pi.id, pi.plant_id, pi.deck_slot, pi.rarity,
+           pi.level, pi.stat_rolls, pi.is_base
+      FROM public.plant_instances pi
+     WHERE pi.owner_id = p_uid
+       AND pi.is_in_deck
+       -- Una carta puesta en venta no puede estar jugando: se vendería a media
+       -- partida y el comprador se quedaría con una carta en uso.
+       AND NOT pi.is_listed_for_sale
+     ORDER BY COALESCE(pi.deck_slot, -1), pi.id DESC
+  ),
+  seis AS (
+    SELECT * FROM una_por_hueco
+     ORDER BY deck_slot NULLS LAST, id
+     LIMIT 6
+  )
   SELECT COALESCE(
     jsonb_agg(
       jsonb_build_object(
-        'instanceId', pi.id,
-        'plantId',    pi.plant_id,
-        'slot',       pi.deck_slot,
-        'rarity',     pi.rarity,
-        'level',      pi.level,
-        'statRolls',  pi.stat_rolls,
-        'isBase',     pi.is_base
+        'instanceId', s.id,
+        'plantId',    s.plant_id,
+        'slot',       s.deck_slot,
+        'rarity',     s.rarity,
+        'level',      s.level,
+        'statRolls',  s.stat_rolls,
+        'isBase',     s.is_base
       )
-      ORDER BY pi.deck_slot NULLS LAST, pi.id
+      ORDER BY s.deck_slot NULLS LAST, s.id
     ),
     '[]'::JSONB
   )
-  FROM public.plant_instances pi
-  WHERE pi.owner_id = p_uid
-    AND pi.is_in_deck
-    -- Una carta puesta en venta no puede estar jugando: se vendería a media
-    -- partida y el comprador se quedaría con una carta en uso.
-    AND NOT pi.is_listed_for_sale;
+  FROM seis s;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public._active_deck(UUID) FROM anon, authenticated, PUBLIC;
+
+-- Y además se impide de raíz: un hueco, una carta.
+--
+-- Se limpian los duplicados antes de crear el índice, o la creación falla. Se
+-- conserva la carta más nueva de cada hueco, igual que hace _active_deck, para
+-- que el mazo que ve el jugador no cambie al aplicar esto.
+UPDATE public.plant_instances pi
+   SET is_in_deck = FALSE, deck_slot = NULL
+ WHERE pi.is_in_deck
+   AND pi.deck_slot IS NOT NULL
+   AND pi.id <> (
+     SELECT p2.id FROM public.plant_instances p2
+      WHERE p2.owner_id = pi.owner_id
+        AND p2.deck_slot = pi.deck_slot
+        AND p2.is_in_deck
+      ORDER BY p2.id DESC
+      LIMIT 1
+   );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plant_instances_un_hueco_una_carta
+  ON public.plant_instances (owner_id, deck_slot)
+  WHERE is_in_deck AND deck_slot IS NOT NULL;
 
 
 -- -----------------------------------------------------------------------------

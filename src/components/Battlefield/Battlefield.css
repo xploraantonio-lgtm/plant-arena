@@ -1274,3 +1274,41 @@
   margin-top: 4px;
 }
 
+
+/* ── RESULTADO DE UNA PARTIDA REAL ──────────────────────────────────────────
+   Sólo aparece cuando la partida tenía sala. Distingue tres cosas que el
+   jugador necesita diferenciar: que su reporte se envió pero falta el del
+   rival, que hay desacuerdo y no se reparte nada, y que ya está liquidada. */
+
+.resultado-servidor {
+  width: 100%;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.resultado-servidor p {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.resultado-servidor__esperando {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(203, 213, 225, 0.3);
+}
+
+.resultado-servidor__disputa {
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid #f87171;
+}
+
+.resultado-servidor__ok {
+  color: #bbf7d0;
+  background: rgba(74, 222, 128, 0.14);
+  border: 1px solid #4ade80;
+  font-weight: 700;
+}

@@ -1,0 +1,196 @@
+/* Pantalla de buscar rival.
+   Usa los mismos ámbar y verde que el resto del juego (MainMenu.css) para que no
+   parezca de otra aplicación. */
+
+.mm {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(74, 222, 128, 0.18), transparent 60%),
+    linear-gradient(160deg, #0f2418 0%, #0a1710 60%, #070f0a 100%);
+}
+
+.mm__panel {
+  width: min(30rem, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1.75rem;
+  text-align: center;
+  border: 2px solid #4ade80;
+  border-radius: 1rem;
+  background: rgba(7, 20, 13, 0.9);
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+}
+
+/* El latido: comunica "esto está vivo, no colgado". Es lo único que se mueve. */
+.mm__latido {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: rgba(74, 222, 128, 0.14);
+  animation: mm-latido 1.8s ease-in-out infinite;
+}
+
+.mm__hoja {
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+@keyframes mm-latido {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.45); }
+  50%      { transform: scale(1.06); box-shadow: 0 0 0 0.9rem rgba(74, 222, 128, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm__latido { animation: none; }
+}
+
+.mm__titulo {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #fde047;
+  text-wrap: balance;
+}
+
+.mm__subtitulo {
+  margin: 0;
+  max-width: 26rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+/* El tiempo esperando. Cifras tabulares para que no baile al cambiar. */
+.mm__tiempo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.25rem;
+}
+
+.mm__tiempo-num {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.mm__tiempo-eti {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #94a3b8;
+}
+
+.mm__apuesta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #fef08a;
+}
+
+/* La cuenta atrás de la devolución en coliseo. */
+.mm__plazo {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(203, 213, 225, 0.18);
+}
+
+.mm__barra {
+  width: 100%;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgba(203, 213, 225, 0.18);
+  overflow: hidden;
+}
+
+.mm__barra-relleno {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4ade80, #fbbf24);
+  transition: width 1s linear;
+}
+
+.mm__plazo-texto {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.mm__plazo-texto strong { color: #fde047; font-variant-numeric: tabular-nums; }
+
+.mm__error {
+  margin: 0;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  border: 1px solid #f87171;
+  border-radius: 0.5rem;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
+.mm__relleno {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(203, 213, 225, 0.18);
+}
+
+.mm__relleno-texto {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+
+.mm__boton {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(203, 213, 225, 0.35);
+  border-radius: 0.6rem;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.mm__boton:hover { background: rgba(148, 163, 184, 0.24); border-color: #cbd5e1; }
+.mm__boton:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+.mm__boton--principal {
+  color: #0f2418;
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  border-color: #fbbf24;
+}
+
+.mm__boton--principal:hover {
+  background: linear-gradient(180deg, #fef08a, #fbbf24);
+  border-color: #fde047;
+}
+
+.mm__pista {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #64748b;
+}
