@@ -43,10 +43,31 @@ DO $$
 DECLARE
   v_a UUID := '11111111-1111-1111-1111-111111111111';
   v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_c UUID := '33333333-3333-3333-3333-333333333333';
   v_n INTEGER;
   v_gemas NUMERIC;
 BEGIN
-  DELETE FROM auth.users WHERE id IN (v_a, v_b);
+  -- Limpieza para poder repetir la prueba sobre la misma base.
+  --
+  -- Hay que borrar lo que apunta al jugador ANTES que al jugador: game_rooms
+  -- referencia profiles sin borrado en cascada, así que un DELETE directo sobre
+  -- auth.users falla en cuanto ha habido una partida.
+  --
+  -- (De paso: eso significa que hoy NO se puede borrar la cuenta de alguien que
+  -- haya jugado. Es defendible como rastro de auditoría, pero conviene saberlo si
+  -- algún día hay que atender un "bórrame la cuenta".)
+  -- La cola antes que las retenciones: matchmaking_queue.escrow_id apunta a
+  -- colosseum_escrow, así que al revés el borrado se bloquea.
+  DELETE FROM public.matchmaking_queue WHERE user_id IN (v_a, v_b, v_c);
+  DELETE FROM public.colosseum_escrow  WHERE user_id IN (v_a, v_b, v_c);
+  DELETE FROM public.game_rooms
+   WHERE player1_id IN (v_a, v_b, v_c) OR player2_id IN (v_a, v_b, v_c);
+  DELETE FROM public.transactions     WHERE user_id IN (v_a, v_b, v_c);
+  DELETE FROM public.pack_slots       WHERE user_id IN (v_a, v_b, v_c);
+  DELETE FROM public.plant_instances  WHERE owner_id IN (v_a, v_b, v_c);
+  DELETE FROM public.plant_copies     WHERE user_id IN (v_a, v_b, v_c);
+  DELETE FROM public.user_lottery     WHERE user_id IN (v_a, v_b, v_c);
+  DELETE FROM auth.users WHERE id IN (v_a, v_b, v_c);
 
   INSERT INTO auth.users (id, email, raw_user_meta_data)
   VALUES (v_a, 'ana@ejemplo.com',  '{"full_name":"Ana"}'),
@@ -387,3 +408,172 @@ BEGIN
 END $$;
 
 DO $$ BEGIN RAISE NOTICE E'\n=== fin ===\n'; END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 10. RENDIRSE CUENTA DE VERDAD (migración 18) ==='; END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB;
+  v_elo_a INTEGER; v_elo_b INTEGER; v_elo_a2 INTEGER; v_elo_b2 INTEGER;
+BEGIN
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+
+  SELECT elo_rating INTO v_elo_a FROM public.profiles WHERE id = v_a;
+  SELECT elo_rating INTO v_elo_b FROM public.profiles WHERE id = v_b;
+
+  -- Ana se rinde. No hace falta que Beto confirme nada.
+  PERFORM public._soy(v_a);
+  v_res := public.surrender_match(v_sala);
+
+  PERFORM public._t('rendirse liquida sin esperar al rival',
+                    v_res->>'status' = 'liquidada', v_res::TEXT);
+  PERFORM public._t('gana el rival, no quien se rinde',
+                    (v_res->>'winner')::UUID = v_b, v_res::TEXT);
+
+  SELECT elo_rating INTO v_elo_a2 FROM public.profiles WHERE id = v_a;
+  SELECT elo_rating INTO v_elo_b2 FROM public.profiles WHERE id = v_b;
+
+  PERFORM public._t('al que se rinde le BAJA el ELO de verdad',
+                    v_elo_a2 < v_elo_a,
+                    'antes ' || v_elo_a || ' después ' || v_elo_a2);
+  PERFORM public._t('al rival le sube',
+                    v_elo_b2 > v_elo_b,
+                    'antes ' || v_elo_b || ' después ' || v_elo_b2);
+
+  -- Y no se puede rendir dos veces para regalarle ELO al rival.
+  BEGIN
+    PERFORM public.surrender_match(v_sala);
+    PERFORM public._t('no se puede rendir dos veces', FALSE, 'no lanzó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('no se puede rendir dos veces',
+                      SQLERRM LIKE '%ya liquidada%', SQLERRM);
+  END;
+END $$;
+
+DO $$
+DECLARE v_ajeno UUID := '33333333-3333-3333-3333-333333333333'; v_sala UUID;
+BEGIN
+  DELETE FROM auth.users WHERE id = v_ajeno;
+  INSERT INTO auth.users (id, email) VALUES (v_ajeno, 'ajeno@ejemplo.com');
+  SELECT id INTO v_sala FROM public.game_rooms ORDER BY created_at DESC LIMIT 1;
+
+  PERFORM public._soy(v_ajeno);
+  BEGIN
+    PERFORM public.surrender_match(v_sala);
+    PERFORM public._t('un tercero no puede rendir tu partida', FALSE, 'no lanzó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('un tercero no puede rendir tu partida',
+                      SQLERRM LIKE '%No participas%' OR SQLERRM LIKE '%ya liquidada%', SQLERRM);
+  END;
+END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 11. EL RANKING DEJA FUERA A QUIEN NO COMPITE ==='; END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_perfiles INTEGER; v_ranking INTEGER; v_n INTEGER;
+BEGIN
+  UPDATE public.profiles SET exclude_from_ranking = TRUE WHERE id = v_a;
+
+  SELECT COUNT(*) INTO v_perfiles FROM public.profiles;
+  SELECT COUNT(*) INTO v_ranking  FROM public.leaderboard;
+  PERFORM public._t('la vista trae menos filas que la tabla',
+                    v_ranking < v_perfiles,
+                    'perfiles ' || v_perfiles || ' ranking ' || v_ranking);
+
+  SELECT COUNT(*) INTO v_n FROM public.leaderboard WHERE id = v_a;
+  PERFORM public._t('la cuenta excluida no aparece en el ranking',
+                    v_n = 0, 'apariciones: ' || v_n);
+
+  -- La vista NO debe exponer saldos ni si es administrador.
+  SELECT COUNT(*) INTO v_n FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='leaderboard'
+     AND column_name IN ('gems_balance','gold_balance','is_admin','exclude_from_ranking');
+  PERFORM public._t('la vista no expone saldos ni is_admin',
+                    v_n = 0, 'columnas sensibles expuestas: ' || v_n);
+
+  UPDATE public.profiles SET exclude_from_ranking = FALSE WHERE id = v_a;
+END $$;
+
+DO $$
+DECLARE v_n INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='profiles'
+     AND column_name='exclude_from_ranking'
+     AND grantee IN ('anon','authenticated') AND privilege_type='UPDATE';
+  PERFORM public._t('el jugador no puede sacarse del ranking a sí mismo',
+                    v_n = 0, 'permisos de UPDATE encontrados: ' || v_n);
+END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 12. EN DISPUTA, EL COLISEO DEVUELVE LO COBRADO ==='; END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB;
+  v_sa NUMERIC; v_sb NUMERIC; v_sa2 NUMERIC; v_sb2 NUMERIC;
+  v_retenidas INTEGER;
+BEGIN
+  UPDATE public.profiles SET gems_balance = 20 WHERE id IN (v_a, v_b);
+
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 3);
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 3)->>'roomId')::UUID;
+  PERFORM public._t('el coliseo empareja a dos con la misma apuesta',
+                    v_sala IS NOT NULL, 'no emparejó');
+
+  SELECT gems_balance INTO v_sa FROM public.profiles WHERE id = v_a;
+  SELECT gems_balance INTO v_sb FROM public.profiles WHERE id = v_b;
+  PERFORM public._t('a los dos se les cobró',
+                    v_sa = 17 AND v_sb = 17, 'ana ' || v_sa || ' beto ' || v_sb);
+
+  -- Cada uno dice que ganó él: es lo que pasa hoy si los dos vencen a su bot.
+  PERFORM public._soy(v_a); PERFORM public.report_match_result(v_sala, v_a);
+  PERFORM public._soy(v_b); v_res := public.report_match_result(v_sala, v_b);
+
+  PERFORM public._t('queda en disputa', v_res->>'status' = 'resultado_en_disputa', v_res::TEXT);
+  PERFORM public._t('y dice que devolvió', (v_res->>'refunded')::BOOLEAN IS TRUE, v_res::TEXT);
+
+  SELECT gems_balance INTO v_sa2 FROM public.profiles WHERE id = v_a;
+  SELECT gems_balance INTO v_sb2 FROM public.profiles WHERE id = v_b;
+  PERFORM public._t('a los DOS se les devolvieron sus 3 gemas',
+                    v_sa2 = 20 AND v_sb2 = 20, 'ana ' || v_sa2 || ' beto ' || v_sb2);
+
+  SELECT COUNT(*) INTO v_retenidas FROM public.colosseum_escrow
+   WHERE room_id = v_sala AND status = 'held';
+  PERFORM public._t('no queda ninguna gema atrapada en retención',
+                    v_retenidas = 0, 'retenciones vivas: ' || v_retenidas);
+END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_tk_a INTEGER; v_tk_a2 INTEGER;
+BEGIN
+  -- Lo mismo pagando con ticket: debe volver el TICKET, no gemas.
+  UPDATE public.profiles SET colosseum_tickets = 2, gems_balance = 20 WHERE id = v_a;
+  UPDATE public.profiles SET gems_balance = 20 WHERE id = v_b;
+  SELECT colosseum_tickets INTO v_tk_a FROM public.profiles WHERE id = v_a;
+
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 3, TRUE);
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 3)->>'roomId')::UUID;
+
+  PERFORM public._soy(v_a); PERFORM public.report_match_result(v_sala, v_a);
+  PERFORM public._soy(v_b); PERFORM public.report_match_result(v_sala, v_b);
+
+  SELECT colosseum_tickets INTO v_tk_a2 FROM public.profiles WHERE id = v_a;
+  PERFORM public._t('quien pagó con ticket recupera el TICKET',
+                    v_tk_a2 = v_tk_a, 'antes ' || v_tk_a || ' después ' || v_tk_a2);
+END $$;

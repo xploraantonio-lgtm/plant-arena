@@ -19,7 +19,7 @@ import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'
 import MatchmakingScreen from './components/Matchmaking/MatchmakingScreen'
-import { useMatchmaking, type ModoPartida } from './hooks/useMatchmaking'
+import { useMatchmaking, EMPAREJAMIENTO_ACTIVO, type ModoPartida } from './hooks/useMatchmaking'
 import { SupabaseService } from './services/supabaseService'
 import { useAuth } from './hooks/useAuth'
 import AuthModal from './components/Auth/AuthModal'
@@ -255,8 +255,14 @@ function App() {
     setCustomArenaBg(undefined)
     setSalaId(null)
     setSemillaPartida(undefined)
-    // Se busca rival de verdad. Si no aparece nadie, a los 30 s la pantalla
-    // ofrece jugar contra el relleno, que es lo que había antes.
+    setRivalId(null)
+    if (!EMPAREJAMIENTO_ACTIVO) {
+      // Sin sincronización de acciones, emparejar da una partida contra el bot
+      // igualmente pero después de esperar por un rival, y con el premio en el
+      // aire. Así que se va directo al bot, como antes.
+      setScreen('battle')
+      return
+    }
     setModoBuscando('ranked')
     setScreen('searching')
     void buscar('ranked')
@@ -288,6 +294,13 @@ function App() {
     setCustomArenaBg(undefined)
     setSalaId(null)
     setSemillaPartida(undefined)
+    if (!EMPAREJAMIENTO_ACTIVO) {
+      // Con gemas de verdad en juego, con más motivo: dos jugadores pagando por
+      // una partida que ambos pueden ganar contra su propio bot acabarían en
+      // disputa. El servidor devuelve, pero es una vuelta entera para nada.
+      setScreen('battle')
+      return
+    }
     setModoBuscando('colosseum')
     setScreen('searching')
     const r = await buscar('colosseum', { betGems, useTicket: usedTicket })

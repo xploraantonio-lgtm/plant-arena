@@ -116,8 +116,12 @@ export const SupabaseService = {
   async getGlobalLeaderboard(limit: number = 50): Promise<ProfileRow[]> {
     if (!isSupabaseConfigured()) return []
     try {
+      // De la VISTA, no de la tabla: la vista ya deja fuera a las cuentas
+      // marcadas como que no compiten (la del dueño, las de prueba). La regla vive
+      // en el servidor a propósito: si la pusiera el cliente, bastaría con no
+      // ponerla para volver a salir en la clasificación.
       const { data, error } = await supabase
-        .from('profiles')
+        .from('leaderboard')
         .select(PUBLIC_PROFILE_COLUMNS)
         .order('elo_rating', { ascending: false })
         .limit(limit)
@@ -137,8 +141,11 @@ export const SupabaseService = {
     try {
       // 'id' y no '*': con head:true PostgREST sigue resolviendo la lista de
       // columnas, y '*' incluye las que anon no puede leer.
+      // Contra la vista, igual que la clasificación: si contara sobre la tabla,
+      // el puesto incluiría a las cuentas excluidas y no cuadraría con la lista
+      // que el jugador ve justo al lado.
       const { count, error } = await supabase
-        .from('profiles')
+        .from('leaderboard')
         .select('id', { count: 'exact', head: true })
         .gt('elo_rating', userElo)
       if (error) {
@@ -156,7 +163,7 @@ export const SupabaseService = {
     if (!isSupabaseConfigured()) return []
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('leaderboard')
         .select(PUBLIC_PROFILE_COLUMNS)
         .gt('colosseum_max_streak', 0)
         .order('colosseum_max_streak', { ascending: false })
@@ -405,6 +412,39 @@ export const SupabaseService = {
     } catch (e: any) {
       logError('cancelMatchmaking', e)
       return { cancelled: false, reason: e?.message }
+    }
+  },
+
+  /**
+   * Rendirse en una partida real.
+   *
+   * No necesita que el rival confirme nada: lo dice quien pierde. El servidor
+   * declara ganador al otro y liquida por el mismo camino que una partida normal.
+   *
+   * Antes rendirse no hacía NADA en el servidor: el cliente restaba 8 puntos en su
+   * propio estado, que no se guarda, así que al recargar volvía el ELO de antes y
+   * el rival se quedaba esperando un reporte que no llegaba nunca.
+   */
+  async surrenderMatch(roomId: string): Promise<{
+    success?: boolean
+    status?: string
+    winner?: string
+    eloLost?: number
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { error: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('surrender_match', {
+        p_room_id: roomId,
+      })
+      if (error) {
+        logError('surrenderMatch', error)
+        return { error: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('surrenderMatch', e)
+      return { error: e?.message }
     }
   },
 

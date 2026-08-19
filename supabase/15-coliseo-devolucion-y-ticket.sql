@@ -184,7 +184,11 @@ BEGIN
    WHERE id = v_escrow.id;
 
   INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
-  VALUES (v_uid, 'colosseum_win',
+  -- colosseum_refund, no colosseum_win: es la devolución de su propia apuesta,
+  -- no una ganancia. Apuntarla como victoria hincha las ganancias aparentes y
+  -- hace inservible el libro para auditar lo que se lleva la casa. El tipo lo
+  -- añade la migración 18, así que ejecútala antes de volver a pasar esta.
+  VALUES (v_uid, 'colosseum_refund',
           CASE WHEN v_escrow.paid_with = 'ticket' THEN 0 ELSE v_escrow.bet_gems END,
           CASE WHEN v_escrow.paid_with = 'ticket'
                THEN 'Ticket devuelto: no se encontró rival'
@@ -248,7 +252,7 @@ BEGIN
      WHERE id = v_row.id;
 
     INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
-    VALUES (v_row.user_id, 'colosseum_win',
+    VALUES (v_row.user_id, 'colosseum_refund',
             CASE WHEN v_row.paid_with = 'ticket' THEN 0 ELSE v_row.bet_gems END,
             'Devolución automática: se agotó el tiempo de búsqueda',
             'completed');

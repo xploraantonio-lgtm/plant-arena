@@ -15,6 +15,31 @@ import { SupabaseService } from '../services/supabaseService'
  * le devuelve la entrada. Por eso importa tanto que la salida sea limpia.
  */
 
+/**
+ * ¿ESTÁ ACTIVO EL EMPAREJAMIENTO?
+ *
+ * En false a propósito, y esto es lo que falta para poder ponerlo en true.
+ *
+ * Emparejar a dos jugadores ya funciona: el servidor los junta, crea la sala y les
+ * da la misma semilla. Pero **no existe la sincronización de acciones**: cada
+ * navegador simula su propia partida. Consecuencias, comprobadas jugando:
+ *
+ *   · No ves lo que planta el rival. Sólo coincidís en las oleadas, porque salen
+ *     de la semilla.
+ *   · El bot local sigue jugando de P2, así que cada uno pelea contra la máquina
+ *     creyendo que pelea contra el otro.
+ *   · Si los dos ganáis vuestra propia partida, los dos os declaráis ganadores →
+ *     disputa → nadie cobra. En coliseo eso son gemas de verdad.
+ *
+ * O sea que emparejar hoy es PEOR que no emparejar: hace esperar por un rival y
+ * entrega una partida contra el bot igualmente, con el premio en el aire.
+ *
+ * Para ponerlo en true hace falta la tabla de acciones (match_actions) y que cada
+ * cliente aplique las del rival. El resto ya está: la cola, la sala, la semilla
+ * compartida, el reparto por modo, la rendición y la devolución en disputa.
+ */
+export const EMPAREJAMIENTO_ACTIVO = false
+
 export type ModoPartida = 'ranked' | 'friendly' | 'colosseum' | 'tournament'
 
 export interface PartidaEncontrada {

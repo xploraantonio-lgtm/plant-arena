@@ -615,7 +615,30 @@ export interface Database {
       }
     }
     Views: {
-      [_ in never]: never
+      /**
+       * La clasificación, ya filtrada por el servidor.
+       *
+       * Es `profiles` menos las cuentas marcadas con exclude_from_ranking (la del
+       * dueño, las de prueba) y sólo con columnas públicas: ni saldos, ni is_admin,
+       * ni el propio exclude_from_ranking. La creó la migración 18.
+       *
+       * Se lee de aquí y no de `profiles` a propósito: una regla sobre quién sale
+       * en la clasificación tiene que estar en el servidor. Si la aplicara el
+       * cliente, bastaría con no aplicarla.
+       */
+      leaderboard: {
+        Row: {
+          id: string
+          username: string
+          avatar_id: string
+          country: string
+          elo_rating: number
+          colosseum_current_streak: number
+          colosseum_max_streak: number
+          created_at: string
+        }
+        Relationships: []
+      }
     }
     Functions: {
       resolve_colosseum_match: {

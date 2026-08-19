@@ -299,6 +299,19 @@ export default function Battlefield({
     setShowSurrenderModal(false)
     hasHandledEndRef.current = true
     surrenderGame()
+
+    // En una partida real, rendirse lo registra el servidor: declara ganador al
+    // rival y aplica el ELO. Antes esto no salía del navegador — el cliente
+    // restaba 8 puntos en su propio estado, que no se guarda, así que al recargar
+    // volvía el ELO de antes; y el rival se quedaba esperando un reporte que no
+    // llegaba nunca.
+    if (roomId) {
+      void SupabaseService.surrenderMatch(roomId).then((r) => {
+        setResultadoServidor(r)
+      })
+      return
+    }
+
     if (onSurrender) {
       const res = onSurrender()
       if (res) {
