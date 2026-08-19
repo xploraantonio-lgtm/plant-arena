@@ -131,6 +131,7 @@ export default function Battlefield({
   onColosseumComplete,
 }: BattlefieldProps) {
   const {
+    tick,
     gameStatus,
     isPracticeMode,
     isMuted,
@@ -573,7 +574,9 @@ export default function Battlefield({
         const config = ENEMY_PLANT_CONFIGS[enemy.type]
         const laneConfig = LANES_CONFIG[enemy.lane]
         const hpPct = Math.max(0, (enemy.hp / enemy.maxHp) * 100)
-        const isFrozen = enemy.frozenUntil ? Date.now() < enemy.frozenUntil : false
+        // frozenUntil es un TIC, no un instante de reloj. Comparado con Date.now()
+        // esto era siempre falso y la congelación del hielo no se veía nunca.
+        const isFrozen = enemy.frozenUntil ? tick < enemy.frozenUntil : false
 
         return (
           <div
@@ -944,6 +947,7 @@ export default function Battlefield({
         selectedSlotIndex={selectedSlotIndex}
         onSelectCard={setSelectedCard}
         cooldowns={cooldowns}
+        currentTick={tick}
         slotCooldowns={slotCooldowns}
         activeDeck={effectiveDeck}
       />

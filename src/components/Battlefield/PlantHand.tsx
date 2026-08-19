@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { PlantId } from '../../types/game'
+import { msToTicks } from '../../engine/time'
 import {
   PLANT_CONFIGS,
   STAT_LABELS,
@@ -74,6 +75,16 @@ interface PlantHandProps {
   selectedSlotIndex?: number | null
   onSelectCard: (id: PlantId | 'shovel' | null, slotIndex?: number | null) => void
   cooldowns: Record<PlantId, number>
+  /**
+   * El tic actual de la partida.
+   *
+   * Los enfriamientos guardan el TIC en que expiran, no un instante de reloj.
+   * Antes esto se comparaba con Date.now(), que siempre es mayor que cualquier
+   * tic, así que isOnCooldown salía siempre falso y el velo de enfriamiento no
+   * se pintaba nunca: el jugador pulsaba la carta y no pasaba nada, sin ninguna
+   * señal de por qué.
+   */
+  currentTick?: number
   slotCooldowns?: Record<number, number>
   activeDeck?: PlantId[]
 }
@@ -87,10 +98,12 @@ export default function PlantHand({
   selectedSlotIndex,
   onSelectCard,
   cooldowns,
+  currentTick,
   slotCooldowns,
   activeDeck,
 }: PlantHandProps) {
-  const now = Date.now()
+  // El reloj de la partida son los tics, no Date.now(). Ver currentTick arriba.
+  const now = currentTick ?? 0
   const isDeckActive = activeDeck && activeDeck.length > 0
   const cardsToRender = isDeckActive ? activeDeck : CARDS
 
@@ -172,7 +185,9 @@ export default function PlantHand({
             const cdTime = isDeckActive ? slotCd : (cooldowns[cardId] || 0)
             const isOnCooldown = cdTime > now
             const cdRemaining = Math.max(0, cdTime - now)
-            const cdRatio = isOnCooldown ? cdRemaining / scaledConfig.cooldownMs : 0
+            // Ambos lados en tics: el que queda y el total del enfriamiento.
+            const cdTotalTicks = msToTicks(scaledConfig.cooldownMs)
+            const cdRatio = isOnCooldown && cdTotalTicks > 0 ? cdRemaining / cdTotalTicks : 0
             const canAfford = sunBank >= config.cost
             const isDisabled = !canAfford || isOnCooldown
 

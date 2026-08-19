@@ -562,6 +562,17 @@ export function useGameEngine() {
   }
 
   return {
+    /**
+     * El tic actual. Lo necesita la interfaz para pintar cualquier cosa que
+     * dependa de un plazo del juego: el velo de enfriamiento de las cartas, la
+     * congelación de un enemigo.
+     *
+     * Antes esos plazos eran instantes de Date.now() y la interfaz los comparaba
+     * con Date.now(). Al pasar el motor a tics, esas comparaciones quedaron
+     * mirando un tic contra un reloj de 1,7 billones: siempre falsas. El
+     * enfriamiento seguía funcionando en el motor, pero el jugador no lo veía.
+     */
+    tick: state.tick,
     gameStatus: state.status,
     isPracticeMode: !!state.isPracticeMode,
     isMuted,
