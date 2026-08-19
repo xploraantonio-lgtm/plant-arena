@@ -201,7 +201,7 @@ export default function AuthModal({
             </div>
 
             <button type="submit" className="auth-submit-btn" disabled={loading}>
-              {loading ? 'GUARDANDO...' : 'GUARDAR NICK Y CONTRASEÑA ➔'}
+              {loading ? 'GUARDANDO...' : 'GUARDAR'}
             </button>
           </form>
         ) : (
