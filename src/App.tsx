@@ -23,7 +23,6 @@ import AuthModal from './components/Auth/AuthModal'
 import AdminPanel from './components/Admin/AdminPanel'
 
 import { UserManager } from './utils/userManager'
-import { SupabaseService } from './services/supabaseService'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -60,11 +59,12 @@ function App() {
 
   const {
     syncProfileData,
+    refreshFromServer,
     userTokens,
     addTokens,
     userGold,
     addGold,
-    buyGoldWithTokens,
+    buyGoldPackage,
     inventoryPacks,
     unlockedPlants,
     plantCopies,
@@ -90,7 +90,6 @@ function App() {
     deductUserTokens,
     addUserTokens,
     donatePlantCopy,
-    receivePlantCopy,
     receivePlantInstance,
     removePlantInstance,
     addPacksToInventory,
@@ -121,6 +120,11 @@ function App() {
       if (profile.elo_rating !== undefined && profile.elo_rating !== null) {
         setUserElo(profile.elo_rating)
       }
+      // Cargar inventario y saldo autoritativos del servidor. Hasta ahora el
+      // estado salía de localStorage, así que el jugador veía su propio
+      // navegador en lugar de su cuenta: se perdía el progreso al cambiar de
+      // dispositivo y era editable a mano.
+      void refreshFromServer()
     }
   }, [profile])
 
@@ -238,32 +242,35 @@ function App() {
     setScreen('battle')
   }
 
-  const handleTriggerPackOpenByInstanceId = (instanceId: string) => {
+  // Estos cuatro manejadores pasaron a asíncronos: la apertura la resuelve el
+  // servidor. El sorteo ya no ocurre en el navegador, así que hay que esperar
+  // la respuesta antes de pintar la animación de resultado.
+  const handleTriggerPackOpenByInstanceId = async (instanceId: string) => {
     const packObj = inventoryPacks.find((p) => p.instanceId === instanceId)
     if (packObj) {
       setLastOpenedPackType(packObj.packId)
     }
-    const drop = openPackByInstanceId(instanceId)
+    const drop = await openPackByInstanceId(instanceId)
     if (drop) {
       setActiveOpeningResult(drop)
     }
   }
 
-  const handleOpenMultiplePacks = (instanceIds: string[]) => {
+  const handleOpenMultiplePacks = async (instanceIds: string[]) => {
     if (instanceIds.length === 0) return
     const packObj = inventoryPacks.find((p) => p.instanceId === instanceIds[0])
     if (packObj) {
       setLastOpenedPackType(packObj.packId)
     }
-    const drops = openMultiplePacksByInstanceIds(instanceIds)
+    const drops = await openMultiplePacksByInstanceIds(instanceIds)
     if (drops.length > 0) {
       setActiveOpeningResult(drops)
     }
   }
 
-  const handleOpenAnotherPack = () => {
+  const handleOpenAnotherPack = async () => {
     if (!lastOpenedPackType) return
-    const drop = openPackByType(lastOpenedPackType)
+    const drop = await openPackByType(lastOpenedPackType)
     if (drop) {
       setActiveOpeningResult(drop)
     } else {
@@ -271,29 +278,38 @@ function App() {
     }
   }
 
-  const handleOpenSlotPack = (slotId: number) => {
-    const drop = openSlotPack(slotId)
+  const handleOpenSlotPack = async (slotId: number) => {
+    const drop = await openSlotPack(slotId)
     if (drop) {
       setActiveOpeningResult(drop)
     }
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // ELO — PENDIENTE DE FASE 2
+  //
+  // Aquí se escribía elo_rating directamente en profiles. Eso permitía a
+  // cualquier jugador ponerse primero del ranking global con una línea en la
+  // consola, porque getGlobalLeaderboard ordena precisamente por esa columna.
+  // El permiso de columna está revocado, así que esas llamadas ya sólo
+  // devolvían un error que nadie miraba.
+  //
+  // El ELO tiene que calcularlo el servidor al resolver la partida, como ya
+  // hace report_match_result en el coliseo. Mientras el emparejamiento y la
+  // resolución de partida clasificatoria no existan (fase 2), el ELO se mueve
+  // sólo en pantalla y el ranking se queda congelado. Es preferible un ranking
+  // parado a uno que cualquiera puede falsificar.
+  // ───────────────────────────────────────────────────────────────────────────
   const handleBattleComplete = (isVictory: boolean) => {
     const deltas = getEloDeltasForElo(userElo)
     if (isVictory) {
       const newElo = userElo + deltas.winElo
       setUserElo(newElo)
-      if (user?.id) {
-        SupabaseService.updateProfile(user.id, { elo_rating: newElo })
-      }
       const packResult = awardVictoryPack(newElo)
       return { winElo: deltas.winElo, newElo, packResult }
     } else {
       const newElo = Math.max(0, userElo - deltas.loseElo)
       setUserElo(newElo)
-      if (user?.id) {
-        SupabaseService.updateProfile(user.id, { elo_rating: newElo })
-      }
       return { loseElo: deltas.loseElo, newElo }
     }
   }
@@ -302,9 +318,6 @@ function App() {
     const deltas = getEloDeltasForElo(userElo)
     const newElo = Math.max(0, userElo - deltas.surrenderElo)
     setUserElo(newElo)
-    if (user?.id) {
-      SupabaseService.updateProfile(user.id, { elo_rating: newElo })
-    }
     return { surrenderElo: deltas.surrenderElo, newElo }
   }
 
@@ -375,7 +388,6 @@ function App() {
             }}
             onStartSlotUnlock={startUnlockingSlot}
             onOpenSlotPack={handleOpenSlotPack}
-            onAddTokens={addTokens}
             onDeductTokens={deductUserTokens}
           />
         )}
@@ -428,11 +440,7 @@ function App() {
             onOpenPack={handleTriggerPackOpenByInstanceId}
             onOpenMultiplePacks={handleOpenMultiplePacks}
             onFusePlant={fuseAndUpgradePlant}
-            onDeductTokens={deductUserTokens}
-            onAddTokens={addUserTokens}
-            onAddGold={addGold}
-            onAddPacks={addPacksToInventory}
-            onReceivePlant={receivePlantCopy}
+            onRewardsChanged={refreshFromServer}
           />
         )}
         {screen === 'shop' && (
@@ -447,7 +455,7 @@ function App() {
             plantInstances={plantInstances}
             onBack={() => setScreen('menu')}
             onBuyPack={buyPack}
-            onBuyGold={buyGoldWithTokens}
+            onBuyGold={buyGoldPackage}
             onAddGold={addGold}
             onOpenJardin={handleOpenJardin}
             onAddTokens={addTokens}
@@ -465,14 +473,9 @@ function App() {
             userProfile={profile}
             hasVipPass={hasVipPass}
             onBack={() => setScreen('menu')}
+            // Igual que arriba: el ELO no se escribe desde el cliente.
             onAddElo={(delta) => {
-              setUserElo((prev) => {
-                const next = Math.max(0, prev + delta)
-                if (user?.id) {
-                  SupabaseService.updateProfile(user.id, { elo_rating: next })
-                }
-                return next
-              })
+              setUserElo((prev) => Math.max(0, prev + delta))
             }}
           />
         )}
@@ -511,8 +514,15 @@ function App() {
                 userElo={userElo}
                 hasVipPass={hasVipPass}
                 claimedVipLevels={claimedVipLevels}
-                onBuyVipPass={() => {
-                  const ok = buyVipPass()
+                onBuyVipPass={async () => {
+                  const { success: ok, error } = await buyVipPass()
+                  if (!ok && error) {
+                    setActiveAppAlert({
+                      title: 'NO SE PUDO ACTIVAR',
+                      message: error,
+                      icon: '⚠️',
+                    })
+                  }
                   if (ok) {
                     setActiveAppAlert({
                       title: '¡PASE VIP ACTIVADO!',

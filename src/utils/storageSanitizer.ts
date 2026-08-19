@@ -1,7 +1,32 @@
 // storageSanitizer.ts - Ensures no stale mock data or test numbers persist in browser localStorage
 
+/**
+ * Claves que nunca debieron vivir en el navegador. Se borran en CADA arranque,
+ * no sólo al cambiar de versión: la primera guardaba el código secreto del
+ * minijuego, así que el jugador tenía la respuesta a la vista y podía cobrar el
+ * bote a la primera. Ahora el código vive sólo en Postgres.
+ */
+const CLAVES_OBSOLETAS = [
+  'plant_arena_lottery_secret_code',
+  'plant_arena_lottery_code_attempts',
+  'plant_arena_lottery_code_last_free_reset',
+  'plant_arena_lottery_code_free_used',
+  'plant_arena_lottery_code_extra_attempts',
+  // El estado de administrador se rehidrataba de aquí: bastaba ponerla a 'true'
+  // para abrir el panel. Ahora sale de profiles.is_admin en el servidor.
+  'plant_arena_admin_auth',
+]
+
 export function sanitizeLocalStorage(): void {
   if (typeof window === 'undefined') return
+
+  // Purga incondicional e idempotente. Va antes del bloque versionado a
+  // propósito: no debe depender de que se suba SANITIZED_VERSION.
+  try {
+    CLAVES_OBSOLETAS.forEach((k) => localStorage.removeItem(k))
+  } catch {
+    // Si localStorage no está disponible, no hay nada que purgar.
+  }
 
   try {
     const SANITIZED_VERSION = 'v3_production_clean'

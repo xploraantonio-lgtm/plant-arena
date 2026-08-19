@@ -36,7 +36,7 @@ export const PACK_DEFINITIONS: Record<PackId, PackDefinition> = {
   },
   epic: {
     name: 'Sobre de Semillas Místico',
-    priceUsd: 8,
+    priceUsd: 5,
     cardCount: 4,
     icon: '/game-assets/greenfoot/seed_pack_epic_whitebg.png',
     rarity: 'epic',

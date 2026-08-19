@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import background from '../../assets/images/background.png'
 import monedaImg from '../../assets/ico/moneda.png'
 import type { PlantCardInstance, PlantId } from '../../types/game'
@@ -8,6 +8,7 @@ import {
   type PackId,
 } from '../../utils/packDropManager'
 import { soundManager } from '../../utils/audioManager'
+import { SupabaseService } from '../../services/supabaseService'
 import Marketplace from '../Marketplace/Marketplace'
 import type { PlantStatKey } from '../../utils/gameConstants'
 import './Shop.css'
@@ -179,15 +180,19 @@ interface ShopProps {
   plantStatRolls?: Partial<Record<PlantId, PlantStatKey[]>>
   plantInstances?: PlantCardInstance[]
   onBack: () => void
-  onBuyPack: (packId: PackId) => { success: boolean; pack?: InventoryPack; error?: string }
-  onBuyGold?: (goldAmount: number, tokenCostUsd: number) => { success: boolean; error?: string }
+  // Estas tres pasan por el servidor, así que son asíncronas: cobra y entrega
+  // Postgres en una sola transacción, y el cliente adopta el saldo que
+  // devuelve. onBuyGold recibe el ID del paquete, no (cantidad, precio): pasar
+  // ambos dejaba el tipo de cambio en manos del navegador.
+  onBuyPack: (packId: PackId, qty?: number) => Promise<{ success: boolean; packs?: InventoryPack[]; error?: string }>
+  onBuyGold?: (packageId: string) => Promise<{ success: boolean; goldAdded?: number; error?: string }>
   onAddGold?: (amount: number) => void
   onWatchAd?: (slotNumber: number, rewardGold: number) => void
   onOpenJardin: () => void
   onAddTokens: (amount: number) => void
   onOpenPackImmediately: (packInstanceId: string) => void
   onOpenMultiplePacks?: (instanceIds: string[]) => void
-  onBuyVipPass?: () => boolean
+  onBuyVipPass?: () => Promise<{ success: boolean; error?: string }>
   onDeductTokens?: (amountUsd: number) => boolean
   onDonatePlant?: (plantId: PlantId) => boolean
   onReceivePlant?: (plantId: PlantId, level?: number, statRolls?: PlantStatKey[]) => void
@@ -234,6 +239,29 @@ export default function Shop({
     return inventoryPacks.filter((p) => p.packId === packId).length
   }
 
+  // Precios traídos del servidor (tabla shop_packs). La interfaz tenía los tres
+  // precios escritos a mano y uno ya no coincidía con la definición: la tienda
+  // anunciaba el sobre épico a 5 gemas y la definición decía 8. Como la compra
+  // no cobraba nada, nadie lo notó hasta mover el cobro al servidor.
+  //
+  // Ahora el número que se muestra es el mismo que se va a cobrar, por
+  // construcción: sale de la misma tabla.
+  const [serverPackPrices, setServerPackPrices] = useState<Partial<Record<PackId, number>> | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    SupabaseService.getShopPackPrices().then((prices) => {
+      if (mounted && prices) setServerPackPrices(prices)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  /** Precio del sobre. Respaldo en PACK_DEFINITIONS si el servidor no responde. */
+  const packPrice = (packId: PackId): number =>
+    serverPackPrices?.[packId] ?? PACK_DEFINITIONS[packId].priceUsd
+
   const getQty = (packId: PackId) => buyQuantities[packId] || 1
 
   const setQty = (packId: PackId, val: number) => {
@@ -241,11 +269,13 @@ export default function Shop({
     setBuyQuantities((prev) => ({ ...prev, [packId]: clamped }))
   }
 
-  const handleBuyPacksBatch = (packId: PackId) => {
+  const handleBuyPacksBatch = async (packId: PackId) => {
     const qty = getQty(packId)
-    const packDef = PACK_DEFINITIONS[packId]
-    const totalCost = packDef.priceUsd * qty
+    const totalCost = packPrice(packId) * qty
 
+    // Comprobación local sólo para dar feedback inmediato. La que cuenta es la
+    // del servidor: antes esto era lo ÚNICO que había, y como buyPack() no
+    // descontaba nada, los sobres salían gratis.
     if (userTokens < totalCost) {
       setThemedAlert({
         title: 'GEMAS INSUFICIENTES',
@@ -255,21 +285,27 @@ export default function Shop({
       return
     }
 
-    const bought: InventoryPack[] = []
-    for (let i = 0; i < qty; i++) {
-      const res = onBuyPack(packId)
-      if (res.success && res.pack) {
-        bought.push(res.pack)
-      }
+    // Una sola llamada por lote: el servidor cobra qty × precio de una vez, así
+    // que no hay ventana para gastar el saldo a medias.
+    const res = await onBuyPack(packId, qty)
+
+    if (!res.success) {
+      setThemedAlert({
+        title: 'COMPRA RECHAZADA',
+        message: res.error || 'El servidor rechazó la compra.',
+        icon: '⚠️',
+      })
+      return
     }
 
+    const bought = res.packs || []
     if (bought.length > 0) {
       soundManager.playSound('plantation', 0.8)
       setPurchasedPacksList(bought)
     }
   }
 
-  const handleBuyGold = (pkg: GoldPackage) => {
+  const handleBuyGold = async (pkg: GoldPackage) => {
     if (userTokens < pkg.priceUsd) {
       setThemedAlert({
         title: 'GEMAS INSUFICIENTES',
@@ -280,12 +316,14 @@ export default function Shop({
     }
 
     if (onBuyGold) {
-      const res = onBuyGold(pkg.goldAmount, pkg.priceUsd)
+      // Se manda sólo el ID: cuánto oro entra y cuánto cuesta lo dice
+      // shop_gold_packages, no el navegador.
+      const res = await onBuyGold(pkg.id)
       if (res.success) {
         soundManager.playSound('plantation', 0.8)
         setThemedAlert({
           title: '¡COMPRA EXITOSA!',
-          message: `🪙 ¡Has adquirido con éxito +${pkg.goldAmount.toLocaleString()} Monedas de Oro por ${pkg.priceUsd} Gemas 💎!`,
+          message: `🪙 ¡Has adquirido con éxito +${(res.goldAdded ?? pkg.goldAmount).toLocaleString()} Monedas de Oro por ${pkg.priceUsd} Gemas 💎!`,
           icon: '🪙',
         })
       } else {
@@ -317,9 +355,9 @@ export default function Shop({
     })
   }
 
-  const handleBuyVipFromShop = () => {
+  const handleBuyVipFromShop = async () => {
     if (onBuyVipPass) {
-      const ok = onBuyVipPass()
+      const { success: ok, error } = await onBuyVipPass()
       if (ok) {
         setThemedAlert({
           title: '¡PASE VIP ACTIVADO!',
@@ -328,9 +366,11 @@ export default function Shop({
         })
         setActiveTab('packs')
       } else {
+        // El mensaje viene del servidor: distingue entre saldo insuficiente y
+        // "ya tienes el pase", que antes se mostraban igual.
         setThemedAlert({
-          title: 'GEMAS INSUFICIENTES',
-          message: '⚠️ Gemas insuficientes (10 Gemas 💎 requeridas).\nRecarga gemas usando el botón "+100 💎 TEST" de la tienda.',
+          title: 'NO SE PUDO ACTIVAR',
+          message: error || 'El servidor rechazó la compra del pase VIP.',
           icon: '⚠️',
         })
       }
@@ -462,7 +502,7 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Básico</h4>
-                  <span className="shop-pack-price-tag">3 💎 Gemas</span>
+                  <span className="shop-pack-price-tag">{packPrice('basic')} 💎 Gemas</span>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -479,7 +519,7 @@ export default function Shop({
                   type="button"
                   onClick={() => handleBuyPacksBatch('basic')}
                 >
-                  COMPRAR ({getQty('basic')}) — {3 * getQty('basic')} 💎 Gemas
+                  COMPRAR ({getQty('basic')}) — {packPrice('basic') * getQty('basic')} 💎 Gemas
                 </button>
               </div>
 
@@ -501,7 +541,7 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Épico</h4>
-                  <span className="shop-pack-price-tag shop-pack-price-tag--epic">5 💎 Gemas</span>
+                  <span className="shop-pack-price-tag shop-pack-price-tag--epic">{packPrice('epic')} 💎 Gemas</span>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -518,7 +558,7 @@ export default function Shop({
                   type="button"
                   onClick={() => handleBuyPacksBatch('epic')}
                 >
-                  COMPRAR ({getQty('epic')}) — {5 * getQty('epic')} 💎 Gemas
+                  COMPRAR ({getQty('epic')}) — {packPrice('epic') * getQty('epic')} 💎 Gemas
                 </button>
               </div>
 
@@ -540,7 +580,7 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Legendario</h4>
-                  <span className="shop-pack-price-tag shop-pack-price-tag--legendary">10 💎 Gemas</span>
+                  <span className="shop-pack-price-tag shop-pack-price-tag--legendary">{packPrice('legendary')} 💎 Gemas</span>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -557,7 +597,7 @@ export default function Shop({
                   type="button"
                   onClick={() => handleBuyPacksBatch('legendary')}
                 >
-                  COMPRAR ({getQty('legendary')}) — {10 * getQty('legendary')} 💎 Gemas
+                  COMPRAR ({getQty('legendary')}) — {packPrice('legendary') * getQty('legendary')} 💎 Gemas
                 </button>
               </div>
             </div>
@@ -927,7 +967,7 @@ export default function Shop({
               onDeductTokens={onDeductTokens || (() => false)}
               onDonatePlant={onDonatePlant || (() => false)}
               onReceivePlant={onReceivePlant || (() => {})}
-              onBuyVipPass={onBuyVipPass || (() => false)}
+              onBuyVipPass={onBuyVipPass || (async () => ({ success: false, error: 'Compra no disponible' }))}
               onBackToMenu={onBack}
             />
           </div>

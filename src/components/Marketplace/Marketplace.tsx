@@ -26,7 +26,7 @@ interface MarketplaceProps {
   onReceivePlant: (plantId: PlantId, level?: number, statRolls?: PlantStatKey[]) => void
   onRemovePlantInstance?: (instanceId: string) => boolean
   onUpdateDeck?: (plantIds: PlantId[], instanceIds?: string[]) => void
-  onBuyVipPass: () => boolean
+  onBuyVipPass: () => Promise<{ success: boolean; error?: string }>
   onBackToMenu: () => void
 }
 
@@ -253,7 +253,7 @@ export default function Marketplace({
         'El Mercado de Comercio es exclusivo para miembros con Pase VIP ($10.00 USD).\n¿Deseas activar tu Pase VIP ahora para vender cartas y builds?',
         '👑',
         () => {
-          onBuyVipPass()
+          void onBuyVipPass()
         },
         'ACTIVAR VIP ($10.00)',
         'CANCELAR'
@@ -355,12 +355,13 @@ export default function Marketplace({
       'ACTIVAR PASE VIP',
       '¿Deseas pagar $10.00 USD para activar tu Pase VIP de Temporada?\nDesbloquearás el Mercado de Comercio y todas las recompensas exclusivas del Pase de Batalla.',
       '👑',
-      () => {
-        const success = onBuyVipPass()
+      async () => {
+        const { success, error } = await onBuyVipPass()
         if (success) {
           showModalAlert('¡PASE VIP ACTIVADO!', '¡Bienvenido a la Zona VIP!\nAhora tienes acceso total al Mercado para comprar y vender cartas libremente.', '🎉', 'success')
         } else {
-          showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente ($10.00 USD requeridos). Recarga saldo en la Tienda.', '⚠️', 'warning')
+          // Mensaje del servidor: distingue saldo insuficiente de "ya lo tienes".
+          showModalAlert('NO SE PUDO ACTIVAR', error || 'El servidor rechazó la compra del pase VIP.', '⚠️', 'warning')
         }
       },
       'ACTIVAR ($10.00 USD)',

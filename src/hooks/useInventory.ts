@@ -1,20 +1,33 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { PlantCardInstance, PlantId, ColosseumBetAmount } from '../types/game'
 import {
   PACK_DEFINITIONS,
-  openSeedPack,
   type InventoryPack,
   type PackId,
   type PackDropResult,
 } from '../utils/packDropManager'
-import { getArenaForElo } from '../utils/arenaManager'
-import { createEmptySlots, drawFreePackCard, type FreePackSlot } from '../utils/freePackManager'
+import { createEmptySlots, type FreePackSlot } from '../utils/freePackManager'
 import { SupabaseService } from '../services/supabaseService'
-import {
-  getEligibleStatsForPlant,
-  STAT_LABELS,
-  type PlantStatKey,
-} from '../utils/gameConstants'
+import { STAT_LABELS, type PlantStatKey } from '../utils/gameConstants'
+
+// El servidor devuelve la rareza en inglés (columna plant_catalog.rarity).
+// Estas dos tablas la traducen a lo que ya espera la interfaz, para no tener que
+// tocar los componentes que pintan el resultado de un sobre.
+const RARITY_LABEL: Record<string, PackDropResult['rarityLabel']> = {
+  common: 'COMÚN',
+  uncommon: 'POCO COMÚN',
+  rare: 'RARA',
+  epic: 'ÉPICA',
+  legendary: 'LEGENDARIA',
+}
+
+const RARITY_COLOR: Record<string, string> = {
+  common: '#4ade80',
+  uncommon: '#22d3ee',
+  rare: '#60a5fa',
+  epic: '#c084fc',
+  legendary: '#fbbf24',
+}
 
 const ALL_15_PLANTS: PlantId[] = [
   'sunflower',
@@ -159,40 +172,12 @@ export function useInventory() {
     return base
   })
 
-  const [plantLevels, setPlantLevels] = useState<Record<PlantId, number>>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.PLANT_LEVELS)
-    return saved ? JSON.parse(saved) : DEFAULT_PLANT_LEVELS
-  })
-
-  const [plantStatRolls, setPlantStatRolls] = useState<Record<PlantId, PlantStatKey[]>>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.PLANT_STAT_ROLLS)
-    const empty: Record<PlantId, PlantStatKey[]> = {
-      sunflower: [],
-      peashooter: [],
-      wallnut: [],
-      chomper: [],
-      repeater: [],
-      garlic: [],
-      bonkchoy: [],
-      squash: [],
-      twinsunflower: [],
-      tallnut: [],
-      threepeater: [],
-      jalapeno: [],
-      iceberglettuce: [],
-      aloe: [],
-      melonpult: [],
-    }
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        return { ...empty, ...parsed }
-      } catch {
-        // fallback
-      }
-    }
-    return empty
-  })
+  // plantLevels y plantStatRolls ya no son estado propio: se DERIVAN de las
+  // instancias base. Antes eran "espejos" que la fusión actualizaba a mano en
+  // paralelo a plantInstances, así que podían desincronizarse del inventario
+  // real. Ahora el nivel y las tiradas viven en cada instancia (que es lo que
+  // guarda el servidor) y esto sólo los reexpone en la forma que ya esperan
+  // los componentes.
 
   // Distinct plant card instances (Original plants + Bought/Improved builds)
   const [plantInstances, setPlantInstances] = useState<PlantCardInstance[]>(() => {
@@ -217,6 +202,25 @@ export function useInventory() {
       obtainedAt: Date.now(),
     }))
   })
+
+  // Derivados de las instancias base. Una sola fuente de verdad: si el servidor
+  // sube el nivel de una carta, estos dos cambian solos.
+  const plantLevels = useMemo<Record<PlantId, number>>(() => {
+    const out = { ...DEFAULT_PLANT_LEVELS }
+    for (const inst of plantInstances) {
+      if (inst.isBase) out[inst.plantId] = inst.level
+    }
+    return out
+  }, [plantInstances])
+
+  const plantStatRolls = useMemo<Record<PlantId, PlantStatKey[]>>(() => {
+    const out = {} as Record<PlantId, PlantStatKey[]>
+    for (const id of ALL_15_PLANTS) out[id] = []
+    for (const inst of plantInstances) {
+      if (inst.isBase) out[inst.plantId] = inst.statRolls || []
+    }
+    return out
+  }, [plantInstances])
 
   // Active Battle Deck (Plant IDs)
   const [activeDeck, setActiveDeck] = useState<PlantId[]>(() => {
@@ -266,14 +270,6 @@ export function useInventory() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PLANT_COPIES, JSON.stringify(plantCopies))
   }, [plantCopies])
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PLANT_LEVELS, JSON.stringify(plantLevels))
-  }, [plantLevels])
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PLANT_STAT_ROLLS, JSON.stringify(plantStatRolls))
-  }, [plantStatRolls])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PLANT_INSTANCES, JSON.stringify(plantInstances))
@@ -367,178 +363,79 @@ export function useInventory() {
     setUserTokens((prev) => prev + amount)
   }
 
-  const buyPack = (packId: PackId): { success: boolean; pack?: InventoryPack; error?: string } => {
-    const packDef = PACK_DEFINITIONS[packId]
-    if (!packDef) return { success: false, error: 'Pack no válido' }
+  // buyPack se movió al bloque de servidor del final del archivo.
+  // La versión que había aquí creaba el sobre y lo añadía al inventario sin
+  // descontar nada: los sobres eran gratis, y el aviso de "gemas insuficientes"
+  // de Shop.tsx era decorativo porque el saldo nunca se gastaba.
 
-    // Create new inventory pack
-    const newPack: InventoryPack = {
-      instanceId: `pack_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      packId,
-      name: packDef.name,
-      icon: packDef.icon,
-      rarity: packDef.rarity,
-      purchasedAt: Date.now(),
-    }
+  // recordDropCopies se eliminó: sumaba copias y sorteaba el 15% de ticket de
+  // coliseo en el navegador. Ambas cosas las hace ahora open_pack en el
+  // servidor, dentro de la misma transacción que consume el sobre.
 
-    setInventoryPacks((prev) => [newPack, ...prev])
-    return { success: true, pack: newPack }
+  /**
+   * Abre un sobre. El instanceId ES la fila de player_packs, así que el
+   * servidor comprueba que existe y es tuyo antes de sortear.
+   *
+   * La versión local llamaba a openSeedPack() con Math.random() en el navegador:
+   * se podía repetir hasta sacar una legendaria, y el sobre nunca se había
+   * cobrado (ver el fallo de la tienda).
+   */
+  const openPackByInstanceId = async (instanceId: string): Promise<PackDropResult[] | null> => {
+    const res = await openPackOnServer(instanceId)
+    return res ? res.drops : null
   }
 
-  const recordDropCopies = (drops: PackDropResult[]) => {
-    setPlantCopies((prev) => {
-      const next = { ...prev }
-      drops.forEach((d) => {
-        next[d.plantId] = (next[d.plantId] || 0) + 1
-      })
-      return next
-    })
-
-    setUnlockedPlants((prev) => {
-      const next = [...prev]
-      drops.forEach((d) => {
-        if (!next.includes(d.plantId)) {
-          next.push(d.plantId)
-        }
-      })
-      return next
-    })
-
-    // 15% de probabilidad de dropear un Ticket de Coliseo en sobres
-    if (Math.random() < 0.15) {
-      addColosseumTickets(1)
-    }
+  const openPackByType = async (packId: PackId): Promise<PackDropResult[] | null> => {
+    const targetPack = inventoryPacks.find((p) => p.packId === packId)
+    if (!targetPack) return null
+    return await openPackByInstanceId(targetPack.instanceId)
   }
 
-  const openPackByInstanceId = (instanceId: string): PackDropResult[] | null => {
-    const packToOpen = inventoryPacks.find((p) => p.instanceId === instanceId)
-    if (!packToOpen) return null
-
-    // Perform drop roll (returns array of cards)
-    const drops = openSeedPack(packToOpen.packId, unlockedPlants)
-
-    // Remove pack from inventory
-    setInventoryPacks((prev) => prev.filter((p) => p.instanceId !== instanceId))
-
-    // Record copies & unlocks
-    recordDropCopies(drops)
-
-    return drops
-  }
-
-  const openPackByType = (packId: PackId): PackDropResult[] | null => {
-    const packIndex = inventoryPacks.findIndex((p) => p.packId === packId)
-    if (packIndex === -1) return null
-
-    const targetPack = inventoryPacks[packIndex]
-    return openPackByInstanceId(targetPack.instanceId)
-  }
-
-  const openMultiplePacksByInstanceIds = (instanceIds: string[]): PackDropResult[] => {
+  const openMultiplePacksByInstanceIds = async (instanceIds: string[]): Promise<PackDropResult[]> => {
     const allDrops: PackDropResult[] = []
-    let updatedUnlocked = [...unlockedPlants]
-
-    const toOpen = inventoryPacks.filter((p) => instanceIds.includes(p.instanceId))
-    if (toOpen.length === 0) return []
-
-    toOpen.forEach((packObj) => {
-      const drops = openSeedPack(packObj.packId, updatedUnlocked)
-      drops.forEach((d) => {
-        if (!updatedUnlocked.includes(d.plantId)) {
-          updatedUnlocked.push(d.plantId)
-        }
-        allDrops.push(d)
-      })
-    })
-
-    setInventoryPacks((prev) => prev.filter((p) => !instanceIds.includes(p.instanceId)))
-    recordDropCopies(allDrops)
-
+    // En serie y no en paralelo: cada apertura mueve saldo y tickets, y así el
+    // refresco de estado de una no se pisa con el de la siguiente.
+    for (const id of instanceIds) {
+      const res = await openPackOnServer(id)
+      if (res) allDrops.push(...res.drops)
+    }
     return allDrops
   }
 
   // FUSES 5 COPIES & ADDS +1 LEVEL WITH A RANDOM STAT ROLL TO A SPECIFIC INSTANCE CARD
-  const fuseAndUpgradePlant = (plantId: PlantId, targetInstanceId?: string): {
+  /**
+   * Fusiona: 5 copias → +1 nivel + una stat elegible al azar.
+   *
+   * Ahora lo resuelve fuse_plant en el servidor. La versión local sorteaba la
+   * stat con Math.random() y descontaba las copias en el navegador, así que se
+   * podía repetir hasta sacar la stat deseada, o subir de nivel sin tener las
+   * copias. El servidor sortea entre las stats que admite ESA planta concreta
+   * (plant_catalog.eligible_stats) y respeta el nivel máximo: 3 en legendarias,
+   * 5 en el resto.
+   */
+  const fuseAndUpgradePlant = async (
+    plantId: PlantId,
+    targetInstanceId?: string
+  ): Promise<{
     success: boolean
     newLevel?: number
     rolledStat?: PlantStatKey
     rolledStatLabel?: string
     error?: string
-  } => {
-    // Find target instance or default base instance
-    let target = targetInstanceId
-      ? plantInstances.find((i) => i.instanceId === targetInstanceId)
-      : plantInstances.find((i) => i.plantId === plantId && i.isBase)
-
-    if (!target) {
-      target = plantInstances.find((i) => i.plantId === plantId)
-    }
+  }> => {
+    // Resolver la instancia igual que antes: la indicada, si no la base, si no
+    // cualquiera de esa planta.
+    const target =
+      (targetInstanceId
+        ? plantInstances.find((i) => i.instanceId === targetInstanceId)
+        : plantInstances.find((i) => i.plantId === plantId && i.isBase)) ??
+      plantInstances.find((i) => i.plantId === plantId)
 
     if (!target) {
       return { success: false, error: 'Carta no encontrada en el inventario' }
     }
 
-    const actualPlantId = target.plantId
-    const isLegendary = actualPlantId === 'threepeater' || actualPlantId === 'iceberglettuce'
-    const maxLevel = isLegendary ? 3 : 5
-    const currentLvl = target.level
-    const currentCopies = plantCopies[actualPlantId] || 0
-
-    if (currentLvl >= maxLevel) {
-      return { success: false, error: 'Esta carta ya alcanzó el Nivel Máximo' }
-    }
-
-    if (currentCopies < 5) {
-      return { success: false, error: `Se requieren 5 copias base para la fusión (Tienes ${currentCopies}/5)` }
-    }
-
-    // Pick 1 random eligible stat for this plant
-    const eligible = getEligibleStatsForPlant(actualPlantId)
-    const rolledStat = eligible[Math.floor(Math.random() * eligible.length)]
-
-    // Deduct 5 copies (burns copies, strengthens the card)
-    setPlantCopies((prev) => ({
-      ...prev,
-      [actualPlantId]: Math.max(0, (prev[actualPlantId] || 0) - 5),
-    }))
-
-    const nextLvl = currentLvl + 1
-
-    // Update the specific instance card
-    setPlantInstances((prev) =>
-      prev.map((inst) => {
-        if (inst.instanceId === target!.instanceId) {
-          return {
-            ...inst,
-            level: nextLvl,
-            statRolls: [...inst.statRolls, rolledStat],
-          }
-        }
-        return inst
-      })
-    )
-
-    // Also update base mirrors
-    if (target.isBase) {
-      setPlantLevels((prev) => ({
-        ...prev,
-        [actualPlantId]: nextLvl,
-      }))
-      setPlantStatRolls((prev) => {
-        const currentList = prev[actualPlantId] || []
-        return {
-          ...prev,
-          [actualPlantId]: [...currentList, rolledStat],
-        }
-      })
-    }
-
-    return {
-      success: true,
-      newLevel: nextLvl,
-      rolledStat,
-      rolledStatLabel: STAT_LABELS[rolledStat].suffix,
-    }
+    return await fusePlantOnServer(target.instanceId)
   }
 
   const [hasVipPass, setHasVipPass] = useState<boolean>(() => {
@@ -558,48 +455,27 @@ export function useInventory() {
     localStorage.setItem('plant_arena_claimed_vip_pass', JSON.stringify(claimedVipLevels))
   }, [claimedVipLevels])
 
-  const buyVipPass = (): boolean => {
-    if (userTokens < 10) return false
-    setUserTokens((prev) => prev - 10)
-    setHasVipPass(true)
-    return true
-  }
+  // buyVipPass se movió al bloque de servidor: el precio lo pone shop_config,
+  // no una constante en el cliente.
 
+  /**
+   * PENDIENTE DE FASE 2c — cerrado a propósito.
+   *
+   * Entregaba las recompensas del pase de batalla creando sobres y copias en el
+   * navegador. Los sobres saldrían con un instanceId inventado y no se podrían
+   * abrir; las copias se sumarían sólo en local y las borraría el siguiente
+   * refresco desde el servidor.
+   *
+   * Tampoco marca el nivel como reclamado: si no se puede entregar, es mejor
+   * que el jugador conserve el derecho a reclamarlo cuando exista la RPC, en
+   * lugar de perder la recompensa para siempre.
+   */
   const claimPassReward = (reward: any, levelNum: number) => {
-    if (claimedVipLevels.includes(levelNum)) return
-    setClaimedVipLevels((prev) => [...prev, levelNum])
-
-    // Grant reward content
-    if (reward.type === 'pack' && reward.packId) {
-      const packId = reward.packId as PackId
-      const count = reward.packCount || 1
-      const packDef = PACK_DEFINITIONS[packId]
-      const createdPacks: InventoryPack[] = []
-      for (let i = 0; i < count; i++) {
-        createdPacks.push({
-          instanceId: `pack_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${i}`,
-          packId,
-          name: packDef.name,
-          rarity: packDef.rarity,
-          icon: packDef.icon,
-          purchasedAt: Date.now(),
-        })
-      }
-      setInventoryPacks((prev) => [...createdPacks, ...prev])
-    } else if (reward.type === 'copies' && reward.plantId) {
-      const pId = reward.plantId as PlantId
-      const count = reward.copiesCount || 1
-      setUnlockedPlants((prev) => {
-        if (!prev.includes(pId)) {
-          return [...prev, pId]
-        }
-        return prev
-      })
-      setPlantCopies((prev) => ({
-        ...prev,
-        [pId]: (prev[pId] || 0) + count,
-      }))
-    }
+    console.warn(
+      `[useInventory] Recompensa del pase (nivel ${levelNum}, tipo "${reward?.type}") ` +
+      'no entregada: debe concederla el servidor. Pendiente de la fase 2c. ' +
+      'El nivel NO se marca como reclamado.'
+    )
   }
 
   const currentUserIdRef = useRef<string | null>(null)
@@ -619,7 +495,19 @@ export function useInventory() {
   useEffect(() => {
     localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(freePackSlots))
     if (currentUserIdRef.current) {
-      SupabaseService.saveUserPackSlots(currentUserIdRef.current, freePackSlots)
+      // El servidor valida el temporizador y devuelve el estado autoritativo.
+      // Si rechaza algo (intento de abrir antes de hora), adoptamos lo que él
+      // dice: el reloj del navegador deja de decidir cuándo hay premio.
+      SupabaseService.syncPackSlots(freePackSlots).then(({ slots, rejected }) => {
+        if (rejected.length > 0) {
+          console.warn('[packSlots] el servidor rechazó cambios:', rejected)
+        }
+        if (slots && slots.length > 0) {
+          setFreePackSlots((prev) =>
+            JSON.stringify(prev) === JSON.stringify(slots) ? prev : slots
+          )
+        }
+      })
     }
   }, [freePackSlots])
 
@@ -645,30 +533,32 @@ export function useInventory() {
     return () => clearInterval(timer)
   }, [])
 
-  const awardVictoryPack = (playerElo: number): { awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean } => {
-    const arenaObj = getArenaForElo(playerElo)
-    const emptyIndex = freePackSlots.findIndex((s) => s.status === 'empty')
-    if (emptyIndex === -1) {
-      return { awarded: false, isSlotsFull: true }
+  /**
+   * Cofre por victoria. Lo concede award_victory_chest en el servidor, que elige
+   * el hueco, la duración y el nivel de arena.
+   *
+   * LÍMITE CONOCIDO: la partida se juega en el navegador, así que el servidor no
+   * puede comprobar que se ganó de verdad. Lo acotan el tope de 4 huecos, las
+   * 2–12 h de espera por cofre y un cofre como máximo cada 2 minutos. Se cierra
+   * del todo cuando el servidor resuelva las partidas.
+   */
+  const awardVictoryPack = async (
+    _playerElo: number
+  ): Promise<{ awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean }> => {
+    const res = await SupabaseService.awardVictoryChest()
+
+    if (!res.awarded) {
+      return { awarded: false, isSlotsFull: res.reason === 'huecos_llenos' }
     }
 
-    const durations: (2 | 4 | 8 | 12)[] = [2, 4, 8, 12]
-    const randomDuration = durations[Math.floor(Math.random() * durations.length)]
+    // Adoptar los cofres tal como quedaron en el servidor.
+    const { slots } = await SupabaseService.syncPackSlots(freePackSlots)
+    if (slots && slots.length > 0) setFreePackSlots(slots)
 
-    setFreePackSlots((prev) => {
-      const next = [...prev]
-      next[emptyIndex] = {
-        slotId: emptyIndex,
-        status: 'locked',
-        durationHours: randomDuration,
-        arenaLevel: arenaObj.id,
-      }
-      return next
-    })
     return {
       awarded: true,
-      durationHours: randomDuration,
-      arenaLevel: arenaObj.id,
+      durationHours: res.durationHours as 2 | 4 | 8 | 12,
+      arenaLevel: res.arenaLevel,
       isSlotsFull: false,
     }
   }
@@ -685,55 +575,24 @@ export function useInventory() {
     return { success: true }
   }
 
-  const fastUnlockSlot = (slotId: number) => {
-    setFreePackSlots((prev) =>
-      prev.map((s) => (s.slotId === slotId ? { ...s, status: 'ready' } : s))
-    )
+  /**
+   * Abre un cofre al instante pagando oro. Antes era gratis: sólo ponía el
+   * estado en 'ready' sin cobrar nada. Ahora instant_unlock_pack_slot cobra el
+   * oro calculando el coste con el reloj del servidor.
+   */
+  const fastUnlockSlot = async (slotId: number): Promise<{ success: boolean; goldSpent?: number; error?: string }> => {
+    return await instantUnlockSlotOnServer(slotId)
   }
 
-  const openSlotPack = (slotId: number): PackDropResult | null => {
-    const slot = freePackSlots.find((s) => s.slotId === slotId)
-    if (!slot || (slot.status !== 'ready' && slot.status !== 'unlocking')) return null
-
-    const dropData = drawFreePackCard(slot.arenaLevel, unlockedPlants)
-    const plantId = dropData.plantId
-
-    // Record unlocked plant
-    if (!unlockedPlants.includes(plantId)) {
-      setUnlockedPlants((prev) => [...prev, plantId])
-    }
-
-    // Add copy
-    setPlantCopies((prev) => ({
-      ...prev,
-      [plantId]: (prev[plantId] || 0) + 1,
-    }))
-
-    // Reset slot to empty
-    setFreePackSlots((prev) =>
-      prev.map((s) => (s.slotId === slotId ? { ...s, status: 'empty' } : s))
-    )
-
-    const color =
-      dropData.rarityLabel === 'COMÚN'
-        ? '#4ade80'
-        : dropData.rarityLabel === 'POCO COMÚN'
-        ? '#22d3ee'
-        : dropData.rarityLabel === 'RARA'
-        ? '#60a5fa'
-        : '#c084fc'
-
-    // 10% de probabilidad de dropear un Ticket de Coliseo en cofres de victoria
-    if (Math.random() < 0.10) {
-      addColosseumTickets(1)
-    }
-
-    return {
-      plantId,
-      isNew: dropData.isNew,
-      rarityLabel: dropData.rarityLabel as any,
-      rarityColor: color,
-    }
+  /**
+   * Reclama un cofre. Ahora lo resuelve claim_pack_slot en el servidor.
+   *
+   * La versión local sorteaba la carta con drawFreePackCard() en el navegador y
+   * ponía el cofre a 'empty' por su cuenta, así que se podía repetir la tirada
+   * hasta sacar la carta deseada. El servidor además revalida el temporizador.
+   */
+  const openSlotPack = async (slotId: number): Promise<PackDropResult | null> => {
+    return await claimSlotOnServer(slotId)
   }
 
   const deductUserTokens = (amountUsd: number): boolean => {
@@ -826,29 +685,27 @@ export function useInventory() {
     return true
   }
 
-  const buyGoldWithTokens = (goldAmount: number, tokenCostUsd: number) => {
-    if (userTokens < tokenCostUsd) {
-      return { success: false, error: 'Saldo insuficiente de tokens USD/USDT' }
-    }
-    setUserTokens((prev) => prev - tokenCostUsd)
-    setUserGold((prev) => prev + goldAmount)
-    return { success: true }
-  }
+  // buyGoldWithTokens se movió al bloque de servidor y ahora recibe el ID del
+  // paquete, no (cantidad, precio). Recibir ambos del cliente significaba que
+  // el tipo de cambio lo decidía el navegador: 1.000.000 de oro por 1 gema era
+  // una llamada.
 
+  /**
+   * PENDIENTE DE FASE 2c — cerrado a propósito.
+   *
+   * Creaba sobres en el navegador con un instanceId inventado. Ahora el
+   * instanceId tiene que ser una fila real de player_packs, así que un sobre
+   * creado aquí NO se podría abrir: open_pack lo rechazaría con "Sobre no
+   * encontrado". Un sobre que aparece y no funciona es peor que ningún sobre.
+   *
+   * Lo llaman las recompensas de clan, la lotería y el jardín. Cada una necesita
+   * su RPC que compruebe que la recompensa se ganó de verdad.
+   */
   const addPacksToInventory = (packId: PackId, qty: number) => {
-    const packDef = PACK_DEFINITIONS[packId]
-    const newPacks: InventoryPack[] = []
-    for (let i = 0; i < qty; i++) {
-      newPacks.push({
-        instanceId: `pack-${Date.now()}-${Math.random().toString(36).substr(2, 6)}-${i}`,
-        packId,
-        name: packDef.name,
-        icon: packDef.icon,
-        rarity: packDef.rarity,
-        purchasedAt: Date.now(),
-      })
-    }
-    setInventoryPacks((prev) => [...prev, ...newPacks])
+    console.warn(
+      `[useInventory] Recompensa de ${qty} sobre(s) "${packId}" no entregada: ` +
+      'los sobres deben crearse en el servidor. Pendiente de la fase 2c.'
+    )
   }
 
   const syncProfileData = (profile: {
@@ -879,7 +736,197 @@ export function useInventory() {
     if (profile.claimed_vip_levels !== undefined) setClaimedVipLevels(profile.claimed_vip_levels || [])
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOQUE DE SERVIDOR (fase 2)
+  //
+  // Todo lo que cobra o crea cartas vive aquí. El patrón es siempre el mismo:
+  // llamar a la RPC, y si sale bien adoptar el saldo que devuelve el servidor
+  // en lugar de calcularlo en el cliente. Así el navegador nunca es la fuente
+  // de verdad de nada que tenga valor.
+  //
+  // Se define al final del hook a propósito: aquí ya están declarados todos los
+  // setters, y el orden de definición no importa porque estas funciones sólo se
+  // ejecutan al interactuar el usuario.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Adopta el saldo autoritativo del servidor. */
+  const refreshBalance = async (): Promise<void> => {
+    const b = await SupabaseService.myBalance()
+    if (!b) return
+    setUserTokens(Number(b.gems_balance))
+    setUserGold(Number(b.gold_balance))
+    setColosseumTickets(Number(b.colosseum_tickets))
+    setHasVipPass(Boolean(b.has_vip_pass))
+    setClaimedVipLevels(b.claimed_vip_levels || [])
+    setColosseumCurrentStreak(Number(b.colosseum_current_streak))
+    setColosseumMaxStreak(Number(b.colosseum_max_streak))
+  }
+
+  /** Recarga el inventario completo desde el servidor. */
+  const refreshInventory = async (): Promise<void> => {
+    const inv = await SupabaseService.myInventory()
+    if (!inv) return
+
+    setPlantInstances(
+      inv.instances.map((i) => ({
+        instanceId: i.instanceId,
+        plantId: i.plantId as PlantId,
+        level: i.level,
+        statRolls: (i.statRolls || []) as PlantStatKey[],
+        isBase: i.isBase,
+        obtainedAt: i.obtainedAt,
+      }))
+    )
+
+    setPlantCopies(inv.copies as Record<PlantId, number>)
+    setUnlockedPlants((inv.unlocked || []) as PlantId[])
+
+    // El instanceId del sobre ES el id de la fila en player_packs: es lo que
+    // open_pack necesita para localizarlo y comprobar que es tuyo.
+    setInventoryPacks(
+      (inv.packs || []).map((p) => {
+        const def = PACK_DEFINITIONS[p.packId as PackId]
+        return {
+          instanceId: p.rowId,
+          packId: p.packId as PackId,
+          name: def?.name || p.packId,
+          icon: def?.icon || '',
+          rarity: def?.rarity || 'common',
+          purchasedAt: p.obtainedAt,
+        }
+      })
+    )
+
+    // El mazo activo sale de is_in_deck / deck_slot, no de una lista aparte que
+    // podía desincronizarse del inventario real.
+    const enDeck = inv.instances
+      .filter((i) => i.isInDeck)
+      .sort((a, b) => (a.deckSlot ?? 99) - (b.deckSlot ?? 99))
+    if (enDeck.length > 0) {
+      setActiveDeckInstances(enDeck.map((i) => i.instanceId))
+      setActiveDeck(enDeck.map((i) => i.plantId as PlantId))
+    }
+  }
+
+  const refreshFromServer = async (): Promise<void> => {
+    await Promise.all([refreshBalance(), refreshInventory()])
+  }
+
+  /** Compra sobres. El precio y el tope de cantidad los pone el servidor. */
+  const buyPack = async (
+    packId: PackId,
+    qty: number = 1
+  ): Promise<{ success: boolean; packs?: InventoryPack[]; error?: string }> => {
+    const res = await SupabaseService.buyPacks(packId, qty)
+    if (!res.success) return { success: false, error: res.error }
+
+    await refreshFromServer()
+
+    const def = PACK_DEFINITIONS[packId]
+    const packs: InventoryPack[] = (res.packIds || []).map((id) => ({
+      instanceId: id,
+      packId,
+      name: def.name,
+      icon: def.icon,
+      rarity: def.rarity,
+      purchasedAt: Date.now(),
+    }))
+    return { success: true, packs }
+  }
+
+  /** Compra oro por ID de paquete. La cantidad y el precio salen de la base. */
+  const buyGoldPackage = async (
+    packageId: string
+  ): Promise<{ success: boolean; goldAdded?: number; error?: string }> => {
+    const res = await SupabaseService.buyGold(packageId)
+    if (!res.success) return { success: false, error: res.error }
+    await refreshBalance()
+    return { success: true, goldAdded: res.goldAdded }
+  }
+
+  const buyVipPass = async (): Promise<{ success: boolean; error?: string }> => {
+    const res = await SupabaseService.buyVipPass()
+    if (!res.success) return { success: false, error: res.error }
+    await refreshBalance()
+    return { success: true }
+  }
+
+  /** Abre un sobre del servidor. El sorteo lo hace Postgres. */
+  const openPackOnServer = async (
+    packRowId: string
+  ): Promise<{ drops: PackDropResult[]; colosseumTicket: boolean } | null> => {
+    const res = await SupabaseService.openPack(packRowId)
+    if (!res.success || !res.drops) return null
+
+    await refreshFromServer()
+
+    const drops: PackDropResult[] = res.drops.map((d) => ({
+      plantId: d.plantId as PlantId,
+      rarityLabel: RARITY_LABEL[d.rarity] ?? 'COMÚN',
+      rarityColor: RARITY_COLOR[d.rarity] ?? '#4ade80',
+      isNew: d.isNew,
+    }))
+    return { drops, colosseumTicket: Boolean(res.colosseumTicket) }
+  }
+
+  /** Fusiona en el servidor: 5 copias → +1 nivel + stat al azar. */
+  const fusePlantOnServer = async (
+    instanceId: string
+  ): Promise<{ success: boolean; newLevel?: number; rolledStat?: PlantStatKey; rolledStatLabel?: string; error?: string }> => {
+    const res = await SupabaseService.fusePlant(instanceId)
+    if (!res.success) return { success: false, error: res.error }
+
+    await refreshInventory()
+
+    const stat = res.rolledStat as PlantStatKey | undefined
+    return {
+      success: true,
+      newLevel: res.newLevel,
+      rolledStat: stat,
+      rolledStatLabel: stat ? STAT_LABELS[stat]?.suffix : undefined,
+    }
+  }
+
+  /** Reclama un cofre listo. El servidor revalida el temporizador. */
+  const claimSlotOnServer = async (
+    slotIndex: number
+  ): Promise<PackDropResult | null> => {
+    const res = await SupabaseService.claimPackSlot(slotIndex)
+    if (!res.success || !res.plantId) return null
+
+    await refreshFromServer()
+    const { slots } = await SupabaseService.syncPackSlots(freePackSlots)
+    if (slots && slots.length > 0) setFreePackSlots(slots)
+
+    return {
+      plantId: res.plantId as PlantId,
+      rarityLabel: RARITY_LABEL[res.rarity || 'common'] ?? 'COMÚN',
+      rarityColor: RARITY_COLOR[res.rarity || 'common'] ?? '#4ade80',
+      isNew: Boolean(res.isNew),
+    }
+  }
+
+  /** Abre un cofre al instante pagando oro. El coste lo calcula el servidor. */
+  const instantUnlockSlotOnServer = async (
+    slotIndex: number
+  ): Promise<{ success: boolean; goldSpent?: number; error?: string }> => {
+    const res = await SupabaseService.instantUnlockPackSlot(slotIndex)
+    if (!res.success) return { success: false, error: res.error }
+
+    await refreshBalance()
+    const { slots } = await SupabaseService.syncPackSlots(freePackSlots)
+    if (slots && slots.length > 0) setFreePackSlots(slots)
+
+    return { success: true, goldSpent: res.goldSpent }
+  }
+
   return {
+    refreshFromServer,
+    buyGoldPackage,
+    openPackOnServer,
+    fusePlantOnServer,
+    claimSlotOnServer,
+    instantUnlockSlotOnServer,
     syncProfileData,
     userTokens,
     setUserTokens,
@@ -888,7 +935,6 @@ export function useInventory() {
     setUserGold,
     addGold,
     deductGold,
-    buyGoldWithTokens,
     inventoryPacks,
     unlockedPlants,
     plantCopies,

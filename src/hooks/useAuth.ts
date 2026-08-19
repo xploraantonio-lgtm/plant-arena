@@ -16,7 +16,10 @@ export interface AuthState {
 
 const STORAGE_KEYS = {
   GUEST_USER: 'plant_arena_guest_profile',
-  ADMIN_SESSION: 'plant_arena_admin_auth',
+  // Legacy: el estado de administrador se guardaba aquí, lo que permitía
+  // concederse el panel con una línea en la consola. Ya no se lee nunca;
+  // sólo se borra, para purgar los navegadores que la tengan puesta.
+  LEGACY_ADMIN_SESSION: 'plant_arena_admin_auth',
   EARLY_ACCESS_PASS: 'plant_arena_early_access_granted',
 }
 
@@ -31,9 +34,9 @@ export function useAuth() {
   const [user, setUser] = useState<any | null>(null)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION) === 'true'
-  })
+  // Arranca siempre en false. La única fuente de verdad es profiles.is_admin,
+  // leído del servidor en loadUserProfile: el navegador no puede concederlo.
+  const [isAdmin, setIsAdmin] = useState<boolean>(false)
   const [needsPasswordSetup, setNeedsPasswordSetup] = useState<boolean>(false)
 
   // Listen for Supabase Auth changes
@@ -81,14 +84,34 @@ export function useAuth() {
     }
   }, [])
 
-  const checkIfPasswordNeeded = (u: any) => {
-    const isGoogle = u?.app_metadata?.provider === 'google' || u?.identities?.some((i: any) => i.provider === 'google')
-    if (isGoogle) {
-      const hasSet = localStorage.getItem('plant_arena_pwd_set_' + u.id) === 'true'
-      if (!hasSet) {
-        setNeedsPasswordSetup(true)
-      }
+  /**
+   * ¿Hay que pedirle nick y contraseña?
+   *
+   * Antes se decidía con la marca 'plant_arena_pwd_set_<id>' en localStorage.
+   * Eso es por navegador: el modal reaparecía al entrar desde otro dispositivo
+   * o al limpiar el almacenamiento, aunque la contraseña ya estuviera puesta.
+   * Ahora se pregunta al servidor, que lee auth.users.encrypted_password.
+   */
+  const checkIfPasswordNeeded = async (u: any) => {
+    const isGoogle =
+      u?.app_metadata?.provider === 'google' ||
+      u?.identities?.some((i: any) => i.provider === 'google')
+    if (!isGoogle) {
+      setNeedsPasswordSetup(false)
+      return
     }
+
+    const status = await SupabaseService.myAuthStatus()
+    if (!status) {
+      // Sin respuesta del servidor no se molesta al jugador: es preferible no
+      // pedir la contraseña que pedirla de nuevo a quien ya la puso.
+      setNeedsPasswordSetup(false)
+      return
+    }
+    setNeedsPasswordSetup(!status.hasPassword)
+
+    // Limpiar la marca vieja: ya no se usa.
+    localStorage.removeItem('plant_arena_pwd_set_' + u.id)
   }
 
   const initializeNewUserProfile = async (userId: string, username: string, email?: string) => {
@@ -148,25 +171,15 @@ export function useAuth() {
         }
       }
       setProfile(prof)
-      const userIsAdmin = Boolean(prof.is_admin)
-      setIsAdmin(userIsAdmin)
-      if (!userIsAdmin) {
-        localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION)
-      } else {
-        localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
-      }
+      setIsAdmin(Boolean(prof.is_admin))
+      localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN_SESSION)
     } else {
       await initializeNewUserProfile(userId, candidateName || 'Guerrero', authUser?.email)
       prof = await SupabaseService.getProfile(userId)
       if (prof) {
         setProfile(prof)
-        const userIsAdmin = Boolean(prof.is_admin)
-        setIsAdmin(userIsAdmin)
-        if (!userIsAdmin) {
-          localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION)
-        } else {
-          localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
-        }
+        setIsAdmin(Boolean(prof.is_admin))
+        localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN_SESSION)
       }
     }
     setLoading(false)
@@ -213,7 +226,9 @@ export function useAuth() {
         }
       }
 
-      localStorage.setItem('plant_arena_pwd_set_' + user.id, 'true')
+      // Ya no se guarda marca en localStorage: la contraseña acaba de quedar en
+      // auth.users, y es allí donde checkIfPasswordNeeded la consulta. Así el
+      // modal no vuelve a salir en ningún navegador.
       setNeedsPasswordSetup(false)
       setLoading(false)
       return { success: true }
@@ -226,36 +241,10 @@ export function useAuth() {
   // Sign in with Email/Username & Password
   const signInWithEmail = async (identifier: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const trimmedId = identifier.trim()
-    const trimmedIdLower = trimmedId.toLowerCase()
 
-    // Master Admin Login (xplora / **4253$$)
-    if (trimmedIdLower === 'xplora' && pass === '**4253$$') {
-      setIsAdmin(true)
-      localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
-      const adminProfile: ProfileRow = {
-        id: 'admin_xplora_master',
-        username: 'xplora',
-        avatar_id: 'peashooter',
-        country: 'US',
-        elo_rating: 1000,
-        gems_balance: 999999,
-        gold_balance: 999999,
-        colosseum_tickets: 999,
-        colosseum_current_streak: 0,
-        colosseum_max_streak: 0,
-        has_vip_pass: true,
-        claimed_vip_levels: [],
-        is_admin: true,
-        referral_code: 'XPLORA_ROOT',
-        referred_by: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-      setUser({ id: 'admin_xplora_master', email: 'admin@plantarena.com', user_metadata: { username: 'xplora' } })
-      setProfile(adminProfile)
-      setLoading(false)
-      return { success: true }
-    }
+    // El acceso maestro con contraseña incrustada se eliminó: viajaba en el
+    // bundle del navegador, así que cualquiera podía leerla. El estado de
+    // administrador ahora sale sólo de profiles.is_admin en el servidor.
 
     if (!isSupabaseConfigured()) {
       return { success: false, error: 'Supabase no está configurado en el archivo .env' }
@@ -263,17 +252,60 @@ export function useAuth() {
     setLoading(true)
     let emailToUse = trimmedId
 
-    // If identifier is not an email, lookup by username in profiles table
+    // Entrar con NOMBRE DE USUARIO: lo resuelve la Edge Function en el servidor.
+    //
+    // Antes se pedía el correo al servidor con get_email_by_username y luego se
+    // iniciaba sesión desde aquí. Eso obligaba a tener un endpoint público que,
+    // dado un nombre, devolvía el correo — y los nombres son públicos porque
+    // salen en el ranking, así que cualquiera podía recorrerlo y quedarse con
+    // los correos de todos los jugadores.
+    //
+    // Ahora se mandan usuario y contraseña a la función, que traduce el nombre
+    // internamente y devuelve sólo los tokens. El correo no llega al navegador,
+    // y la función limita intentos por IP, algo que desde aquí era imposible.
     if (!emailToUse.includes('@')) {
-      const { data: profData } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('username', emailToUse)
-        .maybeSingle()
+      try {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ identifier: trimmedId, password: pass }),
+        })
 
-      if (!profData) {
+        const payload = await res.json().catch(() => null)
+
+        if (!res.ok || !payload?.access_token) {
+          setLoading(false)
+          return {
+            success: false,
+            error: payload?.error || 'Usuario o contraseña incorrectos.',
+          }
+        }
+
+        // Instalar la sesión que devolvió el servidor.
+        const { data: sesion, error: setErr } = await supabase.auth.setSession({
+          access_token: payload.access_token,
+          refresh_token: payload.refresh_token,
+        })
+
+        if (setErr || !sesion?.user) {
+          setLoading(false)
+          return { success: false, error: 'No se pudo abrir la sesión. Inténtalo de nuevo.' }
+        }
+
+        setUser(sesion.user)
+        await loadUserProfile(sesion.user.id, sesion.user)
         setLoading(false)
-        return { success: false, error: 'Usuario no encontrado' }
+        return { success: true }
+      } catch (err) {
+        console.error('[useAuth] fallo al iniciar sesión por nombre de usuario:', err)
+        setLoading(false)
+        return {
+          success: false,
+          error: 'No se pudo contactar con el servicio de inicio de sesión.',
+        }
       }
     }
 
@@ -295,19 +327,13 @@ export function useAuth() {
     return { success: true }
   }
 
-  // Admin Master Pass Login
-  const loginAsAdmin = (masterPass: string): boolean => {
-    if (masterPass === '**4253$$' || masterPass === 'PLANT_ADMIN_2026') {
-      setIsAdmin(true)
-      localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true')
-      return true
-    }
-    return false
-  }
+  // loginAsAdmin se eliminó: aceptaba dos contraseñas maestras escritas en el
+  // código del cliente y nadie lo llamaba. Para conceder administración, marca
+  // profiles.is_admin en la base de datos.
 
   const logoutAdmin = () => {
     setIsAdmin(false)
-    localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION)
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN_SESSION)
   }
 
   const signOut = async () => {
@@ -327,7 +353,6 @@ export function useAuth() {
     signInWithGoogle,
     setUserPassword,
     signInWithEmail,
-    loginAsAdmin,
     logoutAdmin,
     signOut,
     reloadProfile: () => user && loadUserProfile(user.id),

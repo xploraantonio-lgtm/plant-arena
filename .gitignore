@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Variables de entorno. Hoy .env sólo tiene la URL y la anon key, que son
+# públicas por diseño, pero el archivo no debe versionarse: el día que alguien
+# añada un secreto ahí, se subiría sin avisar.
+.env
+.env.local
+.env.*.local
+
+# Estado del CLI de Supabase: versiones, ref del proyecto y URL del pooler.
+# No son secretos, pero es scratch de la herramienta.
+supabase/.temp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

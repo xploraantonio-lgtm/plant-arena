@@ -365,13 +365,17 @@ export default function LandingPage({
   useEffect(() => {
     let mounted = true
     if (isSupabaseConfigured()) {
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).then(({ count }) => {
+      // 'id' y no '*': la landing se ve sin sesión, y anon ya no puede leer las
+      // columnas de saldo. Con '*' PostgREST responde 401 aunque sea un conteo.
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).then(({ count, error }) => {
+        if (error) console.error('[LandingPage] conteo de jugadores falló:', error.message)
         if (mounted && count !== null) setTotalPlayers(count)
       })
       SupabaseService.getActiveSeason().then((s) => {
         if (mounted && s) setSeasonInfo(s)
       })
-      supabase.from('clans').select('*', { count: 'exact', head: true }).then(({ count }) => {
+      supabase.from('clans').select('id', { count: 'exact', head: true }).then(({ count, error }) => {
+        if (error) console.error('[LandingPage] conteo de clanes falló:', error.message)
         if (mounted && count !== null) setTotalClansCount(count)
       })
     }
@@ -462,24 +466,13 @@ export default function LandingPage({
               )}
             </div>
           ) : (
-            <>
-              {onOpenAuth && (
-                <button
-                  type="button"
-                  className="landing-login-btn"
-                  onClick={onOpenAuth}
-                >
-                  🔑 {lang === 'es' ? 'INICIAR SESIÓN' : 'LOGIN'}
-                </button>
-              )}
-              <button
-                type="button"
-                className="landing-navbar__play-btn"
-                onClick={handlePlayClick}
-              >
-                🎮 {lang === 'es' ? 'JUGAR' : 'PLAY'}
-              </button>
-            </>
+            <button
+              type="button"
+              className="landing-navbar__play-btn"
+              onClick={handlePlayClick}
+            >
+              🎮 {lang === 'es' ? 'JUGAR' : 'PLAY'}
+            </button>
           )}
         </div>
       </header>

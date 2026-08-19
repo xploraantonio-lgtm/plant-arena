@@ -51,18 +51,20 @@ interface JardinProps {
   onOpenShop: () => void
   onOpenPack: (instanceId: string) => void
   onOpenMultiplePacks?: (instanceIds: string[]) => void
-  onFusePlant?: (plantId: PlantId, instanceId?: string) => {
+  // Asíncrona: la fusión la resuelve fuse_plant en el servidor, que es quien
+  // sortea la stat y descuenta las 5 copias.
+  onFusePlant?: (plantId: PlantId, instanceId?: string) => Promise<{
     success: boolean
     newLevel?: number
     rolledStat?: PlantStatKey
     rolledStatLabel?: string
     error?: string
-  }
-  onDeductTokens?: (amountUsd: number) => boolean
-  onAddTokens?: (amountUsd: number) => void
-  onAddGold?: (amount: number) => void
-  onAddPacks?: (packId: 'basic' | 'epic' | 'legendary', qty: number) => void
-  onReceivePlant?: (plantId: PlantId, qty: number) => void
+  }>
+  // Los callbacks de recompensa (onAddTokens, onAddGold, onAddPacks,
+  // onReceivePlant, onDeductTokens) se eliminaron: la lotería era su único
+  // consumidor aquí, y ya no concede nada desde el cliente.
+  /** Recarga saldo e inventario del servidor tras un premio de la lotería. */
+  onRewardsChanged?: () => Promise<void> | void
 }
 
 export default function Jardin({
@@ -83,11 +85,7 @@ export default function Jardin({
   onOpenPack,
   onOpenMultiplePacks,
   onFusePlant,
-  onDeductTokens,
-  onAddTokens,
-  onAddGold,
-  onAddPacks,
-  onReceivePlant,
+  onRewardsChanged,
 }: JardinProps) {
   const [deck, setDeck] = useState<PlantId[]>(activeDeck)
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null)
@@ -632,11 +630,11 @@ export default function Jardin({
                     <button
                       type="button"
                       className="jardin-fuse-btn"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
                         if (onFusePlant) {
                           soundManager.playSound('plantation', 0.9)
-                          const res = onFusePlant(plantId, instanceId)
+                          const res = await onFusePlant(plantId, instanceId)
                           if (res && res.success && res.newLevel && res.rolledStat) {
                             setUpgradeModal({
                               plantId,
@@ -712,11 +710,7 @@ export default function Jardin({
           onClose={() => setShowLotteryModal(false)}
           userTokens={userTokens}
           userGold={userGold}
-          onDeductTokens={onDeductTokens || (() => true)}
-          onAddTokens={onAddTokens || (() => {})}
-          onAddGold={onAddGold}
-          onAddPacks={onAddPacks}
-          onReceivePlant={onReceivePlant}
+          onRewardsChanged={onRewardsChanged}
         />
       )}
     </div>

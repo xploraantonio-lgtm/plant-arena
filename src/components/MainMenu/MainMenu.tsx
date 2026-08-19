@@ -59,7 +59,8 @@ interface MainMenuProps {
   onSignOut?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onOpenSlotPack?: (slotId: number) => void
-  onAddTokens?: (amountUsd: number) => void
+  // onAddTokens se eliminó al dejar el formulario de recarga como maqueta:
+  // era la vía por la que ProfileModal se sumaba saldo sin cobrar nada.
   onDeductTokens?: (amountUsd: number) => boolean
 }
 
@@ -89,7 +90,6 @@ export default function MainMenu({
   onSignOut,
   onStartSlotUnlock,
   onOpenSlotPack,
-  onAddTokens,
   onDeductTokens,
 }: MainMenuProps) {
   const [playerProfile, setPlayerProfile] = useState<PlayerProfile>(() => UserManager.getProfile())
@@ -448,8 +448,6 @@ export default function MainMenu({
         userTokens={userTokens}
         hasVipPass={hasVipPass}
         onClose={() => setIsProfileModalOpen(false)}
-        onAddTokens={onAddTokens}
-        onDeductTokens={onDeductTokens}
       />
 
       {/* MODE SELECTOR MODAL (RANKED VS COLOSSEUM VS TOURNAMENT) */}

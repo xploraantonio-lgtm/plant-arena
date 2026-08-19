@@ -16,8 +16,9 @@ interface ProfileModalProps {
   userTokens: number
   hasVipPass: boolean
   onClose: () => void
-  onAddTokens?: (amountUsd: number) => void
-  onDeductTokens?: (amountUsd: number) => boolean
+  // onAddTokens / onDeductTokens se eliminaron: eran la vía por la que el
+  // formulario de recarga sumaba saldo sin cobrar nada. El saldo sólo lo
+  // mueve el servidor.
 }
 
 type ProfileTab = 'profile' | 'deposit' | 'withdraw' | 'referrals' | 'history'
@@ -28,8 +29,6 @@ export default function ProfileModal({
   userTokens,
   hasVipPass,
   onClose,
-  onAddTokens,
-  onDeductTokens,
 }: ProfileModalProps) {
   const [profile, setProfile] = useState<PlayerProfile>(() => UserManager.getProfile())
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile')
@@ -119,56 +118,29 @@ export default function ProfileModal({
     }
   }
 
-  // Handle Deposit
+  // ───────────────────────────────────────────────────────────────────────────
+  // DEPÓSITO Y RETIRO — MAQUETA, SIN EFECTO
+  //
+  // Estas pantallas son sólo interfaz. Antes el botón de depositar llamaba a
+  // onAddTokens(), es decir sumaba saldo en el navegador sin cobrar nada, y
+  // anunciaba "¡Depósito exitoso de +$X USD!". El de retirar descontaba saldo
+  // y decía "solicitud procesada" sin que existiera ninguna solicitud.
+  //
+  // No hay pasarela de pago ni endpoint detrás, así que los botones no tocan el
+  // saldo ni escriben transacciones, y el mensaje dice la verdad. Cuando exista
+  // la pasarela: el abono viene del webhook del proveedor, nunca del cliente, y
+  // el retiro se crea como fila 'pending' en transactions para revisión manual.
+  // ───────────────────────────────────────────────────────────────────────────
   const handleDepositSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (depositAmount <= 0) return
-    if (onAddTokens) {
-      onAddTokens(depositAmount)
-    }
-    UserManager.addTransaction({
-      type: 'deposit',
-      amountUsd: depositAmount,
-      description: `Recarga de Saldo (${depositMethod.toUpperCase()})`,
-      status: 'completed',
-    })
-    soundManager.playSound('victory', 1)
-    showFeedback(`¡Depósito exitoso de +$${depositAmount.toFixed(2)} USD!`)
+    soundManager.playSound('click', 0.6)
+    showFeedback('Las recargas todavía no están disponibles.', 'error')
   }
 
-  // Handle Withdraw
   const handleWithdrawSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (withdrawAmount < 10) {
-      showFeedback('Mínimo de retiro: 10 Gemas 💎 ($10.00 USD).', 'error')
-      return
-    }
-    if (withdrawAmount > userTokens) {
-      showFeedback('Saldo insuficiente para retirar.', 'error')
-      return
-    }
-    if (!withdrawAddress.trim()) {
-      showFeedback('Ingresa tu dirección de billetera o cuenta.', 'error')
-      return
-    }
-
-    if (onDeductTokens) {
-      const ok = onDeductTokens(withdrawAmount)
-      if (!ok) {
-        showFeedback('Error al procesar retiro.', 'error')
-        return
-      }
-    }
-
-    UserManager.addTransaction({
-      type: 'withdraw',
-      amountUsd: withdrawAmount,
-      description: `Retiro a ${withdrawMethod.toUpperCase()} (${withdrawAddress.slice(0, 8)}...)`,
-      status: 'completed',
-    })
-    soundManager.playSound('plantation', 1)
-    showFeedback(`¡Solicitud de retiro de $${withdrawAmount.toFixed(2)} USD procesada!`)
-    setWithdrawAddress('')
+    soundManager.playSound('click', 0.6)
+    showFeedback('Los retiros todavía no están disponibles.', 'error')
   }
 
   // Copy Referral Link

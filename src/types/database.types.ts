@@ -69,17 +69,21 @@ export interface Database {
         }
         Relationships: []
       }
+      // Modelo alineado con el cliente (fase 2a): level + stat_rolls.
+      // Los 4 multiplicadores (power/hp/speed/cooldown) se eliminaron de la
+      // tabla: no podían representar las 5 stats del juego, porque attackSpeed
+      // y moveSpeed colisionaban en speed_mult. Las stats se calculan de
+      // stat_rolls + PLANT_CONFIGS.
       plant_instances: {
         Row: {
           id: string
           owner_id: string
           plant_id: string
-          rarity: 'common' | 'rare' | 'epic' | 'legendary'
+          rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
           star_level: number
-          power_mult: number
-          hp_mult: number
-          speed_mult: number
-          cooldown_mult: number
+          level: number
+          stat_rolls: string[]
+          is_base: boolean
           is_in_deck: boolean
           deck_slot: number | null
           is_listed_for_sale: boolean
@@ -89,32 +93,188 @@ export interface Database {
           id?: string
           owner_id: string
           plant_id: string
-          rarity: 'common' | 'rare' | 'epic' | 'legendary'
+          rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
           star_level?: number
-          power_mult?: number
-          hp_mult?: number
-          speed_mult?: number
-          cooldown_mult?: number
+          level?: number
+          stat_rolls?: string[]
+          is_base?: boolean
           is_in_deck?: boolean
           deck_slot?: number | null
           is_listed_for_sale?: boolean
           created_at?: string
         }
         Update: {
-          id?: string
-          owner_id?: string
-          plant_id?: string
-          rarity?: 'common' | 'rare' | 'epic' | 'legendary'
-          star_level?: number
-          power_mult?: number
-          hp_mult?: number
-          speed_mult?: number
-          cooldown_mult?: number
           is_in_deck?: boolean
           deck_slot?: number | null
-          is_listed_for_sale?: boolean
-          created_at?: string
         }
+        Relationships: []
+      }
+      // Catálogos y tablas añadidas en la fase 2. Sólo lectura para el cliente:
+      // todas las escrituras pasan por RPC.
+      plant_catalog: {
+        Row: {
+          plant_id: string
+          name: string
+          rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+          eligible_stats: string[]
+          max_level: number
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      plant_copies: {
+        Row: { user_id: string; plant_id: string; copies: number }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      player_packs: {
+        Row: {
+          id: string
+          user_id: string
+          pack_id: 'basic' | 'epic' | 'legendary'
+          source: 'purchase' | 'victory' | 'chest' | 'gift' | 'admin'
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      shop_packs: {
+        Row: {
+          pack_id: 'basic' | 'epic' | 'legendary'
+          name: string
+          price_gems: number
+          card_count: number
+          is_active: boolean
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      shop_gold_packages: {
+        Row: {
+          package_id: string
+          name: string
+          gold_amount: number
+          price_gems: number
+          is_active: boolean
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      shop_config: {
+        Row: { key: string; value: number }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      // Minijuego del código secreto por rondas (migración 08).
+      // OJO: la columna "secret" NO se declara aquí a propósito. Tiene el
+      // SELECT revocado en la base, así que pedirla devuelve 401; dejarla fuera
+      // del tipo hace que un select('*') o un acceso a .secret no compile.
+      secret_code_rounds: {
+        Row: {
+          id: string
+          round_number: number
+          status: 'open' | 'finished' | 'cancelled'
+          free_attempts: number
+          prize_pool_gems: number
+          prize_1st: number
+          prize_2nd: number
+          prize_3rd: number
+          winner_id: string | null
+          created_at: string
+          finished_at: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      secret_code_attempts: {
+        Row: {
+          id: string
+          round_id: string
+          user_id: string
+          sequence: string[]
+          exact_count: number
+          wrong_pos_count: number
+          pct: number
+          was_free: boolean
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      secret_code_entries: {
+        Row: { round_id: string; user_id: string; free_used: number; extra_attempts: number }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      secret_code_payouts: {
+        Row: {
+          id: string
+          round_id: string
+          user_id: string
+          place: number
+          tied_with: number
+          pct: number
+          gems: number
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      battle_pass_levels: {
+        Row: {
+          level: number
+          required_elo: number
+          arena_name: string
+          reward_type: 'pack' | 'copies' | 'plant' | 'badge'
+          pack_id: string | null
+          pack_count: number | null
+          plant_id: string | null
+          copies_count: number | null
+          label: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      lottery_sectors: {
+        Row: {
+          sector_id: string
+          label: string
+          reward_type: 'gems' | 'gold' | 'pack' | 'plant' | 'none'
+          gems_amount: number | null
+          gold_amount: number | null
+          pack_id: string | null
+          pack_qty: number | null
+          plant_id: string | null
+          plant_qty: number | null
+          weight: number
+          is_active: boolean
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      colosseum_escrow: {
+        Row: {
+          id: string
+          user_id: string
+          bet_gems: number
+          room_id: string | null
+          status: 'held' | 'settled' | 'refunded'
+          created_at: string
+        }
+        Insert: never
+        Update: never
         Relationships: []
       }
       pack_slots: {
