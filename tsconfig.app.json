@@ -22,5 +22,10 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* Los tests se revisan aparte, en tsconfig.test.json. Corren en Node y
+   * algunos leen ficheros, así que necesitan los tipos de Node — y el código de
+   * la aplicación NO los debe tener: si estuvieran aquí, cualquier componente
+   * podría usar `fs` o `process` por accidente y sólo se vería al desplegar. */
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

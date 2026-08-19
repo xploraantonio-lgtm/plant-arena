@@ -1,0 +1,34 @@
+{
+  /* Configuración de los tests.
+   *
+   * Existe porque los tests corren en Node y algunos leen ficheros
+   * (sin-reloj-de-pared.test.ts revisa el código fuente), así que necesitan los
+   * tipos de Node. El código de la aplicación NO los debe tener: si estuvieran
+   * en tsconfig.app.json, cualquier componente podría usar `fs` o `process` por
+   * accidente y sólo se descubriría al desplegar.
+   *
+   * Se hereda la resolución de módulos del bundler, no la de nodenext, para que
+   * los imports relativos sin extensión sigan funcionando como en el resto del
+   * proyecto. */
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}
