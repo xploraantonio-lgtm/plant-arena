@@ -32,6 +32,29 @@ function cuentaAtras(segundos: number): string {
   return `${m}m ${s}s`
 }
 
+/**
+ * Por qué no se puede usar un código, dicho para una persona.
+ *
+ * Los motivos vienen del servidor en clave. Enseñarlos tal cual («
+ * cuenta_demasiado_antigua») es peor que no decir nada; y esconder el cuadro sin
+ * explicación parece un fallo del juego.
+ */
+const POR_QUE_NO: Record<string, string> = {
+  cuenta_demasiado_antigua:
+    'Tu cuenta tiene ya demasiados días. El código de un amigo sólo se puede usar al empezar.',
+  ya_pasaste_las_copas:
+    'Ya pasaste las copas a las que un invitado empieza a contar, así que este código ya no valdría.',
+  ya_tienes_referidor: 'Ya tienes a quien te invitó.',
+  sin_perfil: 'No se encontró tu perfil.',
+}
+
+/** Y lo mismo para lo que puede fallar al enviarlo. */
+const FALLO_AL_ENVIAR: Record<string, string> = {
+  codigo_no_existe: 'Ese código no existe. Revisa que esté bien escrito.',
+  es_tu_propio_codigo: 'Ése es tu propio código.',
+  sin_codigo: 'Escribe un código.',
+}
+
 export default function PanelDeReferidos() {
   const [datos, setDatos] = useState<MisReferidos | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -39,6 +62,8 @@ export default function PanelDeReferidos() {
   const [copiado, setCopiado] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [restante, setRestante] = useState(0)
+  /** Lo que se escribe en el cuadro del código, cuando se llegó sin enlace. */
+  const [codigoEscrito, setCodigoEscrito] = useState('')
 
   const cargar = useCallback(async () => {
     const d = await SupabaseService.myReferrals()
@@ -97,6 +122,28 @@ export default function PanelDeReferidos() {
       // dejar un botón que parece no hacer nada.
       decir('El navegador no dejó copiar. Selecciona el enlace de arriba a mano.', false)
     }
+  }
+
+  const usarCodigo = async () => {
+    const limpio = codigoEscrito.trim()
+    if (!limpio) return
+    setOcupado('codigo')
+    const r = await SupabaseService.referralBind(limpio)
+    setOcupado(null)
+
+    if (r.ok) {
+      soundManager.playSound('victory', 0.8)
+      setCodigoEscrito('')
+      decir('¡Listo! Ya estás apuntado como invitado.')
+      void cargar()
+      return
+    }
+    decir(
+      FALLO_AL_ENVIAR[r.motivo ?? ''] ??
+        POR_QUE_NO[r.motivo ?? ''] ??
+        `No se pudo: ${r.motivo ?? 'error'}`,
+      false
+    )
   }
 
   const cobrarOro = async () => {
@@ -166,6 +213,71 @@ export default function PanelDeReferidos() {
           Tu código: <strong>{datos.codigo ?? '—'}</strong>
         </p>
       </div>
+
+      {/* ── ¿TE INVITÓ ALGUIEN? ──────────────────────────────────────────
+          El cuadro sólo aparece si de verdad se puede usar. Antes esto no
+          existía y el enganche sólo ocurría al entrar con «?ref=» en la
+          dirección: si te mandaban el enlace y lo abrías sin el parámetro, o te
+          decían el código por voz, el amigo que te trajo no contaba y no había
+          forma de arreglarlo desde el juego. */}
+      {datos.miReferidor ? (
+        <div className="ref-bloque ref-bloque--invitado">
+          <span className="ref-invitado">
+            🤝 Te invitó <strong>{datos.miReferidor}</strong>
+          </span>
+        </div>
+      ) : datos.puedoUsarCodigo ? (
+        <div className="ref-bloque">
+          <h3 className="ref-titulo">🤝 ¿Te invitó alguien?</h3>
+          <p className="ref-sub">
+            Si llegaste sin su enlace, escribe su código aquí y cuenta igual.{' '}
+            {datos.diasParaUsarCodigo > 0 && (
+              <strong>
+                Te quedan {datos.diasParaUsarCodigo}{' '}
+                {datos.diasParaUsarCodigo === 1 ? 'día' : 'días'} para usarlo.
+              </strong>
+            )}
+          </p>
+          <form
+            className="ref-enlace"
+            onSubmit={(ev) => {
+              ev.preventDefault()
+              void usarCodigo()
+            }}
+          >
+            <input
+              className="ref-input"
+              type="text"
+              value={codigoEscrito}
+              // Se enseña en mayúsculas porque así se reparte, pero el servidor
+              // acepta cualquier caja y quita los espacios: nadie debería perder
+              // un referido por teclear en minúscula.
+              onChange={(ev) => setCodigoEscrito(ev.target.value.toUpperCase())}
+              placeholder="CÓDIGO"
+              maxLength={16}
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Código de referido de quien te invitó"
+            />
+            <button
+              type="submit"
+              className="ref-btn ref-btn--principal"
+              disabled={!codigoEscrito.trim() || ocupado === 'codigo'}
+            >
+              {ocupado === 'codigo' ? '…' : 'Usar código'}
+            </button>
+          </form>
+        </div>
+      ) : (
+        datos.motivoNoPuedo && (
+          <div className="ref-bloque">
+            <h3 className="ref-titulo">🤝 ¿Te invitó alguien?</h3>
+            <p className="ref-sub">
+              {POR_QUE_NO[datos.motivoNoPuedo] ?? 'Ya no se puede usar un código.'}
+            </p>
+          </div>
+        )
+      )}
 
       {/* ── MIS NÚMEROS ──────────────────────────────────────────────────── */}
       <div className="ref-cifras">

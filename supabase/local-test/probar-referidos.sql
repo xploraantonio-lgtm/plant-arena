@@ -669,4 +669,118 @@ BEGIN
 END $$;
 
 
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 9. PONER EL CODIGO A MANO (migracion 29) ==='; END $$;
+
+DO $$
+DECLARE
+  v_a    UUID := 'a0000000-0000-0000-0000-000000000001';   -- promotor
+  v_solo UUID := 'f0000000-0000-0000-0000-000000000001';   -- entró sin enlace
+  v_cod  TEXT;
+  v_r    JSONB;
+  v_panel JSONB;
+BEGIN
+  -- Un jugador que se registró SIN el enlace: es el caso que no tenía arreglo.
+  DELETE FROM public.referrals WHERE referred_id = v_solo OR referrer_id = v_solo;
+  DELETE FROM public.plant_instances WHERE owner_id = v_solo;
+  DELETE FROM auth.users WHERE id = v_solo;
+  INSERT INTO auth.users (id, email, raw_user_meta_data)
+  VALUES (v_solo, 'refsolo@prueba.test', '{"full_name":"SinEnlace"}');
+
+  SELECT referral_code INTO v_cod FROM public.profiles WHERE id = v_a;
+
+  PERFORM public._soy(v_solo);
+  v_panel := public.my_referrals();
+  PERFORM public._t('el panel ofrece el cuadro para escribir el código',
+                    (v_panel->>'puedoUsarCodigo')::BOOLEAN IS TRUE
+                AND v_panel->>'motivoNoPuedo' IS NULL
+                AND v_panel->>'miReferidor' IS NULL,
+                    v_panel::TEXT);
+
+  PERFORM public._t('y dice cuántos días le quedan para usarlo',
+                    (v_panel->>'diasParaUsarCodigo')::INTEGER > 0,
+                    v_panel->>'diasParaUsarCodigo');
+
+  -- Escrito a mano: en minúsculas y con espacios, como se teclea de verdad.
+  v_r := public.referral_bind('  ' || lower(v_cod) || ' ');
+  PERFORM public._t('el código se acepta en minúsculas y con espacios',
+                    (v_r->>'ok')::BOOLEAN IS TRUE, v_r::TEXT);
+  PERFORM public._t('y devuelve el nick de quien lo invitó',
+                    v_r->>'referidor' IS NOT NULL, v_r::TEXT);
+
+  -- Y a partir de ahí el cuadro NO se enseña.
+  v_panel := public.my_referrals();
+  PERFORM public._t('con referidor, el cuadro ya no se ofrece',
+                    (v_panel->>'puedoUsarCodigo')::BOOLEAN IS FALSE
+                AND v_panel->>'motivoNoPuedo' = 'ya_tienes_referidor',
+                    v_panel::TEXT);
+  PERFORM public._t('y el panel dice quién lo invitó',
+                    v_panel->>'miReferidor' IS NOT NULL, v_panel->>'miReferidor');
+
+  PERFORM public._soy(v_a);
+  v_panel := public.my_referrals();
+  PERFORM public._t('el promotor lo ve entre sus invitados',
+                    (v_panel->>'total')::INTEGER >= 1, v_panel->>'total');
+END $$;
+
+DO $$
+DECLARE
+  v_a     UUID := 'a0000000-0000-0000-0000-000000000001';
+  v_viejo UUID := 'f0000000-0000-0000-0000-000000000002';
+  v_alto  UUID := 'f0000000-0000-0000-0000-000000000003';
+  v_cod   TEXT;
+  v_panel JSONB;
+  v_r     JSONB;
+  i       INTEGER;
+  v_id    UUID;
+BEGIN
+  SELECT referral_code INTO v_cod FROM public.profiles WHERE id = v_a;
+
+  FOR i IN 2..3 LOOP
+    v_id := ('f0000000-0000-0000-0000-' || lpad(i::TEXT, 12, '0'))::UUID;
+    DELETE FROM public.referrals WHERE referred_id = v_id;
+    DELETE FROM public.plant_instances WHERE owner_id = v_id;
+    DELETE FROM auth.users WHERE id = v_id;
+  END LOOP;
+
+  INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+    (v_viejo, 'refviejo@prueba.test', '{"full_name":"Veterano"}'),
+    (v_alto,  'refalto@prueba.test',  '{"full_name":"Subido"}');
+
+  -- Cuenta de hace un mes: el cuadro NO debe ofrecerse, y el panel tiene que
+  -- decir por qué. Un cuadro que simplemente no está parece un fallo.
+  UPDATE public.profiles SET created_at = NOW() - INTERVAL '30 days' WHERE id = v_viejo;
+  PERFORM public._soy(v_viejo);
+  v_panel := public.my_referrals();
+  PERFORM public._t('cuenta vieja: no se ofrece, y se explica',
+                    (v_panel->>'puedoUsarCodigo')::BOOLEAN IS FALSE
+                AND v_panel->>'motivoNoPuedo' = 'cuenta_demasiado_antigua',
+                    v_panel::TEXT);
+  PERFORM public._t('y los días restantes son cero',
+                    (v_panel->>'diasParaUsarCodigo')::INTEGER = 0,
+                    v_panel->>'diasParaUsarCodigo');
+
+  -- Y el servidor lo rechaza igual, no sólo la pantalla: es la misma regla.
+  v_r := public.referral_bind(v_cod);
+  PERFORM public._t('y el servidor lo rechaza con el mismo motivo',
+                    v_r->>'motivo' = 'cuenta_demasiado_antigua', v_r::TEXT);
+
+  -- Quien ya pasó las copas tampoco.
+  UPDATE public.profiles SET elo_rating = 1300 WHERE id = v_alto;
+  PERFORM public._soy(v_alto);
+  v_panel := public.my_referrals();
+  PERFORM public._t('quien ya pasó las copas tampoco puede',
+                    v_panel->>'motivoNoPuedo' = 'ya_pasaste_las_copas',
+                    v_panel::TEXT);
+
+  -- Un código inventado, con la cuenta ya en regla.
+  UPDATE public.profiles SET elo_rating = 1000, created_at = NOW() WHERE id = v_alto;
+  DELETE FROM public.referrals WHERE referred_id = v_alto;
+  PERFORM public._soy(v_alto);
+  v_r := public.referral_bind('NOEXISTE');
+  PERFORM public._t('un código inventado se rechaza',
+                    v_r->>'motivo' = 'codigo_no_existe', v_r::TEXT);
+END $$;
+
+
 DO $$ BEGIN RAISE NOTICE E'\n=== FIN ==='; END $$;

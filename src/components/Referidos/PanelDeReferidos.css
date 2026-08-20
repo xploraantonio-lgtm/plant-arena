@@ -325,3 +325,39 @@
 @media (prefers-reduced-motion: reduce) {
   .ref-meta__barra > div { transition: none; }
 }
+
+/* ── El código escrito a mano ────────────────────────────────────────────── */
+
+.ref-input {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  padding: 0.45rem 0.6rem;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+  color: #fde047;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: 0.4rem;
+}
+
+.ref-input::placeholder {
+  color: #64748b;
+  letter-spacing: 0.1em;
+  font-weight: 400;
+}
+
+.ref-input:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+/* Cuando ya hay referidor: una línea y nada más, que no es una acción. */
+.ref-bloque--invitado { padding: 0.6rem 0.85rem; }
+
+.ref-invitado {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+
+.ref-invitado strong { color: #4ade80; }

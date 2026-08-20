@@ -24,6 +24,20 @@ type MarketplaceRow = Database['public']['Tables']['marketplace_listings']['Row'
  */
 export interface MisReferidos {
   codigo: string | null
+  /**
+   * Si se puede escribir un código de referido ahora mismo.
+   *
+   * Lo decide el servidor con la MISMA función que usa referral_bind para
+   * aceptar. Si la pantalla lo decidiera por su cuenta, acabaría ofreciendo el
+   * cuadro cuando ya no vale — o escondiéndolo cuando sí.
+   */
+  puedoUsarCodigo: boolean
+  /** Por qué no se puede, cuando no se puede. Para poder explicarlo. */
+  motivoNoPuedo: string | null
+  /** Quién te invitó, si ya tienes referidor. */
+  miReferidor: string | null
+  /** Días que quedan para poder usar un código. */
+  diasParaUsarCodigo: number
   amigos: Array<{
     nombre: string | null
     avatar: string | null
