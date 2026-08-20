@@ -455,12 +455,23 @@ export default function Battlefield({
       }
     } else if (gameStatus === 'ready') {
       hasHandledEndRef.current = false
-      // La semilla de la sala, si la hay. Con la misma semilla los dos jugadores
-      // simulan exactamente la misma partida; sin ella se juega en solitario.
-      // Con sala es PvP: el bot se calla y el lado contrario lo llena el rival.
-      startGame(seed, Boolean(roomId))
+
+      if (roomId) {
+        // Con sala, la partida NO empieza en cuanto se pinta la pantalla: primero
+        // se pide al servidor el reloj común, para que el tic 0 sea el mismo para
+        // los dos. Si arrancáramos ya y lo alineáramos después, los primeros
+        // segundos irían desalineados — y ahí es donde caen los primeros soles.
+        void SupabaseService.startMatchClock(roomId).then((reloj) => {
+          // Sin reloj (la migración 23 aún no está, o falló la llamada) se arranca
+          // igual y se juega desalineado, que es peor pero mejor que no jugar.
+          startGame(seed, true, reloj?.ancoraMs)
+        })
+      } else {
+        // En solitario no hay nada que alinear.
+        startGame(seed, false)
+      }
     }
-  }, [practicePlantId, seed])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus])
 
   const [showSurrenderModal, setShowSurrenderModal] = useState<boolean>(false)
 

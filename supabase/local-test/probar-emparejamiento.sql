@@ -880,3 +880,93 @@ BEGIN
                       SQLERRM LIKE '%No participas%', SQLERRM);
   END;
 END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 16. EL RELOJ COMÚN DE LA PARTIDA (migración 23) ==='; END $$;
+
+-- El fallo que se vio en la foto: los soles caían en momentos distintos en cada
+-- pantalla. El tic 0 de cada uno era el instante en que ÉL entró al campo, y eso
+-- no coincide. Aquí se comprueba que el reloj lo pone el servidor una sola vez.
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_c UUID := '33333333-3333-3333-3333-333333333333';
+  v_sala UUID;
+  v_uno JSONB; v_dos JSONB; v_info JSONB;
+BEGIN
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+
+  -- Ana entra primero: fija el reloj.
+  PERFORM public._soy(v_a);
+  v_uno := public.start_match_clock(v_sala);
+  PERFORM public._t('el primero en entrar fija el reloj',
+                    (v_uno->>'startedAt') IS NOT NULL, v_uno::TEXT);
+  PERFORM public._t('y arranca en el tic 0 o casi',
+                    (v_uno->>'currentTick')::INTEGER < 5, v_uno::TEXT);
+
+  -- Beto entra después: DEBE recibir el mismo, no uno nuevo. Es el corazón del
+  -- arreglo: si recibiera el suyo, los dos volverían a tener relojes distintos.
+  PERFORM public._soy(v_b);
+  v_dos := public.start_match_clock(v_sala);
+  PERFORM public._t('el segundo recibe EL MISMO reloj, no uno nuevo',
+                    (v_dos->>'startedAt') = (v_uno->>'startedAt'),
+                    'primero ' || (v_uno->>'startedAt') || ' segundo ' || (v_dos->>'startedAt'));
+
+  -- Y llamarlo más veces no lo reinicia.
+  PERFORM public._soy(v_a);
+  PERFORM public._t('llamarlo otra vez no reinicia la partida',
+                    (public.start_match_clock(v_sala)->>'startedAt') = (v_uno->>'startedAt'),
+                    'se movió el reloj');
+
+  -- game_room_info también lo trae, para quien recarga a mitad de partida.
+  v_info := public.game_room_info(v_sala);
+  PERFORM public._t('game_room_info trae el reloj',
+                    (v_info->>'startedAt') = (v_uno->>'startedAt'), v_info::TEXT);
+  PERFORM public._t('y la hora del servidor, para corregir el desfase de relojes',
+                    (v_info->>'serverNow') IS NOT NULL, v_info::TEXT);
+
+  -- Un tercero no puede arrancar la partida de otros.
+  PERFORM public._soy(v_c);
+  BEGIN
+    PERFORM public.start_match_clock(v_sala);
+    PERFORM public._t('un tercero no puede tocar el reloj ajeno', FALSE, 'lo dejó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('un tercero no puede tocar el reloj ajeno',
+                      SQLERRM LIKE '%No participas%', SQLERRM);
+  END;
+END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB;
+BEGIN
+  -- Y lo que provocaba el síntoma: con relojes alineados, los dos pueden plantar
+  -- en tics parecidos sin que a ninguno se le rechace por antiguo.
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  PERFORM public._soy(v_a); PERFORM public.start_match_clock(v_sala);
+
+  -- La partida lleva 20 s andando.
+  UPDATE public.game_rooms SET started_at = NOW() - INTERVAL '20 seconds' WHERE id = v_sala;
+
+  -- Ana, ligeramente adelantada, planta en el tic 600.
+  PERFORM public._soy(v_a);
+  v_res := public.submit_match_action(v_sala, 1, 600, 'plant', 'sunflower', 0::SMALLINT, 3::SMALLINT);
+  PERFORM public._t('el adelantado planta', (v_res->>'ok')::BOOLEAN, v_res::TEXT);
+
+  -- Beto, 20 tics por detrás (0,7 s de red), TAMBIÉN debe poder plantar. Antes se
+  -- le rechazaba por antiguo y por eso el otro no veía nada.
+  PERFORM public._soy(v_b);
+  BEGIN
+    v_res := public.submit_match_action(v_sala, 1, 580, 'plant', 'sunflower', 1::SMALLINT, 3::SMALLINT);
+    PERFORM public._t('el que va unos tics por detrás TAMBIÉN planta',
+                      (v_res->>'ok')::BOOLEAN, v_res::TEXT);
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('el que va unos tics por detrás TAMBIÉN planta', FALSE, SQLERRM);
+  END;
+END $$;

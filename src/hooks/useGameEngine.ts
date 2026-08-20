@@ -110,6 +110,22 @@ export function useGameEngine() {
    */
   const accumulatorMsRef = useRef<number>(0)
 
+  /**
+   * EL RELOJ COMÚN DE LA PARTIDA
+   *
+   * El instante (en Date.now()) que corresponde al tic 0. Cuando hay sala lo pone
+   * el SERVIDOR y es el mismo para los dos jugadores.
+   *
+   * Sin esto, el tic 0 de cada uno era el momento en que ÉL entró al campo, y eso
+   * no coincide: entre emparejar y estar jugando pasan un par de segundos
+   * distintos por cabeza. Jugando se veía en que los soles del cielo caían en
+   * momentos distintos en cada pantalla, y en que al que iba atrasado el servidor
+   * le rechazaba las plantaciones por antiguas.
+   *
+   * En null, la partida cuenta desde que arrancó — que es lo correcto en solitario.
+   */
+  const ancoraMsRef = useRef<number | null>(null)
+
   // Los temporizadores del juego ya NO viven aquí: están en state.timers, para
   // que formen parte de la simulación y se puedan guardar y reanudar.
 
@@ -157,12 +173,18 @@ export function useGameEngine() {
    * Sin ella se usa un valor fijo, así que en solitario la partida es
    * reproducible pero siempre igual — para variar, pásale una semilla distinta.
    */
-  const startGame = useCallback((seed: number = 1, esPvp: boolean = false) => {
-    // esPvp calla al bot: en una partida contra otro jugador, todo lo que aparece
-    // en el lado contrario llega de SUS acciones, no de la máquina.
+  /**
+   * @param seed      la semilla del azar, de game_rooms.seed
+   * @param esPvp     calla al bot: en PvP el otro lado lo llena el rival
+   * @param ancoraMs  el instante (Date.now) que corresponde al tic 0. En PvP lo
+   *                  pone el servidor y es el mismo para los dos, así que los dos
+   *                  van por el mismo tic aunque uno haya entrado más tarde: el
+   *                  que llega tarde simula de golpe los tics que se perdió.
+   */
+  const startGame = useCallback((seed: number = 1, esPvp: boolean = false, ancoraMs?: number) => {
     stateRef.current = createBattleState(seed, false, esPvp)
 
-    // El puente con el reloj real se reancla; el acumulador arranca vacío.
+    ancoraMsRef.current = ancoraMs ?? null
     lastFrameMsRef.current = performance.now()
     accumulatorMsRef.current = 0
 
@@ -172,6 +194,8 @@ export function useGameEngine() {
 
   // Start practice / sandbox mode
   const startPracticeGame = useCallback((plantId?: string) => {
+    // En prácticas no hay rival, así que no hay reloj que compartir.
+    ancoraMsRef.current = null
     const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
 
     // Create 3 static target dummies in cols 7, 8, 9 across the 3 lanes
@@ -525,12 +549,37 @@ export function useGameEngine() {
       // OJO: descartar tics rompe la reproducibilidad. Una repetición o una
       // verificación en servidor NO usa este bucle: recorre todos los tics
       // seguidos, sin depender de fotogramas.
-      const elapsedMs = Math.min(nowMs - lastFrameMsRef.current, MAX_TICKS_PER_FRAME * TICK_MS)
-      lastFrameMsRef.current = nowMs
+      let ticksToRun: number
 
-      accumulatorMsRef.current += elapsedMs
-      let ticksToRun = Math.floor(accumulatorMsRef.current / TICK_MS)
-      accumulatorMsRef.current -= ticksToRun * TICK_MS
+      if (ancoraMsRef.current !== null) {
+        // ── CON RELOJ COMÚN (partida contra otro jugador) ──────────────────────
+        //
+        // No se cuenta cuánto ha pasado desde el fotograma anterior: se calcula por
+        // qué tic DEBERÍA ir la partida según el reloj, y se corre lo que falte.
+        // Es la diferencia entre "yo llevo N tics" y "vamos por el tic N", y es lo
+        // que mantiene a los dos jugadores en el mismo momento de la partida.
+        //
+        // De paso arregla dos cosas de gratis: no acumula desfase con el tiempo, y
+        // quien vuelve de tener la pestaña en segundo plano se pone al día en lugar
+        // de quedarse atrasado para siempre.
+        const ticObjetivo = Math.floor((Date.now() - ancoraMsRef.current) / TICK_MS)
+        ticksToRun = Math.max(0, ticObjetivo - state.tick)
+
+        // Tope por fotograma para no congelar la pantalla si hay mucho que
+        // recuperar. Lo que quede se recupera en los fotogramas siguientes, así
+        // que no se pierde ningún tic — al contrario que antes, que los tiraba.
+        ticksToRun = Math.min(ticksToRun, MAX_TICKS_PER_FRAME)
+        lastFrameMsRef.current = nowMs
+      } else {
+        // ── SIN RELOJ COMÚN (en solitario) ────────────────────────────────────
+        // Acumulador de paso fijo: sólo tics completos, y los milisegundos
+        // sobrantes se arrastran al fotograma siguiente.
+        const elapsedMs = Math.min(nowMs - lastFrameMsRef.current, MAX_TICKS_PER_FRAME * TICK_MS)
+        lastFrameMsRef.current = nowMs
+        accumulatorMsRef.current += elapsedMs
+        ticksToRun = Math.floor(accumulatorMsRef.current / TICK_MS)
+        accumulatorMsRef.current -= ticksToRun * TICK_MS
+      }
 
       while (ticksToRun > 0) {
         ticksToRun -= 1

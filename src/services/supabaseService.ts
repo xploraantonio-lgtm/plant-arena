@@ -583,6 +583,59 @@ export const SupabaseService = {
   },
 
   /**
+   * Arranca (o consulta) el reloj común de la partida.
+   *
+   * El primero de los dos que entra al campo lo fija; el segundo recibe el mismo
+   * valor. Eso es lo que hace que los dos vayan por el mismo tic aunque uno haya
+   * tardado más en cargar: el que llega tarde simula de golpe los tics que se
+   * perdió.
+   *
+   * Devuelve además `serverNow` para poder corregir la diferencia entre el reloj
+   * del navegador y el del servidor. Los relojes de dos ordenadores nunca
+   * coinciden exactamente, y sin esa corrección un desfase de un segundo volvería
+   * a desalinear la partida — que es el fallo que esto viene a arreglar.
+   */
+  async startMatchClock(roomId: string): Promise<{
+    /** El instante de Date.now() del navegador que corresponde al tic 0. */
+    ancoraMs: number
+    currentTick: number
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      // Se mide alrededor de la llamada para estimar el viaje de ida y vuelta.
+      const antes = Date.now()
+      const { data, error } = await (supabase.rpc as any)('start_match_clock', {
+        p_room_id: roomId,
+      })
+      const despues = Date.now()
+
+      if (error) {
+        logError('startMatchClock', error)
+        return null
+      }
+      if (!data?.startedAt || !data?.serverNow) return null
+
+      const inicioServidor = new Date(data.startedAt).getTime()
+      const ahoraServidor = new Date(data.serverNow).getTime()
+
+      // La respuesta del servidor describe SU reloj. Para traducirlo al nuestro:
+      // cuánto hace, según el servidor, que empezó la partida; y ese mismo rato
+      // hacia atrás desde nuestro ahora.
+      //
+      // Se resta la mitad del viaje de ida y vuelta porque `serverNow` se generó
+      // a mitad de camino, no cuando llegó la respuesta.
+      const medioViaje = Math.max(0, (despues - antes) / 2)
+      const llevaAndando = ahoraServidor - inicioServidor
+      const ancoraMs = despues - medioViaje - llevaAndando
+
+      return { ancoraMs, currentTick: data.currentTick ?? 0 }
+    } catch (e) {
+      logError('startMatchClock', e)
+      return null
+    }
+  },
+
+  /**
    * ¿Terminó la partida, y quién ganó?
    *
    * Red de seguridad de subscribeToRoomEnd: si el mensaje de Realtime se perdió,
