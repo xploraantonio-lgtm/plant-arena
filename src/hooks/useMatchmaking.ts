@@ -15,32 +15,43 @@ import { SupabaseService } from '../services/supabaseService'
  * le devuelve la entrada. Por eso importa tanto que la salida sea limpia.
  */
 
-/**
- * ¿ESTÁ ACTIVO EL EMPAREJAMIENTO?
- *
- * En false a propósito, y esto es lo que falta para poder ponerlo en true.
- *
- * Emparejar a dos jugadores ya funciona: el servidor los junta, crea la sala y les
- * da la misma semilla. Pero **no existe la sincronización de acciones**: cada
- * navegador simula su propia partida. Consecuencias, comprobadas jugando:
- *
- *   · No ves lo que planta el rival. Sólo coincidís en las oleadas, porque salen
- *     de la semilla.
- *   · El bot local sigue jugando de P2, así que cada uno pelea contra la máquina
- *     creyendo que pelea contra el otro.
- *   · Si los dos ganáis vuestra propia partida, los dos os declaráis ganadores →
- *     disputa → nadie cobra. En coliseo eso son gemas de verdad.
- *
- * O sea que emparejar hoy es PEOR que no emparejar: hace esperar por un rival y
- * entrega una partida contra el bot igualmente, con el premio en el aire.
- *
- * Para ponerlo en true hace falta la tabla de acciones (match_actions) y que cada
- * cliente aplique las del rival. El resto ya está: la cola, la sala, la semilla
- * compartida, el reparto por modo, la rendición y la devolución en disputa.
- */
-export const EMPAREJAMIENTO_ACTIVO = false
-
 export type ModoPartida = 'ranked' | 'friendly' | 'colosseum' | 'tournament'
+
+/**
+ * QUÉ MODOS BUSCAN RIVAL DE VERDAD
+ *
+ * Por modo y no un interruptor único, porque lo que falta no afecta igual a todos.
+ *
+ * YA FUNCIONA, y por eso ranked y amistoso están dentro:
+ *   · el servidor junta a dos jugadores y les da la misma semilla;
+ *   · el bot se calla cuando hay rival (state.isPvpMode);
+ *   · cada plantación se registra con el tic en que debe ocurrir, validada contra
+ *     el mazo que guardó el servidor;
+ *   · cada cliente aplica las del otro en ese mismo tic, así que veis lo mismo.
+ *
+ * LO QUE FALTA, y por eso el coliseo se queda fuera:
+ *   El servidor todavía NO recalcula la partida: el resultado sale de que los dos
+ *   jugadores reporten lo mismo. Si una acción llega tarde, un cliente la aplica
+ *   un tic después, las dos simulaciones se separan un poco y pueden acabar
+ *   discrepando sobre quién ganó. Entonces la partida queda en disputa.
+ *
+ *   En ranked y amistoso una disputa cuesta un cero: nadie gana ELO ni cofre y se
+ *   vuelve a jugar. En el coliseo hay gemas de verdad — se devuelven (lo hace la
+ *   migración 18), pero es una vuelta entera para nada, y con dinero encima.
+ *
+ * El coliseo entra cuando exista la verificación en servidor: recalcular la
+ * partida desde match_actions y que ESE veredicto pague, en lugar de fiarse de lo
+ * que vio cada navegador. El motor ya es reproducible para poder hacerlo.
+ */
+export const MODOS_CON_EMPAREJAMIENTO: ReadonlySet<ModoPartida> = new Set<ModoPartida>([
+  'ranked',
+  'friendly',
+])
+
+/** ¿Este modo busca rival, o va directo al bot? */
+export function buscaRival(modo: ModoPartida): boolean {
+  return MODOS_CON_EMPAREJAMIENTO.has(modo)
+}
 
 export interface PartidaEncontrada {
   roomId: string

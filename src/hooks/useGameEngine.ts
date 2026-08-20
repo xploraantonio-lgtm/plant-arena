@@ -158,8 +158,10 @@ export function useGameEngine() {
    * Sin ella se usa un valor fijo, así que en solitario la partida es
    * reproducible pero siempre igual — para variar, pásale una semilla distinta.
    */
-  const startGame = useCallback((seed: number = 1) => {
-    stateRef.current = createBattleState(seed)
+  const startGame = useCallback((seed: number = 1, esPvp: boolean = false) => {
+    // esPvp calla al bot: en una partida contra otro jugador, todo lo que aparece
+    // en el lado contrario llega de SUS acciones, no de la máquina.
+    stateRef.current = createBattleState(seed, false, esPvp)
 
     // El puente con el reloj real se reancla; el acumulador arranca vacío.
     lastFrameMsRef.current = performance.now()
@@ -426,6 +428,44 @@ export function useGameEngine() {
   )
 
   // Dig plant handler (removes plant by ID or by cell lane & column)
+  /**
+   * Encola la carta que plantó el rival para el tic en que le toca.
+   *
+   * No la planta ya: la mete en la cola de acciones aplazadas con SU tic. Los dos
+   * clientes reciben la misma acción con el mismo tic, así que los dos la aplican
+   * en el mismo momento de la partida y las dos simulaciones convergen — sin que
+   * ninguno tenga que esperar al otro.
+   *
+   * Si llega tarde (su tic ya pasó), se aplica en el siguiente tic. Las dos
+   * pantallas se separan un poco, y eso es aceptable a propósito: quien decide el
+   * resultado es el servidor recalculando la partida desde el registro, no lo que
+   * vio un navegador.
+   */
+  const encolarAccionDelRival = useCallback(
+    (accion: {
+      tick: number
+      plantId: PlantId
+      lane: number
+      col?: number
+      statRolls?: PlantStatKey[]
+      level?: number
+    }) => {
+      const state = stateRef.current
+      if (state.status !== 'playing') return
+      state.pending.push({
+        // Nunca en el pasado: si llegó tarde, en el tic siguiente.
+        atTick: Math.max(state.tick + 1, accion.tick),
+        kind: 'rival_plant',
+        plantId: accion.plantId,
+        lane: accion.lane,
+        col: accion.col,
+        statRolls: accion.statRolls,
+        level: accion.level,
+      })
+    },
+    []
+  )
+
   const digPlant = useCallback(
     (target: string | { lane: number; col: number }) => {
       const state = stateRef.current
@@ -599,5 +639,6 @@ export function useGameEngine() {
     collectSun,
     placePlant,
     digPlant,
+    encolarAccionDelRival,
   }
 }

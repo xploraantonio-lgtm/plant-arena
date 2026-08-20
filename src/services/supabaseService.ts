@@ -415,6 +415,135 @@ export const SupabaseService = {
     }
   },
 
+  // ---------------------------------------------------------------------------
+  // EL REGISTRO DE ACCIONES
+  //
+  // Lo que convierte dos navegadores jugando en paralelo en una partida de
+  // verdad. Cada acción va con el TIC futuro en que debe ocurrir; los dos
+  // clientes la aplican en ese mismo tic y las dos simulaciones convergen.
+  //
+  // El cliente no puede escribir en la tabla: todo pasa por submit_match_action,
+  // que comprueba que la carta está en TU mazo (el que guardó el servidor, no el
+  // que diga el navegador), que el tic no está en el pasado, y que la partida no
+  // está liquidada.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Registra una acción propia.
+   *
+   * `seq` es tu número de orden en esta partida, empezando en 1. Sirve para que un
+   * reintento de red no duplique la acción: el servidor la ignora si ya la tiene.
+   */
+  async submitMatchAction(
+    roomId: string,
+    accion: {
+      seq: number
+      tick: number
+      kind: 'plant' | 'dig'
+      plantId?: string | null
+      lane: number
+      col?: number | null
+    }
+  ): Promise<{ ok?: boolean; serverTick?: number; error?: string }> {
+    if (!isSupabaseConfigured()) return { error: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('submit_match_action', {
+        p_room_id: roomId,
+        p_seq: accion.seq,
+        p_tick: accion.tick,
+        p_kind: accion.kind,
+        p_plant: accion.plantId ?? null,
+        p_lane: accion.lane,
+        p_col: accion.col ?? null,
+      })
+      if (error) {
+        logError('submitMatchAction', error)
+        return { error: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('submitMatchAction', e)
+      return { error: e?.message }
+    }
+  },
+
+  /**
+   * Todas las acciones de la partida a partir de un identificador.
+   *
+   * El camino normal es Realtime, que las entrega al instante. Esto es la red de
+   * seguridad: al reconectar, o si se perdió un mensaje, se recupera lo que falte.
+   * Sin esto, una acción perdida dejaría las dos partidas divergentes para siempre.
+   */
+  async matchActionsSince(
+    roomId: string,
+    desdeId: number = 0
+  ): Promise<Array<{
+    id: number
+    userId: string
+    seq: number
+    tick: number
+    kind: string
+    plantId: string | null
+    lane: number
+    col: number | null
+  }>> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await (supabase.rpc as any)('match_actions_since', {
+        p_room_id: roomId,
+        p_desde_id: desdeId,
+      })
+      if (error) {
+        logError('matchActionsSince', error)
+        return []
+      }
+      return data ?? []
+    } catch (e) {
+      logError('matchActionsSince', e)
+      return []
+    }
+  },
+
+  /**
+   * Escucha las acciones nuevas de una partida.
+   *
+   * Devuelve la función para dejar de escuchar. HAY QUE LLAMARLA al salir de la
+   * batalla: un canal abierto sigue consumiendo conexión de Realtime, y son
+   * limitadas.
+   */
+  subscribeToMatchActions(
+    roomId: string,
+    alRecibir: (accion: {
+      id: number
+      user_id: string
+      seq: number
+      tick: number
+      kind: string
+      plant_id: string | null
+      lane: number
+      col: number | null
+    }) => void
+  ): () => void {
+    if (!isSupabaseConfigured()) return () => {}
+    const canal = supabase
+      .channel(`match_${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'match_actions',
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload: any) => alRecibir(payload.new)
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(canal)
+    }
+  },
+
   /**
    * Rendirse en una partida real.
    *

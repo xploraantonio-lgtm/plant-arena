@@ -232,3 +232,72 @@ describe('la planta del rival es la misma carta, al revés', () => {
     expect(jugarConRival()).toBe(jugarConRival())
   })
 })
+
+describe('en PvP el bot se calla y manda el registro de acciones', () => {
+  it('sin rival, el bot planta y manda oleadas', () => {
+    const s = createBattleState(99)
+    for (let i = 0; i < 600; i++) stepTick(s, () => {})
+    // Que el bot hace algo: si esto sale 0, la comprobación de abajo no vale nada.
+    expect(s.enemyPlants.length).toBeGreaterThan(0)
+  })
+
+  it('en PvP el lado contrario está vacío hasta que el rival planta', () => {
+    const s = createBattleState(99, false, true)
+    for (let i = 0; i < 600; i++) stepTick(s, () => {})
+
+    // Nada: en PvP todo lo del otro lado llega del registro de acciones.
+    expect(s.enemyPlants).toHaveLength(0)
+    // Y el sol del cielo sigue cayendo, que es del azar compartido y es justo
+    // para los dos.
+    expect(s.suns.length).toBeGreaterThan(0)
+  })
+
+  it('la acción del rival se aplica en SU tic, no antes', () => {
+    const s = createBattleState(5, false, true)
+    s.pending.push({ atTick: 100, kind: 'rival_plant', plantId: 'peashooter', lane: 1, col: 8 })
+
+    for (let i = 0; i < 99; i++) stepTick(s, () => {})
+    expect(s.enemyPlants).toHaveLength(0)   // tic 99: todavía no
+
+    stepTick(s, () => {})                    // tic 100: ahora
+    expect(s.enemyPlants).toHaveLength(1)
+    expect(s.enemyPlants[0].plantId).toBe('peashooter')
+  })
+
+  it('las mismas acciones en los mismos tics dan la misma partida en los dos lados', () => {
+    // Esto es lo que hace que el PvP funcione: los dos clientes reciben las mismas
+    // acciones con los mismos tics y llegan al mismo estado sin hablar entre ellos.
+    // Y es lo que permitirá al servidor recalcular quién ganó.
+    const registro = [
+      { atTick: 40,  kind: 'rival_plant' as const, plantId: 'sunflower' as const,  lane: 0, col: 10 },
+      { atTick: 120, kind: 'rival_plant' as const, plantId: 'peashooter' as const, lane: 1, col: 8 },
+      { atTick: 200, kind: 'rival_plant' as const, plantId: 'wallnut' as const,    lane: 1, col: 6 },
+      { atTick: 260, kind: 'rival_plant' as const, plantId: 'chomper' as const,    lane: 2 },
+    ]
+
+    const simular = () => {
+      const s = createBattleState(31337, false, true)
+      s.pending.push(...registro.map((a) => ({ ...a })))
+      for (let i = 0; i < 500; i++) stepTick(s, () => {})
+      return JSON.stringify(s)
+    }
+
+    expect(simular()).toBe(simular())
+  })
+
+  it('el registro llega igual pasando por JSON, como pasa por la red', () => {
+    const registro = [
+      { atTick: 60, kind: 'rival_plant' as const, plantId: 'melonpult' as const, lane: 0, col: 9 },
+    ]
+
+    const directo = createBattleState(777, false, true)
+    directo.pending.push(...registro.map((a) => ({ ...a })))
+    for (let i = 0; i < 300; i++) stepTick(directo, () => {})
+
+    const porLaRed = createBattleState(777, false, true)
+    porLaRed.pending.push(...(JSON.parse(JSON.stringify(registro)) as typeof registro))
+    for (let i = 0; i < 300; i++) stepTick(porLaRed, () => {})
+
+    expect(JSON.stringify(porLaRed)).toBe(JSON.stringify(directo))
+  })
+})

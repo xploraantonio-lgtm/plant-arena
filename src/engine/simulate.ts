@@ -146,7 +146,7 @@ export function crearPlantaDelRival(
  * `seed` viene de game_rooms.seed y es idéntica para los dos jugadores: es lo que
  * hace que ambos simulen la misma partida.
  */
-export function createBattleState(seed: number, isPracticeMode = false): GameState {
+export function createBattleState(seed: number, isPracticeMode = false, isPvpMode = false): GameState {
   return {
     tick: 0,
     rng: createRng(seed),
@@ -183,6 +183,7 @@ export function createBattleState(seed: number, isPracticeMode = false): GameSta
     waveBanner: isPracticeMode ? 'Modo Práctica' : '¡Ola 1 de Plantas Enemigas!',
     stats: { sunsCollected: 0, enemyPlantsDefeated: 0, plantsPlaced: 0, score: 0 },
     ...(isPracticeMode ? { isPracticeMode: true } : {}),
+    ...(isPvpMode ? { isPvpMode: true } : {}),
   }
 }
 
@@ -221,6 +222,26 @@ export type PendingAction =
   | { atTick: number; kind: 'clear_heal_fx'; plantId: string }
   /** El segundo guisante del repetidor. Ya viene formado desde que se encoló. */
   | { atTick: number; kind: 'spawn_projectile'; projectile: ProjectileEntity }
+  /**
+   * La carta que plantó el RIVAL, para aplicarla en su tic.
+   *
+   * Llega por la red con el tic FUTURO en que debe ocurrir (el tic actual de
+   * quien la manda, más un margen para la red). Los dos clientes la aplican en
+   * ese mismo tic, así que las dos simulaciones convergen sin que ninguno tenga
+   * que esperar al otro.
+   *
+   * Es un dato y no una función, como el resto de la cola: así viaja por JSON y
+   * el servidor puede recalcular la partida entera desde el registro.
+   */
+  | {
+      atTick: number
+      kind: 'rival_plant'
+      plantId: PlantId
+      lane: number
+      col?: number
+      statRolls?: PlantStatKey[]
+      level?: number
+    }
 
 export interface GameState {
   /**
@@ -273,6 +294,13 @@ export interface GameState {
   waveBanner: string | null
   stats: GameStats
   isPracticeMode?: boolean
+  /**
+   * Partida contra otro jugador de verdad.
+   *
+   * Cuando está puesta, el bot no planta ni manda oleadas: todo lo que aparece
+   * en el lado contrario llega del registro de acciones del rival.
+   */
+  isPvpMode?: boolean
 }
 
 /**
@@ -339,6 +367,19 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
         case 'spawn_projectile':
           state.projectiles.push(accion.projectile)
           break
+
+        case 'rival_plant':
+          state.enemyPlants.push(
+            crearPlantaDelRival(
+              state,
+              accion.plantId,
+              accion.lane,
+              accion.col,
+              accion.statRolls ?? [],
+              accion.level ?? 0
+            )
+          )
+          break
       }
     }
     state.pending = aunNoVencen
@@ -353,14 +394,20 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   }
 
   // 1. PC AI SKY SUN RECOVERY (Synchronized with sky sun drop every 6.0s for 100% fair parity)
-  if (!state.isPracticeMode && state.tick - state.timers.lastP2PassiveSun > msToTicks(6000)) {
+  // El bot no juega si hay un rival de verdad al otro lado: sus plantas llegan
+  // por el registro de acciones. Sin esta guarda, en una partida contra otro
+  // jugador seguirías peleando contra la máquina — que es exactamente el fallo
+  // que apareció al probarlo con dos cuentas.
+  const juegaElBot = !state.isPracticeMode && !state.isPvpMode
+
+  if (juegaElBot && state.tick - state.timers.lastP2PassiveSun > msToTicks(6000)) {
     state.timers.lastP2PassiveSun = state.tick
     state.p2SunBank += 25
   }
 
   // 2. PC AI TACTICAL PURCHASING & PLANT SPAWNING (SUNFLOWER-FIRST RULE + THREAT ASSESSMENT)
   const spawnInterval = Math.max(1200, 2200 - state.wave * 200)
-  if (!state.isPracticeMode && state.tick - state.timers.lastEnemySpawn > msToTicks(spawnInterval)) {
+  if (juegaElBot && state.tick - state.timers.lastEnemySpawn > msToTicks(spawnInterval)) {
     state.timers.lastEnemySpawn = state.tick
 
     // Count active P2 Sunflowers

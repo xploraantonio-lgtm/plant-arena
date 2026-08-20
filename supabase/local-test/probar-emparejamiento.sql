@@ -58,6 +58,7 @@ BEGIN
   -- algún día hay que atender un "bórrame la cuenta".)
   -- La cola antes que las retenciones: matchmaking_queue.escrow_id apunta a
   -- colosseum_escrow, así que al revés el borrado se bloquea.
+  DELETE FROM public.match_actions     WHERE user_id IN (v_a, v_b, v_c);
   DELETE FROM public.matchmaking_queue WHERE user_id IN (v_a, v_b, v_c);
   DELETE FROM public.colosseum_escrow  WHERE user_id IN (v_a, v_b, v_c);
   DELETE FROM public.game_rooms
@@ -576,4 +577,113 @@ BEGIN
   SELECT colosseum_tickets INTO v_tk_a2 FROM public.profiles WHERE id = v_a;
   PERFORM public._t('quien pagó con ticket recupera el TICKET',
                     v_tk_a2 = v_tk_a, 'antes ' || v_tk_a || ' después ' || v_tk_a2);
+END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 13. EL REGISTRO DE ACCIONES (migración 19) ==='; END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_c UUID := '33333333-3333-3333-3333-333333333333';
+  v_sala UUID; v_res JSONB; v_n INTEGER; v_acciones JSONB;
+BEGIN
+  -- Sala nueva, sin liquidar.
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+
+  -- Una acción normal.
+  PERFORM public._soy(v_a);
+  v_res := public.submit_match_action(v_sala, 1, 40, 'plant', 'sunflower', 0::SMALLINT, 3::SMALLINT);
+  PERFORM public._t('se registra una plantación válida',
+                    (v_res->>'ok')::BOOLEAN, v_res::TEXT);
+
+  -- Mandar la MISMA otra vez (reintento de red) no la duplica ni falla.
+  v_res := public.submit_match_action(v_sala, 1, 40, 'plant', 'sunflower', 0::SMALLINT, 3::SMALLINT);
+  SELECT COUNT(*) INTO v_n FROM public.match_actions
+   WHERE room_id = v_sala AND user_id = v_a AND seq = 1;
+  PERFORM public._t('el reintento no duplica la acción', v_n = 1, 'filas: ' || v_n);
+
+  -- Una carta que NO está en su mazo.
+  BEGIN
+    PERFORM public.submit_match_action(v_sala, 2, 45, 'plant', 'melonpult', 1::SMALLINT, 4::SMALLINT);
+    PERFORM public._t('rechaza una carta que no tienes', FALSE, 'la aceptó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('rechaza una carta que no tienes',
+                      SQLERRM LIKE '%no está en tu mazo%', SQLERRM);
+  END;
+
+  -- Reescribir el pasado.
+  BEGIN
+    PERFORM public.submit_match_action(v_sala, 3, 0, 'plant', 'sunflower', 0::SMALLINT, 1::SMALLINT);
+    -- El tic 0 puede estar dentro de tolerancia si la sala se acaba de crear, así
+    -- que se usa un valor claramente imposible.
+    PERFORM public.submit_match_action(v_sala, 4, -1, 'plant', 'sunflower', 0::SMALLINT, 1::SMALLINT);
+    PERFORM public._t('rechaza un tic negativo', FALSE, 'lo aceptó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('rechaza un tic negativo', TRUE);
+  END;
+
+  -- Programar una jugada muy en el futuro.
+  BEGIN
+    PERFORM public.submit_match_action(v_sala, 5, 99999, 'plant', 'sunflower', 0::SMALLINT, 1::SMALLINT);
+    PERFORM public._t('rechaza una acción muy en el futuro', FALSE, 'la aceptó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('rechaza una acción muy en el futuro',
+                      SQLERRM LIKE '%futuro%', SQLERRM);
+  END;
+
+  -- Un tercero no puede meter acciones en una partida ajena.
+  PERFORM public._soy(v_c);
+  BEGIN
+    PERFORM public.submit_match_action(v_sala, 1, 40, 'plant', 'sunflower', 0::SMALLINT, 3::SMALLINT);
+    PERFORM public._t('un tercero no puede jugar tu partida', FALSE, 'lo dejó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('un tercero no puede jugar tu partida',
+                      SQLERRM LIKE '%No participas%', SQLERRM);
+  END;
+
+  -- Los dos participantes ven las acciones de la partida, incluidas las del otro.
+  PERFORM public._soy(v_b);
+  PERFORM public.submit_match_action(v_sala, 1, 50, 'plant', 'repeater', 2::SMALLINT, 8::SMALLINT);
+  v_acciones := public.match_actions_since(v_sala, 0);
+  PERFORM public._t('el rival ve las acciones de los dos',
+                    jsonb_array_length(v_acciones) = 2,
+                    'acciones vistas: ' || jsonb_array_length(v_acciones));
+  PERFORM public._t('las acciones traen su tic',
+                    (v_acciones->0->>'tick')::INTEGER = 40, v_acciones::TEXT);
+
+  -- Un tercero no las puede leer.
+  PERFORM public._soy(v_c);
+  BEGIN
+    PERFORM public.match_actions_since(v_sala, 0);
+    PERFORM public._t('un tercero no puede leer la partida ajena', FALSE, 'la leyó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('un tercero no puede leer la partida ajena',
+                      SQLERRM LIKE '%No participas%', SQLERRM);
+  END;
+
+  -- Y con la partida liquidada, no se aceptan más acciones: si no, se podrían
+  -- añadir después de cobrar y el recálculo del servidor daría otro ganador.
+  PERFORM public._soy(v_a); PERFORM public.surrender_match(v_sala);
+  BEGIN
+    PERFORM public.submit_match_action(v_sala, 9, 60, 'plant', 'sunflower', 0::SMALLINT, 2::SMALLINT);
+    PERFORM public._t('no se aceptan acciones tras liquidar', FALSE, 'la aceptó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('no se aceptan acciones tras liquidar',
+                      SQLERRM LIKE '%liquidada%', SQLERRM);
+  END;
+END $$;
+
+DO $$
+DECLARE v_n INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM information_schema.role_table_grants
+   WHERE table_schema='public' AND table_name='match_actions'
+     AND grantee IN ('anon','authenticated')
+     AND privilege_type IN ('INSERT','UPDATE','DELETE');
+  PERFORM public._t('el cliente no puede escribir acciones directamente',
+                    v_n = 0, 'permisos encontrados: ' || v_n);
 END $$;

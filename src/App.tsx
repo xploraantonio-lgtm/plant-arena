@@ -19,7 +19,7 @@ import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'
 import MatchmakingScreen from './components/Matchmaking/MatchmakingScreen'
-import { useMatchmaking, EMPAREJAMIENTO_ACTIVO, type ModoPartida } from './hooks/useMatchmaking'
+import { useMatchmaking, buscaRival, type ModoPartida } from './hooks/useMatchmaking'
 import { SupabaseService } from './services/supabaseService'
 import { useAuth } from './hooks/useAuth'
 import AuthModal from './components/Auth/AuthModal'
@@ -256,10 +256,7 @@ function App() {
     setSalaId(null)
     setSemillaPartida(undefined)
     setRivalId(null)
-    if (!EMPAREJAMIENTO_ACTIVO) {
-      // Sin sincronización de acciones, emparejar da una partida contra el bot
-      // igualmente pero después de esperar por un rival, y con el premio en el
-      // aire. Así que se va directo al bot, como antes.
+    if (!buscaRival('ranked')) {
       setScreen('battle')
       return
     }
@@ -294,10 +291,10 @@ function App() {
     setCustomArenaBg(undefined)
     setSalaId(null)
     setSemillaPartida(undefined)
-    if (!EMPAREJAMIENTO_ACTIVO) {
-      // Con gemas de verdad en juego, con más motivo: dos jugadores pagando por
-      // una partida que ambos pueden ganar contra su propio bot acabarían en
-      // disputa. El servidor devuelve, pero es una vuelta entera para nada.
+    if (!buscaRival('colosseum')) {
+      // El coliseo espera a la verificación en servidor. Hasta entonces una
+      // discrepancia entre los dos clientes dejaría la partida en disputa, y aquí
+      // hay gemas de verdad: se devuelven, pero es una vuelta entera para nada.
       setScreen('battle')
       return
     }

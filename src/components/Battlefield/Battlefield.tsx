@@ -157,6 +157,7 @@ export default function Battlefield({
     collectSun,
     placePlant,
     digPlant,
+    encolarAccionDelRival,
   } = useGameEngine()
 
   const { user } = useAuth()
@@ -205,6 +206,104 @@ export default function Battlefield({
     }
     return allCatalogCards.slice(0, 6)
   }, [activeDeck, allCatalogCards])
+
+  // ── EL REGISTRO DE ACCIONES ────────────────────────────────────────────────
+  //
+  // Con sala, cada plantación se manda al servidor con el TIC futuro en que debe
+  // ocurrir, y se escuchan las del rival para aplicarlas en ese mismo tic. Es lo
+  // que hace que las dos partidas sean la misma en lugar de dos partidas
+  // paralelas contra la máquina.
+
+  /**
+   * Margen de red, en tics.
+   *
+   * La acción se programa para el tic actual MÁS esto, para que le dé tiempo a
+   * llegar al rival antes de que su partida alcance ese tic. Seis tics son unos
+   * 200 ms: suficiente para una conexión normal, y poco como retardo entre pulsar
+   * y ver la planta del otro.
+   *
+   * Si aun así llega tarde, encolarAccionDelRival la aplica en el tic siguiente y
+   * las dos pantallas se separan un poco. Eso es aceptable: el resultado lo decide
+   * el servidor recalculando el registro, no lo que vio un navegador.
+   */
+  const MARGEN_DE_RED_TICS = 6
+
+  /** Número de orden de mis acciones en esta partida. Empieza en 1. */
+  const ordenRef = useRef<number>(0)
+  /** El id de la última acción vista, para no volver a aplicarla. */
+  const ultimaAccionRef = useRef<number>(0)
+  const aplicadasRef = useRef<Set<number>>(new Set())
+
+  const registrarPlantacion = (carta: PlantId, lane: number, col: number) => {
+    if (!roomId) return
+    ordenRef.current += 1
+    void SupabaseService.submitMatchAction(roomId, {
+      seq: ordenRef.current,
+      tick: tick + MARGEN_DE_RED_TICS,
+      kind: 'plant',
+      plantId: carta,
+      lane,
+      col,
+    })
+  }
+
+  useEffect(() => {
+    if (!roomId || !currentUserId) return
+
+    /** Aplica una acción del rival; las propias ya están plantadas en local. */
+    const aplicar = (a: {
+      id: number
+      user_id: string
+      tick: number
+      kind: string
+      plant_id: string | null
+      lane: number
+      col: number | null
+    }) => {
+      if (a.user_id === currentUserId) return
+      // Realtime puede entregar el mismo mensaje dos veces, y la recuperación por
+      // match_actions_since puede solaparse con él. Sin esto, la planta del rival
+      // aparecería duplicada.
+      if (aplicadasRef.current.has(a.id)) return
+      aplicadasRef.current.add(a.id)
+      if (a.id > ultimaAccionRef.current) ultimaAccionRef.current = a.id
+
+      if (a.kind !== 'plant' || !a.plant_id) return
+      encolarAccionDelRival({
+        tick: a.tick,
+        plantId: a.plant_id as PlantId,
+        lane: a.lane,
+        col: a.col ?? undefined,
+      })
+    }
+
+    const dejarDeEscuchar = SupabaseService.subscribeToMatchActions(roomId, aplicar)
+
+    // Red de seguridad: al entrar se recoge lo que ya hubiera, y cada 3 s se
+    // comprueba si se perdió algún mensaje. Sin esto, una sola acción perdida
+    // dejaría las dos partidas divergentes hasta el final.
+    const recuperar = async () => {
+      const pendientes = await SupabaseService.matchActionsSince(roomId, ultimaAccionRef.current)
+      for (const a of pendientes) {
+        aplicar({
+          id: a.id,
+          user_id: a.userId,
+          tick: a.tick,
+          kind: a.kind,
+          plant_id: a.plantId,
+          lane: a.lane,
+          col: a.col,
+        })
+      }
+    }
+    void recuperar()
+    const reloj = setInterval(() => { void recuperar() }, 3000)
+
+    return () => {
+      dejarDeEscuchar()
+      clearInterval(reloj)
+    }
+  }, [roomId, currentUserId, encolarAccionDelRival])
 
   const hasHandledEndRef = useRef<boolean>(false)
 
@@ -285,7 +384,8 @@ export default function Battlefield({
       hasHandledEndRef.current = false
       // La semilla de la sala, si la hay. Con la misma semilla los dos jugadores
       // simulan exactamente la misma partida; sin ella se juega en solitario.
-      startGame(seed)
+      // Con sala es PvP: el bot se calla y el lado contrario lo llena el rival.
+      startGame(seed, Boolean(roomId))
     }
   }, [practicePlantId, seed])
 
@@ -403,7 +503,17 @@ export default function Battlefield({
 
       {/* Base Towers */}
       <BaseTower team="p1" hp={p1BaseHp} maxHp={INITIAL_BASE_HP} />
-      <BaseTower team="p2" hp={p2BaseHp} maxHp={INITIAL_BASE_HP} sunBank={p2SunBank} />
+      {/* Los soles del rival sólo se enseñan contra el bot, que es cuando el
+          número es de verdad: lo lleva esta misma simulación. En PvP los soles del
+          otro son cosa de SU navegador y aquí no se conocen, así que el contador
+          se quedaría clavado en 150 — un número inventado en pantalla. Mejor no
+          mostrarlo que mostrar uno falso. */}
+      <BaseTower
+        team="p2"
+        hp={p2BaseHp}
+        maxHp={INITIAL_BASE_HP}
+        sunBank={roomId ? undefined : p2SunBank}
+      />
 
       {/* Start Overlay */}
       {gameStatus === 'ready' && !practicePlantId && (
@@ -459,7 +569,11 @@ export default function Battlefield({
                       if (selectedCard === 'shovel') {
                         digPlant({ lane: lane.id, col })
                       } else {
+                        const carta = selectedCard
                         placePlant(lane.id, col)
+                        // En PvP, además de plantar en local se registra para que
+                        // el rival la aplique en el mismo tic.
+                        registrarPlantacion(carta, lane.id, col)
                       }
                     }
                   }}
