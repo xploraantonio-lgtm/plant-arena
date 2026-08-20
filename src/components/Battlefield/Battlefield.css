@@ -1312,3 +1312,37 @@
   border: 1px solid #4ade80;
   font-weight: 700;
 }
+
+/* ── DIAGNÓSTICO DEL PVP ────────────────────────────────────────────────────
+   Un recuadro pequeño arriba a la izquierda, sólo en partidas con sala. Está
+   pensado para leerse en una captura de pantalla: cifras tabulares para poder
+   comparar los tics de las dos ventanas de un vistazo. */
+
+.pvp-diag {
+  position: absolute;
+  top: 3.2rem;
+  left: 0.5rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0.5rem;
+  max-width: 17rem;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: #e2e8f0;
+  background: rgba(7, 20, 13, 0.82);
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  border-radius: 0.35rem;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.pvp-diag__linea b { color: #fde047; font-weight: 700; }
+
+/* El último envío puede traer el error del servidor entero: que no rompa la caja. */
+.pvp-diag__linea--envio {
+  color: #93c5fd;
+  overflow-wrap: anywhere;
+}

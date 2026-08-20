@@ -970,3 +970,68 @@ BEGIN
     PERFORM public._t('el que va unos tics por detrás TAMBIÉN planta', FALSE, SQLERRM);
   END;
 END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 17. NO REUTILIZAR SALAS VIEJAS (migración 24) ==='; END $$;
+
+-- La sospecha principal de por qué los dos jugadores no se veían: cada uno era
+-- devuelto a SU sala vieja, así que creían estar emparejados estando en salas
+-- distintas. Ni se veían las plantas (iban a otra sala) ni coincidían los soles
+-- (dos semillas).
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_vieja UUID; v_r1 JSONB; v_r2 JSONB;
+BEGIN
+  -- Una partida de una prueba anterior, colgada y callada hace rato.
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_vieja := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '6 minutes',
+                               started_at = NOW() - INTERVAL '6 minutes'
+   WHERE id = v_vieja;
+  DELETE FROM public.match_actions WHERE room_id = v_vieja;
+
+  -- Ana busca otra vez. NO debe volver a la sala vieja.
+  PERFORM public._soy(v_a);
+  v_r1 := public.enter_matchmaking('ranked');
+  PERFORM public._t('no se reanuda una partida abandonada',
+                    (v_r1->>'roomId') IS DISTINCT FROM v_vieja::TEXT, v_r1::TEXT);
+  PERFORM public._t('y se queda esperando rival como debe',
+                    (v_r1->>'matched')::BOOLEAN IS FALSE, v_r1::TEXT);
+
+  -- Beto busca: DEBE caer con Ana, no en su propia sala vieja. Es el corazón del
+  -- arreglo.
+  PERFORM public._soy(v_b);
+  v_r2 := public.enter_matchmaking('ranked');
+  PERFORM public._t('los dos caen en la MISMA sala nueva',
+                    (v_r2->>'matched')::BOOLEAN IS TRUE
+                    AND (v_r2->>'roomId') IS DISTINCT FROM v_vieja::TEXT,
+                    v_r2::TEXT);
+
+  -- Y la vieja quedó cerrada, no colgada para siempre.
+  PERFORM public._t('la sala vieja quedó liquidada',
+                    (SELECT settled_at IS NOT NULL FROM public.game_rooms WHERE id = v_vieja),
+                    'sigue sin liquidar');
+END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_r JSONB;
+BEGIN
+  -- Lo contrario también tiene que seguir funcionando: una partida VIVA sí se
+  -- reanuda, para que recargar la página no te haga perder la partida.
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  PERFORM public._soy(v_a); PERFORM public.start_match_clock(v_sala);
+  PERFORM public.submit_match_action(v_sala, 1, 10, 'plant', 'sunflower', 0::SMALLINT, 3::SMALLINT);
+
+  -- Ana recarga y vuelve a buscar: debe volver a SU partida en curso.
+  v_r := public.enter_matchmaking('ranked');
+  PERFORM public._t('una partida viva SÍ se reanuda al recargar',
+                    (v_r->>'roomId')::UUID = v_sala AND (v_r->>'resumed')::BOOLEAN IS TRUE,
+                    v_r::TEXT);
+END $$;

@@ -249,16 +249,41 @@ export default function Battlefield({
   const ultimaAccionRef = useRef<number>(0)
   const aplicadasRef = useRef<Set<number>>(new Set())
 
+  /**
+   * DIAGNÓSTICO DEL PVP
+   *
+   * Se enseña en pantalla, y no en la consola, por un motivo práctico: llevamos
+   * varias rondas diagnosticando a ciegas y pidiendo consultas SQL después de
+   * cada prueba. Con esto, una captura de las dos ventanas dice qué está pasando.
+   *
+   * Sólo aparece en partidas con sala. Cuando el PvP esté estable se puede quitar
+   * o dejar detrás de un interruptor.
+   */
+  const [diag, setDiag] = useState<{
+    enviadas: number
+    recibidas: number
+    ultimoEnvio: string
+    canal: string
+  }>({ enviadas: 0, recibidas: 0, ultimoEnvio: '—', canal: 'conectando…' })
+
   const registrarPlantacion = (carta: PlantId, lane: number, col: number) => {
     if (!roomId) return
     ordenRef.current += 1
+    const enTic = tick + MARGEN_DE_RED_TICS
     void SupabaseService.submitMatchAction(roomId, {
       seq: ordenRef.current,
-      tick: tick + MARGEN_DE_RED_TICS,
+      tick: enTic,
       kind: 'plant',
       plantId: carta,
       lane,
       col,
+    }).then((r) => {
+      setDiag((d) => ({
+        ...d,
+        enviadas: d.enviadas + (r.error ? 0 : 1),
+        // El error del servidor tal cual: es lo que dice POR QUÉ se rechazó.
+        ultimoEnvio: r.error ? `✗ ${r.error}` : `✓ ${carta} @tic ${enTic}`,
+      }))
     })
   }
 
@@ -284,6 +309,7 @@ export default function Battlefield({
       if (a.id > ultimaAccionRef.current) ultimaAccionRef.current = a.id
 
       if (a.kind !== 'plant' || !a.plant_id) return
+      setDiag((d) => ({ ...d, recibidas: d.recibidas + 1 }))
       encolarAccionDelRival({
         tick: a.tick,
         plantId: a.plant_id as PlantId,
@@ -293,6 +319,7 @@ export default function Battlefield({
     }
 
     const dejarDeEscuchar = SupabaseService.subscribeToMatchActions(roomId, aplicar)
+    setDiag((d) => ({ ...d, canal: 'escuchando' }))
 
     // Red de seguridad: al entrar se recoge lo que ya hubiera, y cada 3 s se
     // comprueba si se perdió algún mensaje. Sin esto, una sola acción perdida
@@ -600,6 +627,31 @@ export default function Battlefield({
         nombre={nombres?.rival}
       />
 
+      {/* DIAGNÓSTICO DEL PVP
+          Sólo en partidas con sala. Está en pantalla y no en la consola a
+          propósito: con una captura de las dos ventanas se ve qué pasa, sin tener
+          que buscar en la consola ni ejecutar consultas después de cada prueba.
+
+          Qué mirar:
+            · el TIC de los dos debe ir casi igual (±10). Si uno va muy por
+              delante, el reloj común no se aplicó.
+            · SALA debe ser LA MISMA en las dos ventanas. Si son distintas, no
+              estáis en la misma partida.
+            · «último envío» dice si el servidor aceptó la plantación, y si no,
+              por qué exactamente. */}
+      {roomId && (
+        <div className="pvp-diag">
+          <div className="pvp-diag__linea">
+            <b>SALA</b> {roomId.slice(0, 8)} · <b>TIC</b> {tick}
+          </div>
+          <div className="pvp-diag__linea">
+            <b>enviadas</b> {diag.enviadas} · <b>recibidas</b> {diag.recibidas} ·{' '}
+            {diag.canal}
+          </div>
+          <div className="pvp-diag__linea pvp-diag__linea--envio">{diag.ultimoEnvio}</div>
+        </div>
+      )}
+
       {/* Start Overlay */}
       {gameStatus === 'ready' && !practicePlantId && (
         <div
@@ -655,10 +707,13 @@ export default function Battlefield({
                         digPlant({ lane: lane.id, col })
                       } else {
                         const carta = selectedCard
-                        placePlant(lane.id, col)
-                        // En PvP, además de plantar en local se registra para que
-                        // el rival la aplique en el mismo tic.
-                        registrarPlantacion(carta, lane.id, col)
+                        // SÓLO se registra si aquí de verdad se plantó. Si el clic
+                        // falla (sin soles, en enfriamiento, casilla ocupada) y se
+                        // registrara igual, el rival plantaría algo que en tu
+                        // pantalla no existe y las dos partidas se separarían.
+                        if (placePlant(lane.id, col)) {
+                          registrarPlantacion(carta, lane.id, col)
+                        }
                       }
                     }
                   }}

@@ -304,12 +304,22 @@ export function useGameEngine() {
 
   // Place plant handler
   const placePlant = useCallback(
-    (lane: number, col: number) => {
+    /**
+     * Intenta plantar. Devuelve si lo consiguió.
+     *
+     * Importa porque en PvP la acción sólo se registra en el servidor si aquí SÍ
+     * se plantó. Antes devolvía void y el cliente la registraba igual, así que si
+     * el clic fallaba (sin soles, en enfriamiento, casilla ocupada) el rival
+     * plantaba algo que en tu pantalla no existía: las dos partidas se separaban
+     * en el momento.
+     */
+    (lane: number, col: number): boolean => {
       const state = stateRef.current
+      let plantoBien = false
       const card = state.selectedCard
       const slotIdx = state.selectedSlotIndex
 
-      if (!card || card === 'shovel' || state.status !== 'playing') return
+      if (!card || card === 'shovel' || state.status !== 'playing') return false
 
       let rolls: PlantStatKey[] = getPlantRolls(card)
       let cardLevel = 0
@@ -342,15 +352,15 @@ export function useGameEngine() {
       }
 
       const config = getScaledPlantConfig(card, rolls)
-      if (!config) return
+      if (!config) return false
 
-      if (state.sunBank < config.cost) return
+      if (state.sunBank < config.cost) return false
 
       // Los enfriamientos guardan el TIC en que expiran, no un instante de
       // reloj real: así se pueden reproducir.
       if (!state.isPracticeMode) {
-        if (slotIdx !== null && (state.slotCooldowns[slotIdx] || 0) > state.tick) return
-        if (slotIdx === null && (state.cooldowns[card] || 0) > state.tick) return
+        if (slotIdx !== null && (state.slotCooldowns[slotIdx] || 0) > state.tick) return false
+        if (slotIdx === null && (state.cooldowns[card] || 0) > state.tick) return false
       }
 
       const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
@@ -360,7 +370,7 @@ export function useGameEngine() {
       const isWalkingUnit = config.category === 'melee' || !!config.moveSpeed || card === 'chomper'
       if (!isWalkingUnit) {
         const existing = state.plants.find((p) => p.lane === lane && p.col === col && !p.isWalking)
-        if (existing) return
+        if (existing) return false
       }
 
       // Jalapeño Instant Lane-Clearing Explosion!
@@ -413,7 +423,10 @@ export function useGameEngine() {
         })
 
         forceRender()
-        return
+        // El jalapeño SÍ se plantó: sale por aquí porque su efecto es inmediato y
+        // no deja planta permanente. Devolver false lo habría dejado fuera del
+        // registro y el rival no vería la llamarada.
+        return true
       }
 
       const newPlant: PlantEntity = {
@@ -446,9 +459,11 @@ export function useGameEngine() {
       state.stats.plantsPlaced += 1
       state.selectedCard = null
       state.selectedSlotIndex = null
+      plantoBien = true
 
       soundManager.playSound('plantation', 0.6)
       forceRender()
+      return plantoBien
     },
     [forceRender]
   )
@@ -477,7 +492,7 @@ export function useGameEngine() {
       level?: number
     }) => {
       const state = stateRef.current
-      if (state.status !== 'playing') return
+      if (state.status !== 'playing') return false
       state.pending.push({
         // Nunca en el pasado: si llegó tarde, en el tic siguiente.
         atTick: Math.max(state.tick + 1, accion.tick),
