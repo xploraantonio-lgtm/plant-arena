@@ -792,3 +792,91 @@ BEGIN
   PERFORM public._t('no expone saldos del rival',
                     NOT (v_info->'player2' ? 'gems_balance'), (v_info->'player2')::TEXT);
 END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 15. LOS BARRIDOS SIN CRON (migración 22) ==='; END $$;
+
+-- Este proyecto no tiene pg_cron, así que los tres barridos no se ejecutaban
+-- NUNCA: si alguien cerraba el navegador, su rival esperaba para siempre. Ahora
+-- se disparan cuando alguien los necesita — quien espera ya está preguntando.
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB; v_elo_b INTEGER; v_elo_b2 INTEGER;
+BEGIN
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+
+  -- Beto termina y reporta que ganó él. Ana cerró el navegador y no reporta.
+  PERFORM public._soy(v_b);
+  v_res := public.report_match_result(v_sala, v_b);
+  PERFORM public._t('con un solo reporte la partida sigue abierta',
+                    v_res->>'status' = 'esperando_al_rival', v_res::TEXT);
+
+  -- Beto pregunta y la partida aún no ha vencido el plazo.
+  v_res := public.room_result(v_sala);
+  PERFORM public._t('antes del plazo, la partida no se cierra',
+                    (v_res->>'ended')::BOOLEAN IS FALSE, v_res::TEXT);
+
+  -- Pasan más de 120 segundos sin que nadie plante nada.
+  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '5 minutes' WHERE id = v_sala;
+  DELETE FROM public.match_actions WHERE room_id = v_sala;
+
+  SELECT elo_rating INTO v_elo_b FROM public.profiles WHERE id = v_b;
+
+  -- Beto vuelve a preguntar: ahora sí se cierra, sin cron ninguno.
+  v_res := public.room_result(v_sala);
+  PERFORM public._t('pasado el plazo, preguntar cierra la partida',
+                    (v_res->>'ended')::BOOLEAN IS TRUE, v_res::TEXT);
+  PERFORM public._t('y gana quien sí reportó',
+                    (v_res->>'iWon')::BOOLEAN IS TRUE, v_res::TEXT);
+
+  SELECT elo_rating INTO v_elo_b2 FROM public.profiles WHERE id = v_b;
+  PERFORM public._t('con su ELO de verdad',
+                    v_elo_b2 > v_elo_b, 'antes ' || v_elo_b || ' después ' || v_elo_b2);
+END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB; v_sa NUMERIC; v_sa2 NUMERIC;
+BEGIN
+  -- Si NADIE reportó, no se inventa un ganador y en coliseo se devuelve.
+  UPDATE public.profiles SET gems_balance = 20 WHERE id IN (v_a, v_b);
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 4);
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 4)->>'roomId')::UUID;
+
+  SELECT gems_balance INTO v_sa FROM public.profiles WHERE id = v_a;
+  PERFORM public._t('se cobró la entrada del coliseo', v_sa = 16, 'saldo: ' || v_sa);
+
+  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '5 minutes' WHERE id = v_sala;
+
+  PERFORM public._soy(v_a);
+  v_res := public.room_result(v_sala);
+  PERFORM public._t('sin reportes, la partida queda abandonada',
+                    v_res->>'status' = 'abandoned', v_res::TEXT);
+  PERFORM public._t('y sin ganador', (v_res->>'noWinner')::BOOLEAN IS TRUE, v_res::TEXT);
+
+  SELECT gems_balance INTO v_sa2 FROM public.profiles WHERE id = v_a;
+  PERFORM public._t('con las gemas devueltas', v_sa2 = 20, 'saldo: ' || v_sa2);
+END $$;
+
+DO $$
+DECLARE
+  v_c UUID := '33333333-3333-3333-3333-333333333333';
+  v_sala UUID;
+BEGIN
+  -- Y un tercero no puede usar room_result para cerrar partidas ajenas.
+  SELECT id INTO v_sala FROM public.game_rooms ORDER BY created_at DESC LIMIT 1;
+  PERFORM public._soy(v_c);
+  BEGIN
+    PERFORM public.room_result(v_sala);
+    PERFORM public._t('un tercero no puede cerrar partidas ajenas', FALSE, 'lo dejó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('un tercero no puede cerrar partidas ajenas',
+                      SQLERRM LIKE '%No participas%', SQLERRM);
+  END;
+END $$;
