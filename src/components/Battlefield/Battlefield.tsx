@@ -173,6 +173,7 @@ export default function Battlefield({
     placePlant,
     digPlant,
     encolarAccionDelRival,
+    terminarPorOrdenDelServidor,
   } = useGameEngine()
 
   const { user } = useAuth()
@@ -319,6 +320,64 @@ export default function Battlefield({
       clearInterval(reloj)
     }
   }, [roomId, currentUserId, encolarAccionDelRival])
+
+  // ── EL FINAL LLEGA A LOS DOS LADOS ─────────────────────────────────────────
+  //
+  // Si el rival se rinde o pierde, el servidor liquida la sala. Sin esto tú te
+  // quedabas jugando contra un campo vacío sin saber que ya habías ganado: el
+  // resultado existía en la base y en su pantalla, pero no en la tuya.
+  useEffect(() => {
+    if (!roomId || !currentUserId) return
+    let cerrado = false
+
+    const comprobar = async () => {
+      if (cerrado) return
+      const r = await SupabaseService.roomResult(roomId)
+      if (cerrado || !r || !r.ended) return
+      cerrado = true
+
+      setResultadoServidor({
+        success: true,
+        status: r.noWinner ? 'resultado_en_disputa' : 'liquidada',
+        payout: 0,
+      })
+      // Sin ganador (disputa o abandono sin reportes) se muestra como derrota
+      // pero sin premio: el aviso de arriba explica que no se repartió nada.
+      terminarPorOrdenDelServidor(r.iWon ? 'victory' : 'defeat')
+    }
+
+    const dejarDeEscuchar = SupabaseService.subscribeToRoomEnd(roomId, () => { void comprobar() })
+    // Y se pregunta cada 4 s por si el mensaje de Realtime se perdió. Sin esta red
+    // un mensaje perdido dejaría a alguien peleando contra un campo vacío.
+    const reloj = setInterval(() => { void comprobar() }, 4000)
+
+    return () => {
+      cerrado = true
+      dejarDeEscuchar()
+      clearInterval(reloj)
+    }
+  }, [roomId, currentUserId, terminarPorOrdenDelServidor])
+
+  // ── AVISO AL CERRAR EL NAVEGADOR ───────────────────────────────────────────
+  //
+  // Cerrar la pestaña a mitad de un duelo real cuenta como abandono: el rival
+  // acaba ganando por el barrido del servidor. Conviene avisar antes.
+  //
+  // El navegador NO deja poner un texto propio (se ignora desde hace años por
+  // abuso), así que enseña su mensaje genérico. Lo que importa es que pregunte.
+  useEffect(() => {
+    if (!roomId) return
+    if (gameStatus !== 'playing') return
+
+    const alCerrar = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      // returnValue sigue haciendo falta para navegadores antiguos.
+      e.returnValue = 'Si sales ahora pierdes el duelo.'
+      return e.returnValue
+    }
+    window.addEventListener('beforeunload', alCerrar)
+    return () => window.removeEventListener('beforeunload', alCerrar)
+  }, [roomId, gameStatus])
 
   const hasHandledEndRef = useRef<boolean>(false)
 

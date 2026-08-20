@@ -583,6 +583,70 @@ export const SupabaseService = {
   },
 
   /**
+   * ¿Terminó la partida, y quién ganó?
+   *
+   * Red de seguridad de subscribeToRoomEnd: si el mensaje de Realtime se perdió,
+   * el cliente pregunta y se entera igual. Sin esto, un mensaje perdido dejaría a
+   * un jugador peleando contra un campo vacío para siempre.
+   */
+  async roomResult(roomId: string): Promise<{
+    ended: boolean
+    status?: string
+    winner?: string | null
+    iWon?: boolean
+    noWinner?: boolean
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('room_result', {
+        p_room_id: roomId,
+      })
+      if (error) {
+        logError('roomResult', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('roomResult', e)
+      return null
+    }
+  },
+
+  /**
+   * Escucha el final de la partida.
+   *
+   * Cuando el rival se rinde o pierde, el servidor liquida la sala y esto lo
+   * entrega al instante, para que tu partida termine también en lugar de seguir
+   * contra un campo vacío.
+   *
+   * Devuelve la función para dejar de escuchar; hay que llamarla al salir.
+   */
+  subscribeToRoomEnd(roomId: string, alTerminar: () => void): () => void {
+    if (!isSupabaseConfigured()) return () => {}
+    const canal = supabase
+      .channel(`room_end_${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'game_rooms',
+          filter: `id=eq.${roomId}`,
+        },
+        (payload: any) => {
+          // Sólo interesa la liquidación. La sala se actualiza también al guardar
+          // un reporte, y eso no termina nada todavía.
+          if (payload.new?.settled_at) alTerminar()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(canal)
+    }
+  },
+
+  /**
    * Rendirse en una partida real.
    *
    * No necesita que el rival confirme nada: lo dice quien pierde. El servidor

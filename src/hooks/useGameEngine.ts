@@ -601,6 +601,24 @@ export function useGameEngine() {
     forceRender()
   }
 
+  /**
+   * Termina la partida porque lo dice el SERVIDOR.
+   *
+   * Hace falta para el caso que faltaba: si el rival se rinde o pierde, tú te
+   * quedabas jugando contra un campo vacío sin saber que ya habías ganado. El
+   * resultado existía en la base y en su pantalla, pero no en la tuya.
+   *
+   * No toca la vida de las bases: el marcador que se enseña es el que dice el
+   * servidor, no uno inventado aquí para que cuadre.
+   */
+  const terminarPorOrdenDelServidor = useCallback((resultado: 'victory' | 'defeat') => {
+    const state = stateRef.current
+    if (state.status !== 'playing') return
+    state.status = resultado
+    soundManager.playSound(resultado === 'victory' ? 'level_select' : 'defeat', 0.7)
+    forceRender()
+  }, [forceRender])
+
   return {
     /**
      * El tic actual. Lo necesita la interfaz para pintar cualquier cosa que
@@ -640,5 +658,6 @@ export function useGameEngine() {
     placePlant,
     digPlant,
     encolarAccionDelRival,
+    terminarPorOrdenDelServidor,
   }
 }

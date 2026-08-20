@@ -185,9 +185,29 @@ function App() {
     if (!encontrada) return
     let cancelado = false
     ;(async () => {
-      // gameRoomInfo y no getGameRoom: trae además los nicks de los dos, para
-      // poder poner "Xplora" y "Leonel" en la batalla en lugar de "ÁRBOL MADRE".
-      const sala = await SupabaseService.gameRoomInfo(encontrada.roomId)
+      // gameRoomInfo trae además los nicks de los dos, para poder poner
+      // "Xplora" y "Leonel" en la batalla en lugar de "ÁRBOL MADRE".
+      //
+      // Si esa función no existe todavía en la base (código desplegado antes que
+      // la migración, que ya pasó una vez), se cae a getGameRoom: la partida
+      // arranca igual, sólo sin nombres. Antes esto devolvía al menú, así que un
+      // desfase de despliegue impedía jugar en absoluto — y eso es peor que
+      // jugar sin nicks.
+      const info = await SupabaseService.gameRoomInfo(encontrada.roomId)
+      if (cancelado) return
+
+      const sala = info ?? (await (async () => {
+        const basica = await SupabaseService.getGameRoom(encontrada.roomId)
+        if (!basica) return null
+        return {
+          id: basica.id,
+          mode: basica.mode,
+          seed: basica.seed,
+          iAm: (basica.player1_id === user?.id ? 'p1' : 'p2') as 'p1' | 'p2',
+          player1: { id: basica.player1_id, username: null },
+          player2: { id: basica.player2_id, username: null },
+        }
+      })())
       if (cancelado) return
       if (!sala) {
         // Sin sala no se puede jugar la partida real: se vuelve al menú en lugar
@@ -199,10 +219,13 @@ function App() {
       setSemillaPartida(Number(sala.seed))
       const soyP1 = sala.iAm === 'p1'
       setRivalId(soyP1 ? sala.player2.id : sala.player1.id)
-      setNombresEnPartida({
-        mio: (soyP1 ? sala.player1.username : sala.player2.username) ?? 'Tú',
-        rival: (soyP1 ? sala.player2.username : sala.player1.username) ?? 'Rival',
-      })
+      const miNick = soyP1 ? sala.player1.username : sala.player2.username
+      const suNick = soyP1 ? sala.player2.username : sala.player1.username
+      // Sin nombres (el respaldo de arriba) se dejan las etiquetas de siempre en
+      // lugar de inventarse un "Tú" y un "Rival" que no dicen nada.
+      setNombresEnPartida(
+        miNick && suNick ? { mio: miNick, rival: suNick } : null
+      )
       setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
       setPracticePlantId(null)
       setScreen('battle')
