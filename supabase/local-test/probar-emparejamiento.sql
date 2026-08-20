@@ -36,6 +36,48 @@ CREATE OR REPLACE FUNCTION public._soy(p_uid UUID)
 RETURNS VOID LANGUAGE sql AS $$ SELECT set_config('test.uid', p_uid::TEXT, false)::VOID $$;
 
 
+
+/**
+ * Empareja a dos jugadores y devuelve la sala.
+ *
+ * Desde la migración 28 el emparejamiento va por LOTES: entrar a la cola ya no
+ * empareja a nadie, hay que cumplir la espera. Se envejece la cola en lugar de
+ * esperar los segundos de verdad — el servidor mide contra NOW(), así que es
+ * equivalente y la prueba sigue tardando lo mismo.
+ */
+CREATE OR REPLACE FUNCTION public._emparejar_ya(
+  p_a UUID, p_b UUID, p_mode TEXT, p_bet NUMERIC DEFAULT 0
+) RETURNS UUID LANGUAGE plpgsql AS $ay$
+DECLARE v_r JSONB;
+BEGIN
+  PERFORM public._soy(p_a);
+  PERFORM public.enter_matchmaking(p_mode, p_bet);
+  PERFORM public._soy(p_b);
+  PERFORM public.enter_matchmaking(p_mode, p_bet);
+
+  UPDATE public.matchmaking_queue
+     SET created_at = NOW() - CASE WHEN user_id = p_a
+                                   THEN INTERVAL '11 seconds'
+                                   ELSE INTERVAL '10 seconds' END
+   WHERE user_id IN (p_a, p_b) AND status = 'searching';
+
+  PERFORM public._soy(p_b);
+  v_r := public.poll_matchmaking();
+
+  -- La sala nace con unos segundos de cuenta atrás (migración 28). Aquí se
+  -- adelanta a "ya empezada": la cuenta atrás se comprueba en probar-lotes.sql,
+  -- y en esta prueba sólo haría que las acciones se rechazaran por venir del
+  -- futuro — correcto, pero no es lo que se está midiendo.
+  UPDATE public.game_rooms SET started_at = NOW()
+   WHERE id = (v_r->>'roomId')::UUID;
+
+  RETURN (v_r->>'roomId')::UUID;
+END $ay$;
+
+REVOKE EXECUTE ON FUNCTION public._emparejar_ya(UUID, UUID, TEXT, NUMERIC)
+  FROM anon, authenticated, PUBLIC;
+
+
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$ BEGIN RAISE NOTICE E'\n=== 1. EL REGISTRO CREA EL PERFIL (trigger de la 02) ==='; END $$;
 
@@ -155,10 +197,25 @@ BEGIN
   PERFORM public._t('la primera en buscar se queda esperando',
                     (v_r1->>'matched')::BOOLEAN IS FALSE, v_r1::TEXT);
 
-  -- Beto busca: la encuentra.
+  -- Beto busca. Desde la migración 28 tampoco empareja al instante: nadie lo
+  -- hace. Se espera un lote de unos segundos y se emparejan todos los que estén
+  -- buscando, para que no te toque siempre quien pulsó en el mismo momento que tú.
   PERFORM public._soy(v_b);
   v_r2 := public.enter_matchmaking('ranked');
-  PERFORM public._t('el segundo empareja al momento',
+  PERFORM public._t('el segundo tampoco empareja al instante (lotes, la 28)',
+                    (v_r2->>'matched')::BOOLEAN IS FALSE, v_r2::TEXT);
+
+  -- Se envejece la cola para no esperar los segundos de verdad: el servidor mide
+  -- contra NOW(), así que es equivalente. Ana un segundo por delante, porque
+  -- entró antes: es lo que decide quién es el jugador 1.
+  UPDATE public.matchmaking_queue
+     SET created_at = NOW() - CASE WHEN user_id = v_a
+                                   THEN INTERVAL '11 seconds'
+                                   ELSE INTERVAL '10 seconds' END
+   WHERE user_id IN (v_a, v_b) AND status = 'searching';
+
+  v_r2 := public.poll_matchmaking();
+  PERFORM public._t('cumplida la espera, el lote los empareja',
                     (v_r2->>'matched')::BOOLEAN IS TRUE, v_r2::TEXT);
 
   v_sala := (v_r2->>'roomId')::UUID;
@@ -252,8 +309,7 @@ DECLARE
   v_elo_a INTEGER; v_elo_b INTEGER; v_elo_a2 INTEGER; v_elo_b2 INTEGER;
   v_cofres INTEGER; v_cofres2 INTEGER;
 BEGIN
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('friendly');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('friendly')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'friendly');
   PERFORM public._t('el amistoso también empareja', v_sala IS NOT NULL, 'sin sala');
 
   SELECT elo_rating INTO v_elo_a FROM public.profiles WHERE id = v_a;
@@ -287,8 +343,7 @@ DECLARE
   v_b UUID := '22222222-2222-2222-2222-222222222222';
   v_sala UUID; v_res JSONB; v_elo_a INTEGER; v_elo_a2 INTEGER;
 BEGIN
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
 
   SELECT elo_rating INTO v_elo_a FROM public.profiles WHERE id = v_a;
 
@@ -421,8 +476,7 @@ DECLARE
   v_sala UUID; v_res JSONB;
   v_elo_a INTEGER; v_elo_b INTEGER; v_elo_a2 INTEGER; v_elo_b2 INTEGER;
 BEGIN
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
 
   SELECT elo_rating INTO v_elo_a FROM public.profiles WHERE id = v_a;
   SELECT elo_rating INTO v_elo_b FROM public.profiles WHERE id = v_b;
@@ -529,8 +583,7 @@ DECLARE
 BEGIN
   UPDATE public.profiles SET gems_balance = 20 WHERE id IN (v_a, v_b);
 
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 3);
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 3)->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'colosseum', 3);
   PERFORM public._t('el coliseo empareja a dos con la misma apuesta',
                     v_sala IS NOT NULL, 'no emparejó');
 
@@ -568,8 +621,7 @@ BEGIN
   UPDATE public.profiles SET gems_balance = 20 WHERE id = v_b;
   SELECT colosseum_tickets INTO v_tk_a FROM public.profiles WHERE id = v_a;
 
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 3, TRUE);
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 3)->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'colosseum', 3);
 
   PERFORM public._soy(v_a); PERFORM public.report_match_result(v_sala, v_a);
   PERFORM public._soy(v_b); PERFORM public.report_match_result(v_sala, v_b);
@@ -591,8 +643,7 @@ DECLARE
   v_sala UUID; v_res JSONB; v_n INTEGER; v_acciones JSONB;
 BEGIN
   -- Sala nueva, sin liquidar.
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
 
   -- Una acción normal.
   PERFORM public._soy(v_a);
@@ -705,8 +756,7 @@ DECLARE
   v_b UUID := '22222222-2222-2222-2222-222222222222';
   v_sala UUID; v_res JSONB;
 BEGIN
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
 
   -- La sala se creó hace 4 segundos y el cliente acaba de empezar: su tic va por
   -- 10. Es el caso real.
@@ -739,7 +789,12 @@ BEGIN
   -- por reloj lo rechazaría, y con razón — la simulación no puede ir por delante
   -- del tiempo. (La primera versión de esta prueba no lo tenía en cuenta y fallaba
   -- ella, no el código.)
-  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '30 seconds' WHERE id = v_sala;
+  -- started_at además de created_at: desde la 28 el reloj de la partida sale de
+  -- started_at, así que envejecer sólo la creación dejaba la partida en el tic 0.
+  UPDATE public.game_rooms
+     SET created_at = NOW() - INTERVAL '30 seconds',
+         started_at = NOW() - INTERVAL '30 seconds'
+   WHERE id = v_sala;
 
   PERFORM public._soy(v_a);
   PERFORM public.submit_match_action(v_sala, 2, 400, 'plant', 'peashooter', 0::SMALLINT, 4::SMALLINT);
@@ -778,8 +833,11 @@ DECLARE
   v_b UUID := '22222222-2222-2222-2222-222222222222';
   v_sala UUID; v_info JSONB;
 BEGIN
+  -- La sala sin liquidar DE ANA, no la última de la base: otras pruebas dejan
+  -- salas de otros jugadores y game_room_info contestaría "no participas".
   SELECT id INTO v_sala FROM public.game_rooms
-   WHERE settled_at IS NULL ORDER BY created_at DESC LIMIT 1;
+   WHERE settled_at IS NULL AND (player1_id = v_a OR player2_id = v_a)
+   ORDER BY created_at DESC LIMIT 1;
 
   PERFORM public._soy(v_a);
   v_info := public.game_room_info(v_sala);
@@ -806,8 +864,7 @@ DECLARE
   v_b UUID := '22222222-2222-2222-2222-222222222222';
   v_sala UUID; v_res JSONB; v_elo_b INTEGER; v_elo_b2 INTEGER;
 BEGIN
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
 
   -- Beto termina y reporta que ganó él. Ana cerró el navegador y no reporta.
   PERFORM public._soy(v_b);
@@ -846,8 +903,7 @@ DECLARE
 BEGIN
   -- Si NADIE reportó, no se inventa un ganador y en coliseo se devuelve.
   UPDATE public.profiles SET gems_balance = 20 WHERE id IN (v_a, v_b);
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 4);
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 4)->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'colosseum', 4);
 
   SELECT gems_balance INTO v_sa FROM public.profiles WHERE id = v_a;
   PERFORM public._t('se cobró la entrada del coliseo', v_sa = 16, 'saldo: ' || v_sa);
@@ -876,8 +932,7 @@ DECLARE
   v_sala UUID; v_res JSONB; v_sa2 NUMERIC;
 BEGIN
   UPDATE public.profiles SET gems_balance = 20 WHERE id IN (v_a, v_b);
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 4);
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 4)->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'colosseum', 4);
 
   UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '5 minutes' WHERE id = v_sala;
 
@@ -902,15 +957,16 @@ DECLARE
   v_b UUID := '22222222-2222-2222-2222-222222222222';
   v_sala UUID; v_res JSONB;
 BEGIN
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
 
   -- Beto dice que ganó él y cierra el navegador. Ana sigue jugando y preguntando.
   PERFORM public._soy(v_b);
   PERFORM public.report_match_result(v_sala, v_b);
 
   UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '5 minutes' WHERE id = v_sala;
-  UPDATE public.game_rooms SET p1_last_seen = NOW() WHERE id = v_sala;
+  -- No hace falta estampar la presencia de Ana a mano: room_result marca a quien
+  -- llama antes de mirar el abandono. Hacerlo a mano sobre p1_last_seen era
+  -- además un error si Ana resultaba ser el jugador 2.
 
   PERFORM public._soy(v_a);
   v_res := public.room_result(v_sala);
@@ -950,8 +1006,7 @@ DECLARE
   v_sala UUID;
   v_uno JSONB; v_dos JSONB; v_info JSONB;
 BEGIN
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
 
   -- Ana entra primero: fija el reloj.
   PERFORM public._soy(v_a);
@@ -1001,8 +1056,7 @@ DECLARE
 BEGIN
   -- Y lo que provocaba el síntoma: con relojes alineados, los dos pueden plantar
   -- en tics parecidos sin que a ninguno se le rechace por antiguo.
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
   PERFORM public._soy(v_a); PERFORM public.start_match_clock(v_sala);
 
   -- La partida lleva 20 s andando.
@@ -1040,8 +1094,7 @@ DECLARE
   v_vieja UUID; v_r1 JSONB; v_r2 JSONB;
 BEGIN
   -- Una partida de una prueba anterior, colgada y callada hace rato.
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_vieja := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_vieja := public._emparejar_ya(v_a, v_b, 'ranked');
   UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '6 minutes',
                                started_at = NOW() - INTERVAL '6 minutes'
    WHERE id = v_vieja;
@@ -1059,6 +1112,13 @@ BEGIN
   -- arreglo.
   PERFORM public._soy(v_b);
   v_r2 := public.enter_matchmaking('ranked');
+
+  -- Y cumplen la espera del lote: desde la 28 nadie empareja al entrar.
+  UPDATE public.matchmaking_queue
+     SET created_at = NOW() - INTERVAL '10 seconds'
+   WHERE user_id IN (v_a, v_b) AND status = 'searching';
+  v_r2 := public.poll_matchmaking();
+
   PERFORM public._t('los dos caen en la MISMA sala nueva',
                     (v_r2->>'matched')::BOOLEAN IS TRUE
                     AND (v_r2->>'roomId') IS DISTINCT FROM v_vieja::TEXT,
@@ -1078,8 +1138,7 @@ DECLARE
 BEGIN
   -- Lo contrario también tiene que seguir funcionando: una partida VIVA sí se
   -- reanuda, para que recargar la página no te haga perder la partida.
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
   PERFORM public._soy(v_a); PERFORM public.start_match_clock(v_sala);
   PERFORM public.submit_match_action(v_sala, 1, 10, 'plant', 'sunflower', 0::SMALLINT, 3::SMALLINT);
 
@@ -1111,8 +1170,7 @@ BEGIN
      AND (player1_id IN (v_a, v_b) OR player2_id IN (v_a, v_b));
 
   -- Una partida completa con jugadas de los dos y un ganador.
-  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
-  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  v_sala := public._emparejar_ya(v_a, v_b, 'ranked');
   PERFORM public._soy(v_a); PERFORM public.start_match_clock(v_sala);
   UPDATE public.game_rooms SET started_at = NOW() - INTERVAL '60 seconds' WHERE id = v_sala;
 
@@ -1213,3 +1271,10 @@ BEGIN
   PERFORM public._t('el jugador no puede escribir el código a mano',
                     v_n = 0, 'permisos: ' || v_n);
 END $$;
+
+
+-- Se retiran los ayudantes de la prueba. Si se quedan en la base, el control de
+-- "ninguna función interna es llamable por authenticated" salta por un artefacto
+-- de test en lugar de por un fallo de verdad.
+DROP FUNCTION IF EXISTS public._emparejar_ya(UUID, UUID, TEXT, NUMERIC);
+DROP FUNCTION IF EXISTS public._envejecer_cola(INTEGER);

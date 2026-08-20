@@ -218,6 +218,18 @@ export default function Battlefield({
 
   const [tournamentResult, setTournamentResult] = useState<ActiveTournamentSession | null>(null)
 
+  /**
+   * Segundos que faltan para el tic 1.
+   *
+   * El desfase es negativo mientras la partida no ha empezado: el reloj común
+   * apunta a un instante futuro y los dos clientes lo esperan. Es la cuenta atrás
+   * que sustituye al «uno entra dos segundos antes que el otro».
+   */
+  const segundosParaEmpezar =
+    desfaseDeTics !== null && desfaseDeTics < 0
+      ? Math.ceil((-desfaseDeTics * TICK_MS) / 1000)
+      : 0
+
   const activeArena = useMemo(() => getArenaForElo(userElo), [userElo])
   const activeBgImage = customBgImage || activeArena.bgImage
 
@@ -944,7 +956,13 @@ export default function Battlefield({
       {/* El reloj de la partida y la cuenta atrás hasta la muerte súbita. Sin
           esto el plazo existía pero no se veía, y un plazo que no se ve no se
           puede jugar. */}
-      {gameStatus === 'playing' && <RelojDePartida tick={tick} practica={isPracticeMode} />}
+      {gameStatus === 'playing' && (
+        <RelojDePartida
+          tick={tick}
+          practica={isPracticeMode}
+          arrancaEn={segundosParaEmpezar}
+        />
+      )}
 
       {/* Wave Banner */}
       {waveBanner && (

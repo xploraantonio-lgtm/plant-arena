@@ -82,3 +82,14 @@
   .reloj-partida--subita { animation: none; }
   .reloj-partida__barra > div { transition: none; }
 }
+
+/* La cuenta atrás antes del tic 1. Los dos jugadores la ven a la vez, y por eso
+   la partida empieza igual para los dos. */
+.reloj-partida--arranque {
+  border-color: #93c5fd;
+  color: #dbeafe;
+  background: rgba(8, 26, 52, 0.9);
+}
+
+.reloj-partida--arranque .reloj-partida__titulo { font-size: 15px; letter-spacing: 0.06em; }
+.reloj-partida--arranque .reloj-partida__nota { color: #93c5fd; }

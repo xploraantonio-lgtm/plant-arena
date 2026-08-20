@@ -535,7 +535,7 @@ export default function LandingPage({
               🗺️ Road Map
             </a>
             <a
-              href="https://t.me/"
+              href="https://t.me/PlantaArena"
               target="_blank"
               rel="noreferrer"
               className="landing-btn-secondary"
@@ -1174,7 +1174,7 @@ export default function LandingPage({
             </div>
             <div className="landing-footer__col">
               <h4>{lang === 'es' ? 'Comunidad' : 'Community'}</h4>
-              <a href="https://t.me/" target="_blank" rel="noreferrer">Telegram</a>
+              <a href="https://t.me/PlantaArena" target="_blank" rel="noreferrer">Telegram</a>
               <a href="#hero" onClick={handlePlayClick}>{lang === 'es' ? 'Jugar en Navegador' : 'Play in Browser'}</a>
             </div>
             <div className="landing-footer__col">

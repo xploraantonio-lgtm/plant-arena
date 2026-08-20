@@ -312,6 +312,23 @@ export function useGameEngine() {
     [forceRender]
   )
 
+  /**
+   * ¿Ha empezado ya la partida?
+   *
+   * Con reloj común, la sala nace con la hora de inicio unos segundos en el
+   * FUTURO (migración 28): es la cuenta atrás que hace que los dos jugadores
+   * arranquen a la vez en lugar de que el tic 0 sea «cuando entró el más rápido
+   * en cargar».
+   *
+   * Mientras no llegue esa hora, el bucle no avanza ningún tic y no se puede
+   * jugar. Sin esta comprobación, plantar durante la cuenta atrás mandaría al
+   * servidor una acción con un tic que su reloj todavía no ha alcanzado, y la
+   * rechazaría por venir del futuro.
+   */
+  const haEmpezado = useCallback(() => {
+    return ancoraMsRef.current === null || Date.now() >= ancoraMsRef.current
+  }, [])
+
   // Place plant handler
   const placePlant = useCallback(
     /**
@@ -330,6 +347,10 @@ export function useGameEngine() {
       const slotIdx = state.selectedSlotIndex
 
       if (!card || card === 'shovel' || state.status !== 'playing') return false
+      // Durante la cuenta atrás no se planta: la partida no ha empezado y el
+      // servidor rechazaría la acción por venir de un tic que su reloj todavía no
+      // ha alcanzado.
+      if (!haEmpezado()) return false
 
       let rolls: PlantStatKey[] = getPlantRolls(card)
       let cardLevel = 0
@@ -475,7 +496,7 @@ export function useGameEngine() {
       forceRender()
       return plantoBien
     },
-    [forceRender]
+    [forceRender, haEmpezado]
   )
 
   // Dig plant handler (removes plant by ID or by cell lane & column)

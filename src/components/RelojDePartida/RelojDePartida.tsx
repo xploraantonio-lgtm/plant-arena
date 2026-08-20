@@ -33,10 +33,28 @@ interface Props {
   tick: number
   /** En práctica no hay partida que cerrar, así que no hay reloj. */
   practica?: boolean
+  /**
+   * Segundos que faltan para el tic 1, si la partida aún no ha empezado.
+   *
+   * La sala nace con la hora de arranque unos segundos en el futuro y los DOS
+   * clientes reciben la misma: es lo que hace que empiecen a la vez en lugar de
+   * que el tic 0 sea «cuando entró el más rápido en cargar». Sin enseñarlo, esos
+   * segundos parecen un campo congelado.
+   */
+  arrancaEn?: number
 }
 
-export default function RelojDePartida({ tick, practica }: Props) {
+export default function RelojDePartida({ tick, practica, arrancaEn = 0 }: Props) {
   if (practica) return null
+
+  if (arrancaEn > 0) {
+    return (
+      <div className="reloj-partida reloj-partida--arranque">
+        <span className="reloj-partida__titulo">EMPIEZA EN {arrancaEn}</span>
+        <span className="reloj-partida__nota">los dos a la vez · prepara tu mazo</span>
+      </div>
+    )
+  }
 
   const enMuerteSubita = tick >= TIC_MUERTE_SUBITA
   const faltan = Math.max(0, Math.ceil(((TIC_MUERTE_SUBITA - tick) * TICK_MS) / 1000))
