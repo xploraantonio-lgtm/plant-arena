@@ -100,7 +100,34 @@ export interface EnemyPlantConfig {
 
 export interface EnemyPlantEntity {
   id: string
+  /**
+   * El tipo del catálogo enemigo, para las plantas que pone el bot.
+   *
+   * Sigue existiendo porque el bot planta esos 5 tipos con sus propias
+   * estadísticas. Para las plantas de un RIVAL DE VERDAD se rellena además
+   * plantId, y entonces manda ése.
+   */
   type: EnemyPlantType
+  /**
+   * La carta que plantó el rival, cuando la partida es contra otro jugador.
+   *
+   * Existe porque el rival juega con las mismas 15 plantas que tú, no con los 5
+   * tipos del bot. No hace falta arte nueva: las plantas «enemigas» ya usan los
+   * MISMOS ficheros de sprite que las del jugador (transparentsunflower.png es
+   * el girasol de los dos lados) y el CSS ya las espeja con scaleX(-1). Es la
+   * misma planta al revés.
+   *
+   * Cuando está puesto, las estadísticas salen de getScaledPlantConfig con
+   * statRolls, igual que las del jugador — el rival no puede mandar una carta
+   * mejor de la que tiene porque el mazo lo lee el servidor.
+   */
+  plantId?: PlantId
+  /** Nivel de la carta del rival, para pintar su insignia. */
+  level?: number
+  /** Mejoras de la carta del rival, fijadas al plantarla. */
+  statRolls?: PlantStatKey[]
+  /** Soles que da al morir. Del catálogo enemigo, o del coste de la carta. */
+  rewardSun?: number
   lane: number
   col?: number // 4..7 for static P2 plants
   x: number // percentage across field

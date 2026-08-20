@@ -571,7 +571,14 @@ export default function Battlefield({
 
       {/* Player 2 PC Enemy Plants */}
       {enemyPlants.map((enemy) => {
-        const config = ENEMY_PLANT_CONFIGS[enemy.type]
+        // Si la planta la puso un RIVAL de verdad, trae su plantId y se pinta con
+        // el sprite de esa carta. No hace falta arte nueva: los dos lados ya usan
+        // los mismos ficheros (transparentsunflower.png es el girasol de ambos) y
+        // el CSS de enemy-unit ya los espeja. Es la misma planta al revés.
+        //
+        // Sin plantId es una planta del bot, con su tipo del catálogo enemigo.
+        const cartaDelRival = enemy.plantId ? PLANT_CONFIGS[enemy.plantId] : null
+        const config = cartaDelRival ?? ENEMY_PLANT_CONFIGS[enemy.type]
         const laneConfig = LANES_CONFIG[enemy.lane]
         const hpPct = Math.max(0, (enemy.hp / enemy.maxHp) * 100)
         // frozenUntil es un TIC, no un instante de reloj. Comparado con Date.now()

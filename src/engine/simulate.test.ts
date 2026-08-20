@@ -17,7 +17,8 @@
 // montar React ni de esperar dos veces el mismo resultado.
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
-import { stepTick, createBattleState, type GameState } from './simulate'
+import { stepTick, createBattleState, crearPlantaDelRival, type GameState } from './simulate'
+import { PLANT_CONFIGS } from '../utils/gameConstants'
 import { TICKS_PER_SECOND } from './time'
 
 /** Un minuto y medio de partida: suficiente para varias oleadas y muchas muertes. */
@@ -157,5 +158,77 @@ describe('los efectos aplazados ocurren en su tic, no cuando quiere el navegador
     // acabaría comiéndose la memoria en una partida larga.
     const { state } = jugar(31337, TICS_LARGOS)
     expect(state.pending.length).toBeLessThan(50)
+  })
+})
+
+describe('la planta del rival es la misma carta, al revés', () => {
+  it('lleva las estadísticas de SU carta, no las del catálogo del bot', () => {
+    const state = createBattleState(1)
+    const rival = crearPlantaDelRival(state, 'melonpult', 1, 9)
+
+    expect(rival.plantId).toBe('melonpult')
+    // Lo que importa: la vida y el daño salen de la carta del rival. Si salieran
+    // del catálogo enemigo, el rival jugaría con estadísticas del bot y una carta
+    // mejorada no valdría más que una sin mejorar.
+    const suCarta = PLANT_CONFIGS.melonpult
+    expect(rival.maxHp).toBe(suCarta.maxHp)
+    expect(rival.damage).toBe(suCarta.damage)
+  })
+
+  it('las mejoras del rival cuentan', () => {
+    const state = createBattleState(1)
+    const pelada = crearPlantaDelRival(state, 'peashooter', 0, 8, [])
+    const mejorada = crearPlantaDelRival(state, 'peashooter', 0, 8, ['hp', 'hp', 'damage'])
+
+    expect(mejorada.maxHp).toBeGreaterThan(pelada.maxHp)
+    expect(mejorada.damage).toBeGreaterThan(pelada.damage!)
+  })
+
+  it('las que caminan salen de la base del rival y avanzan hacia la tuya', () => {
+    const state = createBattleState(1)
+    const andarina = crearPlantaDelRival(state, 'chomper', 1, undefined)
+
+    expect(andarina.isWalking).toBe(true)
+    expect(andarina.state).toBe('walking')
+
+    const xInicial = andarina.x
+    state.enemyPlants.push(andarina)
+    for (let i = 0; i < 60; i++) stepTick(state, () => {})
+
+    const viva = state.enemyPlants.find((e) => e.id === andarina.id)
+    expect(viva).toBeDefined()
+    // Hacia la izquierda: hacia tu base.
+    expect(viva!.x).toBeLessThan(xInicial)
+  })
+
+  it('sobrevive al viaje por JSON, como cualquier otra parte del estado', () => {
+    const state = createBattleState(7)
+    state.enemyPlants.push(crearPlantaDelRival(state, 'jalapeno', 2, 7, ['damage']))
+
+    const ida = JSON.parse(JSON.stringify(state))
+    for (let i = 0; i < 30; i++) stepTick(ida, () => {})
+
+    const directo = createBattleState(7)
+    directo.enemyPlants.push(crearPlantaDelRival(directo, 'jalapeno', 2, 7, ['damage']))
+    for (let i = 0; i < 30; i++) stepTick(directo, () => {})
+
+    expect(JSON.stringify(ida)).toBe(JSON.stringify(directo))
+  })
+
+  it('dos partidas con las mismas acciones del rival dan lo mismo', () => {
+    // La razón de todo el trabajo de determinismo: el servidor tiene que poder
+    // recalcular la partida desde el registro de acciones y llegar al mismo sitio.
+    const jugarConRival = () => {
+      const s = createBattleState(4242)
+      for (let i = 0; i < 400; i++) {
+        // El rival planta en tics fijos, como haría el registro de acciones.
+        if (i === 30) s.enemyPlants.push(crearPlantaDelRival(s, 'peashooter', 0, 8))
+        if (i === 90) s.enemyPlants.push(crearPlantaDelRival(s, 'wallnut', 1, 7))
+        if (i === 150) s.enemyPlants.push(crearPlantaDelRival(s, 'chomper', 2, undefined))
+        stepTick(s, () => {})
+      }
+      return JSON.stringify(s)
+    }
+    expect(jugarConRival()).toBe(jugarConRival())
   })
 })

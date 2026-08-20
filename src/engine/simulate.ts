@@ -31,6 +31,7 @@ import type {
   GameStats,
   PlantId,
   EnemyPlantType,
+  PlantStatKey,
 } from '../types/game'
 import {
   PLANT_CONFIGS,
@@ -61,6 +62,79 @@ const enfriamientosACero = (): Record<PlantId, number> =>
     (acc, id) => ({ ...acc, [id]: 0 }),
     {} as Record<PlantId, number>
   )
+
+/**
+ * A qué tipo del catálogo enemigo se parece cada carta.
+ *
+ * El motor usa `type` para dos cosas que no dependen de la carta: si la planta
+ * camina y cómo se comporta al descongelarse. Para la planta de un rival real se
+ * elige el tipo del bot más parecido y las estadísticas de verdad salen de su
+ * carta, no de aquí.
+ */
+function tipoEquivalente(plantId: PlantId): EnemyPlantType {
+  const config = PLANT_CONFIGS[plantId]
+  if (!config) return 'enemy_peashooter'
+  if (plantId === 'sunflower' || plantId === 'twinsunflower') return 'enemy_sunflower'
+  if (config.category === 'defensive') return 'enemy_wallnut'
+  if (config.category === 'melee') return 'enemy_chomper'
+  if (plantId === 'melonpult') return 'enemy_melonpult'
+  return 'enemy_peashooter'
+}
+
+/**
+ * Convierte la carta que plantó el RIVAL en una planta de su lado del campo.
+ *
+ * Es la pieza que faltaba para el PvP. El rival juega con las mismas 15 plantas
+ * que tú, no con los 5 tipos del bot — y no hace falta arte nueva, porque las
+ * plantas de ambos lados ya usan los mismos ficheros de sprite y el CSS ya las
+ * espeja. Es la misma planta al revés.
+ *
+ * Las estadísticas salen de SU carta con SUS mejoras. Eso no se puede falsear
+ * desde el navegador: el mazo lo lee el servidor de plant_instances y viaja en
+ * game_rooms.p2_deck.
+ *
+ * No cobra soles: quien decide si el rival podía pagar es su propio cliente, y el
+ * servidor lo comprueba al recalcular la partida desde el registro de acciones.
+ */
+export function crearPlantaDelRival(
+  state: GameState,
+  plantId: PlantId,
+  lane: number,
+  col: number | undefined,
+  statRolls: PlantStatKey[] = [],
+  level = 0
+): EnemyPlantEntity {
+  const config = getScaledPlantConfig(plantId, statRolls)
+  const camina = config.category === 'melee' || !!config.moveSpeed || plantId === 'chomper'
+
+  // Camina desde su base hacia la tuya; estática, en su columna.
+  const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
+  const x = camina || col === undefined
+    ? BASE_RIGHT_START_X - 1
+    : BASE_LEFT_END_X + col * colWidth + colWidth / 2
+
+  const entidad: EnemyPlantEntity = {
+    id: entityId('rival', state.tick, state.entityCounter++),
+    type: tipoEquivalente(plantId),
+    plantId,
+    level,
+    statRolls,
+    lane,
+    col: camina ? undefined : col,
+    x,
+    hp: config.maxHp,
+    maxHp: config.maxHp,
+    speed: config.moveSpeed ?? 0,
+    damage: config.damage ?? 0,
+    // Al morir devuelve soles proporcionales a lo que costó, no los del tipo del
+    // bot que le tocara por parecido.
+    rewardSun: Math.max(10, Math.round((config.cost ?? 50) / 4)),
+    isWalking: camina,
+    state: camina ? 'walking' : 'idle',
+    lastAttackTime: state.tick,
+  }
+  return entidad
+}
 
 /**
  * El estado con el que arranca una batalla.
@@ -778,7 +852,10 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
       sonar('zombie_fall', 0.4)
       state.stats.enemyPlantsDefeated += 1
       state.stats.score += 100
-      state.sunBank += ENEMY_PLANT_CONFIGS[e.type]?.rewardSun || 25
+      // De la entidad si los trae (planta de un rival real), y si no del
+      // catálogo del bot. Sin esto, matar la planta de un rival daría los soles
+      // del tipo del bot que le tocara por defecto.
+      state.sunBank += e.rewardSun ?? ENEMY_PLANT_CONFIGS[e.type]?.rewardSun ?? 25
       continue
     }
 
@@ -792,9 +869,11 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
       } else {
         // 7 seconds expired! Clear freeze & restore walking state
         e.frozenUntil = undefined
-        if (config.category === 'melee') {
+        // Se recupera la velocidad que YA tenía la entidad, no la del catálogo:
+        // la planta de un rival real tiene la suya, sacada de su carta.
+        if (e.isWalking || config.category === 'melee') {
           e.isWalking = true
-          e.speed = config.speed
+          if (!e.speed) e.speed = config.speed
         }
       }
     }
