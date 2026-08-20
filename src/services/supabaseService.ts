@@ -15,6 +15,50 @@ type MarketplaceRow = Database['public']['Tables']['marketplace_listings']['Row'
 /** Sólo los campos que el jugador puede escribir de su propio perfil. El
  *  servidor revoca el resto a nivel de columna, así que pasar `gems_balance`
  *  aquí fallaría en silencio: mejor que no compile. */
+/**
+ * El panel de referidos tal como lo devuelve my_referrals().
+ *
+ * Se escribe aquí y no en types/database.types.ts porque ese fichero lo genera
+ * Supabase y una RPC que devuelve JSONB llega sin tipo ninguno: sin esto, la
+ * pantalla accedería a campos que nadie comprueba.
+ */
+export interface MisReferidos {
+  codigo: string | null
+  amigos: Array<{
+    nombre: string | null
+    avatar: string | null
+    copas: number
+    valido: boolean
+    oroCobrado: boolean
+    desde: string
+  }>
+  total: number
+  validos: number
+  copasNecesarias: number
+  /** Oro que se puede cobrar ahora mismo. */
+  oroPorCobrar: number
+  amigosSinCobrar: number
+  oroPorAmigo: number
+  metaSobre: { objetivo: number; alcanzada: boolean; cobrada: boolean }
+  metaGemas: {
+    objetivo: number
+    gemas: number
+    alcanzada: boolean
+    cobrada: boolean
+    /** Cuántos jugadores pueden cobrarla en total. */
+    cupo: number
+    quedan: number
+  }
+  temporada: { terminaEn: string; empezoEn: string; segundos: number }
+  miPuesto: number | null
+  /** Referidos válidos de TODOS los jugadores: es lo que decide la meta. */
+  totalGlobal: number
+  metaActual: number | null
+  metaSiguiente: number | null
+  premios: Array<{ meta: number; puesto: number; gemas: number; sobres: number; p2pPct: number }>
+  ranking: Array<{ puesto: number; nombre: string | null; avatar: string | null; validos: number }>
+}
+
 export type EditableProfileFields = Pick<ProfileUpdate, 'username' | 'avatar_id' | 'country'>
 
 /** Las llamadas a Supabase no lanzan excepción: devuelven `{ error }`. Cuando
@@ -957,6 +1001,42 @@ export const SupabaseService = {
     }
   },
 
+  /**
+   * Las ofertas activas con lo que hace falta para pintarlas.
+   *
+   * getMarketplaceListings devuelve las filas crudas, sin la carta ni el nick del
+   * vendedor, así que la pantalla no podía usarlas: por eso seguía leyendo de
+   * localStorage. Esta trae todo junto y sin identificadores de usuario.
+   */
+  async marketplaceBoard(limite = 60): Promise<{
+    comisionPct: number
+    ofertas: Array<{
+      id: string
+      plantId: any
+      nivel: number
+      statRolls: any[]
+      precio: number
+      vendedor: string | null
+      esMia: boolean
+      desde: string
+    }>
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('marketplace_board', {
+        p_limite: limite,
+      })
+      if (error) {
+        logError('marketplaceBoard', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('marketplaceBoard', e)
+      return null
+    }
+  },
+
   /** El comprador es siempre quien llama. Antes se podía forzar a otro jugador
    *  a comprar y así vaciarle el saldo. */
   async buyMarketplaceCard(listingId: string): Promise<{ success: boolean; price_gems?: number; error?: string }> {
@@ -1813,5 +1893,129 @@ export const SupabaseService = {
       logError('syncPackSlots', e)
       return { slots: null, rejected: [] }
     }
+  },  // ---------------------------------------------------------------------------
+  // REFERIDOS
+  //
+  // Antes de la migración 27 esto no existía: el enlace era «/?ref=<nombre>» y
+  // nadie leía ese parámetro, así que un jugador podía repartirlo a cien
+  // personas sin que pasara nada. Ahora el enganche, la cuenta y los premios los
+  // lleva el servidor; el navegador sólo pinta y pulsa.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Engancha al jugador que acaba de entrar con un enlace de invitación.
+   *
+   * Se llama UNA vez por sesión nueva, en cuanto hay sesión. Devuelve el motivo
+   * cuando no se pudo, para poder decírselo en pantalla en lugar de fallar en
+   * silencio (que es lo que hacía el botón de compartir de la 25).
+   */
+  async referralBind(code: string): Promise<{ ok: boolean; motivo?: string }> {
+    if (!isSupabaseConfigured()) return { ok: false, motivo: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('referral_bind', { p_code: code })
+      if (error) {
+        logError('referralBind', error)
+        return { ok: false, motivo: error.message }
+      }
+      return data ?? { ok: false }
+    } catch (e: any) {
+      logError('referralBind', e)
+      return { ok: false, motivo: e?.message }
+    }
+  },
+
+  /** Todo el panel de referidos en una llamada. */
+  async myReferrals(): Promise<MisReferidos | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('my_referrals')
+      if (error) {
+        logError('myReferrals', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('myReferrals', e)
+      return null
+    }
+  },
+
+  /** Cobra las 100 monedas por cada amigo que ya llegó a las copas. */
+  async claimReferralGold(): Promise<{ ok: boolean; oro?: number; amigos?: number; motivo?: string }> {
+    if (!isSupabaseConfigured()) return { ok: false, motivo: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('claim_referral_gold')
+      if (error) {
+        logError('claimReferralGold', error)
+        return { ok: false, motivo: error.message }
+      }
+      return data ?? { ok: false }
+    } catch (e: any) {
+      logError('claimReferralGold', e)
+      return { ok: false, motivo: e?.message }
+    }
+  },
+
+  /** Cobra una de las dos metas: el sobre de los 10 o las gemas de los 25. */
+  async claimReferralReward(kind: 'sobre_10' | 'gemas_25'): Promise<{
+    ok: boolean
+    gemas?: number
+    sobres?: number
+    quedan?: number
+    motivo?: string
+    tienes?: number
+    necesitas?: number
+    /** El cupo global, cuando el motivo es que se agotó. */
+    cupo?: number
+  }> {
+    if (!isSupabaseConfigured()) return { ok: false, motivo: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('claim_referral_reward', {
+        p_kind: kind,
+      })
+      if (error) {
+        logError('claimReferralReward', error)
+        return { ok: false, motivo: error.message }
+      }
+      return data ?? { ok: false }
+    } catch (e: any) {
+      logError('claimReferralReward', e)
+      return { ok: false, motivo: e?.message }
+    }
+  },
+
+  /** El registro del comercio P2P y las temporadas. Sólo admin. */
+  async adminP2pReport(limite = 50): Promise<any | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('admin_p2p_report', {
+        p_limite: limite,
+      })
+      if (error) {
+        logError('adminP2pReport', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('adminP2pReport', e)
+      return null
+    }
+  },
+
+  /** Cierra la temporada ya, sin esperar los 15 días. Sólo admin. */
+  async adminCloseReferralSeason(): Promise<{ cerrada: boolean; total?: number; meta?: number; premiados?: number } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('admin_close_referral_season')
+      if (error) {
+        logError('adminCloseReferralSeason', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('adminCloseReferralSeason', e)
+      return null
+    }
   },
 }
+

@@ -1,0 +1,327 @@
+/* El panel de referidos. Vive dentro del modal de perfil, así que hereda su
+   fondo: aquí sólo se define el contenido. Misma paleta que el resto del juego,
+   ámbar para lo que se cobra y verde para lo que ya cuenta. */
+
+.ref-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: #e2e8f0;
+}
+
+.ref-cargando {
+  margin: 0;
+  padding: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.ref-aviso {
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: 0.5rem;
+  border: 1px solid;
+}
+
+.ref-aviso--bien { color: #bbf7d0; background: rgba(74, 222, 128, 0.14); border-color: rgba(74, 222, 128, 0.5); }
+.ref-aviso--mal  { color: #fecaca; background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.5); }
+
+.ref-bloque {
+  padding: 0.85rem;
+  background: rgba(7, 20, 13, 0.6);
+  border: 1px solid rgba(203, 213, 225, 0.18);
+  border-radius: 0.6rem;
+}
+
+.ref-titulo {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fde047;
+}
+
+.ref-sub {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.ref-sub strong { color: #cbd5e1; }
+
+/* ── El enlace ───────────────────────────────────────────────────────────── */
+
+.ref-enlace {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ref-enlace code {
+  flex: 1 1 14rem;
+  padding: 0.45rem 0.6rem;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #93c5fd;
+  background: rgba(147, 197, 253, 0.1);
+  border-radius: 0.35rem;
+  overflow-wrap: anywhere;
+  /* Se puede seleccionar entero: es el respaldo si el portapapeles se niega. */
+  user-select: all;
+}
+
+.ref-codigo {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.ref-codigo strong {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  color: #fde047;
+}
+
+/* ── Botones ─────────────────────────────────────────────────────────────── */
+
+.ref-btn {
+  padding: 0.45rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(203, 213, 225, 0.32);
+  border-radius: 0.45rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ref-btn--principal {
+  color: #0f2418;
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  border-color: #fbbf24;
+}
+
+.ref-btn--principal:hover:not(:disabled) { background: linear-gradient(180deg, #fef08a, #fbbf24); }
+.ref-btn:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.ref-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Cifras ──────────────────────────────────────────────────────────────── */
+
+.ref-cifras {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.ref-cifra {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.6rem 0.4rem;
+  text-align: center;
+  background: rgba(7, 20, 13, 0.6);
+  border: 1px solid rgba(203, 213, 225, 0.18);
+  border-radius: 0.55rem;
+}
+
+.ref-cifra__num {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #4ade80;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-cifra__num--gris { color: #94a3b8; }
+.ref-cifra__num--oro  { color: #fbbf24; }
+
+.ref-cifra__lbl {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Premios ─────────────────────────────────────────────────────────────── */
+
+.ref-premio {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0;
+  border-top: 1px solid rgba(203, 213, 225, 0.12);
+}
+
+.ref-premio:first-of-type { border-top: none; padding-top: 0.2rem; }
+
+.ref-premio__txt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.ref-premio__txt strong { font-size: 0.85rem; color: #e2e8f0; }
+.ref-premio__txt small  { font-size: 0.72rem; color: #94a3b8; }
+
+/* ── La temporada ────────────────────────────────────────────────────────── */
+
+.ref-reloj {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.6rem;
+  margin-bottom: 0.6rem;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 0.5rem;
+}
+
+.ref-reloj__num {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fde047;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-reloj__lbl {
+  font-size: 0.68rem;
+  color: #fbbf24;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ref-meta { margin-bottom: 0.7rem; }
+
+.ref-meta__barra {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.ref-meta__barra > div {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80, #fde047);
+  transition: width 0.4s ease-out;
+}
+
+.ref-meta__txt {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-tabla th {
+  padding: 0.3rem 0.4rem;
+  text-align: left;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.2);
+}
+
+.ref-tabla td {
+  padding: 0.32rem 0.4rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.08);
+}
+
+.ref-tabla tr:first-child td:first-child { color: #fde047; font-weight: 800; }
+
+/* ── Ranking y amigos ────────────────────────────────────────────────────── */
+
+.ref-ranking {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.ref-ranking li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  font-size: 0.82rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.08);
+}
+
+.ref-ranking__pos {
+  width: 1.4rem;
+  font-weight: 800;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-ranking__nombre { flex: 1; overflow-wrap: anywhere; }
+
+.ref-ranking__num {
+  font-weight: 800;
+  color: #4ade80;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-amigos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.ref-amigos li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.08);
+}
+
+.ref-amigo__nombre { flex: 1 1 6rem; font-weight: 700; overflow-wrap: anywhere; }
+.ref-amigo__copas  { color: #94a3b8; font-variant-numeric: tabular-nums; }
+
+.ref-amigo__estado {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.ref-amigo--ok .ref-amigo__estado { color: #4ade80; }
+
+@media (max-width: 480px) {
+  .ref-cifras { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ref-meta__barra > div { transition: none; }
+}

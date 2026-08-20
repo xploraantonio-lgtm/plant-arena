@@ -148,6 +148,46 @@ function App() {
     }
   }, [profile])
 
+  /**
+   * EL ENLACE DE INVITACIÓN
+   *
+   * Antes esto no existía: el enlace era «/?ref=<nombre>» y nadie leía ese
+   * parámetro, así que repartirlo no servía absolutamente para nada.
+   *
+   * El código se guarda en cuanto se abre la página, ANTES de registrarse: quien
+   * llega por una invitación tiene que crearse la cuenta primero, y en ese viaje
+   * la dirección se pierde. Se queda en sessionStorage hasta que hay sesión, y
+   * entonces se manda una sola vez.
+   *
+   * El servidor decide si vale (referral_bind): no a uno mismo, no dos veces, no
+   * con la cuenta ya vieja y no si ya se pasó de las copas. Aquí sólo se entrega.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const codigo = new URLSearchParams(window.location.search).get('ref')
+    if (codigo) {
+      try {
+        sessionStorage.setItem('pa_ref', codigo)
+      } catch {}
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!profile) return
+    let codigo: string | null = null
+    try {
+      codigo = sessionStorage.getItem('pa_ref')
+    } catch {}
+    if (!codigo) return
+
+    // Se quita antes de llamar: si la llamada falla no se reintenta en bucle, y
+    // si el código no valía tampoco tiene sentido guardarlo.
+    try {
+      sessionStorage.removeItem('pa_ref')
+    } catch {}
+    void SupabaseService.referralBind(codigo)
+  }, [profile])
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false)
 
@@ -818,6 +858,10 @@ function App() {
               onRemovePlantInstance={removePlantInstance}
               onUpdateDeck={updateActiveDeck}
               onBuyVipPass={buyVipPass}
+              // El mercado ya no mueve el inventario en el navegador: lo hace el
+              // servidor. Esto recarga saldo y cartas tras comprar, publicar o
+              // retirar una oferta.
+              onServerChange={() => void refreshFromServer()}
               onBackToMenu={() => setScreen('menu')}
             />
           </div>

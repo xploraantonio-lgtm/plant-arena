@@ -673,3 +673,75 @@
   color: #fff;
 }
 
+
+/* ── Referidos y el reparto del mercado ──────────────────────────────────────
+   El registro del P2P: cifras arriba y tablas anchas debajo. Las tablas van en
+   su propio contenedor con desplazamiento horizontal porque tienen ocho
+   columnas y el panel es un modal: sin eso, el modal entero se desplaza. */
+
+.admin-p2p-cifras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.admin-p2p-cifra {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+}
+
+.admin-p2p-cifra__num {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-p2p-cifra__lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.admin-p2p-tabla-wrap {
+  overflow-x: auto;
+  margin: 8px 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+
+.admin-p2p-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-p2p-tabla th {
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #cbd5e1;
+  background: rgba(0, 0, 0, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.admin-p2p-tabla td {
+  padding: 6px 10px;
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.admin-p2p-tabla tbody tr:hover { background: rgba(255, 255, 255, 0.04); }

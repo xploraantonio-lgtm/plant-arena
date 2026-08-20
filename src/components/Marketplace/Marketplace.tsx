@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { soundManager } from '../../utils/audioManager'
 import {
-  MarketplaceManager,
   getPlantRarityAndMinPrice,
-  type MarketListing,
   type PlantRarity,
 } from '../../utils/marketplaceManager'
+import { SupabaseService } from '../../services/supabaseService'
+import { isSupabaseConfigured } from '../../lib/supabaseClient'
 import type { PlantId, PlantCardInstance } from '../../types/game'
 import { PLANT_CONFIGS, STAT_LABELS, type PlantStatKey } from '../../utils/gameConstants'
-import { UserManager } from '../../utils/userManager'
 import './Marketplace.css'
 
 interface MarketplaceProps {
+  /** Ya no se usa para cobrar: el saldo lo mueve el servidor. Se deja para
+   *  poder avisar de saldo insuficiente antes de llamar. */
   userTokens: number
   hasVipPass: boolean
   plantCopies: Partial<Record<PlantId, number>>
@@ -21,13 +22,43 @@ interface MarketplaceProps {
   unlockedPlants?: PlantId[]
   activeDeck?: PlantId[]
   activeDeckInstances?: string[]
-  onDeductTokens: (amountUsd: number) => boolean
-  onDonatePlant: (plantId: PlantId) => boolean
-  onReceivePlant: (plantId: PlantId, level?: number, statRolls?: PlantStatKey[]) => void
+  /**
+   * Estos cinco movían el inventario y el saldo EN EL NAVEGADOR. Ya no se usan:
+   * comprar, publicar y retirar los hace el servidor, que es el único que sabe
+   * de quién es cada carta. Se mantienen en la interfaz del componente para no
+   * tocar App.tsx, y el prefijo _ dice que están de más.
+   */
+  onDeductTokens?: (amountUsd: number) => boolean
+  onDonatePlant?: (plantId: PlantId) => boolean
+  onReceivePlant?: (plantId: PlantId, level?: number, statRolls?: PlantStatKey[]) => void
   onRemovePlantInstance?: (instanceId: string) => boolean
   onUpdateDeck?: (plantIds: PlantId[], instanceIds?: string[]) => void
+  /** Para recargar el inventario y el saldo del servidor tras una operación. */
+  onServerChange?: () => void
   onBuyVipPass: () => Promise<{ success: boolean; error?: string }>
   onBackToMenu: () => void
+}
+
+/**
+ * Una oferta tal como la devuelve marketplace_board().
+ *
+ * Antes esta pantalla leía las ofertas de localStorage y cobraba en dólares de
+ * mentira: las RPC de comprar, publicar y cancelar existían desde la primera
+ * migración y NADIE las llamaba. O sea que ni el vendedor cobraba de verdad ni
+ * la comisión del 10 % se aplicaba a nada, porque no había ventas reales.
+ *
+ * Ahora el mercado es del servidor: los precios van en GEMAS, el saldo lo mueve
+ * buy_marketplace_card y cada venta deja su fila en el registro del panel.
+ */
+interface OfertaDelMercado {
+  id: string
+  plantId: PlantId
+  nivel: number
+  statRolls: PlantStatKey[]
+  precio: number
+  vendedor: string | null
+  esMia: boolean
+  desde: string
 }
 
 interface MarketModalDialog {
@@ -50,19 +81,22 @@ export default function Marketplace({
   unlockedPlants,
   activeDeck = [],
   activeDeckInstances = [],
-  onDeductTokens,
-  onDonatePlant,
-  onReceivePlant,
-  onRemovePlantInstance,
-  onUpdateDeck,
+  onDeductTokens: _onDeductTokens,
+  onDonatePlant: _onDonatePlant,
+  onReceivePlant: _onReceivePlant,
+  onRemovePlantInstance: _onRemovePlantInstance,
+  onUpdateDeck: _onUpdateDeck,
+  onServerChange,
   onBuyVipPass,
   onBackToMenu,
 }: MarketplaceProps) {
   const [activeTab, setActiveTab] = useState<'browse' | 'sell'>('browse')
-  const [listings, setListings] = useState<MarketListing[]>(() => MarketplaceManager.getListings())
+  const [listings, setListings] = useState<OfertaDelMercado[]>([])
+  /** La comisión la manda el servidor: así el número no vive duplicado aquí. */
+  const [comisionPct, setComisionPct] = useState<number>(10)
+  const [cargando, setCargando] = useState(true)
   const [activeDialog, setActiveDialog] = useState<MarketModalDialog | null>(null)
 
-  const playerName = UserManager.getProfile().name || 'Guerrero'
 
   // Build the list of all individual card builds/instances from Mi Jardín
   const gardenCards = useMemo(() => {
@@ -136,12 +170,12 @@ export default function Marketplace({
   const selectedInstance = gardenCards.find((c) => c.instanceId === selectedInstanceId) || gardenCards[0]
 
   const currentMinPrice = selectedInstance ? selectedInstance.minPrice : 5
-  const [sellPriceUsd, setSellPriceUsd] = useState<number>(currentMinPrice)
+  const [sellPriceGems, setSellPriceGems] = useState<number>(currentMinPrice)
 
   // Ensure sellPrice is at least the minimum allowed for that rarity
   useEffect(() => {
     if (selectedInstance) {
-      setSellPriceUsd((prev) => Math.max(selectedInstance.minPrice, prev))
+      setSellPriceGems((prev) => Math.max(selectedInstance.minPrice, prev))
     }
   }, [selectedInstance?.instanceId, selectedInstance?.minPrice])
 
@@ -173,13 +207,22 @@ export default function Marketplace({
     })
   }
 
-  const refreshListings = () => {
-    setListings(MarketplaceManager.getListings())
+  const refreshListings = async () => {
+    const tablero = await SupabaseService.marketplaceBoard(60)
+    if (tablero) {
+      setListings(tablero.ofertas)
+      setComisionPct(Number(tablero.comisionPct ?? 10))
+    }
+    setCargando(false)
   }
 
   useEffect(() => {
-    refreshListings()
+    void refreshListings()
   }, [])
+
+  // Sin servidor no hay mercado. Antes había una versión en localStorage y eso
+  // era peor que nada: cada jugador veía sus propias ofertas inventadas.
+  const sinServidor = !isSupabaseConfigured()
 
   // Helper to format rolls in clean pills
   const formatStatRolls = (rolls: PlantStatKey[] = []) => {
@@ -205,39 +248,50 @@ export default function Marketplace({
     })
   }
 
-  // BUY A LISTING (Disponible para todos los usuarios)
-  const handleBuyListing = (listing: MarketListing) => {
-    if (listing.sellerName === playerName) {
+  // COMPRAR UNA OFERTA
+  //
+  // El saldo lo mueve el servidor, no esta pantalla: cobra al comprador, paga al
+  // vendedor su 90 %, reparte el trozo del ranking de referidos y apunta la venta
+  // en el registro. Aquí sólo se pide y se recarga.
+  const handleBuyListing = (item: OfertaDelMercado) => {
+    if (item.esMia) {
       showModalAlert('OFERTA PROPIA', 'No puedes comprar tu propia oferta puesta en el mercado.', '⚠️', 'warning')
       return
     }
-    if (userTokens < listing.priceUsd) {
-      showModalAlert('SALDO INSUFICIENTE', `Saldo insuficiente ($${listing.priceUsd.toFixed(2)} USD requeridos).\nRecarga saldo en la Tienda o en el banco.`, '⚠️', 'warning')
+    if (userTokens < item.precio) {
+      showModalAlert(
+        'GEMAS INSUFICIENTES',
+        `Necesitas ${item.precio} 💎 y tienes ${userTokens}. Recarga en la Tienda.`,
+        '⚠️',
+        'warning'
+      )
       return
     }
+    const nombre = PLANT_CONFIGS[item.plantId]?.name || item.plantId
 
     showModalConfirm(
       'CONFIRMAR COMPRA',
-      `¿Deseas comprar "${listing.plantName}" (Nivel ${listing.level}) por $${listing.priceUsd.toFixed(2)} USD?`,
+      `¿Deseas comprar "${nombre}" (Nivel ${item.nivel}) por ${item.precio} 💎 gemas?`,
       '🛒',
-      () => {
-        const deducted = onDeductTokens(listing.priceUsd)
-        if (!deducted) return
-
-        const bought = MarketplaceManager.buyListing(listing.id)
-        if (bought) {
-          onReceivePlant(bought.plantId, bought.level, bought.statRolls)
-          soundManager.playSound('victory', 1)
-          showModalAlert(
-            '¡COMPRA EXITOSA!',
-            `Has adquirido una instancia de "${bought.plantName}" (Nivel ${bought.level}) por $${bought.priceUsd.toFixed(2)} USD.\nSe ha añadido como una nueva carta a tu inventario de Mi Jardín.`,
-            '🎉',
-            'success'
-          )
-          refreshListings()
+      async () => {
+        const r = await SupabaseService.buyMarketplaceCard(item.id)
+        if (!r.success) {
+          showModalAlert('NO SE PUDO COMPRAR', r.error || 'La carta ya no está disponible.', '⚠️', 'error')
+          await refreshListings()
+          return
         }
+        soundManager.playSound('victory', 1)
+        showModalAlert(
+          '¡COMPRA EXITOSA!',
+          `Has adquirido "${nombre}" (Nivel ${item.nivel}) por ${item.precio} 💎.
+Ya está en tu Jardín.`,
+          '🎉',
+          'success'
+        )
+        await refreshListings()
+        onServerChange?.()
       },
-      `COMPRAR ($${listing.priceUsd.toFixed(2)} USD)`,
+      `COMPRAR (${item.precio} 💎)`,
       'CANCELAR'
     )
   }
@@ -261,10 +315,23 @@ export default function Marketplace({
       return
     }
 
-    if (sellPriceUsd < currentMinPrice) {
+    if (sellPriceGems < currentMinPrice) {
       showModalAlert(
         'PRECIO INFERIOR AL MÍNIMO',
-        `El precio mínimo de venta para plantas ${selectedInstance.rarity} es de $${currentMinPrice}.00 USD.\nPor favor asigna un precio de $${currentMinPrice}.00 USD o superior.`,
+        `El precio mínimo de venta para plantas ${selectedInstance.rarity} es de ${currentMinPrice} 💎 gemas.`,
+        '⚠️',
+        'warning'
+      )
+      return
+    }
+
+    // Las cartas base no son instancias del servidor: no tienen fila propia en
+    // plant_instances y por tanto no se pueden vender. Se dice aquí en lugar de
+    // dejar que el servidor conteste «no eres el propietario», que no explica nada.
+    if (!/^[0-9a-f-]{36}$/i.test(selectedInstance.instanceId)) {
+      showModalAlert(
+        'ESTA CARTA NO SE PUEDE VENDER',
+        'Es una carta base del juego, no una instancia de tu inventario. Vende cartas obtenidas en sobres o cofres.',
         '⚠️',
         'warning'
       )
@@ -272,78 +339,68 @@ export default function Marketplace({
     }
 
     const pConfig = PLANT_CONFIGS[selectedInstance.plantId]
+    const comision = Math.round(sellPriceGems * comisionPct) / 100
+    const neto = sellPriceGems - comision
 
     showModalConfirm(
       'PUBLICAR OFERTA EN EL MERCADO',
-      `¿Confirmas poner en venta "${pConfig.name}" (Nivel ${selectedInstance.level}) por $${sellPriceUsd.toFixed(2)} USD?\n\n⚠️ NOTA: Esta carta se retirará de tu Jardín y de tu Mazo de Batalla mientras esté publicada en el mercado.`,
+      `¿Confirmas poner en venta "${pConfig.name}" (Nivel ${selectedInstance.level}) por ${sellPriceGems} 💎?
+
+` +
+        `El comprador paga ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct} % (${comision} 💎) y tú recibes ${neto} 💎.
+
+` +
+        '⚠️ La carta se retira de tu Jardín y de tu Mazo mientras esté publicada.',
       '🏷️',
-      () => {
-        // 1. Remove instance from player inventory
-        if (onRemovePlantInstance) {
-          onRemovePlantInstance(selectedInstance.instanceId)
-        } else {
-          onDonatePlant(selectedInstance.plantId)
+      async () => {
+        // El servidor mueve la carta: la marca en venta y la saca del mazo. Esta
+        // pantalla ya no toca el inventario — cuando lo hacía, una publicación
+        // fallida dejaba la carta perdida en el navegador.
+        const r = await SupabaseService.listMarketplaceCard(selectedInstance.instanceId, sellPriceGems)
+        if (!r.success) {
+          showModalAlert('NO SE PUDO PUBLICAR', r.error || 'Inténtalo de nuevo.', '⚠️', 'error')
+          return
         }
-
-        // 2. Un-equip from battle deck if in deck
-        if (activeDeck && onUpdateDeck) {
-          const nextDeck = activeDeck.filter((_, idx) => {
-            if (activeDeckInstances && activeDeckInstances[idx] === selectedInstance.instanceId) {
-              return false
-            }
-            return true
-          })
-          const nextInstIds = activeDeckInstances
-            ? activeDeckInstances.filter((id) => id !== selectedInstance.instanceId)
-            : undefined
-          onUpdateDeck(nextDeck, nextInstIds)
-        }
-
-        // 3. Create listing
-        MarketplaceManager.createListing(
-          playerName,
-          selectedInstance.plantId,
-          pConfig.name,
-          pConfig.packetActive || pConfig.icon,
-          selectedInstance.level,
-          selectedInstance.statRolls,
-          sellPriceUsd
-        )
 
         soundManager.playSound('plantation', 0.9)
         showModalAlert(
           '¡OFERTA PUBLICADA EN EL MERCADO!',
-          `"${pConfig.name}" (Nivel ${selectedInstance.level}) ha sido publicada exitosamente por $${sellPriceUsd.toFixed(2)} USD.\nLa carta permanecerá en venta y no podrá usarse en batalla hasta que sea vendida o retires la oferta.`,
+          `"${pConfig.name}" (Nivel ${selectedInstance.level}) está en venta por ${sellPriceGems} 💎.
+Recibirás ${neto} 💎 cuando se venda.`,
           '🏷️',
           'success'
         )
         setActiveTab('browse')
-        refreshListings()
+        await refreshListings()
+        onServerChange?.()
       },
-      `SÍ, VENDER ($${sellPriceUsd.toFixed(2)} USD)`,
+      `SÍ, VENDER (${sellPriceGems} 💎)`,
       'CANCELAR'
     )
   }
 
-  // CANCEL MY LISTING
-  const handleCancelListing = (listing: MarketListing) => {
+  // RETIRAR MI OFERTA
+  const handleCancelListing = (item: OfertaDelMercado) => {
+    const nombre = PLANT_CONFIGS[item.plantId]?.name || item.plantId
     showModalConfirm(
       'RETIRAR OFERTA DEL MERCADO',
-      `¿Deseas retirar "${listing.plantName}" del mercado y recuperarla en tu Jardín para volver a usarla en batalla?`,
+      `¿Deseas retirar "${nombre}" del mercado y recuperarla en tu Jardín?`,
       '📦',
-      () => {
-        const canceled = MarketplaceManager.cancelListing(listing.id, playerName)
-        if (canceled) {
-          onReceivePlant(listing.plantId, listing.level, listing.statRolls)
-          soundManager.playSound('plantation', 0.8)
-          showModalAlert(
-            'OFERTA RETIRADA',
-            `Has retirado la oferta de "${listing.plantName}" del mercado. La carta ha vuelto a tu Jardín y ya está disponible para equipar.`,
-            '📦',
-            'info'
-          )
-          refreshListings()
+      async () => {
+        const r = await SupabaseService.cancelMarketplaceListing(item.id)
+        if (!r.success) {
+          showModalAlert('NO SE PUDO RETIRAR', r.error || 'Inténtalo de nuevo.', '⚠️', 'error')
+          return
         }
+        soundManager.playSound('plantation', 0.8)
+        showModalAlert(
+          'OFERTA RETIRADA',
+          `"${nombre}" ha vuelto a tu Jardín y ya se puede equipar.`,
+          '📦',
+          'info'
+        )
+        await refreshListings()
+        onServerChange?.()
       },
       'RETIRAR Y RECUPERAR',
       'MANTENER EN VENTA'
@@ -388,7 +445,7 @@ export default function Marketplace({
       ) : (
         <div className="market-vip-active-banner">
           <span className="market-vip-badge">👑 PASE VIP ACTIVO — VENTA Y COMPRA HABILITADAS</span>
-          <span>Puedes comprar y vender cartas libremente con saldo real ($USD).</span>
+          <span>Compra y vende cartas con gemas. El mercado se queda un {comisionPct} % de cada venta.</span>
         </div>
       )}
 
@@ -443,34 +500,43 @@ export default function Marketplace({
       {/* TAB 1: BROWSE LISTINGS */}
       {activeTab === 'browse' && (
         <div className="market-listings-grid">
-          {listings.length === 0 ? (
+          {sinServidor ? (
+            <div className="market-empty-state">
+              <span>
+                🔌 El mercado necesita conexión con el servidor: es él quien mueve
+                las gemas y las cartas. Vuelve a entrar cuando haya conexión.
+              </span>
+            </div>
+          ) : cargando ? (
+            <div className="market-empty-state"><span>Cargando ofertas…</span></div>
+          ) : listings.length === 0 ? (
             <div className="market-empty-state">
               <span>🛒 No hay ofertas en el mercado en este momento. ¡Sé el primero en vender una carta!</span>
             </div>
           ) : (
             listings.map((item) => {
-              const isMine = item.sellerName === playerName
+              const isMine = item.esMia
               const plantDef = PLANT_CONFIGS[item.plantId]
-              const itemIcon = plantDef?.packetActive || plantDef?.icon || item.plantIcon
+              const itemIcon = plantDef?.packetActive || plantDef?.icon
               const rInfo = getPlantRarityAndMinPrice(item.plantId)
               return (
                 <div key={item.id} className="market-item-card">
                   {/* Card Header */}
                   <div className="market-item-card__header">
                     <span className="market-item-level-tag">
-                      {item.level > 0 ? `⭐ LVL ${item.level}` : '🌱 BASE'}
+                      {item.nivel > 0 ? `⭐ LVL ${item.nivel}` : '🌱 BASE'}
                     </span>
                     <span className="market-item-rarity-badge" style={{ color: rInfo.color, borderColor: rInfo.color }}>
                       {rInfo.rarity}
                     </span>
-                    <span className="market-item-seller">👤 {isMine ? 'TÚ' : item.sellerName}</span>
+                    <span className="market-item-seller">👤 {isMine ? 'TÚ' : item.vendedor ?? 'Jugador'}</span>
                   </div>
 
                   {/* Image and Name */}
                   <div className="market-item-card__img-wrap">
-                    <img src={itemIcon} alt={plantDef?.name || item.plantName} className="market-item-icon" />
+                    <img src={itemIcon} alt={plantDef?.name || item.plantId} className="market-item-icon" />
                   </div>
-                  <h4 className="market-item-name">{plantDef?.name || item.plantName}</h4>
+                  <h4 className="market-item-name">{plantDef?.name || item.plantId}</h4>
 
                   {/* Stat Rolls Pills */}
                   <div className="market-item-stats-box">
@@ -485,7 +551,7 @@ export default function Marketplace({
                   <div className="market-item-card__footer">
                     <div className="market-item-price-box">
                       <span className="market-price-label">PRECIO</span>
-                      <span className="market-price-val">${item.priceUsd.toFixed(2)} USD</span>
+                      <span className="market-price-val">{item.precio} 💎</span>
                     </div>
 
                     {isMine ? (
@@ -602,7 +668,7 @@ export default function Marketplace({
                       className="market-rarity-pill"
                       style={{ color: selectedInstance.rarityColor, borderColor: selectedInstance.rarityColor }}
                     >
-                      {selectedInstance.rarity} (Mín ${selectedInstance.minPrice} USD)
+                      {selectedInstance.rarity} (Mín {selectedInstance.minPrice} 💎)
                     </span>
                   </div>
 
@@ -633,38 +699,39 @@ export default function Marketplace({
                   {/* Price Setting with Steppers */}
                   <div className="market-price-input-group">
                     <label>
-                      Precio de Venta ($USD) — <span style={{ color: '#fde047' }}>Mínimo: ${selectedInstance.minPrice}.00 USD</span>
+                      Precio de Venta (💎 gemas) —{' '}
+                      <span style={{ color: '#fde047' }}>Mínimo: {selectedInstance.minPrice} 💎</span>
                     </label>
                     <div className="market-price-stepper-wrap">
                       <button
                         type="button"
                         className="market-stepper-btn"
-                        disabled={sellPriceUsd <= selectedInstance.minPrice}
-                        onClick={() => setSellPriceUsd((p) => Math.max(selectedInstance.minPrice, p - 1))}
-                        title="Disminuir $1"
+                        disabled={sellPriceGems <= selectedInstance.minPrice}
+                        onClick={() => setSellPriceGems((p) => Math.max(selectedInstance.minPrice, p - 1))}
+                        title="Bajar 1 gema"
                       >
                         -
                       </button>
 
                       <div className="market-price-input-wrap">
-                        <span>$</span>
+                        <span>💎</span>
                         <input
                           type="number"
                           step="1"
                           min={selectedInstance.minPrice}
                           max="999"
-                          value={sellPriceUsd}
-                          onChange={(e) => setSellPriceUsd(Math.max(0, Number(e.target.value)))}
+                          value={sellPriceGems}
+                          onChange={(e) => setSellPriceGems(Math.max(0, Number(e.target.value)))}
                           required
                         />
-                        <span>USD</span>
+                        <span>gemas</span>
                       </div>
 
                       <button
                         type="button"
                         className="market-stepper-btn"
-                        onClick={() => setSellPriceUsd((p) => p + 1)}
-                        title="Aumentar $1"
+                        onClick={() => setSellPriceGems((p) => p + 1)}
+                        title="Subir 1 gema"
                       >
                         +
                       </button>
@@ -675,21 +742,21 @@ export default function Marketplace({
                       <button
                         type="button"
                         className="market-shortcut-btn"
-                        onClick={() => setSellPriceUsd(selectedInstance.minPrice)}
+                        onClick={() => setSellPriceGems(selectedInstance.minPrice)}
                       >
                         MÍN (${selectedInstance.minPrice})
                       </button>
                       <button
                         type="button"
                         className="market-shortcut-btn"
-                        onClick={() => setSellPriceUsd((p) => p + 5)}
+                        onClick={() => setSellPriceGems((p) => p + 5)}
                       >
                         +$5
                       </button>
                       <button
                         type="button"
                         className="market-shortcut-btn"
-                        onClick={() => setSellPriceUsd((p) => p + 10)}
+                        onClick={() => setSellPriceGems((p) => p + 10)}
                       >
                         +$10
                       </button>
@@ -698,13 +765,13 @@ export default function Marketplace({
 
                   <button
                     type="submit"
-                    disabled={!hasVipPass || sellPriceUsd < selectedInstance.minPrice}
+                    disabled={!hasVipPass || sellPriceGems < selectedInstance.minPrice}
                     className={`market-publish-btn ${!hasVipPass ? 'market-publish-btn--locked' : ''}`}
                     title={!hasVipPass ? 'Activa el Pase VIP para vender tus plantas en el mercado' : undefined}
                   >
                     {!hasVipPass
                       ? '🔒 REQUIERE PASE VIP PARA VENDER'
-                      : `🏷️ PUBLICAR EN EL MERCADO POR $${sellPriceUsd.toFixed(2)} USD`}
+                      : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes ${sellPriceGems - Math.round(sellPriceGems * comisionPct) / 100} 💎`}
                   </button>
 
                   {!hasVipPass && (

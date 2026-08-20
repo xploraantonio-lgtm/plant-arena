@@ -42,7 +42,15 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'tournaments' | 'seasons' | 'players' | 'rewards' | 'code'>('tournaments')
+  const [activeTab, setActiveTab] = useState<'tournaments' | 'seasons' | 'players' | 'rewards' | 'code' | 'referidos'>('tournaments')
+  /**
+   * El registro del comercio P2P y las temporadas de referidos.
+   *
+   * Sin esto no había forma de auditar la comisión: «cuánto se ha llevado el
+   * proyecto» habría que reconstruirlo sumando transacciones sueltas, y el 3 %
+   * que va a un jugador no se podría comprobar en absoluto.
+   */
+  const [p2pReport, setP2pReport] = useState<any | null>(null)
 
   // ── Minijuego del código secreto ──────────────────────────────────────────
   // El secreto lo genera el servidor y no vuelve en ninguna respuesta, así que
@@ -566,7 +574,137 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
           >
             🔐 Código Secreto ({codeRounds.filter((r) => r.status === 'open').length > 0 ? 'ronda activa' : 'sin ronda'})
           </button>
+          <button
+            type="button"
+            className={`admin-tab-btn ${activeTab === 'referidos' ? 'admin-tab-btn--active' : ''}`}
+            onClick={() => {
+              setActiveTab('referidos')
+              void SupabaseService.adminP2pReport(50).then(setP2pReport)
+            }}
+          >
+            🔗 Referidos y Mercado
+          </button>
         </div>
+
+        {/* TAB 6: REFERIDOS Y EL REPARTO DEL MERCADO */}
+        {activeTab === 'referidos' && (
+          <div className="admin-content-section">
+            <h3>🔗 Comisión del mercado P2P</h3>
+
+            {!p2pReport ? (
+              <p className="admin-card-desc">Cargando el registro…</p>
+            ) : (
+              <>
+                {/* El reparto nace apagado y se enciende cuando una temporada
+                    llega a la meta de 300 y asigna esos puestos. Decirlo aquí
+                    evita el «¿por qué el top 1 no cobra nada?». */}
+                <p className="admin-card-desc">
+                  Comisión <strong>{p2pReport.porcentajes?.comision ?? 10} %</strong> de cada
+                  venta. Reparto al ranking de referidos:{' '}
+                  <strong>{p2pReport.repartoActivo ? 'ENCENDIDO' : 'apagado'}</strong>
+                  {' '}— 1.º {p2pReport.porcentajes?.top1 ?? 3} % y 2.º{' '}
+                  {p2pReport.porcentajes?.top2 ?? 1} % del precio. Se enciende al
+                  cerrarse una temporada que alcance la meta de 300 referidos.
+                </p>
+
+                <div className="admin-p2p-cifras">
+                  <div className="admin-p2p-cifra">
+                    <span className="admin-p2p-cifra__num">{p2pReport.totales?.ventas ?? 0}</span>
+                    <span className="admin-p2p-cifra__lbl">Ventas</span>
+                  </div>
+                  <div className="admin-p2p-cifra">
+                    <span className="admin-p2p-cifra__num">{p2pReport.totales?.volumen ?? 0} 💎</span>
+                    <span className="admin-p2p-cifra__lbl">Volumen</span>
+                  </div>
+                  <div className="admin-p2p-cifra">
+                    <span className="admin-p2p-cifra__num">{p2pReport.totales?.alProyecto ?? 0} 💎</span>
+                    <span className="admin-p2p-cifra__lbl">Al proyecto</span>
+                  </div>
+                  <div className="admin-p2p-cifra">
+                    <span className="admin-p2p-cifra__num">
+                      {(Number(p2pReport.totales?.aTop1 ?? 0) + Number(p2pReport.totales?.aTop2 ?? 0)).toFixed(2)} 💎
+                    </span>
+                    <span className="admin-p2p-cifra__lbl">Repartido al ranking</span>
+                  </div>
+                </div>
+
+                <h3>📋 Últimas ventas</h3>
+                <div className="admin-p2p-tabla-wrap">
+                  <table className="admin-p2p-tabla">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th><th>Vendedor</th><th>Comprador</th>
+                        <th>Precio</th><th>Comisión</th>
+                        <th>1.º</th><th>2.º</th><th>Proyecto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(p2pReport.ventas ?? []).length === 0 ? (
+                        <tr><td colSpan={8}>Todavía no hay ventas registradas.</td></tr>
+                      ) : (
+                        (p2pReport.ventas ?? []).map((v: any, i: number) => (
+                          <tr key={i}>
+                            <td>{new Date(v.fecha).toLocaleString()}</td>
+                            <td>{v.vendedor ?? '—'}</td>
+                            <td>{v.comprador ?? '—'}</td>
+                            <td>{v.precio}</td>
+                            <td>{v.comision}</td>
+                            <td>{v.top1 ? `${v.top1}: ${v.top1Gemas}` : '—'}</td>
+                            <td>{v.top2 ? `${v.top2}: ${v.top2Gemas}` : '—'}</td>
+                            <td>{v.proyecto}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <h3>🏆 Temporadas de referidos</h3>
+                <div className="admin-p2p-tabla-wrap">
+                  <table className="admin-p2p-tabla">
+                    <thead>
+                      <tr>
+                        <th>Empezó</th><th>Termina</th><th>Estado</th>
+                        <th>Válidos</th><th>Meta</th><th>1.º del P2P</th><th>2.º del P2P</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(p2pReport.temporadas ?? []).map((t: any, i: number) => (
+                        <tr key={i}>
+                          <td>{new Date(t.empezo).toLocaleDateString()}</td>
+                          <td>{new Date(t.termina).toLocaleString()}</td>
+                          <td>{t.estado === 'open' ? '🟢 abierta' : 'cerrada'}</td>
+                          <td>{t.validos ?? '—'}</td>
+                          <td>{t.meta ?? '—'}</td>
+                          <td>{t.top1 ?? '—'}</td>
+                          <td>{t.top2 ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Cerrar a mano usa exactamente el mismo código que el contador,
+                    así que lo que se prueba es lo que va a pasar de verdad. */}
+                <button
+                  type="button"
+                  className="admin-action-btn--red"
+                  onClick={async () => {
+                    const r = await SupabaseService.adminCloseReferralSeason()
+                    setStatusNotice(
+                      r?.cerrada
+                        ? `Temporada cerrada: ${r.total} referidos válidos, meta ${r.meta ?? 'ninguna'}, ${r.premiados ?? 0} premiados.`
+                        : 'No había temporada que cerrar.'
+                    )
+                    void SupabaseService.adminP2pReport(50).then(setP2pReport)
+                  }}
+                >
+                  ⏭️ Cerrar la temporada YA y repartir premios
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* TAB 4: CÓDIGO SECRETO POR RONDAS */}
         {activeTab === 'code' && (() => {

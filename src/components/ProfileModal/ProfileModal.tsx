@@ -10,6 +10,7 @@ import { soundManager } from '../../utils/audioManager'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import type { PlantId } from '../../types/game'
+import PanelDeReferidos from '../Referidos/PanelDeReferidos'
 import './ProfileModal.css'
 
 interface ProfileModalProps {
@@ -40,7 +41,6 @@ export default function ProfileModal({
   const [isEditingNick, setIsEditingNick] = useState(false)
   const [nickInput, setNickInput] = useState(profile.name)
   const [isCompressing, setIsCompressing] = useState(false)
-  const [copiedLink, setCopiedLink] = useState(false)
 
   // Deposit state
   const [depositAmount, setDepositAmount] = useState<number>(10)
@@ -145,15 +145,6 @@ export default function ProfileModal({
     e.preventDefault()
     soundManager.playSound('click', 0.6)
     showFeedback('Los retiros todavía no están disponibles.', 'error')
-  }
-
-  // Copy Referral Link
-  const handleCopyRefLink = () => {
-    const refUrl = `${window.location.origin}/?ref=${profile.name}`
-    navigator.clipboard.writeText(refUrl)
-    setCopiedLink(true)
-    soundManager.playSound('click', 0.6)
-    setTimeout(() => setCopiedLink(false), 2500)
   }
 
   const transactions: UserTransaction[] = UserManager.getTransactions()
@@ -535,58 +526,14 @@ export default function ProfileModal({
           </form>
         )}
 
-        {/* TAB 4: REFERIDOS */}
+        {/* TAB 4: REFERIDOS
+            Lo que había aquí era un decorado: el enlace apuntaba a
+            «/?ref=<nombre>», que nadie leía, y los contadores eran ceros de
+            localStorage. Ahora todo lo cuenta y lo paga el servidor, y vive en su
+            propio componente en lugar de dentro de este modal de mil líneas. */}
         {activeTab === 'referrals' && (
           <div className="profile-tab-body">
-            <div className="profile-section-title">
-              <span>👥 PROGRAMA DE REFERIDOS PLANT ARENA</span>
-              <small>Invita a tus amigos y gana $1.00 USD por cada amigo que alcance 500 copas ELO.</small>
-            </div>
-
-            {/* Referral Link Copy Bar */}
-            <div className="profile-ref-link-card">
-              <div className="profile-ref-link-info">
-                <span className="profile-ref-lbl">TU ENLACE DE INVITACIÓN:</span>
-                <span className="profile-ref-url">
-                  {window.location.origin}/?ref={profile.name}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="profile-ref-copy-btn"
-                onClick={handleCopyRefLink}
-              >
-                {copiedLink ? '✓ COPIADO' : '📋 COPIAR'}
-              </button>
-            </div>
-
-            {/* Referral Stats Summary */}
-            <div className="profile-stats-grid" style={{ margin: '14px 0' }}>
-              <div className="profile-stat-box">
-                <span className="profile-stat-val" style={{ color: '#38bdf8' }}>{profile.totalReferred}</span>
-                <span className="profile-stat-lbl">Amigos Invitados</span>
-              </div>
-              <div className="profile-stat-box">
-                <span className="profile-stat-val" style={{ color: '#4ade80' }}>
-                  ${profile.totalReferralBonusUsd.toFixed(2)} USD
-                </span>
-                <span className="profile-stat-lbl">Bonos Ganados</span>
-              </div>
-              <div className="profile-stat-box">
-                <span className="profile-stat-val" style={{ color: '#fbbf24' }}>{profile.referralCode}</span>
-                <span className="profile-stat-lbl">Código de Creador</span>
-              </div>
-            </div>
-
-            {/* Rules */}
-            <div className="profile-ref-rules">
-              <h4>¿Cómo funciona?</h4>
-              <ul>
-                <li>📤 <strong>1. Comparte tu enlace:</strong> Envía tu link a tus amigos de Discord, Telegram o WhatsApp.</li>
-                <li>⚔️ <strong>2. Ellos juegan:</strong> Cuando tu amigo se registra y alcanza 500 copas ELO en la Arena...</li>
-                <li>💎 <strong>3. Recompensa Automática:</strong> Recibes <strong>+$1.00 USD</strong> directo a tu saldo y un Sobre Básico verde.</li>
-              </ul>
-            </div>
+            <PanelDeReferidos />
           </div>
         )}
 
