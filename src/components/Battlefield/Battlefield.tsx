@@ -6,7 +6,6 @@ import { useAuth } from '../../hooks/useAuth'
 import { SupabaseService } from '../../services/supabaseService'
 import {
   PLANT_CONFIGS,
-  ENEMY_PLANT_CONFIGS,
   LANES_CONFIG,
   BASE_LEFT_END_X,
   FIELD_WIDTH_PCT,
@@ -765,9 +764,9 @@ export default function Battlefield({
         // los mismos ficheros (transparentsunflower.png es el girasol de ambos) y
         // el CSS de enemy-unit ya los espeja. Es la misma planta al revés.
         //
-        // Sin plantId es una planta del bot, con su tipo del catálogo enemigo.
-        const cartaDelRival = enemy.plantId ? PLANT_CONFIGS[enemy.plantId] : null
-        const config = cartaDelRival ?? ENEMY_PLANT_CONFIGS[enemy.type]
+        // Ya no hay catálogo enemigo: las plantas de los dos lados son la misma
+        // cosa y salen del mismo sitio. El bot también planta cartas de verdad.
+        const config = PLANT_CONFIGS[enemy.plantId]
         const laneConfig = LANES_CONFIG[enemy.lane]
         const hpPct = Math.max(0, (enemy.hp / enemy.maxHp) * 100)
         // frozenUntil es un TIC, no un instante de reloj. Comparado con Date.now()
@@ -793,7 +792,7 @@ export default function Battlefield({
             </div>
             <img
               className={`enemy-unit__sprite ${
-                enemy.type === 'enemy_melonpult' ? 'enemy-unit__sprite--melon' : ''
+                enemy.plantId === 'melonpult' ? 'enemy-unit__sprite--melon' : ''
               } ${isFrozen ? 'enemy-unit__sprite--frozen' : ''}`}
               src={config.sprite}
               alt={config.name}

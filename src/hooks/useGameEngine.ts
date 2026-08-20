@@ -22,7 +22,6 @@ import { TICK_MS, MAX_TICKS_PER_FRAME, msToTicks } from '../engine/time'
 import { stepTick, createBattleState, type GameState } from '../engine/simulate'
 import type {
   PlantEntity,
-  EnemyPlantEntity,
   PlantId,
 } from '../types/game'
 import {
@@ -176,22 +175,25 @@ export function useGameEngine() {
     const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
 
     // Create 3 static target dummies in cols 7, 8, 9 across the 3 lanes
-    const dummies: EnemyPlantEntity[] = [0, 1, 2].map((lane) => {
+    // Los muñecos de prácticas son plantas normales, como todo lo demás desde
+    // que los dos lados comparten una sola rama de código: un muro sin daño que
+    // aguanta para poder probar.
+    const dummies: PlantEntity[] = [0, 1, 2].map((lane) => {
       const targetCol = 8
       const cellCenterX = BASE_LEFT_END_X + targetCol * colWidth + colWidth / 2
       return {
         id: `dummy-${lane}`,
-        type: 'enemy_wallnut',
+        plantId: 'wallnut' as PlantId,
+        statRolls: [],
         lane,
         col: targetCol,
         x: cellCenterX,
         hp: 850,
         maxHp: 850,
-        speed: 0,
         damage: 0,
         isWalking: false,
-        state: 'idle',
-        lastAttackTime: 0,
+        state: 'idle' as const,
+        lastActionTime: 0,
       }
     })
 

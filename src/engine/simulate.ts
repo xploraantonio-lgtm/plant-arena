@@ -24,18 +24,15 @@ import { createRng, nextFloat, nextInt, chance, entityId, type Rng } from './rng
 import { TICK_SECONDS, msToTicks } from './time'
 import type {
   PlantEntity,
-  EnemyPlantEntity,
   ProjectileEntity,
   SunEntity,
   GameStatus,
   GameStats,
   PlantId,
-  EnemyPlantType,
   PlantStatKey,
 } from '../types/game'
 import {
   PLANT_CONFIGS,
-  ENEMY_PLANT_CONFIGS,
   INITIAL_SUN,
   INITIAL_BASE_HP,
   SUN_VALUE,
@@ -63,23 +60,10 @@ const enfriamientosACero = (): Record<PlantId, number> =>
     {} as Record<PlantId, number>
   )
 
-/**
- * A qué tipo del catálogo enemigo se parece cada carta.
- *
- * El motor usa `type` para dos cosas que no dependen de la carta: si la planta
- * camina y cómo se comporta al descongelarse. Para la planta de un rival real se
- * elige el tipo del bot más parecido y las estadísticas de verdad salen de su
- * carta, no de aquí.
- */
-function tipoEquivalente(plantId: PlantId): EnemyPlantType {
-  const config = PLANT_CONFIGS[plantId]
-  if (!config) return 'enemy_peashooter'
-  if (plantId === 'sunflower' || plantId === 'twinsunflower') return 'enemy_sunflower'
-  if (config.category === 'defensive') return 'enemy_wallnut'
-  if (config.category === 'melee') return 'enemy_chomper'
-  if (plantId === 'melonpult') return 'enemy_melonpult'
-  return 'enemy_peashooter'
-}
+// tipoEquivalente se eliminó junto con el catálogo enemigo: ya no hay dos
+// catálogos que traducir. El rival juega con las mismas cartas que tú y el motor
+// las trata con la misma rama de código.
+
 
 /**
  * Convierte la carta que plantó el RIVAL en una planta de su lado del campo.
@@ -103,7 +87,7 @@ export function crearPlantaDelRival(
   col: number | undefined,
   statRolls: PlantStatKey[] = [],
   level = 0
-): EnemyPlantEntity {
+): PlantEntity {
   const config = getScaledPlantConfig(plantId, statRolls)
   const camina = config.category === 'melee' || !!config.moveSpeed || plantId === 'chomper'
 
@@ -113,9 +97,8 @@ export function crearPlantaDelRival(
     ? BASE_RIGHT_START_X - 1
     : BASE_LEFT_END_X + col * colWidth + colWidth / 2
 
-  const entidad: EnemyPlantEntity = {
+  const entidad: PlantEntity = {
     id: entityId('rival', state.tick, state.entityCounter++),
-    type: tipoEquivalente(plantId),
     plantId,
     level,
     statRolls,
@@ -124,14 +107,12 @@ export function crearPlantaDelRival(
     x,
     hp: config.maxHp,
     maxHp: config.maxHp,
-    speed: config.moveSpeed ?? 0,
     damage: config.damage ?? 0,
-    // Al morir devuelve soles proporcionales a lo que costó, no los del tipo del
-    // bot que le tocara por parecido.
-    rewardSun: Math.max(10, Math.round((config.cost ?? 50) / 4)),
+    attackSpeedMs: config.attackSpeedMs,
+    moveSpeed: config.moveSpeed,
     isWalking: camina,
     state: camina ? 'walking' : 'idle',
-    lastAttackTime: state.tick,
+    lastActionTime: state.tick,
   }
   return entidad
 }
@@ -283,7 +264,16 @@ export interface GameState {
   sunBank: number
   p2SunBank: number
   plants: PlantEntity[]
-  enemyPlants: EnemyPlantEntity[]
+  /**
+   * Las plantas del otro lado.
+   *
+   * Son PlantEntity, igual que las tuyas, y eso es el arreglo del PvP: antes
+   * eran EnemyPlantEntity, un tipo aparte con su propio catálogo, y por eso la
+   * misma carta se comportaba distinto según en qué pantalla estuviera. Ahora hay
+   * un solo tipo y una sola rama de código; la única diferencia entre los dos
+   * lados es el sentido en que avanzan.
+   */
+  enemyPlants: PlantEntity[]
   projectiles: ProjectileEntity[]
   suns: SunEntity[]
   selectedCard: PlantId | 'shovel' | null
@@ -316,6 +306,395 @@ export interface GameState {
  * recalcular la partida, dos jugadores ven lo mismo, y una repetición reproduce
  * lo ocurrido.
  */
+/**
+ * Un lado del campo.
+ *
+ * Es todo lo que cambia entre jugar de p1 o de p2. Que sea tan poco es el punto:
+ * si hubiera más, volveríamos a tener dos juegos distintos.
+ */
+interface Lado {
+  equipo: 'p1' | 'p2'
+  /** Hacia dónde avanzan sus plantas: +1 a la derecha, −1 a la izquierda. */
+  sentido: 1 | -1
+  /** El equipo al que apuntan sus proyectiles. */
+  objetivo: 'p1' | 'p2'
+}
+
+const LADO_P1: Lado = { equipo: 'p1', sentido: 1, objetivo: 'p2' }
+const LADO_P2: Lado = { equipo: 'p2', sentido: -1, objetivo: 'p1' }
+
+/** Las plantas de un lado. */
+function propias(state: GameState, lado: Lado): PlantEntity[] {
+  return lado.equipo === 'p1' ? state.plants : state.enemyPlants
+}
+
+/** Las del otro. */
+function ajenas(state: GameState, lado: Lado): PlantEntity[] {
+  return lado.equipo === 'p1' ? state.enemyPlants : state.plants
+}
+
+function guardarPropias(state: GameState, lado: Lado, lista: PlantEntity[]): void {
+  if (lado.equipo === 'p1') state.plants = lista
+  else state.enemyPlants = lista
+}
+
+/** La X de la base a la que este lado ataca. */
+function baseRivalX(lado: Lado): number {
+  return lado.equipo === 'p1' ? BASE_RIGHT_START_X : BASE_LEFT_END_X
+}
+
+/** Resta vida a la base del equipo indicado. */
+function dañarBase(state: GameState, equipo: 'p1' | 'p2', cuanto: number): void {
+  if (equipo === 'p1') state.p1BaseHp = Math.max(0, state.p1BaseHp - cuanto)
+  else state.p2BaseHp = Math.max(0, state.p2BaseHp - cuanto)
+}
+
+/** Suma soles al banco del equipo indicado. */
+function sumarSoles(state: GameState, equipo: 'p1' | 'p2', cuanto: number): void {
+  if (equipo === 'p1') state.sunBank += cuanto
+  else state.p2SunBank += cuanto
+}
+
+/**
+ * ¿Está esa planta delante de ésta, dentro del alcance?
+ *
+ * "Delante" depende del sentido, y es la única asimetría real entre los dos
+ * lados. Multiplicar por el sentido la resuelve sin duplicar la condición.
+ */
+function estaDelante(planta: PlantEntity, otra: PlantEntity, alcance: number, sentido: 1 | -1): boolean {
+  const d = (otra.x - planta.x) * sentido
+  return d >= 0 && d <= alcance
+}
+
+/** ¿Llegó a la base rival? */
+function llegoALaBase(planta: PlantEntity, lado: Lado): boolean {
+  return (planta.x - baseRivalX(lado)) * lado.sentido >= -1
+}
+
+/**
+ * Un tic de todas las plantas de un lado.
+ *
+ * Se llama dos veces por tic, una por equipo. Todo lo que hay dentro sale de la
+ * carta (getScaledPlantConfig) y del sentido del lado, así que la misma planta
+ * hace lo mismo esté donde esté.
+ */
+function procesarLado(state: GameState, lado: Lado, dt: number, sonar: SonarFn): void {
+  const misPlantas = propias(state, lado)
+  const susPlantas = ajenas(state, lado)
+  const siguientes: PlantEntity[] = []
+
+  for (const planta of misPlantas) {
+    // ── MUERTA: recompensa a quien la mató ────────────────────────────────────
+    if (planta.hp <= 0) {
+      sonar('zombie_fall', 0.4)
+      const quienMato = lado.equipo === 'p1' ? 'p2' : 'p1'
+      const config = getScaledPlantConfig(planta.plantId, planta.statRolls ?? [])
+      sumarSoles(state, quienMato, Math.max(10, Math.round((config.cost ?? 50) / 4)))
+      // Las estadísticas son del jugador local, que siempre es p1.
+      if (lado.equipo === 'p2') {
+        state.stats.enemyPlantsDefeated += 1
+        state.stats.score += 100
+      }
+      continue
+    }
+
+    const config = getScaledPlantConfig(planta.plantId, planta.statRolls ?? [])
+
+    // ── CONGELADA ─────────────────────────────────────────────────────────────
+    if (planta.frozenUntil !== undefined) {
+      if (state.tick < planta.frozenUntil) {
+        siguientes.push(planta)
+        continue
+      }
+      planta.frozenUntil = undefined
+    }
+
+    // ── GIRASOL ───────────────────────────────────────────────────────────────
+    if (planta.plantId === 'sunflower' || planta.plantId === 'twinsunflower') {
+      if (state.tick - planta.lastActionTime > msToTicks(6000)) {
+        planta.lastActionTime = state.tick
+        const cuantos = planta.plantId === 'twinsunflower' ? 2 : 1
+
+        if (lado.equipo === 'p1') {
+          // Los tuyos caen al campo y los recoges tú pulsando.
+          for (let i = 0; i < cuantos; i++) {
+            state.suns.push({
+              id: entityId('sun-flower', state.tick, state.entityCounter++),
+              x: planta.x + (nextFloat(state.rng) * 6 - 3),
+              y: 20 + planta.lane * 20 + 5,
+              targetY: 20 + planta.lane * 20 + 10,
+              value: SUN_VALUE,
+              createdAt: state.tick,
+            })
+          }
+        } else {
+          // Los del rival van directos a su banco: sus soles los recoge él en SU
+          // pantalla, y aquí no se pueden pulsar. La cantidad y el ritmo son los
+          // mismos, que es lo que importa para que el juego sea el mismo.
+          sumarSoles(state, 'p2', cuantos * SUN_VALUE)
+        }
+      }
+    }
+
+    // ── PATATA MINA ───────────────────────────────────────────────────────────
+    if (planta.plantId === 'squash') {
+      const tiempoDeArmado = state.isPracticeMode ? 4000 : 12000
+      const transcurrido = state.tick - planta.lastActionTime
+
+      if (!planta.isArmed) {
+        if (transcurrido >= msToTicks(tiempoDeArmado)) {
+          planta.isArmed = true
+          sonar('pea_hit', 0.8)
+        }
+      } else {
+        const pisada = susPlantas.find(
+          (a) => a.lane === planta.lane && Math.abs(a.x - planta.x) <= 4.5 && a.hp > 0
+        )
+        if (pisada) {
+          for (const a of susPlantas) {
+            if (a.lane === planta.lane && Math.abs(a.x - planta.x) <= 5.5 && a.hp > 0) {
+              a.hp -= config.damage || 1800
+            }
+          }
+          sonar('pea_hit', 1.0)
+          planta.hp = 0
+        }
+      }
+    }
+
+    // ── LECHUGA DE HIELO ──────────────────────────────────────────────────────
+    if (planta.plantId === 'iceberglettuce' && !planta.isArmed) {
+      planta.isArmed = true
+      planta.spriteOverride = '/game-assets/plants/iceberglettuce_burst.png'
+      sonar('pea_hit', 1.0)
+
+      const hasta = state.tick + msToTicks(7000)
+      for (const a of susPlantas) a.frozenUntil = hasta
+
+      state.pending.push({
+        atTick: state.tick + msToTicks(2000),
+        kind: 'iceberg_fade',
+        plantId: planta.id,
+      })
+    }
+
+    // ── ALOE ──────────────────────────────────────────────────────────────────
+    if (planta.plantId === 'aloe') {
+      const cada = config.attackSpeedMs || 2500
+      const cuanto = config.damage || 60
+
+      if (state.tick - planta.lastActionTime > msToTicks(cada)) {
+        planta.lastActionTime = state.tick
+        const herida = misPlantas.find(
+          (a) => a.id !== planta.id && a.lane === planta.lane && a.hp < a.maxHp && a.hp > 0
+        )
+        if (herida) {
+          herida.hp = Math.min(herida.maxHp, herida.hp + cuanto)
+          herida.isHealingFx = true
+          sonar('plantation', 0.6)
+          state.pending.push({
+            atTick: state.tick + msToTicks(1500),
+            kind: 'clear_heal_fx',
+            plantId: herida.id,
+          })
+        }
+      }
+    }
+
+    // ── DISPARO A DISTANCIA ───────────────────────────────────────────────────
+    if (config.category === 'ranged') {
+      if (state.tick - planta.lastActionTime > msToTicks(config.attackSpeedMs || 1200)) {
+        planta.lastActionTime = state.tick
+
+        const tipo =
+          planta.plantId === 'melonpult' ? 'melon'
+          : planta.plantId === 'chomper' ? 'needle'
+          : 'pea'
+
+        const velocidad = tipo === 'melon' ? 22 : tipo === 'needle' ? 34 : 32
+        const salidaX = planta.x + 2 * lado.sentido
+
+        if (planta.plantId === 'threepeater') {
+          for (const carril of [planta.lane - 1, planta.lane, planta.lane + 1].filter((l) => l >= 0 && l <= 2)) {
+            state.projectiles.push({
+              id: entityId(`proj-${lado.equipo}-3p-${carril}`, state.tick, state.entityCounter++),
+              type: 'pea',
+              targetTeam: lado.objetivo,
+              lane: carril,
+              x: salidaX,
+              y: 20 + carril * 19.33 + 7,
+              speed: 32,
+              damage: config.damage || 25,
+            })
+          }
+        } else {
+          state.projectiles.push({
+            id: entityId(`proj-${lado.equipo}`, state.tick, state.entityCounter++),
+            type: tipo,
+            targetTeam: lado.objetivo,
+            lane: planta.lane,
+            x: salidaX,
+            y: 20 + planta.lane * 19.33 + 7,
+            speed: velocidad,
+            damage: config.damage || 25,
+            isSplash: tipo === 'melon',
+          })
+        }
+        sonar('pea_shoot', 0.4)
+
+        if (planta.plantId === 'repeater') {
+          // El segundo guisante sale 180 ms después. Se forma AHORA y se encola
+          // para su tic: si se formara al ejecutarse, la posición ya podría haber
+          // cambiado y el identificador saldría de otro tic.
+          state.pending.push({
+            atTick: state.tick + msToTicks(180),
+            kind: 'spawn_projectile',
+            projectile: {
+              id: entityId(`proj-${lado.equipo}-rep`, state.tick, state.entityCounter++),
+              type: 'pea',
+              targetTeam: lado.objetivo,
+              lane: planta.lane,
+              x: salidaX,
+              y: 20 + planta.lane * 19.33 + 7,
+              speed: 32,
+              damage: config.damage || 25,
+            },
+          })
+        }
+      }
+    }
+
+    // ── LAS QUE CAMINAN ───────────────────────────────────────────────────────
+    if (planta.isWalking) {
+      if (planta.plantId === 'garlic') {
+        // El ajo salta y machaca.
+        if (planta.isSmashing) {
+          planta.state = 'attacking'
+          if (state.tick - (planta.smashStartTime || 0) >= msToTicks(600)) {
+            for (const a of susPlantas) {
+              if (a.lane === planta.lane && Math.abs(a.x - planta.x) <= 5.5 && a.hp > 0) {
+                a.hp -= config.damage || 600
+              }
+            }
+            sonar('pea_hit', 0.9)
+            planta.hp = 0
+          }
+        } else {
+          const cerca = susPlantas.some(
+            (a) => a.lane === planta.lane && Math.abs(a.x - planta.x) <= 4.8 && a.hp > 0
+          )
+          if (cerca) {
+            planta.isSmashing = true
+            planta.smashStartTime = state.tick
+            planta.state = 'attacking'
+            sonar('pea_hit', 0.7)
+          } else {
+            planta.state = 'walking'
+            planta.x += (config.moveSpeed || 6.0) * dt * lado.sentido
+            if (llegoALaBase(planta, lado)) {
+              dañarBase(state, lado.objetivo, 150)
+              sonar('pea_hit', 0.8)
+              planta.hp = 0
+            }
+          }
+        }
+      } else {
+        const enfrente = susPlantas.find(
+          (a) => a.lane === planta.lane && estaDelante(planta, a, 3.8, lado.sentido) && a.hp > 0
+        )
+
+        if (enfrente) {
+          planta.state = 'attacking'
+          if (state.tick - planta.lastActionTime >= msToTicks(config.attackSpeedMs || 600)) {
+            planta.lastActionTime = state.tick
+            enfrente.hp -= config.damage || 90
+            sonar('pea_hit', 0.5)
+          }
+        } else {
+          planta.state = 'walking'
+          planta.x += (config.moveSpeed || 4.5) * dt * lado.sentido
+          if (llegoALaBase(planta, lado)) {
+            dañarBase(state, lado.objetivo, 40)
+            sonar('pea_hit', 0.6)
+            planta.hp = 0
+          }
+        }
+      }
+    } else {
+      // ── LAS ESTÁTICAS CUERPO A CUERPO ──────────────────────────────────────
+      // Sólo las que no son a distancia: un lanzaguisantes ya disparó arriba.
+      if (config.category !== 'ranged') {
+        const pegada = susPlantas.find(
+          (a) => a.lane === planta.lane && estaDelante(planta, a, 3.0, lado.sentido) && a.hp > 0
+        )
+        if (pegada) {
+          planta.state = 'attacking'
+          pegada.hp -= (config.damage || 0) * dt
+        } else {
+          planta.state = 'idle'
+        }
+      }
+    }
+
+    if (planta.hp > 0) siguientes.push(planta)
+  }
+
+  guardarPropias(state, lado, siguientes)
+}
+
+/**
+ * Un tic de todos los proyectiles.
+ *
+ * Antes esto tenía dos ramas y no eran iguales: los que iban hacia el rival
+ * hacían daño en área y los que venían hacia ti no, así que su melón no
+ * salpicaba en tu pantalla. Ahora el sentido sale del equipo al que apunta y el
+ * resto es común.
+ */
+function moverProyectiles(state: GameState, dt: number, sonar: SonarFn): void {
+  const siguientes: ProjectileEntity[] = []
+
+  for (const proy of state.projectiles) {
+    const sentido: 1 | -1 = proy.targetTeam === 'p2' ? 1 : -1
+    const blancos = proy.targetTeam === 'p2' ? state.enemyPlants : state.plants
+    const baseX = proy.targetTeam === 'p2' ? BASE_RIGHT_START_X : BASE_LEFT_END_X
+
+    proy.x += proy.speed * dt * sentido
+    let impacto = false
+
+    for (const objetivo of blancos) {
+      if (objetivo.lane === proy.lane && Math.abs(objetivo.x - proy.x) <= 2.5 && objetivo.hp > 0) {
+        impacto = true
+        objetivo.hp -= proy.damage
+        sonar('pea_hit', 0.4)
+
+        if (proy.isSplash) {
+          for (const salpicado of blancos) {
+            if (
+              salpicado.id !== objetivo.id &&
+              salpicado.lane === proy.lane &&
+              Math.abs(salpicado.x - proy.x) <= 7.0 &&
+              salpicado.hp > 0
+            ) {
+              salpicado.hp -= Math.round(proy.damage * 0.6)
+            }
+          }
+        }
+        break
+      }
+    }
+
+    if (!impacto && (proy.x - baseX) * sentido >= 0) {
+      impacto = true
+      dañarBase(state, proy.targetTeam, proy.damage)
+      sonar('pea_hit', 0.5)
+    }
+
+    if (!impacto && proy.x > 10 && proy.x < 90) siguientes.push(proy)
+  }
+
+  state.projectiles = siguientes
+}
+
 export function stepTick(state: GameState, sonar: SonarFn): void {
   state.tick += 1
 
@@ -412,7 +791,7 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
 
     // Count active P2 Sunflowers
     const p2Sunflowers = state.enemyPlants.filter(
-      (e) => e.type === 'enemy_sunflower' && e.hp > 0
+      (e) => e.plantId === 'sunflower' && e.hp > 0
     ).length
 
     // Assess lane threats (P1 player plants advancing towards P2 base)
@@ -423,38 +802,38 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
     const activeThreatLanes = laneThreats.filter((t) => t.threat).map((t) => t.lane)
     const isEmergency = state.plants.some((pl) => pl.hp > 0 && pl.x > 60)
 
-    let chosenType: EnemyPlantType | null = null
+    let chosenType: PlantId | null = null
 
     // REGLA 1: GIRASOLES PRIMERO PARA ESTABLECER ECONOMÍA DE SOLES (Si no hay emergencia)
     if (p2Sunflowers === 0 && !isEmergency) {
-      if (state.p2SunBank >= ENEMY_PLANT_CONFIGS.enemy_sunflower.cost) {
-        chosenType = 'enemy_sunflower'
+      if (state.p2SunBank >= PLANT_CONFIGS.sunflower.cost) {
+        chosenType = 'sunflower'
       }
     } else if (
       p2Sunflowers === 1 &&
       !isEmergency &&
       chance(state.rng, 0.60) &&
-      state.p2SunBank >= ENEMY_PLANT_CONFIGS.enemy_sunflower.cost
+      state.p2SunBank >= PLANT_CONFIGS.sunflower.cost
     ) {
-      chosenType = 'enemy_sunflower'
+      chosenType = 'sunflower'
     } else {
       // REGLA 2: FILTRAR ÚNICAMENTE PLANTAS QUE EL BOT REALMENTE PUEDA PAGAR AHORA MISMO
-      const affordableTypes: EnemyPlantType[] = ([
-        'enemy_wallnut',
-        'enemy_peashooter',
-        'enemy_chomper',
-        'enemy_melonpult',
-        'enemy_sunflower',
-      ] as EnemyPlantType[]).filter((t) => ENEMY_PLANT_CONFIGS[t].cost <= state.p2SunBank)
+      const affordableTypes: PlantId[] = ([
+        'wallnut',
+        'peashooter',
+        'chomper',
+        'melonpult',
+        'sunflower',
+      ] as PlantId[]).filter((t) => PLANT_CONFIGS[t].cost <= state.p2SunBank)
 
       if (affordableTypes.length > 0) {
         if (activeThreatLanes.length > 0) {
           // MODO DEFENSA: Si el jugador está atacando, priorizar Tanque (Wallnut) o Atacante de carril
-          const wallnutCost = ENEMY_PLANT_CONFIGS.enemy_wallnut.cost
+          const wallnutCost = PLANT_CONFIGS.wallnut.cost
           if (state.p2SunBank >= wallnutCost && chance(state.rng, 0.5)) {
-            chosenType = 'enemy_wallnut'
+            chosenType = 'wallnut'
           } else {
-            const combatTypes = affordableTypes.filter((t) => t !== 'enemy_sunflower')
+            const combatTypes = affordableTypes.filter((t) => t !== 'sunflower')
             if (combatTypes.length > 0) {
               chosenType = combatTypes[nextInt(state.rng, combatTypes.length)]
             } else {
@@ -464,7 +843,7 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
         } else {
           // MODO ATAQUE: Lanzar unidades ofensivas contra el jugador
           const attackTypes = affordableTypes.filter(
-            (t) => t !== 'enemy_sunflower' && t !== 'enemy_wallnut'
+            (t) => t !== 'sunflower' && t !== 'wallnut'
           )
           if (attackTypes.length > 0) {
             chosenType = attackTypes[nextInt(state.rng, attackTypes.length)]
@@ -477,7 +856,7 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
 
     // GUARDIA ESTRICTO: VERIFICAR QUE EL BOT REALMENTE TIENE SOLES SUFICIENTES AHORA MISMO
     if (chosenType) {
-      const eConfig = ENEMY_PLANT_CONFIGS[chosenType]
+      const eConfig = PLANT_CONFIGS[chosenType]
 
       if (state.p2SunBank < eConfig.cost) {
         // NO TIENE SOLES SUFICIENTES -> CANCELAR COLOCACIÓN
@@ -491,24 +870,16 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
             : nextInt(state.rng, 3)
 
         if (isWalking) {
-          state.enemyPlants.push({
-            id: entityId('enemy', state.tick, state.entityCounter++),
-            type: chosenType,
-            lane,
-            x: BASE_RIGHT_START_X - 1,
-            hp: eConfig.maxHp,
-            maxHp: eConfig.maxHp,
-            speed: eConfig.speed,
-            damage: eConfig.damage,
-            isWalking: true,
-            state: 'walking',
-            lastAttackTime: state.tick,
-          })
+          // Por la misma vía que la planta de un rival humano: así el bot juega
+          // con EXACTAMENTE las mismas reglas. Antes plantaba los 5 tipos del
+          // catálogo enemigo, con sus estadísticas aparte, y de ahí salía la
+          // sensación de que "se nota que es un bot".
+          state.enemyPlants.push(crearPlantaDelRival(state, chosenType, lane, undefined))
           // DEDUCIR SOLES RIGUROSAMENTE
           state.p2SunBank = Math.max(0, state.p2SunBank - eConfig.cost)
         } else {
           const preferredCols =
-            chosenType === 'enemy_sunflower'
+            chosenType === 'sunflower'
               ? [11, 10, 9, 8]
               : eConfig.category === 'defensive'
               ? [6, 7, 8]
@@ -522,23 +893,9 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
 
           if (availableCols.length > 0) {
             const targetCol = availableCols[0]
-            const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
-            const cellCenterX = BASE_LEFT_END_X + targetCol * colWidth + colWidth / 2
+            // La posición la calcula crearPlantaDelRival a partir de la columna.
 
-            state.enemyPlants.push({
-              id: entityId('enemy', state.tick, state.entityCounter++),
-              type: chosenType,
-              lane,
-              col: targetCol,
-              x: cellCenterX,
-              hp: eConfig.maxHp,
-              maxHp: eConfig.maxHp,
-              speed: 0,
-              damage: eConfig.damage,
-              isWalking: false,
-              state: 'idle',
-              lastAttackTime: state.tick,
-            })
+            state.enemyPlants.push(crearPlantaDelRival(state, chosenType, lane, targetCol))
             // DEDUCIR SOLES RIGUROSAMENTE
             state.p2SunBank = Math.max(0, state.p2SunBank - eConfig.cost)
           }
@@ -581,427 +938,34 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
     return s
   })
 
-  // 4. UPDATE PLAYER 1 PLANTS
-  const nextPlants: PlantEntity[] = []
-  for (const plant of state.plants) {
-    // Las mejoras vienen de la propia planta, fijadas al plantarla. Antes se
-    // leían de localStorage en cada tic y para cada planta: además de ser
-    // caro, hacía que la partida dependiera del navegador.
-    const config = getScaledPlantConfig(plant.plantId, plant.statRolls ?? [])
+  // ───────────────────────────────────────────────────────────────────────────
+  // 4-6. LOS DOS LADOS, CON LAS MISMAS REGLAS
+  //
+  // Antes esto eran TRES bloques con dos ramas de código para lo mismo: 250
+  // líneas para "mis plantas" y 110 para las "del rival". Con eso, la misma carta
+  // se comportaba distinto según en qué pantalla estuviera:
+  //
+  //   · tu lanzaguisantes disparaba a la cadencia de su carta en tu pantalla y a
+  //     1800 ms fijos en la del rival;
+  //   · la patata mina, la lechuga de hielo, el aloe y el ajo NO EXISTÍAN en el
+  //     lado del rival: si él las plantaba, no hacían nada;
+  //   · los proyectiles hacia el rival hacían daño en área y los que venían hacia
+  //     ti no, así que su melón no salpicaba.
+  //
+  // O sea que los dos jugadores estaban jugando partidas con reglas distintas y
+  // los dos podían ganar la suya de verdad. Eso es lo que producía el "tu rival
+  // dijo otra cosa" al probarlo con dos cuentas: no era un desfase de red, eran
+  // dos juegos diferentes.
+  //
+  // Ahora hay UNA función y se llama dos veces, una por lado. La única diferencia
+  // entre los dos es el SENTIDO: +1 avanza hacia la derecha, −1 hacia la
+  // izquierda. Todo lo demás —cadencias, daños, habilidades, área— sale de la
+  // carta y es idéntico.
+  // ───────────────────────────────────────────────────────────────────────────
+  procesarLado(state, LADO_P1, dt, sonar)
+  moverProyectiles(state, dt, sonar)
+  procesarLado(state, LADO_P2, dt, sonar)
 
-    // Sunflower producing suns every 6s
-    if (plant.plantId === 'sunflower' || plant.plantId === 'twinsunflower') {
-      if (state.tick - plant.lastActionTime > msToTicks(6000)) {
-        plant.lastActionTime = state.tick
-        const count = plant.plantId === 'twinsunflower' ? 2 : 1
-        for (let i = 0; i < count; i++) {
-          state.suns.push({
-            id: entityId('sun-flower', state.tick, state.entityCounter++),
-            x: plant.x + (nextFloat(state.rng) * 6 - 3),
-            y: 20 + plant.lane * 20 + 5,
-            targetY: 20 + plant.lane * 20 + 10,
-            value: SUN_VALUE,
-            createdAt: state.tick,
-          })
-        }
-      }
-    }
-
-    // Potato Mine (squash ID) arming & detonation logic
-    if (plant.plantId === 'squash') {
-      const armTime = state.isPracticeMode ? 4000 : 12000
-      const elapsed = state.tick - plant.lastActionTime
-
-      if (!plant.isArmed) {
-        if (elapsed >= msToTicks(armTime)) {
-          plant.isArmed = true
-          sonar('pea_hit', 0.8)
-        }
-      } else {
-        // Armed Potato Mine explodes when stepped on!
-        const triggerEnemy = state.enemyPlants.find(
-          (e) =>
-            e.lane === plant.lane &&
-            Math.abs(e.x - plant.x) <= 4.5 &&
-            e.hp > 0
-        )
-
-        if (triggerEnemy) {
-          const enemiesInTile = state.enemyPlants.filter(
-            (e) =>
-              e.lane === plant.lane &&
-              Math.abs(e.x - plant.x) <= 5.5 &&
-              e.hp > 0
-          )
-          enemiesInTile.forEach((e) => {
-            e.hp -= config.damage || 1800
-          })
-          sonar('pea_hit', 1.0)
-          plant.hp = 0 // Detonate Potato Mine
-        }
-      }
-    }
-
-    // Iceberg Lettuce instant placement detonation: Asset 1 -> Asset 2 for 2s -> Asset 1 brief -> disappear & freeze ALL enemy units for 7s
-    if (plant.plantId === 'iceberglettuce' && !plant.isArmed) {
-      plant.isArmed = true // Mark as triggered immediately upon placement
-      plant.spriteOverride = '/game-assets/plants/iceberglettuce_burst.png'
-      sonar('pea_hit', 1.0)
-
-      // Freeze ALL opponent plants/enemies across ALL lanes for 7 seconds!
-      const freezeUntilTime = state.tick + msToTicks(7000)
-      state.enemyPlants.forEach((e) => {
-        e.frozenUntil = freezeUntilTime
-      })
-
-      // A los 2 s vuelve un instante a su primer aspecto y 300 ms después se
-      // derrite. La segunda mitad la encola iceberg_fade al ejecutarse.
-      state.pending.push({
-        atTick: state.tick + msToTicks(2000),
-        kind: 'iceberg_fade',
-        plantId: plant.id,
-      })
-    }
-
-    // Aloe Healer (scans lane & heals closest wounded friendly plant with cloud FX)
-    if (plant.plantId === 'aloe') {
-      const healInterval = config.attackSpeedMs || 2500
-      const healPower = config.damage || 60
-
-      if (state.tick - plant.lastActionTime > msToTicks(healInterval)) {
-        plant.lastActionTime = state.tick
-        const woundedAlly = state.plants.find(
-          (p) => p.id !== plant.id && p.lane === plant.lane && p.hp < p.maxHp && p.hp > 0
-        )
-        if (woundedAlly) {
-          woundedAlly.hp = Math.min(woundedAlly.maxHp, woundedAlly.hp + healPower)
-          woundedAlly.isHealingFx = true
-          sonar('plantation', 0.6)
-
-          state.pending.push({
-            atTick: state.tick + msToTicks(1500),
-            kind: 'clear_heal_fx',
-            plantId: woundedAlly.id,
-          })
-        }
-      }
-    }
-
-    // Ranged Attackers shoot continuously
-    if (config.category === 'ranged') {
-      if (state.tick - plant.lastActionTime > msToTicks(config.attackSpeedMs || 1200)) {
-        plant.lastActionTime = state.tick
-
-        const projType =
-          plant.plantId === 'melonpult'
-            ? 'melon'
-            : plant.plantId === 'chomper'
-            ? 'needle'
-            : 'pea'
-
-        if (plant.plantId === 'threepeater') {
-          const targetLanes = [plant.lane - 1, plant.lane, plant.lane + 1].filter(
-            (l) => l >= 0 && l <= 2
-          )
-          for (const l of targetLanes) {
-            state.projectiles.push({
-              id: entityId(`proj-p1-3p-${l}`, state.tick, state.entityCounter++),
-              type: 'pea',
-              targetTeam: 'p2',
-              lane: l,
-              x: plant.x + 2,
-              y: 20 + l * 19.33 + 7,
-              speed: 32,
-              damage: config.damage || 25,
-            })
-          }
-        } else {
-          state.projectiles.push({
-            id: entityId('proj-p1', state.tick, state.entityCounter++),
-            type: projType,
-            targetTeam: 'p2',
-            lane: plant.lane,
-            x: plant.x + 2,
-            y: 20 + plant.lane * 19.33 + 7,
-            speed: projType === 'melon' ? 22 : projType === 'needle' ? 34 : 32,
-            damage: config.damage || 25,
-            isSplash: projType === 'melon',
-          })
-        }
-        sonar('pea_shoot', 0.4)
-
-        if (plant.plantId === 'repeater') {
-          // El segundo guisante sale 180 ms después. Se forma AHORA y se encola
-          // para el tic correspondiente: si se formara al ejecutarse, la
-          // posición de la planta ya podría haber cambiado y el identificador
-          // saldría de otro tic, así que dos ejecuciones no coincidirían.
-          state.pending.push({
-            atTick: state.tick + msToTicks(180),
-            kind: 'spawn_projectile',
-            projectile: {
-              id: entityId('proj-p1-rep', state.tick, state.entityCounter++),
-              type: 'pea',
-              targetTeam: 'p2',
-              lane: plant.lane,
-              x: plant.x + 2,
-              y: 20 + plant.lane * 19.33 + 7,
-              speed: 32,
-              damage: config.damage || 25,
-            },
-          })
-        }
-      }
-    }
-
-    // Walking P1 Plant (Cactus / Squash P1 moving RIGHT towards P2 base)
-    if (plant.isWalking) {
-      if (plant.plantId === 'garlic') {
-        // Squash hopping & high-leap crushing smash logic!
-        if (plant.isSmashing) {
-          plant.state = 'attacking'
-          const elapsed = state.tick - (plant.smashStartTime || 0)
-          if (elapsed >= msToTicks(600)) {
-            // Smash impact moment! Inflict massive 600 damage to all enemies in quadrant & expire
-            const enemiesInQuadrant = state.enemyPlants.filter(
-              (e) =>
-                e.lane === plant.lane &&
-                Math.abs(e.x - plant.x) <= 5.5 &&
-                e.hp > 0
-            )
-            enemiesInQuadrant.forEach((e) => {
-              e.hp -= config.damage || 600
-            })
-            sonar('pea_hit', 0.9)
-            plant.hp = 0 // Expire Squash after full slam animation completes
-          }
-        } else {
-          const enemiesInQuadrant = state.enemyPlants.filter(
-            (e) =>
-              e.lane === plant.lane &&
-              Math.abs(e.x - plant.x) <= 4.8 &&
-              e.hp > 0
-          )
-
-          if (enemiesInQuadrant.length > 0) {
-            plant.isSmashing = true
-            plant.smashStartTime = state.tick
-            plant.state = 'attacking'
-            sonar('pea_hit', 0.7)
-          } else {
-            plant.state = 'walking'
-            plant.x += (config.moveSpeed || 6.0) * dt
-
-            if (plant.x >= BASE_RIGHT_START_X - 1) {
-              state.p2BaseHp = Math.max(0, state.p2BaseHp - 150)
-              sonar('pea_hit', 0.8)
-              plant.hp = 0
-            }
-          }
-        }
-      } else {
-        const enemyTarget = state.enemyPlants.find(
-          (e) =>
-            e.lane === plant.lane &&
-            e.x >= plant.x &&
-            e.x - plant.x <= 3.8 &&
-            e.hp > 0
-        )
-
-        if (enemyTarget) {
-          plant.state = 'attacking'
-          const attackInterval = config.attackSpeedMs || 600
-          if (state.tick - plant.lastActionTime >= msToTicks(attackInterval)) {
-            plant.lastActionTime = state.tick
-            enemyTarget.hp -= config.damage || 90
-            sonar('pea_hit', 0.5)
-          }
-        } else {
-          plant.state = 'walking'
-          plant.x += (config.moveSpeed || 4.5) * dt
-
-          if (plant.x >= BASE_RIGHT_START_X - 1) {
-            state.p2BaseHp = Math.max(0, state.p2BaseHp - 40)
-            sonar('pea_hit', 0.6)
-            plant.hp = 0
-          }
-        }
-      }
-    }
-
-    if (plant.hp > 0) {
-      nextPlants.push(plant)
-    }
-  }
-  state.plants = nextPlants
-
-  // 5. UPDATE PROJECTILES & HITS
-  const nextProjectiles: ProjectileEntity[] = []
-  for (const p of state.projectiles) {
-    let hit = false
-
-    if (p.targetTeam === 'p2') {
-      p.x += p.speed * dt
-      for (const e of state.enemyPlants) {
-        if (e.lane === p.lane && Math.abs(e.x - p.x) <= 2.5 && e.hp > 0) {
-          hit = true
-          e.hp -= p.damage
-          sonar('pea_hit', 0.4)
-
-          if (p.isSplash) {
-            for (const splashE of state.enemyPlants) {
-              if (
-                splashE.id !== e.id &&
-                splashE.lane === p.lane &&
-                Math.abs(splashE.x - p.x) <= 7.0 &&
-                splashE.hp > 0
-              ) {
-                splashE.hp -= Math.round(p.damage * 0.6)
-              }
-            }
-          }
-          break
-        }
-      }
-
-      if (!hit && p.x >= BASE_RIGHT_START_X) {
-        hit = true
-        state.p2BaseHp = Math.max(0, state.p2BaseHp - p.damage)
-        sonar('pea_hit', 0.5)
-      }
-    } else {
-      p.x -= p.speed * dt
-      for (const pl of state.plants) {
-        if (pl.lane === p.lane && Math.abs(pl.x - p.x) <= 2.5 && pl.hp > 0) {
-          hit = true
-          pl.hp -= p.damage
-          sonar('pea_hit', 0.4)
-          break
-        }
-      }
-
-      if (!hit && p.x <= BASE_LEFT_END_X) {
-        hit = true
-        state.p1BaseHp = Math.max(0, state.p1BaseHp - p.damage)
-        sonar('pea_hit', 0.5)
-      }
-    }
-
-    if (!hit && p.x > 10 && p.x < 90) {
-      nextProjectiles.push(p)
-    }
-  }
-  state.projectiles = nextProjectiles
-
-  // 6. UPDATE PLAYER 2 ENEMY PLANTS
-  const nextEnemies: EnemyPlantEntity[] = []
-  for (const e of state.enemyPlants) {
-    if (e.hp <= 0) {
-      sonar('zombie_fall', 0.4)
-      state.stats.enemyPlantsDefeated += 1
-      state.stats.score += 100
-      // De la entidad si los trae (planta de un rival real), y si no del
-      // catálogo del bot. Sin esto, matar la planta de un rival daría los soles
-      // del tipo del bot que le tocara por defecto.
-      state.sunBank += e.rewardSun ?? ENEMY_PLANT_CONFIGS[e.type]?.rewardSun ?? 25
-      continue
-    }
-
-    const config = ENEMY_PLANT_CONFIGS[e.type]
-
-    // Frozen enemy check (Iceberg Lettuce freeze for exactly 7.0 seconds)
-    if (e.frozenUntil) {
-      if (state.tick < e.frozenUntil) {
-        nextEnemies.push(e)
-        continue
-      } else {
-        // 7 seconds expired! Clear freeze & restore walking state
-        e.frozenUntil = undefined
-        // Se recupera la velocidad que YA tenía la entidad, no la del catálogo:
-        // la planta de un rival real tiene la suya, sacada de su carta.
-        if (e.isWalking || config.category === 'melee') {
-          e.isWalking = true
-          if (!e.speed) e.speed = config.speed
-        }
-      }
-    }
-
-    // Enemy Sunflower (Girasol Enemigo P2) generates +25 Sun for PC AI every 6s
-    if (e.type === 'enemy_sunflower') {
-      if (state.tick - e.lastAttackTime > msToTicks(6000)) {
-        e.lastAttackTime = state.tick
-        state.p2SunBank += 25
-      }
-    }
-
-    // Ranged Enemy Plants (Guisantera, Melón, Cactus) shoot left continuously
-    if (config.category === 'ranged') {
-      if (state.tick - e.lastAttackTime > msToTicks(e.type === 'enemy_chomper' ? 1100 : 1800)) {
-        e.lastAttackTime = state.tick
-        const projType =
-          e.type === 'enemy_melonpult'
-            ? 'melon'
-            : e.type === 'enemy_chomper'
-            ? 'needle'
-            : 'pea'
-        state.projectiles.push({
-          id: entityId('proj-p2', state.tick, state.entityCounter++),
-          type: projType,
-          targetTeam: 'p1',
-          lane: e.lane,
-          x: e.x - 2,
-          y: 20 + e.lane * 19.33 + 7,
-          speed: projType === 'melon' ? 22 : projType === 'needle' ? 34 : 32,
-          damage: e.damage,
-        })
-        sonar('pea_shoot', 0.4)
-      }
-    }
-
-    // Walking Melee Enemy Plants (Cactus Enemigo walking LEFT)
-    if (e.isWalking) {
-      const blockingP1 = state.plants.find(
-        (pl) =>
-          pl.lane === e.lane &&
-          pl.x <= e.x &&
-          e.x - pl.x <= 3.8 &&
-          pl.hp > 0
-      )
-
-      if (blockingP1) {
-        e.state = 'attacking'
-        if (state.tick - e.lastAttackTime > msToTicks(600)) {
-          e.lastAttackTime = state.tick
-          blockingP1.hp -= e.damage
-          sonar('pea_hit', 0.5)
-        }
-      } else {
-        e.state = 'walking'
-        e.x -= e.speed * dt
-
-        if (e.x <= BASE_LEFT_END_X + 1) {
-          state.p1BaseHp = Math.max(0, state.p1BaseHp - e.damage * dt)
-        }
-      }
-    } else {
-      // Static Enemy Plant
-      const blockingP1 = state.plants.find(
-        (pl) =>
-          pl.lane === e.lane &&
-          pl.x <= e.x &&
-          e.x - pl.x <= 3.0 &&
-          pl.hp > 0
-      )
-      if (blockingP1) {
-        e.state = 'attacking'
-        blockingP1.hp -= e.damage * dt
-      } else {
-        e.state = 'idle'
-      }
-    }
-
-    nextEnemies.push(e)
-  }
-  state.enemyPlants = nextEnemies
 
   // 7. VICTORY / DEFEAT CHECKS
   if (state.p1BaseHp <= 0) {
