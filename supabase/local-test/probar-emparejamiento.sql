@@ -1035,3 +1035,127 @@ BEGIN
                     (v_r->>'roomId')::UUID = v_sala AND (v_r->>'resumed')::BOOLEAN IS TRUE,
                     v_r::TEXT);
 END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 18. REPETICIONES Y ENLACES (migración 25) ==='; END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_c UUID := '33333333-3333-3333-3333-333333333333';
+  v_sala UUID; v_rep JSONB; v_mia JSONB; v_token TEXT; v_res JSONB;
+BEGIN
+  -- Cerrar lo que dejaron las secciones anteriores. Sin esto,
+  -- enter_matchmaking REANUDA la partida viva que dejó la sección 17 —que ya
+  -- tenía una jugada en el tic 10— en lugar de crear una nueva, y esta sección
+  -- mediría la partida equivocada. (La primera versión fallaba justo por eso.)
+  UPDATE public.game_rooms
+     SET settled_at = NOW(), status = 'abandoned'
+   WHERE settled_at IS NULL
+     AND (player1_id IN (v_a, v_b) OR player2_id IN (v_a, v_b));
+
+  -- Una partida completa con jugadas de los dos y un ganador.
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+  PERFORM public._soy(v_a); PERFORM public.start_match_clock(v_sala);
+  UPDATE public.game_rooms SET started_at = NOW() - INTERVAL '60 seconds' WHERE id = v_sala;
+
+  -- Intercaladas en orden de tic, como pasaría de verdad. Mandarlas agrupadas
+  -- por jugador hace que las del segundo queden muy por detrás del tic más alto
+  -- de la sala y el servidor las rechace por antiguas — con razón.
+  PERFORM public.submit_match_action(v_sala, 1, 40,  'plant', 'sunflower',  0::SMALLINT, 1::SMALLINT);
+  PERFORM public._soy(v_b);
+  PERFORM public.submit_match_action(v_sala, 1, 60,  'plant', 'sunflower',  1::SMALLINT, 1::SMALLINT);
+  PERFORM public._soy(v_a);
+  PERFORM public.submit_match_action(v_sala, 2, 200, 'plant', 'peashooter', 1::SMALLINT, 2::SMALLINT);
+  PERFORM public._soy(v_b);
+  PERFORM public.submit_match_action(v_sala, 2, 260, 'plant', 'wallnut',    1::SMALLINT, 3::SMALLINT);
+
+  -- Ana se rinde: gana Beto.
+  PERFORM public._soy(v_a); PERFORM public.surrender_match(v_sala);
+
+  -- ── LA LISTA ──────────────────────────────────────────────────────────────
+  -- Se busca LA sala de esta prueba, no la primera de la lista: my_matches
+  -- ordena por fecha de inicio y aquí se han creado varias.
+  SELECT fila INTO v_mia
+    FROM jsonb_array_elements(public.my_matches(50)) AS fila
+   WHERE (fila->>'roomId')::UUID = v_sala;
+
+  PERFORM public._t('la partida aparece en mis partidas', v_mia IS NOT NULL, 'no está');
+  PERFORM public._t('con el nick del rival',
+                    (v_mia->>'rival') IS NOT NULL, v_mia::TEXT);
+  PERFORM public._t('y dice si gané o perdí desde MI punto de vista',
+                    (v_mia->>'gane')::BOOLEAN IS FALSE, v_mia::TEXT);
+  PERFORM public._t('y cuántas jugadas tiene',
+                    (v_mia->>'jugadas')::INTEGER = 4, v_mia::TEXT);
+
+  -- ── LA REPETICIÓN ─────────────────────────────────────────────────────────
+  v_rep := public.match_replay(v_sala, NULL);
+  PERFORM public._t('la repetición trae la semilla',
+                    (v_rep->>'seed')::BIGINT > 0, v_rep::TEXT);
+  PERFORM public._t('y las 4 jugadas en orden de tic',
+                    jsonb_array_length(v_rep->'jugadas') = 4
+                    AND (v_rep->'jugadas'->0->>'tick')::INTEGER = 40, v_rep::TEXT);
+  PERFORM public._t('las jugadas dicen 1 o 2, no identificadores de usuario',
+                    (v_rep->'jugadas'->0->>'de') IN ('1','2'), (v_rep->'jugadas'->0)::TEXT);
+  PERFORM public._t('y dice quién soy yo en ella',
+                    (v_rep->>'yoSoy') = '1', v_rep->>'yoSoy');
+  PERFORM public._t('NO expone identificadores de usuario',
+                    NOT (v_rep->'jugador1' ? 'id') AND NOT (v_rep ? 'player1_id'),
+                    v_rep::TEXT);
+
+  -- Un tercero no puede verla sin enlace.
+  PERFORM public._soy(v_c);
+  BEGIN
+    PERFORM public.match_replay(v_sala, NULL);
+    PERFORM public._t('sin enlace, un tercero no la ve', FALSE, 'la vio');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('sin enlace, un tercero no la ve',
+                      SQLERRM LIKE '%No participaste%', SQLERRM);
+  END;
+
+  -- ── EL ENLACE ─────────────────────────────────────────────────────────────
+  PERFORM public._soy(v_a);
+  v_res := public.share_match(v_sala);
+  v_token := v_res->>'token';
+  PERFORM public._t('se genera un código largo e imposible de adivinar',
+                    length(v_token) = 32, 'token: ' || COALESCE(v_token,'NULL'));
+
+  -- Volver a pulsar compartir NO cambia el enlace: el que ya se envió sigue
+  -- funcionando.
+  PERFORM public._t('volver a compartir devuelve el mismo enlace',
+                    (public.share_match(v_sala)->>'token') = v_token, 'cambió');
+
+  -- Con el enlace, cualquiera la ve.
+  PERFORM public._soy(v_c);
+  v_rep := public.match_replay(NULL, v_token);
+  PERFORM public._t('con el enlace, un tercero SÍ la ve',
+                    jsonb_array_length(v_rep->'jugadas') = 4, v_rep::TEXT);
+  PERFORM public._t('pero no sabe quién es él en ella',
+                    (v_rep->>'yoSoy') IS NULL, v_rep->>'yoSoy');
+
+  -- Y se puede revocar.
+  PERFORM public._soy(v_b);   -- cualquiera de los dos jugadores
+  PERFORM public.unshare_match(v_sala);
+  PERFORM public._soy(v_c);
+  BEGIN
+    PERFORM public.match_replay(NULL, v_token);
+    PERFORM public._t('revocar el enlace lo deja de servir', FALSE, 'sigue funcionando');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('revocar el enlace lo deja de servir',
+                      SQLERRM LIKE '%no encontrada%', SQLERRM);
+  END;
+END $$;
+
+DO $$
+DECLARE v_n INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='game_rooms'
+     AND column_name IN ('share_token','shared_at')
+     AND grantee IN ('anon','authenticated') AND privilege_type='UPDATE';
+  PERFORM public._t('el jugador no puede escribir el código a mano',
+                    v_n = 0, 'permisos: ' || v_n);
+END $$;

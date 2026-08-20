@@ -51,6 +51,7 @@ interface MainMenuProps {
   onOpenJardin?: () => void
   onOpenShop?: () => void
   onOpenRanking?: () => void
+  onOpenMisPartidas?: () => void
   onOpenBattlePass?: () => void
   onOpenClan?: () => void
   onOpenMarketplace?: () => void
@@ -84,6 +85,7 @@ export default function MainMenu({
   onOpenJardin,
   onOpenShop,
   onOpenRanking,
+  onOpenMisPartidas,
   onOpenBattlePass,
   onOpenClan,
   onOpenLanding,
@@ -406,6 +408,12 @@ export default function MainMenu({
         <button className="banner-button" type="button" onClick={onOpenShop}>
           <img src={shop} alt="" />
           <span>TIENDA</span>
+        </button>
+        {/* Las repeticiones. Sin icono propio todavía: se usa el de arena y se
+            distingue por el texto, que es lo que se lee. */}
+        <button className="banner-button" type="button" onClick={onOpenMisPartidas}>
+          <img src={arena} alt="" />
+          <span>MIS PARTIDAS</span>
         </button>
       </div>
 

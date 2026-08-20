@@ -1,0 +1,159 @@
+/* El reproductor de repeticiones. Pintado propio y sencillo: aquí no hay nada
+   que pulsar en el campo, así que no hacen falta la mano de cartas ni los
+   recolectores de sol. */
+
+.rep {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: #070f0a;
+  color: #e2e8f0;
+}
+
+.rep__aviso {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  max-width: 24rem;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+/* ── El campo ────────────────────────────────────────────────────────────── */
+
+.rep__campo {
+  position: relative;
+  flex: 1;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+.rep__base {
+  position: absolute;
+  top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 40%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.rep__base--p1 { left: 0.5rem; }
+.rep__base--p2 { right: 0.5rem; text-align: right; }
+
+.rep__vida {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.rep__base--p1 .rep__vida > div { height: 100%; background: #52e061; }
+.rep__base--p2 .rep__vida > div { height: 100%; background: #ff4d4d; margin-left: auto; }
+
+.rep__planta {
+  position: absolute;
+  width: 5.5%;
+  transform: translate(-50%, -50%);
+  /* Las plantas del rival, espejadas: es la misma planta al revés, igual que en
+     la partida. */
+  pointer-events: none;
+}
+
+.rep__planta--rival { transform: translate(-50%, -50%) scaleX(-1); }
+
+.rep__proyectil {
+  position: absolute;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: #86efac;
+  box-shadow: 0 0 0.4rem rgba(134, 239, 172, 0.8);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* ── Los mandos ──────────────────────────────────────────────────────────── */
+
+.rep__mandos {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.8rem;
+  background: rgba(7, 20, 13, 0.95);
+  border-top: 1px solid rgba(74, 222, 128, 0.35);
+}
+
+.rep__boton {
+  padding: 0.45rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(203, 213, 225, 0.32);
+  border-radius: 0.45rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rep__boton:hover { background: rgba(148, 163, 184, 0.28); }
+.rep__boton:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+.rep__boton--principal {
+  color: #0f2418;
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  border-color: #fbbf24;
+  min-width: 7rem;
+}
+
+.rep__boton--principal:hover { background: linear-gradient(180deg, #fef08a, #fbbf24); }
+
+.rep__barra {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  accent-color: #4ade80;
+  cursor: pointer;
+}
+
+.rep__tiempo {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rep__velocidades { display: flex; gap: 0.2rem; }
+
+.rep__vel {
+  padding: 0.35rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid rgba(203, 213, 225, 0.25);
+  border-radius: 0.35rem;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.rep__vel--activa {
+  color: #0f2418;
+  background: #4ade80;
+  border-color: #4ade80;
+}
+
+.rep__vel:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }

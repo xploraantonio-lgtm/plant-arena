@@ -1,0 +1,189 @@
+/* Mis partidas. Misma paleta que el resto del juego (ámbar y verde), y una lista
+   que se lee de un vistazo: el resultado primero, porque es lo que se busca. */
+
+.partidas {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  background: linear-gradient(160deg, #0f2418 0%, #0a1710 60%, #070f0a 100%);
+  color: #e2e8f0;
+}
+
+.partidas__cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.partidas__volver {
+  padding: 0.45rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(203, 213, 225, 0.35);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.partidas__volver:hover { background: rgba(148, 163, 184, 0.28); }
+.partidas__volver:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+.partidas__titulo {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fde047;
+}
+
+.partidas__cargando,
+.partidas__vacio {
+  margin: 0;
+  padding: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+  background: rgba(7, 20, 13, 0.6);
+  border: 1px solid rgba(203, 213, 225, 0.2);
+  border-radius: 0.6rem;
+}
+
+.partidas__vacio p { margin: 0 0 0.5rem; }
+.partidas__vacio p:last-child { margin-bottom: 0; }
+
+/* ── Una partida ─────────────────────────────────────────────────────────── */
+
+.partida {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  background: rgba(7, 20, 13, 0.72);
+  /* La franja de color a la izquierda dice el resultado sin tener que leer. */
+  border: 1px solid rgba(203, 213, 225, 0.18);
+  border-left: 4px solid #64748b;
+  border-radius: 0.55rem;
+}
+
+.partida--ganada  { border-left-color: #4ade80; }
+.partida--perdida { border-left-color: #f87171; }
+
+.partida__datos { flex: 1 1 12rem; min-width: 0; }
+
+.partida__linea1 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.partida__resultado {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.partida--ganada  .partida__resultado { color: #4ade80; }
+.partida--perdida .partida__resultado { color: #f87171; }
+
+.partida__rival {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.partida__linea2 {
+  margin-top: 0.15rem;
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.partida__acciones {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.partida__boton {
+  padding: 0.45rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(203, 213, 225, 0.32);
+  border-radius: 0.45rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.partida__boton:hover:not(:disabled) { background: rgba(148, 163, 184, 0.28); }
+.partida__boton:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.partida__boton:disabled { opacity: 0.45; cursor: default; }
+
+.partida__boton--ver {
+  color: #0f2418;
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  border-color: #fbbf24;
+}
+
+.partida__boton--ver:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fef08a, #fbbf24);
+}
+
+.partida__sin-registro {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* El enlace, cuando la partida está compartida. Ocupa toda la fila para que se
+   pueda seleccionar a mano si el portapapeles falló. */
+.partida__enlace {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(203, 213, 225, 0.14);
+}
+
+.partida__enlace code {
+  flex: 1 1 14rem;
+  padding: 0.3rem 0.45rem;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.72rem;
+  color: #93c5fd;
+  background: rgba(147, 197, 253, 0.1);
+  border-radius: 0.3rem;
+  overflow-wrap: anywhere;
+  /* Se puede seleccionar: es el respaldo si copiar automáticamente no funcionó. */
+  user-select: all;
+}
+
+.partida__revocar {
+  padding: 0.3rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.72rem;
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 0.35rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.partida__revocar:hover { background: rgba(248, 113, 113, 0.22); }
+.partida__revocar:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }

@@ -150,6 +150,46 @@ export function crearPlantaDelRival(
 }
 
 /**
+ * Una planta en MI lado del campo, desde su columna tal cual.
+ *
+ * Es crearPlantaDelRival sin espejar la columna. Sólo la usan las repeticiones:
+ * en una partida normal tus plantas las pone placePlant al pulsar, con la
+ * geometría ya resuelta.
+ */
+export function crearPlantaPropia(
+  state: GameState,
+  plantId: PlantId,
+  lane: number,
+  col: number | undefined,
+  statRolls: PlantStatKey[] = [],
+  level = 0
+): PlantEntity {
+  const config = getScaledPlantConfig(plantId, statRolls)
+  const camina = config.category === 'melee' || !!config.moveSpeed || plantId === 'chomper'
+  const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
+
+  return {
+    id: entityId('propia', state.tick, state.entityCounter++),
+    plantId,
+    level,
+    statRolls,
+    lane,
+    col: camina ? undefined : col,
+    x: camina || col === undefined
+      ? BASE_LEFT_END_X + 1
+      : BASE_LEFT_END_X + col * colWidth + colWidth / 2,
+    hp: config.maxHp,
+    maxHp: config.maxHp,
+    damage: config.damage ?? 0,
+    attackSpeedMs: config.attackSpeedMs,
+    moveSpeed: config.moveSpeed,
+    isWalking: camina,
+    state: camina ? 'walking' : 'idle',
+    lastActionTime: state.tick,
+  }
+}
+
+/**
  * El estado con el que arranca una batalla.
  *
  * Vive aquí y no en el hook porque quien quiera recalcular una partida —el
@@ -261,6 +301,23 @@ export type PendingAction =
   | {
       atTick: number
       kind: 'rival_plant'
+      plantId: PlantId
+      lane: number
+      col?: number
+      statRolls?: PlantStatKey[]
+      level?: number
+    }
+  /**
+   * Una planta MÍA que llega del registro, no de un clic.
+   *
+   * Sólo la usan las repeticiones: al reproducir una partida, las jugadas de
+   * quien mira tienen que aparecer en SU lado y sin espejar, mientras que las del
+   * otro van espejadas como en la partida en vivo. En una partida normal esto no
+   * ocurre nunca — ahí las tuyas las pone placePlant al pulsar.
+   */
+  | {
+      atTick: number
+      kind: 'own_plant'
       plantId: PlantId
       lane: number
       col?: number
@@ -810,6 +867,19 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
         case 'rival_plant':
           state.enemyPlants.push(
             crearPlantaDelRival(
+              state,
+              accion.plantId,
+              accion.lane,
+              accion.col,
+              accion.statRolls ?? [],
+              accion.level ?? 0
+            )
+          )
+          break
+
+        case 'own_plant':
+          state.plants.push(
+            crearPlantaPropia(
               state,
               accion.plantId,
               accion.lane,

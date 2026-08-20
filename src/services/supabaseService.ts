@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import type { Database } from '../types/database.types'
 import type { FreePackSlot } from '../utils/freePackManager'
+import type { DatosDeRepeticion } from '../engine/replay'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -704,6 +705,103 @@ export const SupabaseService = {
 
     return () => {
       void supabase.removeChannel(canal)
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // REPETICIONES
+  //
+  // Una repetición no es un vídeo: es la partida vuelta a ejecutar con la misma
+  // semilla y las mismas jugadas. Así que no se descarga un fichero grande — se
+  // piden unas decenas de filas y el motor hace el resto.
+  // ---------------------------------------------------------------------------
+
+  /** Mis partidas terminadas, de la más reciente a la más antigua. */
+  async myMatches(limite = 20): Promise<Array<{
+    roomId: string
+    mode: string
+    jugadaEn: string
+    duracionSegundos: number
+    rival: string | null
+    rivalAvatar: string | null
+    /** Desde MI punto de vista. Null si no hubo ganador (disputa o abandono). */
+    gane: boolean | null
+    estado: string
+    jugadas: number
+    shareToken: string | null
+  }>> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await (supabase.rpc as any)('my_matches', { p_limite: limite })
+      if (error) {
+        logError('myMatches', error)
+        return []
+      }
+      return data ?? []
+    } catch (e) {
+      logError('myMatches', e)
+      return []
+    }
+  },
+
+  /**
+   * Una repetición entera: semilla, mazos y todas las jugadas con su tic.
+   *
+   * Con el código de compartir la puede pedir cualquiera, incluso sin cuenta: es
+   * lo que atiende los enlaces. Con el identificador de la sala, sólo quien jugó.
+   */
+  async matchReplay(opciones: { roomId?: string; token?: string }): Promise<DatosDeRepeticion | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('match_replay', {
+        p_room_id: opciones.roomId ?? null,
+        p_token: opciones.token ?? null,
+      })
+      if (error) {
+        logError('matchReplay', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('matchReplay', e)
+      return null
+    }
+  },
+
+  /**
+   * Pide el enlace para compartir una partida.
+   *
+   * Devuelve el mismo si ya lo tenía, para que un enlace ya enviado no deje de
+   * funcionar por volver a pulsar el botón.
+   */
+  async shareMatch(roomId: string): Promise<{ token?: string; yaExistia?: boolean; error?: string }> {
+    if (!isSupabaseConfigured()) return { error: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('share_match', { p_room_id: roomId })
+      if (error) {
+        logError('shareMatch', error)
+        return { error: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('shareMatch', e)
+      return { error: e?.message }
+    }
+  },
+
+  /** Revoca el enlace: deja de funcionar para todo el mundo. */
+  async unshareMatch(roomId: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false
+    try {
+      const { error } = await (supabase.rpc as any)('unshare_match', { p_room_id: roomId })
+      if (error) {
+        logError('unshareMatch', error)
+        return false
+      }
+      return true
+    } catch (e) {
+      logError('unshareMatch', e)
+      return false
     }
   },
 

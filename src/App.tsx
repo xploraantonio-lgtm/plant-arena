@@ -19,6 +19,8 @@ import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'
 import MatchmakingScreen from './components/Matchmaking/MatchmakingScreen'
+import MisPartidas from './components/Repeticiones/MisPartidas'
+import VerRepeticion from './components/Repeticiones/VerRepeticion'
 import { useMatchmaking, buscaRival, type ModoPartida } from './hooks/useMatchmaking'
 import { SupabaseService } from './services/supabaseService'
 import { useAuth } from './hooks/useAuth'
@@ -28,15 +30,32 @@ import AdminPanel from './components/Admin/AdminPanel'
 import { UserManager } from './utils/userManager'
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
+  const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase()
       const hash = window.location.hash.toLowerCase()
+      // Un enlace de repetición compartida, /r/<código>. Va primero porque quien
+      // lo abre puede no tener cuenta y no debe acabar en la pantalla de entrada:
+      // el sentido de compartir es que se pueda ver sin registrarse.
+      if (path.startsWith('/r/')) return 'repeticion'
       if (path.startsWith('/play') || hash.includes('play')) {
         return 'menu'
       }
     }
     return 'landing'
+  })
+
+  /**
+   * El código del enlace de repetición, si se llegó por uno.
+   *
+   * Se lee de la dirección una sola vez, al arrancar. Con código se pide la
+   * repetición por él —sin necesidad de sesión— y sin código se pide por sala,
+   * que exige haber jugado.
+   */
+  const [tokenRepeticion] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    const partes = window.location.pathname.split('/').filter(Boolean)
+    return partes[0]?.toLowerCase() === 'r' && partes[1] ? partes[1] : null
   })
   const [practicePlantId, setPracticePlantId] = useState<string | null>(null)
   const [activeOpeningResult, setActiveOpeningResult] = useState<PackDropResult | PackDropResult[] | null>(null)
@@ -173,6 +192,8 @@ function App() {
   const [salaId, setSalaId] = useState<string | null>(null)
   const [semillaPartida, setSemillaPartida] = useState<number | undefined>(undefined)
   const [rivalId, setRivalId] = useState<string | null>(null)
+  /** La partida cuya repetición se está viendo. */
+  const [salaRepeticion, setSalaRepeticion] = useState<string | null>(null)
   /** Los nicks de los dos, para ponerlos encima de cada árbol en la batalla. */
   const [nombresEnPartida, setNombresEnPartida] = useState<{ mio: string; rival: string } | null>(null)
 
@@ -504,6 +525,7 @@ function App() {
             colosseumMaxStreak={colosseumMaxStreak}
             onPlay={handlePlayNormal}
             onStartColosseumMatch={handleStartColosseumMatch}
+            onOpenMisPartidas={() => setScreen('partidas')}
             onStartTournamentMatch={handleStartTournamentMatch}
             onOpenCollection={handleOpenCollection}
             onOpenJardin={handleOpenJardin}
@@ -522,6 +544,36 @@ function App() {
             onStartSlotUnlock={startUnlockingSlot}
             onOpenSlotPack={handleOpenSlotPack}
             onDeductTokens={deductUserTokens}
+          />
+        )}
+        {screen === 'partidas' && (
+          <MisPartidas
+            onVolver={() => setScreen('menu')}
+            onVerRepeticion={(roomId) => {
+              setSalaRepeticion(roomId)
+              setScreen('repeticion')
+            }}
+          />
+        )}
+        {screen === 'repeticion' && (
+          <VerRepeticion
+            roomId={salaRepeticion}
+            token={tokenRepeticion}
+            onVolver={() => {
+              setSalaRepeticion(null)
+              // Quien llegó por un enlace compartido no viene de la lista de sus
+              // partidas: se le lleva a la portada, que es lo que hay detrás para
+              // él. Y se limpia la dirección para que recargar no vuelva a abrir
+              // la repetición.
+              if (tokenRepeticion) {
+                setScreen('landing')
+                if (typeof window !== 'undefined') {
+                  window.history.replaceState(null, '', '/')
+                }
+              } else {
+                setScreen('partidas')
+              }
+            }}
           />
         )}
         {screen === 'searching' && (
