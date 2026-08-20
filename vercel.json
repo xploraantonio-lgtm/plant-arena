@@ -1,15 +1,5 @@
 {
-  "//": [
-    "El dominio del juego es www.plants-arena.online. Todo lo que llegue a la",
-    "dirección de Vercel se manda allí, con su ruta y sus parámetros: así los",
-    "enlaces de invitación y de repetición ya repartidos siguen funcionando.",
-    "",
-    "permanent está en false (redirección 307) a propósito: una 308 se queda",
-    "guardada en el navegador de quien la reciba y cuesta deshacerla. Cuando",
-    "compruebes que el dominio va bien, cámbialo a true.",
-    "",
-    "Los redirects se aplican ANTES de los rewrites, así que el orden importa."
-  ],
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "redirects": [
     {
       "source": "/(.*)",
