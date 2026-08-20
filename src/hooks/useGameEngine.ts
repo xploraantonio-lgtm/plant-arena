@@ -29,7 +29,6 @@ import {
   PLANT_CONFIGS,
   INITIAL_SUN,
   INITIAL_BASE_HP,
-  SUN_VALUE,
   BASE_LEFT_END_X,
   FIELD_WIDTH_PCT,
   TOTAL_COLUMNS,
@@ -298,8 +297,12 @@ export function useGameEngine() {
   const collectSun = useCallback(
     (sunId: string) => {
       const state = stateRef.current
+      // El valor sale del SOL, no de la constante. Con todos a 25 daba lo mismo,
+      // pero un sol de otro valor se habría pagado mal — y en silencio.
+      const sol = state.suns.find((s) => s.id === sunId)
+      if (!sol) return
       state.suns = state.suns.filter((s) => s.id !== sunId)
-      state.sunBank += SUN_VALUE
+      state.sunBank += sol.value
       state.stats.sunsCollected += 1
       state.stats.score += 50
 

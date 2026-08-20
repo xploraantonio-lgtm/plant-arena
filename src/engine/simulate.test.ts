@@ -262,7 +262,12 @@ describe('en PvP el bot se calla y manda el registro de acciones', () => {
     expect(s.enemyPlants).toHaveLength(0)
     // Y el sol del cielo sigue cayendo, que es del azar compartido y es justo
     // para los dos.
-    expect(s.suns.length).toBeGreaterThan(0)
+    //
+    // Se mira el INGRESO y no cuántos soles hay en el campo: desde que se recogen
+    // solos a los 5 segundos, el campo está casi siempre vacío aunque haya
+    // llovido. Contar los del campo medía el retraso en recogerlos, no la lluvia.
+    expect(s.stats.sunsCollected).toBeGreaterThan(0)
+    expect(s.sunBank).toBeGreaterThan(0)
   })
 
   it('la acción del rival se aplica en SU tic, no antes', () => {
@@ -328,7 +333,12 @@ describe('el sol es de los dos', () => {
       stepTick(delOtro, () => {})
     }
 
-    expect(deUnLado.suns.length).toBeGreaterThan(2)   // que llovió algo
+    // Que llovió algo: se mide por lo cobrado, no por lo que queda en el campo.
+    // Los soles se recogen solos a los 5 segundos, así que en el campo hay uno o
+    // ninguno en cualquier momento.
+    expect(deUnLado.stats.sunsCollected).toBeGreaterThan(2)
+    // Y lo que importa de verdad: los dos han cobrado LO MISMO y ven lo mismo.
+    expect(delOtro.sunBank).toBe(deUnLado.sunBank)
     expect(JSON.stringify(delOtro.suns)).toBe(JSON.stringify(deUnLado.suns))
   })
 

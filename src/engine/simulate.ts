@@ -28,6 +28,7 @@ import {
   GIRASOL_DOBLE_MS,
   SOLES_POR_CICLO_GIRASOL,
   SOLES_POR_CICLO_GIRASOL_DOBLE,
+  SOL_SE_RECOGE_SOLO_MS,
   MUERTE_SUBITA_MS,
   DESGASTE_MUERTE_SUBITA_POR_SEGUNDO,
   TOPE_DE_PARTIDA_MS,
@@ -1098,13 +1099,33 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
     })
   }
 
-  // Update Suns (suns float to target position and STAY until clicked)
-  state.suns = state.suns.map((s) => {
-    if (s.y < s.targetY) {
-      return { ...s, y: Math.min(s.targetY, s.y + 20 * dt) }
+  // ───────────────────────────────────────────────────────────────────────────
+  // LOS SOLES: CAEN, Y SI NO LOS RECOGES SE RECOGEN SOLOS
+  //
+  // Antes se quedaban en el campo hasta que los pulsabas. Eso hacía que el
+  // ingreso —lo que decide la partida— dependiera del pulso: dos jugadores con
+  // los MISMOS soles cayendo acababan uno con 250 y el otro con 200.
+  //
+  // Ahora, pasados 5 segundos, el sol entra igual. Quien lo pulsa antes lo cobra
+  // antes (y esa ventaja de tempo es real: planta antes); quien se despista lo
+  // cobra tarde, pero no lo pierde.
+  //
+  // Lo hace el motor en un tic concreto, así que las dos simulaciones coinciden.
+  // El valor sale del propio sol y no de la constante: si algún día hay soles de
+  // 50, este bucle ya los paga bien.
+  // ───────────────────────────────────────────────────────────────────────────
+  const plazoDelSol = msToTicks(SOL_SE_RECOGE_SOLO_MS)
+  const quedan: SunEntity[] = []
+  for (const s of state.suns) {
+    if (state.tick - s.createdAt >= plazoDelSol) {
+      state.sunBank += s.value
+      state.stats.sunsCollected += 1
+      state.stats.score += 50
+      continue
     }
-    return s
-  })
+    quedan.push(s.y < s.targetY ? { ...s, y: Math.min(s.targetY, s.y + 20 * dt) } : s)
+  }
+  state.suns = quedan
 
   // ───────────────────────────────────────────────────────────────────────────
   // 4-6. LOS DOS LADOS, CON LAS MISMAS REGLAS

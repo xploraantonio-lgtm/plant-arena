@@ -20,9 +20,14 @@ const melonImg = '/game-assets/images/Plants/melon_pult.png'
 const needleImg = '/game-assets/greenfoot/needle1.png'
 import PlantHand from './PlantHand'
 import RelojDePartida from '../RelojDePartida/RelojDePartida'
+import { SOL_SE_RECOGE_SOLO_MS } from '../../engine/balance'
+import { TICK_MS } from '../../engine/time'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import './Battlefield.css'
+
+/** Un segundo antes de que el sol se recoja solo: momento de avisar. */
+const TICS_ANTES_DE_RECOGERSE_SOLO = Math.round((SOL_SE_RECOGE_SOLO_MS - 1000) / TICK_MS)
 
 function getBattlefieldPlantLevel(plantId: string): number {
   try {
@@ -909,7 +914,12 @@ export default function Battlefield({
         <button
           key={sun.id}
           type="button"
-          className="sun-item"
+          // El último segundo antes de recogerse solo se avisa: si el sol
+          // desapareciera sin más, parecería que se ha perdido — y lo que pasa es
+          // justo lo contrario, que entra igual.
+          className={`sun-item ${
+            tick - sun.createdAt >= TICS_ANTES_DE_RECOGERSE_SOLO ? 'sun-item--se-va' : ''
+          }`}
           style={{
             left: `${sun.x}%`,
             top: `${sun.y}%`,

@@ -113,3 +113,34 @@ export const DESGASTE_MUERTE_SUBITA_POR_SEGUNDO = 12
  * base más rápido de lo que se desgasta.
  */
 export const TOPE_DE_PARTIDA_MS = 330_000
+
+/**
+ * Cuánto aguanta un sol en el campo antes de recogerse solo.
+ *
+ * EL PROBLEMA QUE ARREGLA
+ *   Los soles caen exactamente igual en las dos pantallas —misma semilla, mismo
+ *   tic, misma posición—, pero cada jugador tenía que PULSAR los suyos. Y ahí se
+ *   abría una diferencia que no tiene nada que ver con jugar mejor: uno iba por
+ *   250 y el otro por 200 recogiendo «casi al mismo tiempo». Los 50 que faltaban
+ *   eran dos soles que seguían en el campo esperando, o dos clics que se
+ *   escaparon.
+ *
+ *   Con un ingreso que decide la partida, eso no puede depender del pulso, del
+ *   ratón o de un dedo en un móvil. Es justo la clase de cosa de la que un
+ *   jugador se queja con razón.
+ *
+ * POR QUÉ 5 SEGUNDOS Y NO CERO
+ *   A cero, recoger dejaría de existir y el campo sería una pantalla que se mira.
+ *   A 5 segundos siguen pasando las dos cosas que importan:
+ *     · quien recoge rápido cobra ANTES, y adelantar 25 soles cinco segundos al
+ *       principio de la partida es una ventaja de tempo real: planta antes;
+ *     · quien se despista NO PIERDE el sol, sólo lo cobra tarde.
+ *
+ *   O sea: la habilidad sigue premiada, el descuido ya no se castiga con menos
+ *   ingreso total. Los dos jugadores acaban la partida habiendo cobrado los
+ *   mismos soles del cielo.
+ *
+ * Y como lo hace el motor en un tic concreto, las dos simulaciones coinciden:
+ * no es un temporizador del navegador de cada uno.
+ */
+export const SOL_SE_RECOGE_SOLO_MS = 5000

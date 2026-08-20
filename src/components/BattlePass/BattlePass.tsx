@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { soundManager } from '../../utils/audioManager'
 import { BATTLE_PASS_LEVELS, type PassLevel } from '../../utils/battlePassManager'
 import './BattlePass.css'
+import { VIP_PASS_PRECIO_GEMAS } from '../../utils/gameConstants'
 
 interface BattlePassProps {
   userElo: number
@@ -94,7 +95,7 @@ export default function BattlePass({
             </div>
           ) : (
             <button className="battle-pass-buy-btn" type="button" onClick={onBuyVipPass}>
-              👑 ACTIVAR PASE VIP ($10.00 USD)
+              👑 ACTIVAR PASE VIP ({VIP_PASS_PRECIO_GEMAS} 💎)
             </button>
           )}
         </div>
@@ -208,7 +209,7 @@ export default function BattlePass({
                 className="pass-pedestal-vip-btn"
                 onClick={onBuyVipPass}
               >
-                👑 ACTIVAR PASE VIP ($10.00 USD)
+                👑 ACTIVAR PASE VIP ({VIP_PASS_PRECIO_GEMAS} 💎)
               </button>
             ) : (
               <div className="pass-pedestal-status-btn pass-pedestal-status-btn--locked">

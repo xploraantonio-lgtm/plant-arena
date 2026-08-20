@@ -376,3 +376,15 @@ export function getScaledPlantConfig(
     damage: base.damage !== undefined ? Math.round(base.damage * scale) : undefined,
   }
 }
+
+/**
+ * Precio del Pase VIP, en GEMAS.
+ *
+ * Sólo para los textos. El precio de verdad lo cobra el servidor leyendo
+ * shop_config.vip_pass_price_gems, así que si algún día se cambia ahí hay que
+ * cambiarlo aquí también — o el botón dirá un número y se cobrará otro.
+ *
+ * Está aquí porque el número estaba escrito diez veces a mano y, además, como
+ * «$10.00 USD»: el juego cobra gemas y la pantalla prometía dólares.
+ */
+export const VIP_PASS_PRECIO_GEMAS = 10

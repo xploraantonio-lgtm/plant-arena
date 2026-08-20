@@ -1374,3 +1374,16 @@
   border-radius: 0.35rem;
   pointer-events: none;
 }
+
+/* El último segundo antes de que el sol se recoja solo.
+   Late, no se apaga: lo que va a pasar es que ENTRA, no que se pierde. */
+.sun-item--se-va { animation: solSeVa 0.5s ease-in-out infinite alternate; }
+
+@keyframes solSeVa {
+  from { transform: scale(1); filter: none; }
+  to   { transform: scale(1.18); filter: drop-shadow(0 0 10px rgba(253, 224, 71, 0.95)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sun-item--se-va { animation: none; opacity: 0.85; }
+}

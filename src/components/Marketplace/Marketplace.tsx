@@ -7,7 +7,7 @@ import {
 import { SupabaseService } from '../../services/supabaseService'
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
 import type { PlantId, PlantCardInstance } from '../../types/game'
-import { PLANT_CONFIGS, STAT_LABELS, type PlantStatKey } from '../../utils/gameConstants'
+import { PLANT_CONFIGS, STAT_LABELS, VIP_PASS_PRECIO_GEMAS, type PlantStatKey } from '../../utils/gameConstants'
 import './Marketplace.css'
 
 interface MarketplaceProps {
@@ -304,12 +304,12 @@ Ya está en tu Jardín.`,
     if (!hasVipPass) {
       showModalConfirm(
         'PASE VIP REQUERIDO',
-        'El Mercado de Comercio es exclusivo para miembros con Pase VIP ($10.00 USD).\n¿Deseas activar tu Pase VIP ahora para vender cartas y builds?',
+        `El Mercado de Comercio es exclusivo para miembros con Pase VIP (${VIP_PASS_PRECIO_GEMAS} 💎 gemas).\n¿Deseas activar tu Pase VIP ahora para vender cartas y builds?`,
         '👑',
         () => {
           void onBuyVipPass()
         },
-        'ACTIVAR VIP ($10.00)',
+        `ACTIVAR VIP (${VIP_PASS_PRECIO_GEMAS} 💎)`,
         'CANCELAR'
       )
       return
@@ -410,7 +410,7 @@ Recibirás ${neto} 💎 cuando se venda.`,
   const handleDirectBuyVip = () => {
     showModalConfirm(
       'ACTIVAR PASE VIP',
-      '¿Deseas pagar $10.00 USD para activar tu Pase VIP de Temporada?\nDesbloquearás el Mercado de Comercio y todas las recompensas exclusivas del Pase de Batalla.',
+      `¿Deseas pagar ${VIP_PASS_PRECIO_GEMAS} 💎 gemas para activar tu Pase VIP de Temporada?\nDesbloquearás el Mercado de Comercio y todas las recompensas exclusivas del Pase de Batalla.`,
       '👑',
       async () => {
         const { success, error } = await onBuyVipPass()
@@ -421,7 +421,7 @@ Recibirás ${neto} 💎 cuando se venda.`,
           showModalAlert('NO SE PUDO ACTIVAR', error || 'El servidor rechazó la compra del pase VIP.', '⚠️', 'warning')
         }
       },
-      'ACTIVAR ($10.00 USD)',
+      `ACTIVAR (${VIP_PASS_PRECIO_GEMAS} 💎)`,
       'CANCELAR'
     )
   }
@@ -433,13 +433,13 @@ Recibirás ${neto} 💎 cuando se venda.`,
         <div className="market-vip-lock-banner">
           <div className="market-vip-lock-icon">👑</div>
           <div className="market-vip-lock-info">
-            <h3>VENTA EXCLUSIVA PARA USUARIOS VIP ($10 USD)</h3>
+            <h3>VENTA EXCLUSIVA PARA USUARIOS VIP ({VIP_PASS_PRECIO_GEMAS} 💎)</h3>
             <p>
               Todos los jugadores pueden comprar cartas libremente en el mercado. Para <strong>vender tus propias plantas</strong> y monetizar builds, activa el Pase VIP.
             </p>
           </div>
           <button className="market-vip-buy-btn" type="button" onClick={handleDirectBuyVip}>
-            👑 ACTIVAR PASE VIP ($10.00 USD)
+            👑 ACTIVAR PASE VIP ({VIP_PASS_PRECIO_GEMAS} 💎)
           </button>
         </div>
       ) : (
@@ -479,12 +479,12 @@ Recibirás ${neto} 💎 cuando se venda.`,
             if (!hasVipPass) {
               showModalConfirm(
                 'PASE VIP REQUERIDO PARA VENDER',
-                'Para poner en venta cartas de tu Jardín y ganar saldo real ($USD) necesitas el Pase de Batalla VIP ($10.00 USD).\n\n¿Deseas activar tu Pase VIP ahora?',
+                `Para poner en venta cartas de tu Jardín y ganar gemas necesitas el Pase de Batalla VIP (${VIP_PASS_PRECIO_GEMAS} 💎).\n\n¿Deseas activar tu Pase VIP ahora?`,
                 '👑',
                 () => {
                   handleDirectBuyVip()
                 },
-                'ACTIVAR VIP ($10.00 USD)',
+                `ACTIVAR VIP (${VIP_PASS_PRECIO_GEMAS} 💎)`,
                 'CANCELAR'
               )
               return
@@ -751,14 +751,14 @@ Recibirás ${neto} 💎 cuando se venda.`,
                         className="market-shortcut-btn"
                         onClick={() => setSellPriceGems((p) => p + 5)}
                       >
-                        +$5
+                        +5 💎
                       </button>
                       <button
                         type="button"
                         className="market-shortcut-btn"
                         onClick={() => setSellPriceGems((p) => p + 10)}
                       >
-                        +$10
+                        +10 💎
                       </button>
                     </div>
                   </div>
@@ -780,7 +780,7 @@ Recibirás ${neto} 💎 cuando se venda.`,
                       className="market-vip-unlock-cta"
                       onClick={handleDirectBuyVip}
                     >
-                      👑 Activar Pase VIP ($10.00 USD) para habilitar ventas
+                      👑 Activar Pase VIP ({VIP_PASS_PRECIO_GEMAS} 💎) para habilitar ventas
                     </button>
                   )}
                 </form>
