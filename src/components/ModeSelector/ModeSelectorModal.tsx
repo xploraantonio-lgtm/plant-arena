@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { soundManager } from '../../utils/audioManager'
 import './ModeSelectorModal.css'
 
@@ -23,49 +22,17 @@ export default function ModeSelectorModal({
   onSelectRanked,
   onSelectColosseum,
   onSelectTournament,
-  onSelectFriendly,
 }: ModeSelectorModalProps) {
-  const [subModal, setSubModal] = useState<'none' | 'friendly'>('none')
-  const [friendlyCode, setFriendlyCode] = useState<string>('')
-  const [generatedRoomCode, setGeneratedRoomCode] = useState<string | null>(null)
-  const [copiedCode, setCopiedCode] = useState(false)
-
   if (!isOpen) return null
 
   const isColosseumUnlocked = userElo >= 1601
   const eloNeeded = Math.max(0, 1601 - userElo)
-
-  const handleOpenFriendly = () => {
-    soundManager.playSound('click', 0.4)
-    const code = Math.floor(1000 + Math.random() * 9000).toString()
-    setGeneratedRoomCode(code)
-    setSubModal('friendly')
-  }
 
   const handleOpenTournament = () => {
     soundManager.playSound('click', 0.4)
     onClose()
     if (onSelectTournament) {
       onSelectTournament()
-    }
-  }
-
-  const handleStartFriendlyMatch = () => {
-    soundManager.playSound('click', 0.5)
-    setSubModal('none')
-    onClose()
-    if (onSelectFriendly) {
-      onSelectFriendly()
-    } else {
-      onSelectRanked()
-    }
-  }
-
-  const handleCopyCode = () => {
-    if (generatedRoomCode) {
-      navigator.clipboard.writeText(generatedRoomCode)
-      setCopiedCode(true)
-      setTimeout(() => setCopiedCode(false), 2000)
     }
   }
 
@@ -115,21 +82,31 @@ export default function ModeSelectorModal({
             </button>
           </div>
 
-          {/* 2. MODO AMISTOSO */}
-          <div className="mode-card mode-card--friendly" onClick={handleOpenFriendly}>
-            <div className="mode-card__badge mode-card__badge--friendly">SIN RIESGO</div>
-            <div className="mode-card__icon">🤝</div>
+          {/* 2. MODO AMISTOSO (BLOQUEADO TEMPORALMENTE) */}
+          <div
+            className="mode-card mode-card--friendly mode-card--locked"
+            style={{ opacity: 0.8, cursor: 'not-allowed' }}
+            onClick={() => {
+              soundManager.playSound('click', 0.3)
+            }}
+          >
+            <div className="mode-card__badge mode-card__badge--locked">🔒 EN AJUSTES</div>
+            <div className="mode-card__icon">🔒</div>
             <h3 className="mode-card__name">DUELO AMISTOSO</h3>
             <p className="mode-card__desc">
-              Reta a un amigo o jugador Free mediante código de sala para probar mazos y estrategias sin arriesgar copas.
+              Reta a un amigo mediante código de sala privada para probar mazos sin arriesgar copas.
             </p>
             <div className="mode-card__perks">
-              <span>✅ Salas privadas con código</span>
-              <span>✅ Ideal para retar amigos</span>
-              <span>✅ Sin pérdida de ELO</span>
+              <span style={{ color: '#fbbf24' }}>⚙️ Modo temporalmente en ajuste</span>
+              <span>🔒 Salas privadas con código PIN</span>
+              <span>🛡️ Sin alteración de copas</span>
             </div>
-            <button type="button" className="mode-card__action-btn mode-card__action-btn--friendly">
-              🤝 CREAR O UNIRSE
+            <button
+              type="button"
+              className="mode-card__action-btn mode-card__action-btn--disabled"
+              disabled
+            >
+              🔒 PRÓXIMAMENTE
             </button>
           </div>
 
@@ -202,45 +179,6 @@ export default function ModeSelectorModal({
             </button>
           </div>
         </div>
-
-        {/* SUBMODAL: AMISTOSO (CÓDIGO DE SALA) */}
-        {subModal === 'friendly' && (
-          <div className="mode-submodal-overlay" onClick={() => setSubModal('none')}>
-            <div className="mode-submodal-box" onClick={(e) => e.stopPropagation()}>
-              <div className="mode-submodal-icon">🤝</div>
-              <h3>DUELO AMISTOSO (SALA PRIVADA)</h3>
-              <p>Comparte este código con tu rival o ingresa el código de una sala existente:</p>
-
-              <div className="friendly-code-display-box">
-                <span>Tu Código de Sala:</span>
-                <strong className="friendly-code-num">{generatedRoomCode}</strong>
-                <button type="button" className="friendly-copy-btn" onClick={handleCopyCode}>
-                  {copiedCode ? '✅ ¡Copiado!' : '📋 Copiar Código'}
-                </button>
-              </div>
-
-              <div className="friendly-join-row">
-                <input
-                  type="text"
-                  placeholder="Ingresar código de amigo (ej: 4892)"
-                  maxLength={6}
-                  value={friendlyCode}
-                  onChange={(e) => setFriendlyCode(e.target.value)}
-                  className="friendly-join-input"
-                />
-              </div>
-
-              <div className="mode-submodal-actions">
-                <button type="button" className="mode-submodal-btn--cancel" onClick={() => setSubModal('none')}>
-                  VOLVER
-                </button>
-                <button type="button" className="mode-submodal-btn--confirm" onClick={handleStartFriendlyMatch}>
-                  ⚔️ INICIAR DUELO AMISTOSO
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

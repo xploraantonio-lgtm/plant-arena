@@ -12,7 +12,6 @@ import rankingIco from '../../assets/ico/Ranking.png'
 import { soundManager } from '../../utils/audioManager'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import { SupabaseService } from '../../services/supabaseService'
-import LandingAccessModal from './LandingAccessModal'
 import './LandingPage.css'
 
 interface LandingPageProps {
@@ -355,7 +354,6 @@ export default function LandingPage({
   const [lang, setLang] = useState<'es' | 'en'>('es')
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({})
   const [selectedRarity, setSelectedRarity] = useState<RarityFilter>('all')
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState<boolean>(false)
 
   // Real live data from Supabase
   const [totalPlayers, setTotalPlayers] = useState<number>(0)
@@ -407,7 +405,7 @@ export default function LandingPage({
     if (isLoggedIn) {
       onPlayGame()
     } else {
-      setIsAccessModalOpen(true)
+      if (onOpenAuth) onOpenAuth()
     }
   }
 
@@ -1189,18 +1187,6 @@ export default function LandingPage({
           </div>
         </div>
       </footer>
-
-      {/* Giant Production Access Modal (Secret Code arena$$**) */}
-      <LandingAccessModal
-        isOpen={isAccessModalOpen}
-        onClose={() => setIsAccessModalOpen(false)}
-        isLoggedIn={Boolean(isLoggedIn)}
-        onOpenAuth={() => {
-          setIsAccessModalOpen(false)
-          if (onOpenAuth) onOpenAuth()
-        }}
-        onProceedToGame={onPlayGame}
-      />
     </div>
   )
 }

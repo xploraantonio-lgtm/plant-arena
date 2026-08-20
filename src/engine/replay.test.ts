@@ -10,8 +10,8 @@
 // servidor podría no coincidir con lo que vieron los jugadores.
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
-import { construirRepeticion, recalcularGanador, type DatosDeRepeticion } from './replay'
-import { stepTick, createBattleState, crearPlantaDelRival, crearPlantaPropia } from './simulate'
+import { construirRepeticion, recalcularGanador, type DatosDeRepeticion, type JugadaGrabada } from './replay'
+import { stepTick, createBattleState, crearPlantaDelRival, crearPlantaPropia, TIC_MUERTE_SUBITA } from './simulate'
 import type { PlantId } from '../types/game'
 
 /** Una partida grabada: lo que devuelve match_replay. */
@@ -134,5 +134,72 @@ describe('la geometría de la reproducción es la de la partida', () => {
     expect(mia.x).toBeLessThan(50)
     expect(suya.x).toBeGreaterThan(50)
     expect(Math.round(mia.x + suya.x)).toBe(100)
+  })
+})
+
+describe('la repetición llega hasta el final de la partida', () => {
+  // Se compartió una batalla y el reproductor la dejaba en el segundo 102: se
+  // paraba unos segundos después de la ÚLTIMA JUGADA, no al acabar la partida. Y
+  // si nadie planta en el último minuto —que es lo normal cuando ya está
+  // decidida— el mensaje de victoria no llegaba nunca.
+  const datosCon = (jugadas: JugadaGrabada[]): DatosDeRepeticion => ({
+    roomId: 'r1',
+    mode: 'ranked',
+    seed: 4242,
+    jugadaEn: '2026-01-01T00:00:00Z',
+    jugador1: { nombre: 'Ana', avatar: null },
+    jugador2: { nombre: 'Beto', avatar: null },
+    ganador: null,
+    yoSoy: 1,
+    jugadas,
+  })
+
+  it('el tic final va mucho más allá de la última jugada', () => {
+    // Una sola jugada al segundo 3 y nada más. Antes: la repetición duraba 13
+    // segundos. Ahora tiene que llegar hasta donde la partida se decide.
+    const rep = construirRepeticion(
+      datosCon([{ de: 1, tick: 90, kind: 'plant', plantId: 'sunflower', lane: 0, col: 2 }])
+    )
+
+    expect(rep.ultimoTic).toBe(90)
+    expect(rep.ticFinal).toBeGreaterThan(rep.ultimoTic + 300)
+    // Y la muerte súbita entra a los 2:30, así que el final está más allá.
+    expect(rep.ticFinal).toBeGreaterThan(TIC_MUERTE_SUBITA)
+  })
+
+  it('sabe cómo acabó', () => {
+    const rep = construirRepeticion(
+      datosCon([
+        { de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', lane: 0, col: 2 },
+        { de: 1, tick: 60, kind: 'plant', plantId: 'peashooter', lane: 1, col: 2 },
+        { de: 1, tick: 90, kind: 'plant', plantId: 'peashooter', lane: 2, col: 2 },
+      ])
+    )
+    // Ana plantó y Beto no: gana Ana, y la repetición lo sabe antes de empezar
+    // (lo necesita para pintar la barra de tiempo).
+    expect(rep.resultado).toBe('victory')
+  })
+
+  it('avanzando hasta el final se llega al mismo resultado', () => {
+    const rep = construirRepeticion(
+      datosCon([{ de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', lane: 0, col: 2 }])
+    )
+    while (rep.avanzar()) { /* hasta que acabe */ }
+
+    expect(rep.estado.status).not.toBe('playing')
+    expect(rep.estado.status).toBe(rep.resultado)
+    expect(rep.estado.tick).toBe(rep.ticFinal)
+  })
+
+  it('mirada desde el otro lado, el resultado es el contrario', () => {
+    const jugadas: JugadaGrabada[] = [
+      { de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', lane: 0, col: 2 },
+      { de: 1, tick: 60, kind: 'plant', plantId: 'peashooter', lane: 1, col: 2 },
+    ]
+    const deAna = construirRepeticion(datosCon(jugadas), 1)
+    const deBeto = construirRepeticion(datosCon(jugadas), 2)
+
+    expect(deAna.resultado).not.toBe(deBeto.resultado)
+    expect(Math.abs(deAna.ticFinal - deBeto.ticFinal)).toBeLessThanOrEqual(1)
   })
 })

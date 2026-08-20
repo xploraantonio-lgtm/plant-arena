@@ -14,7 +14,16 @@
 // sembrar el azar, convertir los setTimeout en una cola por tics, sacar el motor
 // de React. Sin eso, volver a ejecutar una partida daba otra partida parecida.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createBattleState, stepTick, type GameState } from './simulate'
+import { createBattleState, stepTick, TIC_TOPE_DE_PARTIDA, type GameState } from './simulate'
+
+/**
+ * Tope al medir la duración de una repetición.
+ *
+ * El motor garantiza que toda partida acaba en TIC_TOPE_DE_PARTIDA, pero un
+ * registro manipulado no tiene por qué respetar nada: el margen evita que medir
+ * una repetición cuelgue la pestaña.
+ */
+const TOPE_DE_SEGURIDAD = TIC_TOPE_DE_PARTIDA + 600
 import type { PlantId } from '../types/game'
 
 /** Una jugada tal como la devuelve match_replay. */
@@ -43,8 +52,23 @@ export interface DatosDeRepeticion {
 
 export interface Repeticion {
   estado: GameState
-  /** El último tic con alguna jugada: más allá no pasa nada nuevo. */
+  /** El último tic con alguna jugada. */
   ultimoTic: number
+  /**
+   * El tic en que la partida TERMINA de verdad.
+   *
+   * Esto es lo que faltaba. La reproducción se paraba unos segundos después de la
+   * última jugada, y una partida en la que nadie planta al final se cortaba antes
+   * del resultado: se compartió una batalla y el reproductor la dejaba en el
+   * segundo 102 sin llegar nunca al mensaje de victoria.
+   *
+   * Se calcula ejecutando la partida entera una vez al montar la repetición —el
+   * motor tarda milisegundos en miles de tics— y ahora se puede porque NINGUNA
+   * partida es infinita: a los 2:30 entra la muerte súbita y a los 5:30 hay tope.
+   */
+  ticFinal: number
+  /** Cómo acabó, desde el lado que se está mirando. */
+  resultado: 'victory' | 'defeat' | null
   /** Desde qué lado se está mirando. */
   desde: 1 | 2
   /** Avanza un tic. Devuelve si la partida sigue. */
@@ -98,11 +122,31 @@ export function construirRepeticion(datos: DatosDeRepeticion, desde: 1 | 2 = 1):
     return estado
   }
 
+  // Una pasada entera para saber dónde acaba y cómo. Se tira el estado: sólo
+  // interesan el tic final y el resultado, que son los que gobiernan la barra de
+  // tiempo y el cartel del final.
+  const medida = (() => {
+    const e = estadoInicial()
+    let n = 0
+    while (e.status === 'playing' && n < TOPE_DE_SEGURIDAD) {
+      stepTick(e, () => {})
+      n += 1
+    }
+    return {
+      tic: e.tick,
+      resultado: e.status === 'victory' ? 'victory' as const
+               : e.status === 'defeat' ? 'defeat' as const
+               : null,
+    }
+  })()
+
   let estado = estadoInicial()
 
   return {
     get estado() { return estado },
     ultimoTic,
+    ticFinal: medida.tic,
+    resultado: medida.resultado,
     desde,
 
     avanzar() {

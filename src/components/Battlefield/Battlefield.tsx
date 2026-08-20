@@ -1019,7 +1019,7 @@ export default function Battlefield({
                 )}
                 {resultadoServidor?.status === 'liquidada' && (
                   <p className="resultado-servidor__ok">
-                    ✅ Partida confirmada por los dos.
+                    ✅ Partida Confirmada
                     {typeof resultadoServidor.eloGained === 'number' &&
                       gameStatus === 'victory' &&
                       ` +${resultadoServidor.eloGained} 🏆`}

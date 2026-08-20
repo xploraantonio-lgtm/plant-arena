@@ -23,7 +23,7 @@ interface WheelSector {
   icon: string
   color: string
   textColor: string
-  type: 'token' | 'gold' | 'pack' | 'plant'
+  type: 'token' | 'gold' | 'pack' | 'plant' | 'none'
   valueUsd?: number
   goldAmount?: number
   packId?: 'basic' | 'epic' | 'legendary'
@@ -35,108 +35,81 @@ interface WheelSector {
 
 const WHEEL_SECTORS: WheelSector[] = [
   {
-    id: 'jackpot_20',
-    label: '20 Gemas 💎',
+    id: 'jackpot_5',
+    label: '5 Gemas 💎',
     icon: '👑',
     color: '#eab308',
     textColor: '#ffffff',
     type: 'token',
-    valueUsd: 20.0,
+    valueUsd: 5.0,
     rarity: 'jackpot',
   },
   {
-    id: 'pack_legendary',
-    label: 'Sobre Dorado',
-    icon: '📦',
-    color: '#f59e0b',
+    id: 'none_1',
+    label: 'Sigue Intentando',
+    icon: '💨',
+    color: '#475569',
     textColor: '#ffffff',
-    type: 'pack',
-    packId: 'legendary',
-    packQty: 1,
-    rarity: 'legendary',
+    type: 'none',
+    rarity: 'common',
   },
   {
-    id: 'gold_5000',
-    label: '5,000 Oro',
+    id: 'gold_500',
+    label: '500 Oro',
     icon: '🪙',
-    color: '#3b82f6',
+    color: '#f59e0b',
     textColor: '#ffffff',
     type: 'gold',
-    goldAmount: 5000,
+    goldAmount: 500,
     rarity: 'rare',
   },
   {
-    id: 'usd_1',
-    label: '1 Gema 💎',
-    icon: '💎',
-    color: '#10b981',
+    id: 'none_2',
+    label: 'Sigue Intentando',
+    icon: '💨',
+    color: '#334155',
     textColor: '#ffffff',
-    type: 'token',
-    valueUsd: 1.0,
+    type: 'none',
     rarity: 'common',
   },
   {
-    id: 'plant_repeater',
-    label: '3x Repetidor',
-    icon: '🌱',
-    color: '#8b5cf6',
-    textColor: '#ffffff',
-    type: 'plant',
-    plantId: 'repeater',
-    plantQty: 3,
-    rarity: 'epic',
-  },
-  {
-    id: 'pack_epic',
-    label: 'Sobre Épico',
+    id: 'pack_basic',
+    label: 'Sobre Básico',
     icon: '📦',
-    color: '#a855f7',
-    textColor: '#ffffff',
-    type: 'pack',
-    packId: 'epic',
-    packQty: 1,
-    rarity: 'epic',
-  },
-  {
-    id: 'gold_2500',
-    label: '2,500 Oro',
-    icon: '🪙',
-    color: '#06b6d4',
-    textColor: '#ffffff',
-    type: 'gold',
-    goldAmount: 2500,
-    rarity: 'common',
-  },
-  {
-    id: 'usd_5',
-    label: '5 Gemas 💎',
-    icon: '💎',
-    color: '#22c55e',
-    textColor: '#ffffff',
-    type: 'token',
-    valueUsd: 5.0,
-    rarity: 'legendary',
-  },
-  {
-    id: 'plant_twinsunflower',
-    label: '3x Girasol 2x',
-    icon: '🌻',
-    color: '#ec4899',
-    textColor: '#ffffff',
-    type: 'plant',
-    plantId: 'twinsunflower',
-    plantQty: 3,
-    rarity: 'epic',
-  },
-  {
-    id: 'pack_basic_2',
-    label: '2x Sobre Básico',
-    icon: '📦',
-    color: '#14b8a6',
+    color: '#3b82f6',
     textColor: '#ffffff',
     type: 'pack',
     packId: 'basic',
-    packQty: 2,
+    packQty: 1,
+    rarity: 'common',
+  },
+  {
+    id: 'gold_200',
+    label: '200 Oro',
+    icon: '🪙',
+    color: '#10b981',
+    textColor: '#ffffff',
+    type: 'gold',
+    goldAmount: 200,
+    rarity: 'common',
+  },
+  {
+    id: 'none_3',
+    label: 'Sigue Intentando',
+    icon: '💨',
+    color: '#64748b',
+    textColor: '#ffffff',
+    type: 'none',
+    rarity: 'common',
+  },
+  {
+    id: 'gold_50',
+    label: '50 Oro',
+    icon: '🪙',
+    color: '#8b5cf6',
+    textColor: '#ffffff',
+    type: 'gold',
+    goldAmount: 50,
     rarity: 'common',
   },
 ]
@@ -377,7 +350,11 @@ export default function LotteryModal({
       setIsSpinning(false)
       setWinningSector(sectorToWin)
       setShowPrizeModal(true)
-      soundManager.playSound('victory', 0.9)
+      if (sectorToWin.type === 'none') {
+        soundManager.playSound('click', 0.8)
+      } else {
+        soundManager.playSound('victory', 0.9)
+      }
       // Traer saldo e inventario reales.
       void onRewardsChanged?.()
     }, 4600)
@@ -643,19 +620,16 @@ export default function LotteryModal({
                   <span className="lottery-prizes-title">🎁 PREMIOS EN ESTE SORTEO:</span>
                   <div className="lottery-prizes-tags-grid">
                     <div className="lottery-prize-tag lottery-prize-tag--jackpot">
-                      👑 20 Gemas 💎 (Jackpot)
+                      👑 5 Gemas 💎 (Jackpot)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--legendary">
-                      📦 Sobre Legendario (5 Plantas)
-                    </div>
-                    <div className="lottery-prize-tag lottery-prize-tag--usd">
-                      💎 5 Gemas & 1 Gema
-                    </div>
-                    <div className="lottery-prize-tag lottery-prize-tag--epic">
-                      📦 Sobre Épico & Plantas x3
+                      📦 Sobre Básico
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--gold">
-                      🪙 Hasta 5,000 Oro
+                      🪙 500, 200 y 50 Oro
+                    </div>
+                    <div className="lottery-prize-tag lottery-prize-tag--epic">
+                      💨 Sigue Intentando
                     </div>
                   </div>
                 </div>
@@ -1053,12 +1027,21 @@ export default function LotteryModal({
         {showPrizeModal && winningSector && (
           <div className="lottery-prize-overlay" onClick={() => setShowPrizeModal(false)}>
             <div className="lottery-prize-box" onClick={(e) => e.stopPropagation()}>
-              <div className="lottery-prize-confetti">🎉 🎊 ✨</div>
-              <div className="lottery-prize-badge">¡FELICITACIONES!</div>
+              <div className="lottery-prize-confetti">
+                {winningSector.type === 'none' ? '💨 🍀 ✨' : '🎉 🎊 ✨'}
+              </div>
+              <div
+                className="lottery-prize-badge"
+                style={winningSector.type === 'none' ? { background: '#64748b', color: '#ffffff' } : undefined}
+              >
+                {winningSector.type === 'none' ? '¡SIGUE INTENTANDO!' : '¡FELICITACIONES!'}
+              </div>
               <div className="lottery-prize-icon">{winningSector.icon}</div>
               <h3 className="lottery-prize-name">{winningSector.label}</h3>
               <p className="lottery-prize-desc">
-                {winningSector.type === 'token'
+                {winningSector.type === 'none'
+                  ? '¡No te desanimes! Vuelve mañana para tu tiro gratis diario o gira por 1 Gema 💎.'
+                  : winningSector.type === 'token'
                   ? `¡Se han acreditado ${winningSector.valueUsd?.toFixed(0)} Gemas 💎 a tu cuenta!`
                   : winningSector.type === 'gold'
                   ? `¡Has ganado ${winningSector.goldAmount?.toLocaleString()} Monedas de Oro!`
@@ -1074,7 +1057,7 @@ export default function LotteryModal({
                   setShowPrizeModal(false)
                 }}
               >
-                RECLAMAR RECOMPENSA
+                {winningSector.type === 'none' ? 'ENTENDIDO' : 'RECLAMAR RECOMPENSA'}
               </button>
             </div>
           </div>

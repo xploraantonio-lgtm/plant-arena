@@ -102,9 +102,12 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
 
       setPintar((n) => n + 1)
 
-      // Se para al acabar la partida, o unos segundos después de la última jugada
-      // si la partida no llegó a terminar (una disputa o un abandono).
-      if (!sigue || rep.estado.tick > rep.ultimoTic + 300) {
+      // Se para cuando la partida acaba de verdad. Antes se paraba unos segundos
+      // después de la ÚLTIMA JUGADA, y eso cortaba la repetición antes del final:
+      // una batalla compartida se quedaba en el segundo 102 y no llegaba nunca al
+      // mensaje de victoria. Ahora toda partida termina (muerte súbita a los 2:30,
+      // tope a los 5:30), así que se puede correr hasta el final sin más.
+      if (!sigue) {
         setReproduciendo(false)
         return
       }
@@ -136,7 +139,7 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
   const miNombre = desde === 1 ? datos.jugador1.nombre : datos.jugador2.nombre
   const suNombre = desde === 1 ? datos.jugador2.nombre : datos.jugador1.nombre
   const segundo = Math.floor((estado.tick * TICK_MS) / 1000)
-  const total = Math.max(1, Math.floor(((rep.ultimoTic + 300) * TICK_MS) / 1000))
+  const total = Math.max(1, Math.floor((rep.ticFinal * TICK_MS) / 1000))
 
   return (
     <div className="rep">
@@ -184,6 +187,19 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
             }}
           />
         ))}
+        {/* El final. Es lo que el jugador quiere ver al compartir una batalla, y
+            antes no llegaba nunca porque la reproducción se cortaba antes. */}
+        {estado.status !== 'playing' && (
+          <div className={`rep-final ${estado.status === 'victory' ? 'rep-final--gana' : 'rep-final--pierde'}`}>
+            <span className="rep-final__titulo">
+              {estado.status === 'victory' ? '🏆 VICTORIA' : '💀 DERROTA'}
+            </span>
+            <span className="rep-final__nota">
+              {estado.status === 'victory' ? miNombre ?? 'Jugador 1' : suNombre ?? 'Jugador 2'} gana
+            </span>
+          </div>
+        )}
+
         {estado.projectiles.map((pr) => (
           <div key={pr.id} className="rep__proyectil" style={{ left: `${pr.x}%`, top: `${pr.y}%` }} />
         ))}
@@ -199,7 +215,7 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
           onClick={() => {
             // Si ya terminó, volver a pulsar reinicia: es lo que se espera de un
             // botón de reproducir al final de un vídeo.
-            if (estado.status !== 'playing' || estado.tick > rep.ultimoTic + 299) {
+            if (estado.status !== 'playing') {
               rep.irAlTic(0)
             }
             setReproduciendo((r) => !r)
@@ -212,7 +228,7 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
           className="rep__barra"
           type="range"
           min={0}
-          max={rep.ultimoTic + 300}
+          max={rep.ticFinal}
           value={estado.tick}
           onChange={(e) => {
             setReproduciendo(false)
