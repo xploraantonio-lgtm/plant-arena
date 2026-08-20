@@ -174,6 +174,8 @@ function App() {
   const [salaId, setSalaId] = useState<string | null>(null)
   const [semillaPartida, setSemillaPartida] = useState<number | undefined>(undefined)
   const [rivalId, setRivalId] = useState<string | null>(null)
+  /** Los nicks de los dos, para ponerlos encima de cada árbol en la batalla. */
+  const [nombresEnPartida, setNombresEnPartida] = useState<{ mio: string; rival: string } | null>(null)
 
   /**
    * Cuando el servidor empareja, se leen la semilla y los jugadores de la sala y
@@ -183,7 +185,9 @@ function App() {
     if (!encontrada) return
     let cancelado = false
     ;(async () => {
-      const sala = await SupabaseService.getGameRoom(encontrada.roomId)
+      // gameRoomInfo y no getGameRoom: trae además los nicks de los dos, para
+      // poder poner "Xplora" y "Leonel" en la batalla en lugar de "ÁRBOL MADRE".
+      const sala = await SupabaseService.gameRoomInfo(encontrada.roomId)
       if (cancelado) return
       if (!sala) {
         // Sin sala no se puede jugar la partida real: se vuelve al menú en lugar
@@ -193,7 +197,12 @@ function App() {
       }
       setSalaId(sala.id)
       setSemillaPartida(Number(sala.seed))
-      setRivalId(sala.player1_id === user?.id ? sala.player2_id : sala.player1_id)
+      const soyP1 = sala.iAm === 'p1'
+      setRivalId(soyP1 ? sala.player2.id : sala.player1.id)
+      setNombresEnPartida({
+        mio: (soyP1 ? sala.player1.username : sala.player2.username) ?? 'Tú',
+        rival: (soyP1 ? sala.player2.username : sala.player1.username) ?? 'Rival',
+      })
       setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
       setPracticePlantId(null)
       setScreen('battle')
@@ -256,6 +265,7 @@ function App() {
     setSalaId(null)
     setSemillaPartida(undefined)
     setRivalId(null)
+    setNombresEnPartida(null)
     if (!buscaRival('ranked')) {
       setScreen('battle')
       return
@@ -525,6 +535,7 @@ function App() {
             roomId={salaId}
             seed={semillaPartida}
             opponentId={rivalId}
+            nombres={nombresEnPartida}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)

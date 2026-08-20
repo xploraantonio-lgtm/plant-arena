@@ -545,6 +545,44 @@ export const SupabaseService = {
   },
 
   /**
+ * Los datos de la sala CON los nombres de los dos jugadores.
+ *
+ * Sustituye a getGameRoom para la batalla: hace falta el nick de cada uno para
+ * poder poner "Xplora" y "Leonel" encima de cada árbol en lugar de
+ * "ÁRBOL MADRE (P1)".
+ *
+ * Va por RPC y no por un select con join para devolver exactamente lo que hace
+ * falta del perfil ajeno —nombre, avatar y ELO— y nada más.
+ */
+  async gameRoomInfo(roomId: string): Promise<{
+    id: string
+    mode: string
+    seed: number
+    status: string
+    colosseumBet: number
+    p1Deck: unknown
+    p2Deck: unknown
+    player1: { id: string; username: string | null; avatarId: string | null; elo: number | null }
+    player2: { id: string; username: string | null; avatarId: string | null; elo: number | null }
+    iAm: 'p1' | 'p2'
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('game_room_info', {
+        p_room_id: roomId,
+      })
+      if (error) {
+        logError('gameRoomInfo', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('gameRoomInfo', e)
+      return null
+    }
+  },
+
+  /**
    * Rendirse en una partida real.
    *
    * No necesita que el rival confirme nada: lo dice quien pierde. El servidor

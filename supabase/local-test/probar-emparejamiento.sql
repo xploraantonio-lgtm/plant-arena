@@ -687,3 +687,108 @@ BEGIN
   PERFORM public._t('el cliente no puede escribir acciones directamente',
                     v_n = 0, 'permisos encontrados: ' || v_n);
 END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN RAISE NOTICE E'\n=== 14. EL TIC DEL CLIENTE NO ES EL RELOJ (migración 20) ==='; END $$;
+
+-- El fallo que se vio jugando: el tic 0 del cliente NO es cuando se creó la sala.
+-- Entre una cosa y otra pasan segundos (emparejar, leer la sala, cambiar de
+-- pantalla, cargar la batalla). La primera versión deducía el tic de la partida
+-- del reloj y rechazaba TODO por antiguo, así que el rival no veía nada.
+--
+-- Estas comprobaciones simulan ese retardo, que es lo que la prueba instantánea
+-- no podía ver.
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB;
+BEGIN
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+
+  -- La sala se creó hace 4 segundos y el cliente acaba de empezar: su tic va por
+  -- 10. Es el caso real.
+  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '4 seconds' WHERE id = v_sala;
+
+  PERFORM public._soy(v_a);
+  BEGIN
+    v_res := public.submit_match_action(v_sala, 1, 16, 'plant', 'sunflower', 0::SMALLINT, 3::SMALLINT);
+    PERFORM public._t('acepta la primera acción aunque la sala se creara antes',
+                      (v_res->>'ok')::BOOLEAN, v_res::TEXT);
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('acepta la primera acción aunque la sala se creara antes',
+                      FALSE, SQLERRM);
+  END;
+
+  -- Y el rival, con su propio retardo, también.
+  PERFORM public._soy(v_b);
+  BEGIN
+    v_res := public.submit_match_action(v_sala, 1, 20, 'plant', 'sunflower', 1::SMALLINT, 3::SMALLINT);
+    PERFORM public._t('el rival también puede jugar con su retardo',
+                      (v_res->>'ok')::BOOLEAN, v_res::TEXT);
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('el rival también puede jugar con su retardo', FALSE, SQLERRM);
+  END;
+
+  -- Lo que SÍ hay que impedir sigue impedido: reescribir el pasado cuando la
+  -- partida ya iba muy avanzada.
+  --
+  -- La sala se envejece a 30 s para que el tic 400 sea posible: con 4 s el techo
+  -- por reloj lo rechazaría, y con razón — la simulación no puede ir por delante
+  -- del tiempo. (La primera versión de esta prueba no lo tenía en cuenta y fallaba
+  -- ella, no el código.)
+  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '30 seconds' WHERE id = v_sala;
+
+  PERFORM public._soy(v_a);
+  PERFORM public.submit_match_action(v_sala, 2, 400, 'plant', 'peashooter', 0::SMALLINT, 4::SMALLINT);
+  BEGIN
+    PERFORM public._soy(v_b);
+    PERFORM public.submit_match_action(v_sala, 2, 30, 'plant', 'wallnut', 2::SMALLINT, 5::SMALLINT);
+    PERFORM public._t('no se puede insertar muy por detrás de la partida', FALSE, 'la aceptó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('no se puede insertar muy por detrás de la partida',
+                      SQLERRM LIKE '%antigua%', SQLERRM);
+  END;
+
+  -- Ni ir hacia atrás respecto a lo tuyo.
+  PERFORM public._soy(v_a);
+  BEGIN
+    PERFORM public.submit_match_action(v_sala, 3, 390, 'plant', 'wallnut', 1::SMALLINT, 5::SMALLINT);
+    PERFORM public._t('tus acciones no pueden ir hacia atrás', FALSE, 'la aceptó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('tus acciones no pueden ir hacia atrás',
+                      SQLERRM LIKE '%hacia atrás%', SQLERRM);
+  END;
+
+  -- Ni correr más que el reloj: la simulación no puede ir por delante del tiempo.
+  BEGIN
+    PERFORM public.submit_match_action(v_sala, 4, 99999, 'plant', 'wallnut', 1::SMALLINT, 5::SMALLINT);
+    PERFORM public._t('la simulación no puede ir por delante del reloj', FALSE, 'la aceptó');
+  EXCEPTION WHEN others THEN
+    PERFORM public._t('la simulación no puede ir por delante del reloj',
+                      SQLERRM LIKE '%futuro%', SQLERRM);
+  END;
+END $$;
+
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_info JSONB;
+BEGIN
+  SELECT id INTO v_sala FROM public.game_rooms
+   WHERE settled_at IS NULL ORDER BY created_at DESC LIMIT 1;
+
+  PERFORM public._soy(v_a);
+  v_info := public.game_room_info(v_sala);
+  PERFORM public._t('la sala trae los nombres de los dos jugadores',
+                    (v_info->'player1'->>'username') IS NOT NULL
+                    AND (v_info->'player2'->>'username') IS NOT NULL,
+                    v_info::TEXT);
+  PERFORM public._t('y dice quién eres tú en ella',
+                    (v_info->>'iAm') IN ('p1','p2'), v_info->>'iAm');
+  PERFORM public._t('no expone saldos del rival',
+                    NOT (v_info->'player2' ? 'gems_balance'), (v_info->'player2')::TEXT);
+END $$;

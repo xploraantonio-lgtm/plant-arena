@@ -40,11 +40,13 @@ interface BaseTowerProps {
   hp: number
   maxHp: number
   sunBank?: number
+  /** El nick del dueño de este árbol. Sin él se usa la etiqueta genérica. */
+  nombre?: string | null
 }
 
 const motherTreeImg = '/game-assets/greenfoot/mothertree_whitebg.png'
 
-function BaseTower({ team, hp, maxHp, sunBank }: BaseTowerProps) {
+function BaseTower({ team, hp, maxHp, sunBank, nombre }: BaseTowerProps) {
   const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100))
 
   return (
@@ -60,7 +62,12 @@ function BaseTower({ team, hp, maxHp, sunBank }: BaseTowerProps) {
           />
         </div>
         <span className="base__label">
-          🌳 {team === 'p1' ? 'ÁRBOL MADRE (P1)' : 'ÁRBOL MADRE (P2)'} ({Math.round(hp)})
+          {/* El nick cuando se sabe de quién es el árbol; la etiqueta genérica
+              contra el bot, donde no hay nadie al otro lado. */}
+          🌳 {nombre
+            ? nombre
+            : team === 'p1' ? 'ÁRBOL MADRE (P1)' : 'ÁRBOL MADRE (P2)'}{' '}
+          ({Math.round(hp)})
         </span>
         {team === 'p2' && sunBank !== undefined && (
           <div className="base__pc-sun">
@@ -111,6 +118,13 @@ interface BattlefieldProps {
   seed?: number
   /** El rival, para poder decirle al servidor quién ganó. */
   opponentId?: string | null
+  /**
+   * Los nicks de los dos, para ponerlos encima de cada árbol.
+   *
+   * Sin esto se lee "ÁRBOL MADRE (P1)" y "ÁRBOL MADRE (P2)", que no dice quién
+   * es quién. Contra el bot no hay nombres y se cae a las etiquetas de siempre.
+   */
+  nombres?: { mio: string; rival: string } | null
 }
 
 export default function Battlefield({
@@ -126,6 +140,7 @@ export default function Battlefield({
   roomId = null,
   seed,
   opponentId = null,
+  nombres = null,
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -502,7 +517,7 @@ export default function Battlefield({
       )}
 
       {/* Base Towers */}
-      <BaseTower team="p1" hp={p1BaseHp} maxHp={INITIAL_BASE_HP} />
+      <BaseTower team="p1" hp={p1BaseHp} maxHp={INITIAL_BASE_HP} nombre={nombres?.mio} />
       {/* Los soles del rival sólo se enseñan contra el bot, que es cuando el
           número es de verdad: lo lleva esta misma simulación. En PvP los soles del
           otro son cosa de SU navegador y aquí no se conocen, así que el contador
@@ -513,6 +528,7 @@ export default function Battlefield({
         hp={p2BaseHp}
         maxHp={INITIAL_BASE_HP}
         sunBank={roomId ? undefined : p2SunBank}
+        nombre={nombres?.rival}
       />
 
       {/* Start Overlay */}

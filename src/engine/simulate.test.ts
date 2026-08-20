@@ -301,3 +301,38 @@ describe('en PvP el bot se calla y manda el registro de acciones', () => {
     expect(JSON.stringify(porLaRed)).toBe(JSON.stringify(directo))
   })
 })
+
+describe('el sol es de los dos', () => {
+  it('los dos jugadores ven los MISMOS soles, en el mismo sitio y en el mismo tic', () => {
+    // La semilla es compartida, así que la lluvia de soles es idéntica en los dos
+    // clientes. Cada uno los recoge en SU simulación, de modo que el mismo sol de
+    // pantalla da 25 a cada jugador: no es una carrera, es para ambos.
+    const deUnLado  = createBattleState(2024, false, true)
+    const delOtro   = createBattleState(2024, false, true)
+
+    for (let i = 0; i < 900; i++) {
+      stepTick(deUnLado, () => {})
+      stepTick(delOtro, () => {})
+    }
+
+    expect(deUnLado.suns.length).toBeGreaterThan(2)   // que llovió algo
+    expect(JSON.stringify(delOtro.suns)).toBe(JSON.stringify(deUnLado.suns))
+  })
+
+  it('caen por todo el campo, no sólo en una mitad', () => {
+    // Uno cada 6 s en una posición al azar entre las dos bases. En los primeros
+    // segundos pueden caer varios seguidos del mismo lado por casualidad —que es
+    // lo que se vio jugando— pero a lo largo de la partida se reparten.
+    const s = createBattleState(2024, false, true)
+    const equis: number[] = []
+    for (let i = 0; i < 3000; i++) {
+      const antes = s.suns.length
+      stepTick(s, () => {})
+      if (s.suns.length > antes) equis.push(s.suns[s.suns.length - 1].x)
+    }
+
+    expect(equis.length).toBeGreaterThan(8)
+    expect(Math.min(...equis)).toBeLessThan(50)      // alguno en tu mitad
+    expect(Math.max(...equis)).toBeGreaterThan(50)   // alguno en la del rival
+  })
+})
