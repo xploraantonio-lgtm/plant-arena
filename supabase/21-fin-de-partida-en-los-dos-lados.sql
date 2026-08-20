@@ -77,10 +77,16 @@ ALTER TABLE public.game_rooms REPLICA IDENTITY FULL;
 -- -----------------------------------------------------------------------------
 INSERT INTO public.shop_config (key, value) VALUES
   -- Sin señales de vida (ninguna acción nueva) más de esto, la partida se
-  -- considera abandonada. Generoso a propósito: una partida puede tener minutos
-  -- tranquilos sin que nadie plante nada.
-  ('gr_abandono_segundos', 180)
-ON CONFLICT (key) DO NOTHING;
+  -- considera abandonada. Dos minutos: suficiente para un tramo tranquilo sin
+  -- que nadie plante nada, y poco como espera para quien se quedó jugando.
+  ('gr_abandono_segundos', 120)
+ON CONFLICT (key) DO NOTHING;   -- DO NOTHING: no pisar un ajuste que hayas cambiado
+
+-- La primera versión de esta migración puso 180. Si quedó ese valor exacto, se
+-- corrige; cualquier otro se respeta, porque entonces es un ajuste tuyo y el
+-- ON CONFLICT de arriba está justamente para no pisarlo.
+UPDATE public.shop_config SET value = 120
+ WHERE key = 'gr_abandono_segundos' AND value = 180;
 
 
 -- -----------------------------------------------------------------------------
@@ -100,9 +106,9 @@ DECLARE
   v_liquidadas INTEGER := 0;
   v_abandonadas INTEGER := 0;
 BEGIN
-  SELECT COALESCE(value::INTEGER, 180) INTO v_plazo
+  SELECT COALESCE(value::INTEGER, 120) INTO v_plazo
     FROM public.shop_config WHERE key = 'gr_abandono_segundos';
-  v_plazo := COALESCE(v_plazo, 180);
+  v_plazo := COALESCE(v_plazo, 120);
 
   FOR v_sala IN
     SELECT r.id, r.player1_id, r.player2_id,
