@@ -948,12 +948,22 @@
   gap: 10px;
 }
 
-/* Battlefield Bottom Actions Bar */
+/* Battlefield Bottom Actions Bar (Zoom/Sound above Surrender) */
 .battlefield-bottom-actions {
   position: absolute;
   bottom: 12px;
   right: 16px;
-  z-index: 100;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.battlefield-utility-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .surrender-btn {

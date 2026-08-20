@@ -563,43 +563,29 @@ export default function Battlefield({
       className={`battlefield ${selectedCard === 'shovel' ? 'battlefield--shovel-mode' : ''}`}
       style={{ backgroundImage: `url(${activeBgImage})` }}
     >
-      {/* Top Controls Bar */}
-      <div className="battlefield-top-controls">
-        {matchMode === 'colosseum' && (
-          <div className="battlefield-colosseum-header-pill">
-            <span className="battlefield-colosseum-icon">🏛️</span>
-            <span>COLISEO</span>
-            <span>•</span>
-            <span style={{ color: '#38bdf8' }}>Sala: {colosseumConfig?.betGems || 0.5} 💎</span>
-            <span>•</span>
-            <span style={{ color: '#fbbf24' }}>Pozo: {((colosseumConfig?.betGems || 0.5) * 2).toFixed(1)} 💎</span>
-          </div>
-        )}
-        {matchMode === 'tournament' && (
-          <div className="battlefield-colosseum-header-pill" style={{ borderColor: '#a855f7', boxShadow: '0 0 15px rgba(168, 85, 247, 0.4)' }}>
-            <span className="battlefield-colosseum-icon">🎪</span>
-            <span>TORNEO EN VIVO</span>
-            <span>•</span>
-            <span style={{ color: '#d8b4fe' }}>vs {tournamentOpponent?.name || 'Rival'}</span>
-          </div>
-        )}
-        <button
-          type="button"
-          className="fullscreen-toggle-btn"
-          onClick={toggleFullscreen}
-          title="Pantalla Completa (Ocultar navegador)"
-        >
-          ⛶
-        </button>
-        <button
-          type="button"
-          className="sound-toggle-btn"
-          onClick={toggleMute}
-          title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
-        >
-          {isMuted ? '🔇' : '🔊'}
-        </button>
-      </div>
+      {/* Top Controls Bar (Colosseum / Tournament Pill) */}
+      {(matchMode === 'colosseum' || matchMode === 'tournament') && (
+        <div className="battlefield-top-controls">
+          {matchMode === 'colosseum' && (
+            <div className="battlefield-colosseum-header-pill">
+              <span className="battlefield-colosseum-icon">🏛️</span>
+              <span>COLISEO</span>
+              <span>•</span>
+              <span style={{ color: '#38bdf8' }}>Sala: {colosseumConfig?.betGems || 0.5} 💎</span>
+              <span>•</span>
+              <span style={{ color: '#fbbf24' }}>Pozo: {((colosseumConfig?.betGems || 0.5) * 2).toFixed(1)} 💎</span>
+            </div>
+          )}
+          {matchMode === 'tournament' && (
+            <div className="battlefield-colosseum-header-pill" style={{ borderColor: '#a855f7', boxShadow: '0 0 15px rgba(168, 85, 247, 0.4)' }}>
+              <span className="battlefield-colosseum-icon">🎪</span>
+              <span>TORNEO EN VIVO</span>
+              <span>•</span>
+              <span style={{ color: '#d8b4fe' }}>vs {tournamentOpponent?.name || 'Rival'}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Practice / Sandbox Mode Bar */}
       {isPracticeMode && (
@@ -1182,9 +1168,28 @@ export default function Battlefield({
         </div>
       )}
 
-      {/* Bottom Surrender Action Button */}
-      {gameStatus === 'playing' && !isPracticeMode && (
-        <div className="battlefield-bottom-actions">
+      {/* Bottom Right Utility Controls & Surrender */}
+      <div className="battlefield-bottom-actions">
+        <div className="battlefield-utility-controls">
+          <button
+            type="button"
+            className="fullscreen-toggle-btn"
+            onClick={toggleFullscreen}
+            title="Pantalla Completa (Ocultar navegador)"
+          >
+            ⛶
+          </button>
+          <button
+            type="button"
+            className="sound-toggle-btn"
+            onClick={toggleMute}
+            title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
+        </div>
+
+        {gameStatus === 'playing' && !isPracticeMode && (
           <button
             type="button"
             className="surrender-btn"
@@ -1193,8 +1198,8 @@ export default function Battlefield({
           >
             🏳️ RENDIRSE
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Surrender Confirmation In-Game Modal */}
       {showSurrenderModal && (
