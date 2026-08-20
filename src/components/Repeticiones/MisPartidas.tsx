@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SupabaseService } from '../../services/supabaseService'
+import { enlaceDeRepeticion } from '../../utils/direccionPublica'
 import './MisPartidas.css'
 
 /**
@@ -69,7 +70,7 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
     return () => { cancelado = true }
   }, [])
 
-  const enlaceDe = (token: string) => `${window.location.origin}/r/${token}`
+  const enlaceDe = enlaceDeRepeticion
 
   const compartir = async (p: Partida) => {
     setCompartiendo(p.roomId)

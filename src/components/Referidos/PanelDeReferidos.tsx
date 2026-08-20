@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { SupabaseService, type MisReferidos } from '../../services/supabaseService'
 import { soundManager } from '../../utils/audioManager'
+import { enlaceDeReferido } from '../../utils/direccionPublica'
 import './PanelDeReferidos.css'
 
 /**
@@ -82,7 +83,7 @@ export default function PanelDeReferidos() {
     )
   }
 
-  const enlace = `${window.location.origin}/?ref=${datos.codigo ?? ''}`
+  const enlace = enlaceDeReferido(datos.codigo)
 
   const copiar = async () => {
     soundManager.playSound('click', 0.4)

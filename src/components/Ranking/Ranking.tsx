@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
+import { enlaceDeReferido } from '../../utils/direccionPublica'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { SupabaseService } from '../../services/supabaseService'
 import { UserManager } from '../../utils/userManager'
@@ -417,7 +418,12 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                     className="referral-copy-btn"
                     onClick={() => {
                       soundManager.playSound('click', 0.5)
-                      navigator.clipboard?.writeText(window.location.origin + '/?ref=' + (UserManager.getProfile().referralCode || 'ARENA'))
+                      // El código sale del perfil sincronizado con el servidor
+                      // (profiles.referral_code). El apaño de poner 'ARENA' cuando
+                      // faltaba producía un enlace muerto: mejor no copiar nada.
+                      navigator.clipboard?.writeText(
+                        enlaceDeReferido(UserManager.getProfile().referralCode)
+                      )
                       setCopiedLink(true)
                       setTimeout(() => setCopiedLink(false), 2000)
                     }}

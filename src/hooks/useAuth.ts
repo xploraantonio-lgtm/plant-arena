@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+import { urlDeVuelta } from '../utils/direccionPublica'
 import { SupabaseService } from '../services/supabaseService'
 import { UserManager } from '../utils/userManager'
 import type { Database } from '../types/database.types'
@@ -194,7 +195,13 @@ export function useAuth() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          // Al dominio público, no al que se esté navegando: quien entre por una
+          // dirección vieja (la de Vercel) acaba en el dominio de verdad. En
+          // local se queda en local, o no habría forma de probar la entrada.
+          //
+          // Supabase sólo lo respeta si está en su lista blanca
+          // (Authentication → URL Configuration → Redirect URLs).
+          redirectTo: urlDeVuelta(),
         },
       })
       if (error) return { success: false, error: error.message }

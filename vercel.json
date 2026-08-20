@@ -1,4 +1,23 @@
 {
+  "//": [
+    "El dominio del juego es www.plants-arena.online. Todo lo que llegue a la",
+    "dirección de Vercel se manda allí, con su ruta y sus parámetros: así los",
+    "enlaces de invitación y de repetición ya repartidos siguen funcionando.",
+    "",
+    "permanent está en false (redirección 307) a propósito: una 308 se queda",
+    "guardada en el navegador de quien la reciba y cuesta deshacerla. Cuando",
+    "compruebes que el dominio va bien, cámbialo a true.",
+    "",
+    "Los redirects se aplican ANTES de los rewrites, así que el orden importa."
+  ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "plant-arena.vercel.app" }],
+      "destination": "https://www.plants-arena.online/$1",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
