@@ -21,7 +21,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
 import { stepTick, createBattleState, crearPlantaDelRival, type GameState } from './simulate'
-import { PLANT_CONFIGS, BASE_LEFT_END_X, BASE_RIGHT_START_X } from '../utils/gameConstants'
+import { PLANT_CONFIGS, BASE_LEFT_END_X, BASE_RIGHT_START_X, SUN_VALUE } from '../utils/gameConstants'
+import { GIRASOL_MS, SOLES_POR_CICLO_GIRASOL, SOLES_POR_CICLO_GIRASOL_DOBLE } from './balance'
 import type { PlantEntity, PlantId } from '../types/game'
 
 /** Un estado de PvP limpio: sin bot, sin oleadas, sólo lo que se planta. */
@@ -200,5 +201,58 @@ describe('un 1c1 tiene las mismas reglas para los dos', () => {
     expect(muroEnMiLado).toBeDefined()
     expect(muroEnSuLado).toBeDefined()
     expect(Math.round(muroEnSuLado!.hp)).toBe(Math.round(muroEnMiLado!.hp))
+  })
+})
+
+describe('la economía del sol no es un impresor', () => {
+  it('el girasol tarda al menos 25 segundos en pagarse', () => {
+    // ESTE es el número que decide el ritmo de la partida.
+    //
+    // Estaba a 6 segundos: un girasol de 50 soles producía 25 cada 6 s, o sea que
+    // se pagaba en 12 segundos y luego imprimía 250/min para siempre. Cada girasol
+    // permitía comprar 5 más por minuto — una bola de nieve. Y lo peor no era la
+    // cantidad: era que NO HABÍA DECISIÓN, porque con ese retorno nunca hay motivo
+    // para no plantar otro, ni en el último segundo.
+    //
+    // Con un retorno de 30 s, uno plantado al principio se paga dos o tres veces y
+    // uno plantado al final no. Eso es lo que crea la tensión entre economía y
+    // ataque.
+    const coste = PLANT_CONFIGS.sunflower.cost
+    const ciclos = coste / SUN_VALUE
+    const retornoSegundos = (ciclos * GIRASOL_MS) / 1000
+
+    expect(retornoSegundos).toBeGreaterThanOrEqual(25)
+  })
+
+  it('el sol del cielo no compone: cae igual con muchos girasoles', () => {
+    // Es el ingreso base y sostiene el arranque. Que NO dependa de cuántos
+    // girasoles haya es lo que evita que la ventaja temprana se vuelva
+    // irreversible.
+    const contarDelCielo = (cuantosGirasoles: number) => {
+      const s = arena(31337)
+      for (let i = 0; i < cuantosGirasoles; i++) {
+        plantarMia(s, 'sunflower', i % 3, 1 + Math.floor(i / 3))
+      }
+      let delCielo = 0
+      const vistos = new Set<string>()
+      for (let i = 0; i < 1800; i++) {
+        stepTick(s, () => {})
+        for (const sol of s.suns) {
+          if (vistos.has(sol.id)) continue
+          vistos.add(sol.id)
+          if (sol.id.startsWith('sun-sky')) delCielo += sol.value
+        }
+      }
+      return delCielo
+    }
+
+    expect(contarDelCielo(4)).toBe(contarDelCielo(0))
+  })
+
+  it('el girasol doble rinde el doble por hueco, y por eso cuesta más', () => {
+    // Su ventaja real no son los soles: es que ocupa UN hueco en un campo con
+    // huecos limitados. Si costara lo mismo, el sencillo no tendría sentido.
+    expect(PLANT_CONFIGS.twinsunflower.cost).toBeGreaterThan(PLANT_CONFIGS.sunflower.cost)
+    expect(SOLES_POR_CICLO_GIRASOL_DOBLE).toBe(SOLES_POR_CICLO_GIRASOL * 2)
   })
 })

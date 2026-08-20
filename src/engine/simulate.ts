@@ -22,6 +22,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createRng, nextFloat, nextInt, chance, entityId, type Rng } from './rng'
 import { TICK_SECONDS, msToTicks } from './time'
+import {
+  SOL_DEL_CIELO_MS,
+  GIRASOL_MS,
+  GIRASOL_DOBLE_MS,
+  SOLES_POR_CICLO_GIRASOL,
+  SOLES_POR_CICLO_GIRASOL_DOBLE,
+} from './balance'
 import type {
   PlantEntity,
   ProjectileEntity,
@@ -424,9 +431,14 @@ function procesarLado(state: GameState, lado: Lado, dt: number, sonar: SonarFn):
 
     // ── GIRASOL ───────────────────────────────────────────────────────────────
     if (planta.plantId === 'sunflower' || planta.plantId === 'twinsunflower') {
-      if (state.tick - planta.lastActionTime > msToTicks(6000)) {
+      const esDoble = planta.plantId === 'twinsunflower'
+      // Intervalo propio, no el del sol del cielo. Los dos valían 6 s, y por eso
+      // el girasol se pagaba a sí mismo en 12 segundos: era un impresor de soles.
+      // Los números y el razonamiento están en engine/balance.ts.
+      const cada = esDoble ? GIRASOL_DOBLE_MS : GIRASOL_MS
+      if (state.tick - planta.lastActionTime > msToTicks(cada)) {
         planta.lastActionTime = state.tick
-        const cuantos = planta.plantId === 'twinsunflower' ? 2 : 1
+        const cuantos = esDoble ? SOLES_POR_CICLO_GIRASOL_DOBLE : SOLES_POR_CICLO_GIRASOL
 
         if (lado.equipo === 'p1') {
           // Los tuyos caen al campo y los recoges tú pulsando.
@@ -792,7 +804,7 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   // que apareció al probarlo con dos cuentas.
   const juegaElBot = !state.isPracticeMode && !state.isPvpMode
 
-  if (juegaElBot && state.tick - state.timers.lastP2PassiveSun > msToTicks(6000)) {
+  if (juegaElBot && state.tick - state.timers.lastP2PassiveSun > msToTicks(SOL_DEL_CIELO_MS)) {
     state.timers.lastP2PassiveSun = state.tick
     state.p2SunBank += 25
   }
@@ -891,16 +903,31 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
           // DEDUCIR SOLES RIGUROSAMENTE
           state.p2SunBank = Math.max(0, state.p2SunBank - eConfig.cost)
         } else {
+          // OJO CON EL MARCO DE REFERENCIA.
+          //
+          // crearPlantaDelRival recibe la columna VISTA POR SU DUEÑO —contada desde
+          // SU base— y la espeja. El bot es dueño de este lado, así que tiene que
+          // hablar en su propio marco: su columna 0 es la pegada a su base.
+          //
+          // Antes estas listas estaban en coordenadas absolutas del campo (6 a 11,
+          // la mitad derecha). Al empezar a espejar, el 11 pasó a ser el 0 y las
+          // plantas del bot aparecían dentro de la mitad del jugador: había 17
+          // enemigos y ninguno atacaba. Lo cazó el test de sonidos.
+          //
+          //   0,1 = detrás, junto a su base    ·    4,5 = delante, en la frontera
           const preferredCols =
             chosenType === 'sunflower'
-              ? [11, 10, 9, 8]
+              ? [0, 1, 2, 3]          // los girasoles, protegidos detrás
               : eConfig.category === 'defensive'
-              ? [6, 7, 8]
-              : [8, 9, 10, 11, 7, 6]
+              ? [5, 4, 3]             // los muros, delante
+              : [3, 2, 1, 0, 4, 5]    // los atacantes, a media altura
 
-          const availableCols = preferredCols.filter((col) => {
+          const availableCols = preferredCols.filter((propia) => {
+            // La ocupación se compara con la columna YA espejada, que es la que se
+            // guarda en la entidad.
+            const enElCampo = TOTAL_COLUMNS - 1 - propia
             return !state.enemyPlants.some(
-              (e) => e.lane === lane && e.col === col && !e.isWalking
+              (e) => e.lane === lane && e.col === enElCampo && !e.isWalking
             )
           })
 
@@ -931,7 +958,7 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   }
 
   // 3. SKY SUN GENERATION (Every 6s)
-  if (state.tick - state.timers.lastSkySun > msToTicks(6000)) {
+  if (state.tick - state.timers.lastSkySun > msToTicks(SOL_DEL_CIELO_MS)) {
     state.timers.lastSkySun = state.tick
     state.suns.push({
       id: entityId('sun-sky', state.tick, state.entityCounter++),

@@ -21,8 +21,15 @@ import { stepTick, createBattleState, crearPlantaDelRival, type GameState } from
 import { PLANT_CONFIGS } from '../utils/gameConstants'
 import { TICKS_PER_SECOND } from './time'
 
-/** Un minuto y medio de partida: suficiente para varias oleadas y muchas muertes. */
-const TICS_LARGOS = Math.round(90 * TICKS_PER_SECOND)
+/**
+ * Tres minutos de partida.
+ *
+ * Antes eran 90 segundos, y con el ajuste del girasol (engine/balance.ts) eso se
+ * quedó corto: al bajar su producción de 6 a 15 segundos, las partidas pasaron de
+ * acabar a los ~55 s a acabar a los ~112. El test cortaba justo cuando empezaba
+ * la acción y medía una partida en la que casi no pasaba nada.
+ */
+const TICS_LARGOS = Math.round(180 * TICKS_PER_SECOND)
 
 /**
  * Ejecuta una partida y devuelve el estado final junto con la lista de sonidos.
@@ -79,7 +86,9 @@ describe('la misma semilla da la misma partida', () => {
     const a = jugar(777, TICS_LARGOS)
     const b = jugar(777, TICS_LARGOS)
 
-    expect(a.sonidos.length).toBeGreaterThan(20)  // que la partida hizo algo
+    // Que la partida hizo algo: sin esto, dos partidas vacías también
+    // coincidirían y el test pasaría sin comprobar nada.
+    expect(a.sonidos.length).toBeGreaterThan(20)
     expect(b.sonidos).toEqual(a.sonidos)
   })
 

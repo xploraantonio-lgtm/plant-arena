@@ -158,7 +158,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
             setActiveTab('arenas')
           }}
         >
-          🗺️ CAMINO DE ARENAS (ARENA ROAD)
+          🗺️ Arenas
         </button>
         <button
           type="button"
@@ -168,7 +168,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
             setActiveTab('leaderboard')
           }}
         >
-          🏆 CLASIFICACIÓN GLOBAL (LEADERBOARD)
+          🏆 RANKED
         </button>
         <button
           type="button"
@@ -178,7 +178,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
             setActiveTab('referrals')
           }}
         >
-          👥 RANKING DE REFERIDOS ($ USD)
+          👥 RANKING REFERIDOS
         </button>
       </div>
 
