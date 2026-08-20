@@ -20,6 +20,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createRng, entityId } from '../engine/rng'
 import { TICK_MS, MAX_TICKS_PER_FRAME, msToTicks } from '../engine/time'
 import { stepTick, createBattleState, type GameState } from '../engine/simulate'
+import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
   PlantId,
@@ -181,8 +182,14 @@ export function useGameEngine() {
    *                  van por el mismo tic aunque uno haya entrado más tarde: el
    *                  que llega tarde simula de golpe los tics que se perdió.
    */
-  const startGame = useCallback((seed: number = 1, esPvp: boolean = false, ancoraMs?: number) => {
-    stateRef.current = createBattleState(seed, false, esPvp)
+  const startGame = useCallback((
+    seed: number = 1,
+    esPvp: boolean = false,
+    ancoraMs?: number,
+    /** Tu ELO, para que el bot de entrenamiento se parezca a alguien de tu nivel. */
+    miElo?: number
+  ) => {
+    stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500))
 
     ancoraMsRef.current = ancoraMs ?? null
     lastFrameMsRef.current = performance.now()

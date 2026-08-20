@@ -64,7 +64,6 @@ function App() {
     syncProfileData,
     refreshFromServer,
     userTokens,
-    addTokens,
     userGold,
     addGold,
     buyGoldPackage,
@@ -497,6 +496,7 @@ function App() {
             userTokens={userTokens}
             userGold={userGold}
             hasVipPass={hasVipPass}
+            unlockedPlants={unlockedPlants}
             claimedVipLevels={claimedVipLevels}
             freePackSlots={freePackSlots}
             colosseumTickets={colosseumTickets}
@@ -613,7 +613,6 @@ function App() {
             onBuyGold={buyGoldPackage}
             onAddGold={addGold}
             onOpenJardin={handleOpenJardin}
-            onAddTokens={addTokens}
             onOpenPackImmediately={handleTriggerPackOpenByInstanceId}
             onOpenMultiplePacks={handleOpenMultiplePacks}
             onBuyVipPass={buyVipPass}
@@ -628,10 +627,6 @@ function App() {
             userProfile={profile}
             hasVipPass={hasVipPass}
             onBack={() => setScreen('menu')}
-            // Igual que arriba: el ELO no se escribe desde el cliente.
-            onAddElo={(delta) => {
-              setUserElo((prev) => Math.max(0, prev + delta))
-            }}
           />
         )}
         {screen === 'pass' && (

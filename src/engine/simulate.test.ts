@@ -245,7 +245,11 @@ describe('la planta del rival es la misma carta, al revés', () => {
 describe('en PvP el bot se calla y manda el registro de acciones', () => {
   it('sin rival, el bot planta y manda oleadas', () => {
     const s = createBattleState(99)
-    for (let i = 0; i < 600; i++) stepTick(s, () => {})
+    // Un minuto, no veinte segundos. El bot ya no recibe soles automáticos: los
+    // produce, se le caen al suelo y los recoge con retardo, fallando algunos
+    // (engine/bot.ts). Con eso su primera planta tarda más que antes, y a los 20 s
+    // podía no tener ninguna todavía.
+    for (let i = 0; i < 1800; i++) stepTick(s, () => {})
     // Que el bot hace algo: si esto sale 0, la comprobación de abajo no vale nada.
     expect(s.enemyPlants.length).toBeGreaterThan(0)
   })

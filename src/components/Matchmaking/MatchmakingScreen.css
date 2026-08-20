@@ -194,3 +194,12 @@
   font-size: 0.72rem;
   color: #64748b;
 }
+
+/* El aviso de que el entrenamiento no da recompensas. Discreto pero legible:
+   no es una advertencia de error, es una aclaración. */
+.mm__aviso {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #94a3b8;
+}

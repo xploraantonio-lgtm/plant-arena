@@ -23,7 +23,7 @@ import ProfileModal from '../ProfileModal/ProfileModal'
 import ModeSelectorModal from '../ModeSelector/ModeSelectorModal'
 import ColosseumModal from '../Colosseum/ColosseumModal'
 import TournamentModal from '../Tournament/TournamentModal'
-import type { ColosseumBetAmount } from '../../types/game'
+import type { ColosseumBetAmount, PlantId } from '../../types/game'
 import './MainMenu.css'
 
 interface MainMenuProps {
@@ -38,6 +38,7 @@ interface MainMenuProps {
   userTokens?: number
   userGold?: number
   hasVipPass?: boolean
+  unlockedPlants?: PlantId[]
   claimedVipLevels?: number[]
   freePackSlots?: FreePackSlot[]
   colosseumTickets?: number
@@ -70,6 +71,7 @@ export default function MainMenu({
   userTokens = 0,
   userGold = 0,
   hasVipPass = false,
+  unlockedPlants,
   claimedVipLevels = [],
   freePackSlots = [],
   colosseumTickets = 0,
@@ -447,6 +449,7 @@ export default function MainMenu({
         userElo={userElo}
         userTokens={userTokens}
         hasVipPass={hasVipPass}
+        unlockedPlants={unlockedPlants}
         onClose={() => setIsProfileModalOpen(false)}
       />
 

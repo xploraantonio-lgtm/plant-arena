@@ -29,6 +29,18 @@ import {
   SOLES_POR_CICLO_GIRASOL,
   SOLES_POR_CICLO_GIRASOL_DOBLE,
 } from './balance'
+import {
+  menteNueva,
+  producirSol,
+  recogerSoles,
+  echarUnVistazo,
+  leTocaJugar,
+  jugadaMediocre,
+  elegirCarril,
+  NIVEL_POR_DEFECTO,
+  type MenteDelBot,
+  type NivelDelBot,
+} from './bot'
 import type {
   PlantEntity,
   ProjectileEntity,
@@ -147,7 +159,17 @@ export function crearPlantaDelRival(
  * `seed` viene de game_rooms.seed y es idéntica para los dos jugadores: es lo que
  * hace que ambos simulen la misma partida.
  */
-export function createBattleState(seed: number, isPracticeMode = false, isPvpMode = false): GameState {
+/**
+ * @param nivelBot los límites humanos del bot. En ranked se saca del ELO del
+ *                 jugador con nivelPorElo(), para que el relleno se parezca a
+ *                 alguien de su nivel. En PvP no se usa: el bot no juega.
+ */
+export function createBattleState(
+  seed: number,
+  isPracticeMode = false,
+  isPvpMode = false,
+  nivelBot: NivelDelBot = NIVEL_POR_DEFECTO
+): GameState {
   return {
     tick: 0,
     rng: createRng(seed),
@@ -185,6 +207,8 @@ export function createBattleState(seed: number, isPracticeMode = false, isPvpMod
     stats: { sunsCollected: 0, enemyPlantsDefeated: 0, plantsPlaced: 0, score: 0 },
     ...(isPracticeMode ? { isPracticeMode: true } : {}),
     ...(isPvpMode ? { isPvpMode: true } : {}),
+    bot: menteNueva(),
+    nivelBot,
   }
 }
 
@@ -311,6 +335,17 @@ export interface GameState {
    * en el lado contrario llega del registro de acciones del rival.
    */
   isPvpMode?: boolean
+  /**
+   * Lo que el bot lleva en la cabeza: los soles que aún no ha recogido, lo que
+   * cree que está pasando, y cuándo se plantea su próxima jugada.
+   *
+   * Vive en el estado —y no en una variable del módulo— porque si no, una
+   * repetición no reproduciría sus errores y el servidor no podría recalcular la
+   * partida. Sus despistes forman parte de lo que pasó.
+   */
+  bot?: MenteDelBot
+  /** Los límites humanos del bot en esta partida. */
+  nivelBot?: NivelDelBot
 }
 
 /**
@@ -804,27 +839,46 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   // que apareció al probarlo con dos cuentas.
   const juegaElBot = !state.isPracticeMode && !state.isPvpMode
 
-  if (juegaElBot && state.tick - state.timers.lastP2PassiveSun > msToTicks(SOL_DEL_CIELO_MS)) {
-    state.timers.lastP2PassiveSun = state.tick
-    state.p2SunBank += 25
+  const mente = state.bot ?? (state.bot = menteNueva())
+  const nivel = state.nivelBot ?? NIVEL_POR_DEFECTO
+
+  if (juegaElBot) {
+    // Su ingreso base, al mismo ritmo que cae el sol del cielo para ti.
+    if (state.tick - state.timers.lastP2PassiveSun > msToTicks(SOL_DEL_CIELO_MS)) {
+      state.timers.lastP2PassiveSun = state.tick
+      // AL SUELO, no al banco. Antes era un +25 automático y por eso no fallaba
+      // ni un sol mientras el jugador tenía que pulsar cada uno: era lo que más
+      // delataba que enfrente había una máquina.
+      producirSol(mente, state.rng, nivel, state.tick, 25)
+    }
+    // Y recoge lo que le toque en este tic. Llega a rachas, no a compás.
+    state.p2SunBank += recogerSoles(mente, state.tick)
   }
 
   // 2. PC AI TACTICAL PURCHASING & PLANT SPAWNING (SUNFLOWER-FIRST RULE + THREAT ASSESSMENT)
-  const spawnInterval = Math.max(1200, 2200 - state.wave * 200)
-  if (juegaElBot && state.tick - state.timers.lastEnemySpawn > msToTicks(spawnInterval)) {
+  // El intervalo base ya no acelera con las oleadas: eso hacía que el bot fuera
+  // cada vez más máquina justo cuando la partida se pone tensa. Ahora es fijo y
+  // lo que varía es el ritmo, con la irregularidad de su nivel.
+  const spawnInterval = 2000
+  if (juegaElBot && leTocaJugar(mente, state.rng, nivel, state.tick, spawnInterval)) {
     state.timers.lastEnemySpawn = state.tick
 
-    // Count active P2 Sunflowers
     const p2Sunflowers = state.enemyPlants.filter(
       (e) => e.plantId === 'sunflower' && e.hp > 0
     ).length
 
-    // Assess lane threats (P1 player plants advancing towards P2 base)
-    const laneThreats = [0, 1, 2].map((l) => {
-      const P1Advancing = state.plants.filter((pl) => pl.lane === l && pl.hp > 0 && pl.x > 25)
-      return { lane: l, count: P1Advancing.length, threat: P1Advancing.length > 0 }
-    })
-    const activeThreatLanes = laneThreats.filter((t) => t.threat).map((t) => t.lane)
+    // Lo que está pasando DE VERDAD…
+    const amenazaAhora = [0, 1, 2].filter((l) =>
+      state.plants.some((pl) => pl.lane === l && pl.hp > 0 && pl.x > 25)
+    )
+    // …y lo que el bot alcanza a ver, que llega con retraso. Ese medio segundo
+    // es lo que permite sorprenderle, y lo que un rival que reacciona en el mismo
+    // fotograma no concede nunca.
+    echarUnVistazo(mente, nivel, state.tick, amenazaAhora)
+    const activeThreatLanes = mente.carrilesVistos
+
+    // La emergencia sí la ve al momento: cuando algo está a punto de llegarle a
+    // la base, hasta el jugador más distraído lo nota.
     const isEmergency = state.plants.some((pl) => pl.hp > 0 && pl.x > 60)
 
     let chosenType: PlantId | null = null
@@ -870,7 +924,10 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
           const attackTypes = affordableTypes.filter(
             (t) => t !== 'sunflower' && t !== 'wallnut'
           )
-          if (attackTypes.length > 0) {
+          // Una parte de sus jugadas es mediocre a propósito: elige entre lo que
+          // puede pagar en lugar de lo mejor. Un rival que SIEMPRE acierta se nota
+          // más que uno que pierde.
+          if (attackTypes.length > 0 && !jugadaMediocre(state.rng, nivel)) {
             chosenType = attackTypes[nextInt(state.rng, attackTypes.length)]
           } else {
             chosenType = affordableTypes[nextInt(state.rng, affordableTypes.length)]
@@ -889,10 +946,8 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
       } else {
         const isWalking = eConfig.category === 'melee'
 
-        const lane =
-          activeThreatLanes.length > 0 && chance(state.rng, 0.85)
-            ? activeThreatLanes[nextInt(state.rng, activeThreatLanes.length)]
-            : nextInt(state.rng, 3)
+        // Con la foto que tiene en la cabeza, y a veces equivocándose de carril.
+        const lane = elegirCarril(mente, state.rng, nivel)
 
         if (isWalking) {
           // Por la misma vía que la planta de un rival humano: así el bot juega

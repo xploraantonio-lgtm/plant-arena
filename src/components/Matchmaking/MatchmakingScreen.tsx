@@ -130,9 +130,17 @@ export default function MatchmakingScreen({
             <p className="mm__relleno-texto">
               No hay nadie buscando ahora mismo.
             </p>
+            {/* Se dice lo que es y lo que no da. La partida contra la máquina no
+                pasa por el servidor, así que no hay ELO ni cofre — y alguien que
+                juegue diez de estas creyendo que sube de rango se va a enfadar
+                con razón. Cuando el relleno sea la repetición de una partida
+                real habrá sala, habrá registro y sí podrá pagarse. */}
             <button type="button" className="mm__boton mm__boton--principal" onClick={onJugarRelleno}>
-              Jugar ya
+              Entrenar contra la máquina
             </button>
+            <p className="mm__aviso">
+              Sin puntos de arena ni cofre: es para practicar mientras aparece rival.
+            </p>
           </div>
         )}
 

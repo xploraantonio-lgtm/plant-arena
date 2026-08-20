@@ -8,6 +8,8 @@ import {
 } from '../../utils/userManager'
 import { soundManager } from '../../utils/audioManager'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
+import { PLANT_CONFIGS } from '../../utils/gameConstants'
+import type { PlantId } from '../../types/game'
 import './ProfileModal.css'
 
 interface ProfileModalProps {
@@ -15,6 +17,7 @@ interface ProfileModalProps {
   userElo: number
   userTokens: number
   hasVipPass: boolean
+  unlockedPlants?: PlantId[]
   onClose: () => void
   // onAddTokens / onDeductTokens se eliminaron: eran la vía por la que el
   // formulario de recarga sumaba saldo sin cobrar nada. El saldo sólo lo
@@ -28,6 +31,7 @@ export default function ProfileModal({
   userElo,
   userTokens,
   hasVipPass,
+  unlockedPlants,
   onClose,
 }: ProfileModalProps) {
   const [profile, setProfile] = useState<PlayerProfile>(() => UserManager.getProfile())
@@ -309,7 +313,9 @@ export default function ProfileModal({
                 <span className="profile-stat-lbl">Saldo Disponible</span>
               </div>
               <div className="profile-stat-box">
-                <span className="profile-stat-val">15 / 15</span>
+                <span className="profile-stat-val">
+                  {unlockedPlants ? unlockedPlants.length : 3} / {Object.keys(PLANT_CONFIGS).length}
+                </span>
                 <span className="profile-stat-lbl">Plantas Desbloqueadas</span>
               </div>
               <div className="profile-stat-box">

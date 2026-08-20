@@ -189,7 +189,6 @@ interface ShopProps {
   onAddGold?: (amount: number) => void
   onWatchAd?: (slotNumber: number, rewardGold: number) => void
   onOpenJardin: () => void
-  onAddTokens: (amount: number) => void
   onOpenPackImmediately: (packInstanceId: string) => void
   onOpenMultiplePacks?: (instanceIds: string[]) => void
   onBuyVipPass?: () => Promise<{ success: boolean; error?: string }>
@@ -213,7 +212,6 @@ export default function Shop({
   onAddGold,
   onWatchAd,
   onOpenJardin,
-  onAddTokens,
   onOpenPackImmediately,
   onOpenMultiplePacks,
   onBuyVipPass,
@@ -401,15 +399,6 @@ export default function Shop({
             <span className="shop-token-icon">💎</span>
             <span className="shop-token-amount">{userTokens} Gemas</span>
           </div>
-          <button
-            className="shop-back-btn"
-            type="button"
-            style={{ background: '#16a34a', borderColor: '#4ade80' }}
-            onClick={() => onAddTokens(100)}
-            title="Añadir 100 Gemas 💎 de prueba para testear compras"
-          >
-            +100 💎 TEST
-          </button>
           <button
             className="shop-mute-btn"
             type="button"

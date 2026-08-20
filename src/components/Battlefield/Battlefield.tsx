@@ -507,11 +507,12 @@ export default function Battlefield({
           startGame(seed, true, reloj?.ancoraMs)
         })
       } else {
-        // En solitario no hay nada que alinear.
-        startGame(seed, false)
+        // Entrenamiento contra el bot: no hay reloj que alinear, y el nivel del
+        // bot se saca de tu ELO para que se parezca a alguien de tu nivel.
+        startGame(seed, false, undefined, userElo)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo])
 
   const [showSurrenderModal, setShowSurrenderModal] = useState<boolean>(false)
 
@@ -652,6 +653,12 @@ export default function Battlefield({
               estáis en la misma partida.
             · «último envío» dice si el servidor aceptó la plantación, y si no,
               por qué exactamente. */}
+      {/* Contra la máquina se dice: así nadie juega media hora creyendo que
+          está subiendo de rango. En PvP no hace falta, ahí está el nick del rival. */}
+      {!roomId && !isPracticeMode && (
+        <div className="entrenamiento-aviso">🤖 Entrenamiento · sin puntos ni cofre</div>
+      )}
+
       {roomId && (
         <div className="pvp-diag">
           <div className="pvp-diag__linea">

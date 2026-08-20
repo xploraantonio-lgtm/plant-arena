@@ -27,7 +27,6 @@ interface RankingProps {
   userProfile?: Database['public']['Tables']['profiles']['Row'] | null
   hasVipPass?: boolean
   onBack: () => void
-  onAddElo?: (delta: number) => void
 }
 
 interface ReferralLeaderboardUser {
@@ -41,7 +40,7 @@ interface ReferralLeaderboardUser {
   isCurrentUser?: boolean
 }
 
-export default function Ranking({ userElo, userProfile, hasVipPass = false, onBack, onAddElo }: RankingProps) {
+export default function Ranking({ userElo, userProfile, hasVipPass = false, onBack }: RankingProps) {
   const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [copiedLink, setCopiedLink] = useState(false)
@@ -121,20 +120,6 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
           </span>
         </div>
         <div className="ranking-header__right">
-          {onAddElo && (
-            <button
-              className="ranking-back-btn"
-              type="button"
-              style={{ background: 'linear-gradient(180deg, #ca8a04 0%, #a16207 100%)', borderColor: '#fef08a', padding: '4px 8px', fontSize: '10px' }}
-              onClick={() => {
-                onAddElo(100)
-                soundManager.playSound('plantation', 0.8)
-              }}
-              title="Sumar +100 Copas de prueba para subir de Arena"
-            >
-              +100 🏆 TEST
-            </button>
-          )}
           <button
             className="ranking-mute-btn"
             type="button"
