@@ -91,11 +91,24 @@ export function crearPlantaDelRival(
   const config = getScaledPlantConfig(plantId, statRolls)
   const camina = config.category === 'melee' || !!config.moveSpeed || plantId === 'chomper'
 
-  // Camina desde su base hacia la tuya; estática, en su columna.
+  // ── LA COLUMNA SE ESPEJA ───────────────────────────────────────────────────
+  //
+  // El rival planta en SU columna, contada desde SU base. En su pantalla él es el
+  // jugador de la izquierda, igual que tú en la tuya, así que su columna 4 está en
+  // su mitad izquierda — que en tu pantalla es la mitad DERECHA.
+  //
+  // Sin espejar, su planta aparecía en tu columna 4: en tu propia mitad, entre tus
+  // plantas y detrás de tus defensas. Y como el combate va por posición, cada uno
+  // veía una batalla distinta: en una pantalla su lanzaguisantes llegaba a tu base
+  // y en la otra lo paraba un muro que en realidad estaba en el otro extremo.
+  //
+  // El campo va de 15 a 85, así que espejar es 100 − x. En columnas, la 0 pasa a
+  // ser la 11.
   const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
-  const x = camina || col === undefined
+  const colEspejada = col === undefined ? undefined : TOTAL_COLUMNS - 1 - col
+  const x = camina || colEspejada === undefined
     ? BASE_RIGHT_START_X - 1
-    : BASE_LEFT_END_X + col * colWidth + colWidth / 2
+    : BASE_LEFT_END_X + colEspejada * colWidth + colWidth / 2
 
   const entidad: PlantEntity = {
     id: entityId('rival', state.tick, state.entityCounter++),
@@ -103,7 +116,7 @@ export function crearPlantaDelRival(
     level,
     statRolls,
     lane,
-    col: camina ? undefined : col,
+    col: camina ? undefined : colEspejada,
     x,
     hp: config.maxHp,
     maxHp: config.maxHp,
