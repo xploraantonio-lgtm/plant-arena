@@ -264,7 +264,10 @@ export default function Battlefield({
     recibidas: number
     ultimoEnvio: string
     canal: string
-  }>({ enviadas: 0, recibidas: 0, ultimoEnvio: '—', canal: 'conectando…' })
+    /** Acciones que el SERVIDOR dice que hay en esta sala, y cuántas son mías. */
+    enSala: number
+    misEnSala: number
+  }>({ enviadas: 0, recibidas: 0, ultimoEnvio: '—', canal: 'conectando…', enSala: 0, misEnSala: 0 })
 
   const registrarPlantacion = (carta: PlantId, lane: number, col: number) => {
     if (!roomId) return
@@ -318,14 +321,24 @@ export default function Battlefield({
       })
     }
 
-    const dejarDeEscuchar = SupabaseService.subscribeToMatchActions(roomId, aplicar)
-    setDiag((d) => ({ ...d, canal: 'escuchando' }))
+    const dejarDeEscuchar = SupabaseService.subscribeToMatchActions(roomId, aplicar, (estado) => {
+      setDiag((d) => ({ ...d, canal: estado }))
+    })
 
     // Red de seguridad: al entrar se recoge lo que ya hubiera, y cada 3 s se
     // comprueba si se perdió algún mensaje. Sin esto, una sola acción perdida
     // dejaría las dos partidas divergentes hasta el final.
     const recuperar = async () => {
-      const pendientes = await SupabaseService.matchActionsSince(roomId, ultimaAccionRef.current)
+      // Desde 0 a propósito, no desde la última vista: así se sabe cuántas hay en
+      // total en la sala, que es el dato que dice si los dos jugadores están
+      // realmente en la MISMA partida.
+      const todas = await SupabaseService.matchActionsSince(roomId, 0)
+      setDiag((d) => ({
+        ...d,
+        enSala: todas.length,
+        misEnSala: todas.filter((a) => a.userId === currentUserId).length,
+      }))
+      const pendientes = todas.filter((a) => a.id > ultimaAccionRef.current)
       for (const a of pendientes) {
         aplicar({
           id: a.id,
@@ -645,8 +658,15 @@ export default function Battlefield({
             <b>SALA</b> {roomId.slice(0, 8)} · <b>TIC</b> {tick}
           </div>
           <div className="pvp-diag__linea">
-            <b>enviadas</b> {diag.enviadas} · <b>recibidas</b> {diag.recibidas} ·{' '}
-            {diag.canal}
+            <b>enviadas</b> {diag.enviadas} · <b>recibidas</b> {diag.recibidas}
+          </div>
+          {/* EL DATO DECISIVO: cuántas acciones dice el SERVIDOR que hay en esta
+              sala, y cuántas son mías.
+                · misEnSala 0     → no se está enviando nada
+                · enSala = mías   → estáis en salas distintas
+                · enSala > mías   → estáis juntos: el problema es la entrega */}
+          <div className="pvp-diag__linea">
+            <b>en la sala</b> {diag.enSala} ({diag.misEnSala} mías) · {diag.canal}
           </div>
           <div className="pvp-diag__linea pvp-diag__linea--envio">{diag.ultimoEnvio}</div>
         </div>

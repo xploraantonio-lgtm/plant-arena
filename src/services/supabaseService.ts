@@ -522,7 +522,15 @@ export const SupabaseService = {
       plant_id: string | null
       lane: number
       col: number | null
-    }) => void
+    }) => void,
+    /**
+     * El estado de la suscripción: SUBSCRIBED, CHANNEL_ERROR, TIMED_OUT…
+     *
+     * Es el dato que distingue los tres casos posibles cuando el rival no ve tu
+     * planta: que no se esté enviando, que el canal esté caído, o que estéis en
+     * salas distintas. Sin esto hay que adivinar.
+     */
+    alCambiarEstado?: (estado: string) => void
   ): () => void {
     if (!isSupabaseConfigured()) return () => {}
     const canal = supabase
@@ -537,7 +545,7 @@ export const SupabaseService = {
         },
         (payload: any) => alRecibir(payload.new)
       )
-      .subscribe()
+      .subscribe((estado: string) => alCambiarEstado?.(estado))
 
     return () => {
       void supabase.removeChannel(canal)
