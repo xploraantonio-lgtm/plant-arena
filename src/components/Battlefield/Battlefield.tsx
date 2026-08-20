@@ -19,6 +19,7 @@ const peaImg = '/game-assets/images/Plants/PB00.png'
 const melonImg = '/game-assets/images/Plants/melon_pult.png'
 const needleImg = '/game-assets/greenfoot/needle1.png'
 import PlantHand from './PlantHand'
+import RelojDePartida from '../RelojDePartida/RelojDePartida'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import './Battlefield.css'
@@ -146,6 +147,7 @@ export default function Battlefield({
 }: BattlefieldProps) {
   const {
     tick,
+    desfaseDeTics,
     gameStatus,
     isPracticeMode,
     isMuted,
@@ -649,6 +651,7 @@ export default function Battlefield({
         <div className="pvp-diag">
           <div className="pvp-diag__linea">
             <b>SALA</b> {roomId.slice(0, 8)} · <b>TIC</b> {tick}
+            {desfaseDeTics !== null && <> · <b>desfase</b> {desfaseDeTics}</>}
           </div>
           <div className="pvp-diag__linea">
             <b>enviadas</b> {diag.enviadas} · <b>recibidas</b> {diag.recibidas}
@@ -927,6 +930,11 @@ export default function Battlefield({
           <img src={sunIcon} alt="Sol" className="sun-item__icon" />
         </button>
       ))}
+
+      {/* El reloj de la partida y la cuenta atrás hasta la muerte súbita. Sin
+          esto el plazo existía pero no se veía, y un plazo que no se ve no se
+          puede jugar. */}
+      {gameStatus === 'playing' && <RelojDePartida tick={tick} practica={isPracticeMode} />}
 
       {/* Wave Banner */}
       {waveBanner && (

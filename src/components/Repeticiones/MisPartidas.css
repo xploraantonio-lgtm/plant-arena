@@ -187,3 +187,15 @@
 
 .partida__revocar:hover { background: rgba(248, 113, 113, 0.22); }
 .partida__revocar:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+/* Cuando compartir falla. Va en la fila de la partida, no en un aviso global:
+   así se ve al lado del botón que se pulsó. */
+.partida__fallo {
+  flex: 1 1 100%;
+  margin: 0;
+  padding-top: 0.4rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #fca5a5;
+  border-top: 1px solid rgba(248, 113, 113, 0.3);
+}

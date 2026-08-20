@@ -59,6 +59,7 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
   const [partidas, setPartidas] = useState<Partida[] | null>(null)
   const [enlaceCopiado, setEnlaceCopiado] = useState<string | null>(null)
   const [compartiendo, setCompartiendo] = useState<string | null>(null)
+  const [fallo, setFallo] = useState<{ roomId: string; mensaje: string } | null>(null)
 
   useEffect(() => {
     let cancelado = false
@@ -72,7 +73,21 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
 
   const compartir = async (p: Partida) => {
     setCompartiendo(p.roomId)
-    const token = p.shareToken ?? (await SupabaseService.shareMatch(p.roomId)).token
+    setFallo(null)
+
+    let token = p.shareToken
+    if (!token) {
+      const r = await SupabaseService.shareMatch(p.roomId)
+      token = r.token ?? null
+      // Antes esto era un `return` a secas y el botón parecía muerto: la llamada
+      // fallaba (el código se generaba con una función de pgcrypto que no estaba
+      // en el search_path) y en pantalla no pasaba nada. Un botón que no hace
+      // nada es peor que uno que dice qué falló.
+      if (!token) {
+        setFallo({ roomId: p.roomId, mensaje: r.error ?? 'No se pudo crear el enlace.' })
+      }
+    }
+
     setCompartiendo(null)
     if (!token) return
 
@@ -90,6 +105,10 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
       setTimeout(() => setEnlaceCopiado(null), 2500)
     } catch {
       setEnlaceCopiado(null)
+      setFallo({
+        roomId: p.roomId,
+        mensaje: 'El enlace ya está creado, pero el navegador no dejó copiarlo. Cópialo a mano aquí abajo.',
+      })
     }
   }
 
@@ -173,6 +192,10 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
                 : '🔗 Compartir'}
             </button>
           </div>
+
+          {fallo?.roomId === p.roomId && (
+            <p className="partida__fallo">⚠ {fallo.mensaje}</p>
+          )}
 
           {p.shareToken && (
             <div className="partida__enlace">

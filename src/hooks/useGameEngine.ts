@@ -704,6 +704,20 @@ export function useGameEngine() {
      * enfriamiento seguía funcionando en el motor, pero el jugador no lo veía.
      */
     tick: state.tick,
+    /**
+     * Cuántos tics de retraso llevo respecto al reloj común de la partida.
+     *
+     * Es la medida del "uno va más rápido que el otro". El reloj común dice por
+     * qué tic DEBERÍA ir la partida; esto es la diferencia con el tic al que va de
+     * verdad. Cerca de cero significa que las dos pantallas están en el mismo
+     * momento y que los soles caen a la vez en las dos.
+     *
+     * Nulo en las partidas sin reloj común (entrenamiento y práctica).
+     */
+    desfaseDeTics:
+      ancoraMsRef.current === null
+        ? null
+        : Math.floor((Date.now() - ancoraMsRef.current) / TICK_MS) - state.tick,
     gameStatus: state.status,
     isPracticeMode: !!state.isPracticeMode,
     isMuted,

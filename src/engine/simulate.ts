@@ -28,6 +28,9 @@ import {
   GIRASOL_DOBLE_MS,
   SOLES_POR_CICLO_GIRASOL,
   SOLES_POR_CICLO_GIRASOL_DOBLE,
+  MUERTE_SUBITA_MS,
+  DESGASTE_MUERTE_SUBITA_POR_SEGUNDO,
+  TOPE_DE_PARTIDA_MS,
 } from './balance'
 import {
   menteNueva,
@@ -1132,12 +1135,103 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   procesarLado(state, LADO_P2, dt, sonar)
 
 
-  // 7. VICTORY / DEFEAT CHECKS
-  if (state.p1BaseHp <= 0) {
-    state.status = 'defeat'
-    sonar('zombieFinalKill', 0.7)
-  } else if (state.p2BaseHp <= 0) {
-    state.status = 'victory'
-    sonar('level_select', 0.7)
+  // ───────────────────────────────────────────────────────────────────────────
+  // 6.5 MUERTE SÚBITA
+  //
+  // Pasados los 2:30, las dos bases empiezan a perder vida solas. Es lo que hace
+  // que la partida no pueda ser eterna: antes, dos jugadores plantando girasoles
+  // sin atacarse nunca no llegaban a ningún resultado, y a los 120 segundos sin
+  // jugadas el servidor daba la sala por abandonada — el "SIN RESULTADO" de la
+  // lista de partidas.
+  //
+  // Pierden LO MISMO las dos, así que no cambia quién va ganando: sólo obliga a
+  // que se decida. Cae primero la que ya estaba peor.
+  //
+  // En práctica no: ahí no hay rival ni partida que cerrar.
+  // ───────────────────────────────────────────────────────────────────────────
+  if (!state.isPracticeMode) {
+    if (state.tick === TIC_MUERTE_SUBITA) {
+      state.waveBanner = '☠ MUERTE SÚBITA · las dos bases pierden vida'
+      state.pending.push({ atTick: state.tick + msToTicks(4000), kind: 'clear_wave_banner' })
+      sonar('zombie_groan', 0.8)
+    }
+    if (state.tick >= TIC_MUERTE_SUBITA) {
+      const desgaste = DESGASTE_MUERTE_SUBITA_POR_SEGUNDO * dt
+      state.p1BaseHp = Math.max(0, state.p1BaseHp - desgaste)
+      state.p2BaseHp = Math.max(0, state.p2BaseHp - desgaste)
+    }
   }
+
+  // 7. VICTORY / DEFEAT CHECKS
+  if (state.p1BaseHp <= 0 || state.p2BaseHp <= 0) {
+    // Las dos pueden caer en el MISMO tic: con el desgaste de la muerte súbita
+    // pierden lo mismo, así que dos bases con la misma vida llegan a cero juntas.
+    // Mirar sólo `p1BaseHp <= 0` primero daría la derrota a quien mira — o sea, a
+    // los DOS jugadores, cada uno en su pantalla. Por eso ese caso se decide por
+    // puntos, que es simétrico.
+    terminar(
+      state,
+      state.p1BaseHp <= 0 && state.p2BaseHp <= 0
+        ? decidirPorPuntos(state)
+        : state.p1BaseHp <= 0
+        ? 'defeat'
+        : 'victory',
+      sonar
+    )
+  } else if (!state.isPracticeMode && state.tick >= TIC_TOPE_DE_PARTIDA) {
+    // Red de seguridad: aquí se acaba, pase lo que pase.
+    terminar(state, decidirPorPuntos(state), sonar)
+  }
+}
+
+/** El tic en que empieza la muerte súbita. */
+export const TIC_MUERTE_SUBITA = msToTicks(MUERTE_SUBITA_MS)
+/** El tic en que la partida se decide por puntos, sí o sí. */
+export const TIC_TOPE_DE_PARTIDA = msToTicks(TOPE_DE_PARTIDA_MS)
+
+/** ¿Va ya la partida en muerte súbita? La interfaz lo usa para el cartel. */
+export function enMuerteSubita(state: GameState): boolean {
+  return !state.isPracticeMode && state.tick >= TIC_MUERTE_SUBITA
+}
+
+function terminar(state: GameState, resultado: 'victory' | 'defeat', sonar: SonarFn) {
+  state.status = resultado
+  if (resultado === 'victory') sonar('level_select', 0.7)
+  else sonar('zombieFinalKill', 0.7)
+}
+
+/**
+ * Decide la partida cuando no la decide una base caída.
+ *
+ * TODO lo que se compara aquí es una comparación ENTRE LOS DOS LADOS, nunca un
+ * lado concreto. Es obligatorio: cada jugador se simula a sí mismo como p1, así
+ * que "gana p1" haría ganar a los dos, mientras que "gana quien tenga más vida"
+ * da la misma respuesta en las dos pantallas.
+ *
+ * El orden es el que un jugador esperaría: primero quién tiene la base mejor,
+ * porque es el objetivo; luego quién domina el campo.
+ */
+export function decidirPorPuntos(state: GameState): 'victory' | 'defeat' {
+  // 1. La vida de la base. Es de lo que va la partida.
+  if (state.p1BaseHp !== state.p2BaseHp) {
+    return state.p1BaseHp > state.p2BaseHp ? 'victory' : 'defeat'
+  }
+
+  // 2. Cuántas plantas quedan en pie. Quien controla el campo iba ganando.
+  if (state.plants.length !== state.enemyPlants.length) {
+    return state.plants.length > state.enemyPlants.length ? 'victory' : 'defeat'
+  }
+
+  // 3. La vida que suman esas plantas: mismo número de plantas, pero más enteras.
+  const mia = state.plants.reduce((t, p) => t + p.hp, 0)
+  const suya = state.enemyPlants.reduce((t, p) => t + p.hp, 0)
+  if (mia !== suya) return mia > suya ? 'victory' : 'defeat'
+
+  // Empate perfecto: misma vida de base, mismas plantas y misma vida en ellas.
+  // No hay forma simétrica de sacar un ganador, y no se puede inventar uno (los
+  // dos clientes elegirían el suyo). Así que los dos reportan haber perdido, el
+  // servidor ve dos reportes que no coinciden y lo registra como empate: sin
+  // cambio de ELO y, en coliseo, devolviendo lo apostado. Es exactamente lo que
+  // corresponde a un empate — y es un caso que en la práctica no se ve.
+  return 'defeat'
 }

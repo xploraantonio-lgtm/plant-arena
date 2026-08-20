@@ -36,31 +36,67 @@
   overflow: hidden;
 }
 
+/* ── Las bases, con el árbol madre ───────────────────────────────────────────
+   Misma geometría que en la batalla: una franja del 15 % en cada borde, la vida
+   arriba y el árbol centrado. Antes la repetición sólo pintaba la barra de vida,
+   y sin el árbol no se reconocía como la misma partida. */
+
 .rep__base {
   position: absolute;
-  top: 0.5rem;
+  top: 0;
+  bottom: 0;
+  width: 15%;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  width: 40%;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  font-variant-numeric: tabular-nums;
+  align-items: center;
+  padding-top: 0.4rem;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
-.rep__base--p1 { left: 0.5rem; }
-.rep__base--p2 { right: 0.5rem; text-align: right; }
+.rep__base--p1 { left: 0; }
+.rep__base--p2 { right: 0; }
+
+.rep__nombre {
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
 
 .rep__vida {
-  height: 0.35rem;
+  width: 90%;
+  height: 0.4rem;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .rep__base--p1 .rep__vida > div { height: 100%; background: #52e061; }
 .rep__base--p2 .rep__vida > div { height: 100%; background: #ff4d4d; margin-left: auto; }
+
+.rep__arbol {
+  position: absolute;
+  top: 49%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 160%;
+  max-width: 220px;
+  max-height: 90%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.7))
+          drop-shadow(0 0 12px rgba(82, 224, 97, 0.5));
+}
+
+/* El del rival, espejado: es el mismo árbol al otro lado. */
+.rep__arbol--p2 { transform: translate(-50%, -50%) scaleX(-1); }
 
 .rep__planta {
   position: absolute;

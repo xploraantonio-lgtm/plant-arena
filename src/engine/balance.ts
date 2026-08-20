@@ -63,3 +63,53 @@ export const GIRASOL_DOBLE_MS = GIRASOL_MS
 /** Cuántos soles da cada uno. */
 export const SOLES_POR_CICLO_GIRASOL = 1
 export const SOLES_POR_CICLO_GIRASOL_DOBLE = 2
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUÁNTO DURA UNA PARTIDA
+//
+// Antes: lo que hiciera falta. Y si los dos se dedicaban a plantar girasoles y
+// nadie llegaba a la base del otro, la partida NO TERMINABA — se quedaba abierta
+// hasta que el servidor la daba por abandonada a los 120 segundos sin jugadas.
+// Eso salía en la lista de partidas como "SIN RESULTADO": nadie se rindió, nadie
+// atacó, y no ganó nadie.
+//
+// Ahora toda partida acaba, y acaba con un resultado:
+//
+//   0 → 2:30   FASE NORMAL. Lo de siempre.
+//   2:30 →     MUERTE SÚBITA. Las DOS bases empiezan a perder vida por sí solas.
+//              Como pierden lo mismo, cae primero la que ya estaba peor: quien va
+//              ganando, gana. Y como la presión sube sola, la partida se cierra.
+//   5:30       TOPE. Si a estas alturas siguen las dos en pie, se decide por
+//              puntos y se acaba. Es una red de seguridad; con el desgaste no
+//              debería llegarse nunca.
+//
+// POR QUÉ EL DESGASTE ES IGUAL PARA LOS DOS
+//   Cada cliente se simula a sí mismo como p1: lo que para ti es `p1BaseHp` para
+//   tu rival es `p2BaseHp`. Así que cualquier regla que diga "gana p1" haría que
+//   los DOS se declararan ganadores. Todo lo que decide la partida tiene que ser
+//   una COMPARACIÓN entre los dos lados —quién tiene más vida, quién tiene más
+//   plantas—, porque una comparación da la misma respuesta mirada desde los dos
+//   sitios.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Cuándo empieza la muerte súbita. */
+export const MUERTE_SUBITA_MS = 150_000
+
+/**
+ * Vida que pierde CADA base por segundo durante la muerte súbita.
+ *
+ * Con 600 de vida, una base entera se consume en 50 segundos. O sea que en el
+ * peor caso —dos bases intactas al llegar a la muerte súbita— la partida se
+ * decide sobre el 3:20. Y no es un empate: las plantas siguen peleando, así que
+ * la diferencia que ya hubiera se agranda.
+ */
+export const DESGASTE_MUERTE_SUBITA_POR_SEGUNDO = 12
+
+/**
+ * Tope absoluto. Pasado esto se decide por puntos, se juegue lo que se juegue.
+ *
+ * Existe para que no haya NINGÚN camino por el que una partida siga abierta:
+ * ni un registro manipulado, ni un fallo del desgaste, ni una carta que cure la
+ * base más rápido de lo que se desgasta.
+ */
+export const TOPE_DE_PARTIDA_MS = 330_000

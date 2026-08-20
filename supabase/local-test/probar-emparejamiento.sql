@@ -854,14 +854,68 @@ BEGIN
 
   UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '5 minutes' WHERE id = v_sala;
 
+  -- Desde la migración 26 esto ya NO acaba en "abandonada". Ana pregunta, o sea
+  -- que Ana está; Beto no ha dado señales en cinco minutos, o sea que Beto se
+  -- fue. Gana Ana, que es lo que el juego le promete al rival de quien cierra la
+  -- pestaña. Antes se cerraba sin ganador y el que se quedaba no cobraba nada.
   PERFORM public._soy(v_a);
   v_res := public.room_result(v_sala);
-  PERFORM public._t('sin reportes, la partida queda abandonada',
+  PERFORM public._t('si el rival se fue, gana quien se queda',
+                    (v_res->>'iWon')::BOOLEAN IS TRUE, v_res::TEXT);
+
+  SELECT gems_balance INTO v_sa2 FROM public.profiles WHERE id = v_a;
+  PERFORM public._t('y cobra el bote del coliseo, no una devolución',
+                    v_sa2 > 20, 'saldo: ' || v_sa2);
+END $$;
+
+-- Y el caso que sí queda sin ganador: no aparece NINGUNO de los dos.
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB; v_sa2 NUMERIC;
+BEGIN
+  UPDATE public.profiles SET gems_balance = 20 WHERE id IN (v_a, v_b);
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('colosseum', 4);
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('colosseum', 4)->>'roomId')::UUID;
+
+  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '5 minutes' WHERE id = v_sala;
+
+  -- Nadie pregunta: lo cierra el barrido, sin nadie presente a quien dar la
+  -- victoria.
+  PERFORM public.settle_abandoned_rooms();
+
+  PERFORM public._soy(v_a);
+  v_res := public.room_result(v_sala);
+  PERFORM public._t('sin nadie, la partida queda abandonada',
                     v_res->>'status' = 'abandoned', v_res::TEXT);
   PERFORM public._t('y sin ganador', (v_res->>'noWinner')::BOOLEAN IS TRUE, v_res::TEXT);
 
   SELECT gems_balance INTO v_sa2 FROM public.profiles WHERE id = v_a;
   PERFORM public._t('con las gemas devueltas', v_sa2 = 20, 'saldo: ' || v_sa2);
+END $$;
+
+-- Y el agujero que abrió y cerró la 26: reportar y desaparecer no es ganar.
+DO $$
+DECLARE
+  v_a UUID := '11111111-1111-1111-1111-111111111111';
+  v_b UUID := '22222222-2222-2222-2222-222222222222';
+  v_sala UUID; v_res JSONB;
+BEGIN
+  PERFORM public._soy(v_a); PERFORM public.enter_matchmaking('ranked');
+  PERFORM public._soy(v_b); v_sala := (public.enter_matchmaking('ranked')->>'roomId')::UUID;
+
+  -- Beto dice que ganó él y cierra el navegador. Ana sigue jugando y preguntando.
+  PERFORM public._soy(v_b);
+  PERFORM public.report_match_result(v_sala, v_b);
+
+  UPDATE public.game_rooms SET created_at = NOW() - INTERVAL '5 minutes' WHERE id = v_sala;
+  UPDATE public.game_rooms SET p1_last_seen = NOW() WHERE id = v_sala;
+
+  PERFORM public._soy(v_a);
+  v_res := public.room_result(v_sala);
+  PERFORM public._t('el reporte de quien se fue no le da la victoria',
+                    (v_res->>'iWon')::BOOLEAN IS TRUE, v_res::TEXT);
 END $$;
 
 DO $$

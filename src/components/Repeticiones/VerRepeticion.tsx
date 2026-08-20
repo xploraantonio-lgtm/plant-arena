@@ -4,7 +4,11 @@ import { construirRepeticion, type DatosDeRepeticion, type Repeticion } from '..
 import { TICK_MS } from '../../engine/time'
 import { PLANT_CONFIGS, LANES_CONFIG, INITIAL_BASE_HP } from '../../utils/gameConstants'
 import { getArenaForElo } from '../../utils/arenaManager'
+import RelojDePartida from '../RelojDePartida/RelojDePartida'
 import './VerRepeticion.css'
+
+/** El mismo fichero que usa la batalla, para que la repetición se vea igual. */
+const ARBOL_MADRE = '/game-assets/greenfoot/mothertree_whitebg.png'
 
 /**
  * EL REPRODUCTOR DE REPETICIONES
@@ -137,14 +141,21 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
   return (
     <div className="rep">
       <div className="rep__campo" style={{ backgroundImage: `url(${arena.bgImage})` }}>
-        {/* Las bases */}
+        {/* El reloj, igual que en la partida: sin él no se entiende por qué las
+            dos bases empiezan a caer solas a los 2:30. */}
+        <RelojDePartida tick={estado.tick} />
+
+        {/* Las bases, con su árbol madre. Es el mismo asset de la batalla: sin él
+            la repetición no se parecía a la partida que se jugó. */}
         <div className="rep__base rep__base--p1">
           <div className="rep__vida"><div style={{ width: `${(estado.p1BaseHp / INITIAL_BASE_HP) * 100}%` }} /></div>
-          <span>🌳 {miNombre ?? 'Jugador 1'} ({Math.round(estado.p1BaseHp)})</span>
+          <span className="rep__nombre">🌳 {miNombre ?? 'Jugador 1'} ({Math.round(estado.p1BaseHp)})</span>
+          <img className="rep__arbol" src={ARBOL_MADRE} alt="" />
         </div>
         <div className="rep__base rep__base--p2">
           <div className="rep__vida"><div style={{ width: `${(estado.p2BaseHp / INITIAL_BASE_HP) * 100}%` }} /></div>
-          <span>🌳 {suNombre ?? 'Jugador 2'} ({Math.round(estado.p2BaseHp)})</span>
+          <span className="rep__nombre">🌳 {suNombre ?? 'Jugador 2'} ({Math.round(estado.p2BaseHp)})</span>
+          <img className="rep__arbol rep__arbol--p2" src={ARBOL_MADRE} alt="" />
         </div>
 
         {/* Las plantas de los dos lados. Es el mismo dato y el mismo sprite: lo
