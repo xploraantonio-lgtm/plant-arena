@@ -138,6 +138,20 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
   const arena = getArenaForElo(1000)
   const miNombre = desde === 1 ? datos.jugador1.nombre : datos.jugador2.nombre
   const suNombre = desde === 1 ? datos.jugador2.nombre : datos.jugador1.nombre
+  /**
+   * ¿Ganó el lado que se está mirando?
+   *
+   * El resultado de la SALA cuando lo hay: es el que cobró el ELO. La simulación
+   * sólo decide cuando la sala no tiene ganador —una disputa, o un abandono sin
+   * reportes— y entonces el cartel lo dice.
+   *
+   * Hacen falta las dos cosas porque el registro de jugadas no guarda rendiciones
+   * ni navegadores cerrados: una partida que acabó porque alguien se fue, vuelta a
+   * ejecutar, sigue hasta la muerte súbita y puede dar otro ganador.
+   */
+  const gane =
+    datos.ganador !== null ? datos.ganador === desde : estado.status === 'victory'
+
   const segundo = Math.floor((estado.tick * TICK_MS) / 1000)
   const total = Math.max(1, Math.floor((rep.ticFinal * TICK_MS) / 1000))
 
@@ -188,14 +202,22 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
           />
         ))}
         {/* El final. Es lo que el jugador quiere ver al compartir una batalla, y
-            antes no llegaba nunca porque la reproducción se cortaba antes. */}
+            antes no llegaba nunca porque la reproducción se cortaba unos segundos
+            después de la última jugada.
+
+            MANDA EL RESULTADO DEL SERVIDOR, no el de la simulación. No siempre
+            coinciden, y cuando no lo hacen el del servidor es el de verdad: si
+            alguien se rindió o cerró el navegador, eso NO está en el registro de
+            jugadas, así que la repetición sigue hasta la muerte súbita y puede
+            declarar otro ganador. La partida la ganó quien dice la sala. */}
         {estado.status !== 'playing' && (
-          <div className={`rep-final ${estado.status === 'victory' ? 'rep-final--gana' : 'rep-final--pierde'}`}>
+          <div className={`rep-final ${gane ? 'rep-final--gana' : 'rep-final--pierde'}`}>
             <span className="rep-final__titulo">
-              {estado.status === 'victory' ? '🏆 VICTORIA' : '💀 DERROTA'}
+              {gane ? '🏆 VICTORIA' : '💀 DERROTA'}
             </span>
             <span className="rep-final__nota">
-              {estado.status === 'victory' ? miNombre ?? 'Jugador 1' : suNombre ?? 'Jugador 2'} gana
+              {(gane ? miNombre : suNombre) ?? (gane ? 'Jugador 1' : 'Jugador 2')} gana
+              {datos.ganador === null && ' · según la repetición'}
             </span>
           </div>
         )}
