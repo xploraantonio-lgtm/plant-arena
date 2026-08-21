@@ -99,6 +99,53 @@ export default function PanelDeReferidos() {
     return () => clearInterval(id)
   }, [corriendo])
 
+  // Amigos filtrados y paginados (HOOKS LLAMADOS INCONDICIONALMENTE AL INICIO)
+  const amigosFiltrados = useMemo(() => {
+    const q = amigosBusqueda.trim().toLowerCase()
+    if (!datos?.amigos) return []
+    if (!q) return datos.amigos
+    return datos.amigos.filter((a) => (a.nombre || '').toLowerCase().includes(q))
+  }, [datos?.amigos, amigosBusqueda])
+
+  const totalAmigos = amigosFiltrados.length
+  const tamanoRealAmigos = amigosTamanoPagina === 'all' ? (totalAmigos || 1) : amigosTamanoPagina
+  const totalPaginasAmigos = Math.max(1, Math.ceil(totalAmigos / tamanoRealAmigos))
+  const paginaAmigosActual = Math.min(amigosPagina, totalPaginasAmigos)
+
+  const amigosPaginados = useMemo(() => {
+    if (amigosTamanoPagina === 'all') return amigosFiltrados
+    const start = (paginaAmigosActual - 1) * tamanoRealAmigos
+    return amigosFiltrados.slice(start, start + tamanoRealAmigos)
+  }, [amigosFiltrados, paginaAmigosActual, tamanoRealAmigos, amigosTamanoPagina])
+
+  const inicioAmigos = totalAmigos === 0 ? 0 : (paginaAmigosActual - 1) * tamanoRealAmigos + 1
+  const finAmigos = amigosTamanoPagina === 'all' ? totalAmigos : Math.min(paginaAmigosActual * tamanoRealAmigos, totalAmigos)
+
+  const handleAmigosPagina = (nueva: number) => {
+    soundManager.playSound('click', 0.2)
+    setAmigosPagina(nueva)
+    amigosListaRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Ranking de referidos paginado
+  const totalRanking = datos?.ranking?.length ?? 0
+  const tamanoRealRanking = rankingTamanoPagina === 'all' ? (totalRanking || 1) : rankingTamanoPagina
+  const totalPaginasRanking = Math.max(1, Math.ceil(totalRanking / tamanoRealRanking))
+  const paginaRankingActual = Math.min(rankingPagina, totalPaginasRanking)
+
+  const rankingPaginado = useMemo(() => {
+    if (!datos?.ranking) return []
+    if (rankingTamanoPagina === 'all') return datos.ranking
+    const start = (paginaRankingActual - 1) * tamanoRealRanking
+    return datos.ranking.slice(start, start + tamanoRealRanking)
+  }, [datos?.ranking, paginaRankingActual, tamanoRealRanking, rankingTamanoPagina])
+
+  const handleRankingPagina = (nueva: number) => {
+    soundManager.playSound('click', 0.2)
+    setRankingPagina(nueva)
+    rankingListaRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const decir = (texto: string, bien = true) => {
     setAviso({ texto, bien })
     setTimeout(() => setAviso(null), 4000)
@@ -198,53 +245,6 @@ export default function PanelDeReferidos() {
   const premiosDeLaMeta = datos.premios.filter(
     (p) => p.meta === (datos.metaActual ?? datos.metaSiguiente ?? 50)
   )
-
-  // Amigos filtrados y paginados
-  const amigosFiltrados = useMemo(() => {
-    const q = amigosBusqueda.trim().toLowerCase()
-    if (!datos?.amigos) return []
-    if (!q) return datos.amigos
-    return datos.amigos.filter((a) => (a.nombre || '').toLowerCase().includes(q))
-  }, [datos?.amigos, amigosBusqueda])
-
-  const totalAmigos = amigosFiltrados.length
-  const tamanoRealAmigos = amigosTamanoPagina === 'all' ? (totalAmigos || 1) : amigosTamanoPagina
-  const totalPaginasAmigos = Math.max(1, Math.ceil(totalAmigos / tamanoRealAmigos))
-  const paginaAmigosActual = Math.min(amigosPagina, totalPaginasAmigos)
-
-  const amigosPaginados = useMemo(() => {
-    if (amigosTamanoPagina === 'all') return amigosFiltrados
-    const start = (paginaAmigosActual - 1) * tamanoRealAmigos
-    return amigosFiltrados.slice(start, start + tamanoRealAmigos)
-  }, [amigosFiltrados, paginaAmigosActual, tamanoRealAmigos, amigosTamanoPagina])
-
-  const inicioAmigos = totalAmigos === 0 ? 0 : (paginaAmigosActual - 1) * tamanoRealAmigos + 1
-  const finAmigos = amigosTamanoPagina === 'all' ? totalAmigos : Math.min(paginaAmigosActual * tamanoRealAmigos, totalAmigos)
-
-  const handleAmigosPagina = (nueva: number) => {
-    soundManager.playSound('click', 0.2)
-    setAmigosPagina(nueva)
-    amigosListaRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  // Ranking de referidos paginado
-  const totalRanking = datos?.ranking?.length ?? 0
-  const tamanoRealRanking = rankingTamanoPagina === 'all' ? (totalRanking || 1) : rankingTamanoPagina
-  const totalPaginasRanking = Math.max(1, Math.ceil(totalRanking / tamanoRealRanking))
-  const paginaRankingActual = Math.min(rankingPagina, totalPaginasRanking)
-
-  const rankingPaginado = useMemo(() => {
-    if (!datos?.ranking) return []
-    if (rankingTamanoPagina === 'all') return datos.ranking
-    const start = (paginaRankingActual - 1) * tamanoRealRanking
-    return datos.ranking.slice(start, start + tamanoRealRanking)
-  }, [datos?.ranking, paginaRankingActual, tamanoRealRanking, rankingTamanoPagina])
-
-  const handleRankingPagina = (nueva: number) => {
-    soundManager.playSound('click', 0.2)
-    setRankingPagina(nueva)
-    rankingListaRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
 
   return (
     <div className="ref-panel">
