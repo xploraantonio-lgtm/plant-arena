@@ -27,7 +27,7 @@
 //   simula dándole los mismos límites que tiene una persona — ver tarde, fallar
 //   clics, dudar.
 // ─────────────────────────────────────────────────────────────────────────────
-import { chance, nextFloat, nextInt, type Rng } from './rng'
+import { chance, nextFloat, nextInt, type Rng } from './rng.ts'
 
 /**
  * Lo bueno que es el bot, de 0 a 1.

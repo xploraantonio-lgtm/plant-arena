@@ -20,8 +20,8 @@
 //   navegador (localStorage, document, window). El tic sólo puede mirar y
 //   modificar el estado que recibe. determinism.test.ts lo comprueba.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createRng, nextFloat, nextInt, chance, entityId, type Rng } from './rng'
-import { TICK_SECONDS, msToTicks } from './time'
+import { createRng, nextFloat, nextInt, chance, entityId, type Rng } from './rng.ts'
+import { TICK_SECONDS, msToTicks } from './time.ts'
 import {
   SOL_DEL_CIELO_MS,
   GIRASOL_MS,
@@ -32,7 +32,7 @@ import {
   MUERTE_SUBITA_MS,
   DESGASTE_MUERTE_SUBITA_POR_SEGUNDO,
   TOPE_DE_PARTIDA_MS,
-} from './balance'
+} from './balance.ts'
 import {
   menteNueva,
   producirSol,
@@ -44,7 +44,7 @@ import {
   NIVEL_POR_DEFECTO,
   type MenteDelBot,
   type NivelDelBot,
-} from './bot'
+} from './bot.ts'
 import type {
   PlantEntity,
   ProjectileEntity,
@@ -53,7 +53,7 @@ import type {
   GameStats,
   PlantId,
   PlantStatKey,
-} from '../types/game'
+} from '../types/game.ts'
 import {
   PLANT_CONFIGS,
   INITIAL_SUN,
@@ -64,7 +64,7 @@ import {
   FIELD_WIDTH_PCT,
   TOTAL_COLUMNS,
   getScaledPlantConfig,
-} from '../utils/gameConstants'
+} from '../utils/gameConstants.ts'
 
 /**
  * Por dónde salen los sonidos.

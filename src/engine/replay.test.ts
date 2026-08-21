@@ -10,7 +10,13 @@
 // servidor podría no coincidir con lo que vieron los jugadores.
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
-import { construirRepeticion, recalcularGanador, type DatosDeRepeticion, type JugadaGrabada } from './replay'
+import {
+  construirRepeticion,
+  recalcularGanador,
+  recalcularGanadorAutoritativo,
+  type DatosDeRepeticion,
+  type JugadaGrabada,
+} from './replay'
 import { stepTick, createBattleState, crearPlantaDelRival, crearPlantaPropia, TIC_MUERTE_SUBITA } from './simulate'
 import type { PlantId } from '../types/game'
 
@@ -52,11 +58,23 @@ describe('reproducir da exactamente la misma partida', () => {
     const enVivo = createBattleState(31337, false, true)
     const datos = partidaGrabada()
     for (const j of datos.jugadas) {
-      enVivo.pending.push(
-        j.de === 1
-          ? { atTick: j.tick, kind: 'own_plant', plantId: j.plantId as PlantId, lane: j.lane, col: j.col ?? undefined }
-          : { atTick: j.tick, kind: 'rival_plant', plantId: j.plantId as PlantId, lane: j.lane, col: j.col ?? undefined }
-      )
+      if (j.de === 1) {
+        enVivo.pending.push({
+          atTick: j.tick,
+          kind: 'own_plant',
+          plantId: j.plantId as PlantId,
+          lane: j.lane!,
+          col: j.col ?? undefined,
+        })
+      } else {
+        enVivo.pending.push({
+          atTick: j.tick,
+          kind: 'rival_plant',
+          plantId: j.plantId as PlantId,
+          lane: j.lane!,
+          col: j.col ?? undefined,
+        })
+      }
     }
     for (let i = 0; i < 900; i++) stepTick(enVivo, () => {})
 
@@ -201,5 +219,82 @@ describe('la repetición llega hasta el final de la partida', () => {
 
     expect(deAna.resultado).not.toBe(deBeto.resultado)
     expect(Math.abs(deAna.ticFinal - deBeto.ticFinal)).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('arbitro autoritativo auth-v1 (recalcularGanadorAutoritativo)', () => {
+  const mazoBasico = [
+    { plantId: 'peashooter', slot: 0, level: 0, statRolls: [] },
+    { plantId: 'sunflower', slot: 1, level: 0, statRolls: [] },
+    { plantId: 'wallnut', slot: 2, level: 0, statRolls: [] },
+  ]
+
+  it('detecta partida legal y otorga victoria al lado correspondiente', () => {
+    const datos: DatosDeRepeticion = {
+      roomId: 'room-auth-1',
+      mode: 'ranked',
+      seed: 12345,
+      engineVersion: 'auth-v1',
+      jugadaEn: '2026-08-20T00:00:00Z',
+      jugador1: { nombre: 'Ana', avatar: null, mazo: mazoBasico },
+      jugador2: { nombre: 'Beto', avatar: null, mazo: mazoBasico },
+      ganador: null,
+      yoSoy: 1,
+      jugadas: [
+        // Ana planta peashooter tras acumular 100 soles con margen de red válido (issuedTick: 960, tick: 966)
+        { de: 1, seq: 1, issuedTick: 960, tick: 966, kind: 'plant', plantId: 'peashooter', lane: 1, col: 2, slot: 0 },
+      ],
+    }
+
+    const res = recalcularGanadorAutoritativo(datos)
+    expect(res.consistente).toBe(true)
+    expect(res.ganador).toBe(1)
+    expect(res.motivo).toBe('simulation')
+    expect(res.ilegales).toHaveLength(0)
+  })
+
+  it('declara forfeit unilateral si un jugador comete una acción ilegal (ej. sin soles)', () => {
+    const datos: DatosDeRepeticion = {
+      roomId: 'room-auth-illegal',
+      mode: 'ranked',
+      seed: 99999,
+      engineVersion: 'auth-v1',
+      jugadaEn: '2026-08-20T00:00:00Z',
+      jugador1: { nombre: 'Hacker', avatar: null, mazo: mazoBasico },
+      jugador2: { nombre: 'Legal', avatar: null, mazo: mazoBasico },
+      ganador: null,
+      yoSoy: 2,
+      jugadas: [
+        // P1 intenta plantar peashooter 3 veces seguidas en el tick 0 sin soles suficientes (costo 100 cada uno, inicial 100)
+        { de: 1, seq: 1, issuedTick: 0, tick: 6, kind: 'plant', plantId: 'peashooter', lane: 0, col: 0, slot: 0 },
+        { de: 1, seq: 2, issuedTick: 0, tick: 6, kind: 'plant', plantId: 'peashooter', lane: 1, col: 0, slot: 0 },
+      ],
+    }
+
+    const res = recalcularGanadorAutoritativo(datos)
+    expect(res.ganador).toBe(2) // Gana P2 por forfeit de P1
+    expect(res.motivo).toBe('forfeit_p1')
+    expect(res.ilegales.length).toBeGreaterThan(0)
+    expect(res.ilegales[0].de).toBe(1)
+  })
+
+  it('declara empate perfecto cuando ambos terminan en defeat simétrico', () => {
+    const datos: DatosDeRepeticion = {
+      roomId: 'room-auth-draw',
+      mode: 'ranked',
+      seed: 55555,
+      engineVersion: 'auth-v1',
+      jugadaEn: '2026-08-20T00:00:00Z',
+      jugador1: { nombre: 'Ana', avatar: null, mazo: mazoBasico },
+      jugador2: { nombre: 'Beto', avatar: null, mazo: mazoBasico },
+      ganador: null,
+      yoSoy: 1,
+      jugadas: [], // Sin jugadas, la muerte súbita drena ambas bases al mismo tiempo con perfecta simetría
+    }
+
+    const res = recalcularGanadorAutoritativo(datos)
+    expect(res.motivo).toBe('true_draw')
+    expect(res.consistente).toBe(true)
+    expect(res.ganador).toBeNull()
   })
 })

@@ -15,8 +15,8 @@
 // en un lado y no en el otro— y cada uno costó una ronda de pruebas manuales con
 // dos ventanas. Un test los habría cazado en segundos.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { PlantId } from '../types/game'
-import type { GameState } from './simulate'
+import type { PlantId } from '../types/game.ts'
+import type { GameState } from './simulate.ts'
 
 /** Una acción tal como la devuelve el servidor. */
 export interface AccionDeLaPartida {

@@ -32,7 +32,11 @@ import {
   conservarLoLocal,
   type AccionRegistrada,
 } from '../engine/reconstruir'
-import { leerMazo, mejorasDeLaCarta, type CartaDeMazo } from '../engine/mazoDeLaSala'
+import {
+  leerMazo,
+  mejorasDeLaCartaEnSlot,
+  type CartaDeMazo,
+} from '../engine/mazoDeLaSala'
 import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
@@ -414,19 +418,21 @@ export function useGameEngine() {
 
   // Collect sun handler
   const collectSun = useCallback(
-    (sunId: string) => {
+    (sunId: string): number | null => {
       const state = stateRef.current
-      // El valor sale del SOL, no de la constante. Con todos a 25 daba lo mismo,
-      // pero un sol de otro valor se habría pagado mal — y en silencio.
       const sol = state.suns.find((s) => s.id === sunId)
-      if (!sol) return
+      if (!sol) return null
+
+      // Éste es el tic que el árbitro necesita para reconstruir la economía.
+      const issuedTick = state.tick
+
       state.suns = state.suns.filter((s) => s.id !== sunId)
       state.sunBank += sol.value
       state.stats.sunsCollected += 1
       state.stats.score += 50
-
       soundManager.playSound('points', 0.6)
       forceRender()
+      return issuedTick
     },
     [forceRender]
   )
@@ -564,7 +570,7 @@ export function useGameEngine() {
         // 345 de vida en una pantalla y 300 en la otra desde el momento de
         // plantarla, y la partida acababa en «tu rival dijo otra cosa». Le pasaba a
         // cualquiera con una carta mejorada.
-        const mejoras = mejorasDeLaCarta(mazoMioRef.current, card)
+        const mejoras = mejorasDeLaCartaEnSlot(mazoMioRef.current, card, slotIdx)
         rolls = mejoras.statRolls
         cardLevel = mejoras.level
       } else {
@@ -729,6 +735,7 @@ export function useGameEngine() {
       plantId?: PlantId
       lane: number
       col?: number
+      slot?: number | null
       // Las mejoras de la carta NO vienen aquí a propósito: se sacan del mazo de la
       // sala, que lo guardó el servidor y lo tenemos los dos. Si viajaran con la
       // jugada, cada navegador podría decir que su carta es del nivel que quiera.
@@ -747,7 +754,7 @@ export function useGameEngine() {
       // 300 de vida donde él veía 345, y las dos partidas eran distintas desde ese
       // momento. Ver engine/mazoDeLaSala.ts.
       const mejoras = accion.plantId
-        ? mejorasDeLaCarta(mazoDelRivalRef.current, accion.plantId)
+        ? mejorasDeLaCartaEnSlot(mazoDelRivalRef.current, accion.plantId, accion.slot)
         : null
 
       // Al registro siempre, con SU tic: llegue a tiempo o tarde, la partida se

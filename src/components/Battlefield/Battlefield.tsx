@@ -21,6 +21,7 @@ const needleImg = '/game-assets/greenfoot/needle1.png'
 import PlantHand from './PlantHand'
 import RelojDePartida from '../RelojDePartida/RelojDePartida'
 import { SOL_SE_RECOGE_SOLO_MS } from '../../engine/balance'
+import { MARGEN_DE_RED_TICS } from '../../engine/pvp'
 import { TICK_MS } from '../../engine/time'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
@@ -324,16 +325,24 @@ export default function Battlefield({
    * partidas ya no son la misma — es la misma clase de desfase que dejaba la
    * partida «en revisión» al final.
    */
-  const registrarPlantacion = (carta: PlantId, lane: number, col: number, enTic: number) => {
+  const registrarPlantacion = (
+    carta: PlantId,
+    lane: number,
+    col: number,
+    enTic: number,
+    slot: number
+  ) => {
     if (!roomId) return
     ordenRef.current += 1
     void SupabaseService.submitMatchAction(roomId, {
       seq: ordenRef.current,
       tick: enTic,
+      issuedTick: enTic - MARGEN_DE_RED_TICS,
       kind: 'plant',
       plantId: carta,
       lane,
       col,
+      slot,
     }).then((r) => {
       // RECHAZADA: fuera de mi pantalla también.
       //
@@ -346,7 +355,7 @@ export default function Battlefield({
         ...d,
         enviadas: d.enviadas + (r.error ? 0 : 1),
         // El error del servidor tal cual: es lo que dice POR QUÉ se rechazó.
-        ultimoEnvio: r.error ? `✗ ${r.error}` : `✓ ${carta} @tic ${enTic}`,
+        ultimoEnvio: r.error ? `✗ ${r.error}` : `✓ ${carta} [slot ${slot}] @tic ${enTic}`,
       }))
     })
   }
@@ -369,6 +378,7 @@ export default function Battlefield({
     void SupabaseService.submitMatchAction(roomId, {
       seq: ordenRef.current,
       tick: enTic,
+      issuedTick: enTic - MARGEN_DE_RED_TICS,
       kind: 'dig',
       lane,
       col,
@@ -384,6 +394,30 @@ export default function Battlefield({
     })
   }
 
+  const recogerSolAutorizado = (sunId: string) => {
+    // collectSun muta la economía y devuelve EL tic exacto usado por el motor.
+    const issuedTick = collectSun(sunId)
+    if (issuedTick === null || !roomId) return
+
+    ordenRef.current += 1
+    void SupabaseService.submitMatchAction(roomId, {
+      seq: ordenRef.current,
+      tick: issuedTick,
+      issuedTick,
+      kind: 'collect',
+      targetId: sunId,
+      lane: null,
+      col: null,
+      slot: null,
+    }).then((r) => {
+      setDiag((d) => ({
+        ...d,
+        enviadas: d.enviadas + (r.error ? 0 : 1),
+        ultimoEnvio: r.error ? `✗ sol: ${r.error}` : `✓ sol @tic ${issuedTick}`,
+      }))
+    })
+  }
+
   useEffect(() => {
     if (!roomId || !currentUserId) return
 
@@ -391,11 +425,15 @@ export default function Battlefield({
     const aplicar = (a: {
       id: number
       user_id: string
+      seq?: number
       tick: number
+      issued_tick?: number | null
       kind: string
       plant_id: string | null
-      lane: number
+      lane: number | null
       col: number | null
+      slot?: number | null
+      target_id?: string | null
     }) => {
       if (a.user_id === currentUserId) return
       // Realtime puede entregar el mismo mensaje dos veces, y la recuperación por
@@ -404,6 +442,10 @@ export default function Battlefield({
       if (aplicadasRef.current.has(a.id)) return
       aplicadasRef.current.add(a.id)
       if (a.id > ultimaAccionRef.current) ultimaAccionRef.current = a.id
+
+      // Los soles son economía local del rival; se guardan para el árbitro, pero no
+      // modifican nuestra simulación remota.
+      if (a.kind === 'collect') return
 
       // El pico del rival. Antes se descartaba aquí —sólo se miraba 'plant'— así
       // que su planta excavada seguía en pie en tu pantalla: dos partidas
@@ -416,13 +458,13 @@ export default function Battlefield({
           id: a.id,
           tick: a.tick,
           kind: 'dig',
-          lane: a.lane,
+          lane: a.lane ?? 0,
           col: a.col ?? 0,
         })
         return
       }
 
-      if (a.kind !== 'plant' || !a.plant_id) return
+      if (a.kind !== 'plant' || !a.plant_id || a.lane === null) return
       setDiag((d) => ({ ...d, recibidas: d.recibidas + 1 }))
       encolarAccionDelRival({
         id: a.id,
@@ -431,6 +473,7 @@ export default function Battlefield({
         plantId: a.plant_id as PlantId,
         lane: a.lane,
         col: a.col ?? undefined,
+        slot: a.slot,
       })
     }
 
@@ -456,11 +499,15 @@ export default function Battlefield({
         aplicar({
           id: a.id,
           user_id: a.userId,
+          seq: a.seq,
           tick: a.tick,
+          issued_tick: a.issuedTick,
           kind: a.kind,
           plant_id: a.plantId,
           lane: a.lane,
           col: a.col,
+          slot: a.slot,
+          target_id: a.targetId,
         })
       }
     }
@@ -549,14 +596,57 @@ export default function Battlefield({
       // dos para que se liquide, así que callarse al perder dejaría al rival sin
       // su premio.
       if (roomId && opponentId && currentUserId) {
-        const ganador = gameStatus === 'victory' ? currentUserId : opponentId
-        void SupabaseService.reportMatchResult(roomId, ganador).then((r) => {
-          setResultadoServidor(r)
-        })
+        const ganadorQueVioMiCliente = gameStatus === 'victory' ? currentUserId : opponentId
+
+        setResultadoServidor({ success: true, status: 'verificando' })
+
+        void (async () => {
+          // Sólo telemetría en auth-v1. Si falla, el árbitro igualmente puede decidir.
+          await SupabaseService.reportMatchResult(roomId, ganadorQueVioMiCliente)
+
+          const verificacion = await SupabaseService.verifyMatch(roomId)
+
+          if (verificacion.status === 'verified' || verificacion.status === 'settled') {
+            const s = verificacion.settlement ?? {}
+            setResultadoServidor({
+              success: true,
+              status: 'liquidada',
+              eloGained: typeof s.eloGained === 'number' ? s.eloGained : undefined,
+              eloLost: typeof s.eloLost === 'number' ? s.eloLost : undefined,
+              payout: typeof s.payout === 'number' ? s.payout : undefined,
+            })
+            return
+          }
+
+          if (verificacion.status === 'verified_draw') {
+            setResultadoServidor({ success: true, status: 'empate_verificado', payout: 0 })
+            return
+          }
+
+          if (verificacion.status === 'failed') {
+            setResultadoServidor({
+              success: false,
+              status: 'revision_servidor',
+              error: 'La verificación automática encontró una inconsistencia. No se liquidó la partida.',
+            })
+            return
+          }
+
+          if (verificacion.status === 'pending') {
+            setResultadoServidor({ success: true, status: 'verificacion_pendiente' })
+            return
+          }
+
+          setResultadoServidor({
+            success: false,
+            status: 'revision_servidor',
+            error: verificacion.error ?? 'No se pudo verificar la partida.',
+          })
+        })()
       }
 
       // Handle Colosseum match resolution
-      if (matchMode === 'colosseum' && onColosseumComplete) {
+      if (!roomId && matchMode === 'colosseum' && onColosseumComplete) {
         const coloRes = onColosseumComplete(gameStatus === 'victory')
         setColosseumResult(coloRes)
       }
@@ -882,16 +972,10 @@ export default function Battlefield({
                         if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick)
                       } else {
                         const carta = selectedCard
-                        // SÓLO se registra si aquí de verdad se plantó. Si el clic
-                        // falla (sin soles, en enfriamiento, casilla ocupada) y se
-                        // registrara igual, el rival plantaría algo que en tu
-                        // pantalla no existe y las dos partidas se separarían.
-                        //
-                        // Y se manda EL TIC QUE DEVOLVIÓ placePlant, que es el que
-                        // se usó de verdad.
+                        const slot = selectedSlotIndex
                         const enTic = placePlant(lane.id, col)
-                        if (enTic !== null) {
-                          registrarPlantacion(carta, lane.id, col, enTic)
+                        if (enTic !== null && slot !== null) {
+                          registrarPlantacion(carta, lane.id, col, enTic, slot)
                         }
                       }
                     }
@@ -1092,15 +1176,15 @@ export default function Battlefield({
           }}
           onMouseDown={(e) => {
             e.stopPropagation()
-            collectSun(sun.id)
+            recogerSolAutorizado(sun.id)
           }}
           onTouchStart={(e) => {
             e.stopPropagation()
-            collectSun(sun.id)
+            recogerSolAutorizado(sun.id)
           }}
           onClick={(e) => {
             e.stopPropagation()
-            collectSun(sun.id)
+            recogerSolAutorizado(sun.id)
           }}
         >
           <img src={sunIcon} alt="Sol" className="sun-item__icon" />
@@ -1159,16 +1243,19 @@ export default function Battlefield({
                     Enviando el resultado…
                   </p>
                 )}
-                {resultadoServidor?.status === 'esperando_al_rival' && (
+                {['verificando', 'verificacion_pendiente'].includes(resultadoServidor?.status ?? '') && (
                   <p className="resultado-servidor__esperando">
-                    ⏳ Tu resultado está registrado. Falta que tu rival confirme para
-                    repartir las recompensas.
+                    🔐 El servidor está reconstruyendo y verificando la partida…
                   </p>
                 )}
-                {resultadoServidor?.status === 'resultado_en_disputa' && (
+                {resultadoServidor?.status === 'revision_servidor' && (
                   <p className="resultado-servidor__disputa">
-                    ⚠️ Tu rival dijo otra cosa. La partida queda en revisión y no se
-                    reparte nada a ninguno de los dos.
+                    ⚠️ La partida quedó bloqueada para revisión. No se entregó ELO ni pago automático.
+                  </p>
+                )}
+                {resultadoServidor?.status === 'empate_verificado' && (
+                  <p className="resultado-servidor__esperando">
+                    🤝 Empate verificado por el servidor.
                   </p>
                 )}
                 {resultadoServidor?.status === 'liquidada' && (

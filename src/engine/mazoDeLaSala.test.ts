@@ -7,7 +7,7 @@
 // por la red.
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
-import { leerMazo, mejorasDeLaCarta } from './mazoDeLaSala'
+import { leerMazo, mejorasDeLaCarta, mejorasDeLaCartaEnSlot } from './mazoDeLaSala'
 import { reconstruirHasta, type AccionRegistrada } from './reconstruir'
 import { huellaDeLaPartida } from './huella'
 import type { PlantId } from '../types/game'
@@ -30,10 +30,26 @@ describe('leer el mazo de la sala', () => {
     expect(mejorasDeLaCarta(mazo, 'sunflower' as PlantId)).toEqual({ statRolls: [], level: 0 })
   })
 
+  it('resuelve mejoras por slot exacto en auth-v1', () => {
+    const mazo = leerMazo([
+      { plantId: 'peashooter', slot: 0, level: 1, statRolls: ['hp'] },
+      { plantId: 'peashooter', slot: 3, level: 2, statRolls: ['damage', 'attackSpeed'] },
+    ])
+    expect(mejorasDeLaCartaEnSlot(mazo, 'peashooter' as PlantId, 0)).toEqual({
+      statRolls: ['hp'],
+      level: 1,
+    })
+    expect(mejorasDeLaCartaEnSlot(mazo, 'peashooter' as PlantId, 3)).toEqual({
+      statRolls: ['damage', 'attackSpeed'],
+      level: 2,
+    })
+  })
+
   it('sin mazo no se inventa nada: ninguna mejora', () => {
     // Y esto importa: «no sé» tiene que dar lo MISMO que le sale al rival, no un
     // valor a medias. Coincidir vale más que acertar.
     expect(mejorasDeLaCarta(null, 'peashooter' as PlantId)).toEqual({ statRolls: [], level: 0 })
+    expect(mejorasDeLaCartaEnSlot(null, 'peashooter' as PlantId, 0)).toEqual({ statRolls: [], level: 0 })
     expect(leerMazo(undefined)).toBeNull()
     expect(leerMazo('vaya')).toBeNull()
   })

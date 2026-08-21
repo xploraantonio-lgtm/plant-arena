@@ -32,8 +32,8 @@
 //   irrenunciable. Para que sea exacto habría que mandar el hueco en la jugada, y
 //   eso sí pide una columna nueva en el registro.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { PlantId } from '../types/game'
-import type { PlantStatKey } from '../utils/gameConstants'
+import type { PlantId } from '../types/game.ts'
+import type { PlantStatKey } from '../utils/gameConstants.ts'
 
 /** Una carta del mazo, tal como la devuelve game_room_info. */
 export interface CartaDeMazo {
@@ -79,24 +79,43 @@ export function leerMazo(bruto: unknown): CartaDeMazo[] | null {
 }
 
 /**
- * Las mejoras de una carta según el mazo de la sala.
+ * Resuelve las mejoras del hueco exacto del mazo.
  *
- * Sin mazo o sin esa carta en el mazo, devuelve «ninguna mejora»: es lo mismo que
- * ve el rival, y coincidir importa más que acertar.
+ * auth-v1 manda `slot` con la jugada para que dos copias de la misma planta
+ * puedan tener mejoras distintas sin que ninguna pantalla tenga que adivinar.
  */
+export function mejorasDeLaCartaEnSlot(
+  mazo: CartaDeMazo[] | null,
+  plantId: PlantId,
+  slot: number | null | undefined
+): MejorasDeCarta {
+  if (!mazo) return SIN_MEJORAS
+
+  let carta: CartaDeMazo | undefined
+
+  if (slot !== null && slot !== undefined && Number.isInteger(slot)) {
+    carta = mazo.find((c) => c.slot === slot)
+
+    // Compatibilidad con mazos anteriores que no guardaban `slot` pero sí el
+    // orden del array.
+    if (!carta && mazo[slot] && (mazo[slot].slot === null || mazo[slot].slot === undefined)) {
+      carta = mazo[slot]
+    }
+  } else {
+    carta = mazo.find((c) => c.plantId === plantId)
+  }
+
+  if (!carta || carta.plantId !== plantId) return SIN_MEJORAS
+
+  const statRolls = (carta.statRolls ?? []) as PlantStatKey[]
+  const level = statRolls.length > 0 ? statRolls.length : carta.level ?? 0
+  return { statRolls, level }
+}
+
+/** Compatibilidad para código que todavía no conoce el slot. */
 export function mejorasDeLaCarta(
   mazo: CartaDeMazo[] | null,
   plantId: PlantId
 ): MejorasDeCarta {
-  if (!mazo) return SIN_MEJORAS
-  // La primera con esa carta. Ver la regla de las cartas repetidas, arriba.
-  const carta = mazo.find((c) => c.plantId === plantId)
-  if (!carta) return SIN_MEJORAS
-
-  const statRolls = (carta.statRolls ?? []) as PlantStatKey[]
-  // El nivel se deduce de cuántas mejoras hay cuando no viene: son lo mismo
-  // contado de dos maneras, y si no cuadran manda la lista, que es la que decide
-  // las estadísticas de verdad.
-  const level = statRolls.length > 0 ? statRolls.length : carta.level ?? 0
-  return { statRolls, level }
+  return mejorasDeLaCartaEnSlot(mazo, plantId, null)
 }

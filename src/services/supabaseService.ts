@@ -521,32 +521,53 @@ export const SupabaseService = {
     accion: {
       seq: number
       tick: number
-      kind: 'plant' | 'dig'
+      issuedTick: number
+      kind: 'plant' | 'dig' | 'collect'
       plantId?: string | null
-      lane: number
+      lane?: number | null
       col?: number | null
+      slot?: number | null
+      targetId?: string | null
     }
-  ): Promise<{ ok?: boolean; serverTick?: number; error?: string }> {
+  ): Promise<{ ok?: boolean; duplicate?: boolean; serverTick?: number; error?: string }> {
     if (!isSupabaseConfigured()) return { error: 'sin_supabase' }
-    try {
-      const { data, error } = await (supabase.rpc as any)('submit_match_action', {
-        p_room_id: roomId,
-        p_seq: accion.seq,
-        p_tick: accion.tick,
-        p_kind: accion.kind,
-        p_plant: accion.plantId ?? null,
-        p_lane: accion.lane,
-        p_col: accion.col ?? null,
-      })
-      if (error) {
-        logError('submitMatchAction', error)
-        return { error: error.message }
-      }
-      return data
-    } catch (e: any) {
-      logError('submitMatchAction', e)
-      return { error: e?.message }
+
+    const payload = {
+      p_room_id: roomId,
+      p_seq: accion.seq,
+      p_tick: accion.tick,
+      p_kind: accion.kind,
+      p_plant: accion.plantId ?? null,
+      p_lane: accion.lane ?? null,
+      p_col: accion.col ?? null,
+      p_slot: accion.slot ?? null,
+      p_issued_tick: accion.issuedTick,
+      p_target_id: accion.targetId ?? null,
     }
+
+    // La RPC es idempotente por (room,user,seq), así que el MISMO payload puede
+    // reintentarse si la respuesta se perdió sin duplicar la jugada.
+    let ultimoError: any = null
+    for (let intento = 0; intento < 3; intento += 1) {
+      try {
+        const { data, error } = await (supabase.rpc as any)('submit_match_action', payload)
+        if (!error) return data
+        ultimoError = error
+
+        // P0001 normalmente es RAISE EXCEPTION de nuestras validaciones: repetirlo
+        // no lo va a convertir en una jugada válida.
+        if (error.code === 'P0001') break
+      } catch (e) {
+        ultimoError = e
+      }
+
+      if (intento < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 180 * (intento + 1)))
+      }
+    }
+
+    logError('submitMatchAction', ultimoError)
+    return { error: ultimoError?.message ?? 'No se pudo registrar la acción' }
   },
 
   /**
@@ -564,14 +585,17 @@ export const SupabaseService = {
     userId: string
     seq: number
     tick: number
+    issuedTick: number
     kind: string
     plantId: string | null
-    lane: number
+    lane: number | null
     col: number | null
+    slot: number | null
+    targetId: string | null
   }>> {
     if (!isSupabaseConfigured()) return []
     try {
-      const { data, error } = await (supabase.rpc as any)('match_actions_since', {
+      const { data, error } = await (supabase.rpc as any)('match_actions_since_v2', {
         p_room_id: roomId,
         p_desde_id: desdeId,
       })
@@ -600,10 +624,13 @@ export const SupabaseService = {
       user_id: string
       seq: number
       tick: number
+      issued_tick: number | null
       kind: string
       plant_id: string | null
-      lane: number
+      lane: number | null
       col: number | null
+      slot: number | null
+      target_id: string | null
     }) => void,
     /**
      * El estado de la suscripción: SUBSCRIBED, CHANNEL_ERROR, TIMED_OUT…
@@ -738,6 +765,9 @@ export const SupabaseService = {
     winner?: string | null
     iWon?: boolean
     noWinner?: boolean
+    verificationStatus?: string
+    verificationNote?: string | null
+    authoritative?: boolean
   } | null> {
     if (!isSupabaseConfigured()) return null
     try {
@@ -1047,6 +1077,56 @@ export const SupabaseService = {
       logError('reportMatchResult', e)
       return { success: false, error: e?.message }
     }
+  },
+
+  /**
+   * Pide al árbitro servidor reconstruir la partida.
+   * El navegador NO manda ganador: sólo roomId.
+   */
+  async verifyMatch(roomId: string): Promise<{
+    ok: boolean
+    status?: 'pending' | 'verified' | 'verified_draw' | 'settled' | 'failed'
+    winnerId?: string | null
+    winnerSide?: 1 | 2
+    reason?: string
+    retryAfterMs?: number
+    reviewRequired?: boolean
+    settlement?: {
+      success?: boolean
+      status?: string
+      eloGained?: number
+      eloLost?: number
+      payout?: number
+      [k: string]: unknown
+    }
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { ok: false, error: 'sin_supabase' }
+
+    // La función puede responder pending si todavía falta alcanzar el tic final
+    // + la pequeña ventana de gracia. Reintentamos unas veces desde el cliente.
+    for (let intento = 0; intento < 8; intento += 1) {
+      try {
+        const { data, error } = await supabase.functions.invoke('verify-match', {
+          body: { roomId },
+        })
+
+        if (error) {
+          logError('verifyMatch', error)
+          return { ok: false, error: error.message }
+        }
+
+        if (data?.status !== 'pending') return data
+
+        const espera = Math.max(250, Math.min(Number(data.retryAfterMs) || 750, 5000))
+        await new Promise((resolve) => setTimeout(resolve, espera))
+      } catch (e: any) {
+        logError('verifyMatch', e)
+        return { ok: false, error: e?.message ?? 'verify-match falló' }
+      }
+    }
+
+    return { ok: true, status: 'pending' }
   },
 
   // ---------------------------------------------------------------------------

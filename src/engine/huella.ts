@@ -23,9 +23,9 @@
 //   Quien sea el 2 le da la vuelta antes de resumir. Con eso, dos pantallas que
 //   están de acuerdo producen exactamente la misma cadena.
 // ─────────────────────────────────────────────────────────────────────────────
-import { TOTAL_COLUMNS } from '../utils/gameConstants'
-import type { GameState } from './simulate'
-import type { PlantEntity } from '../types/game'
+import { TOTAL_COLUMNS } from '../utils/gameConstants.ts'
+import type { GameState } from './simulate.ts'
+import type { PlantEntity } from '../types/game.ts'
 
 /** Cada cuántos tics se manda una huella. 300 tics son unos 10 segundos. */
 export const CADA_CUANTOS_TICS = 300

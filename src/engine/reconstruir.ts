@@ -36,9 +36,9 @@
 //   Y no hace falta: nadie más simula tu banco. No forma parte de la partida
 //   compartida, así que se conserva tal cual.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createBattleState, stepTick, type GameState } from './simulate'
-import { huellaDeLaPartida, tocaHuella, type HuellaEnUnTic } from './huella'
-import type { PlantId, PlantStatKey } from '../types/game'
+import { createBattleState, stepTick, type GameState } from './simulate.ts'
+import { huellaDeLaPartida, tocaHuella, type HuellaEnUnTic } from './huella.ts'
+import type { PlantId, PlantStatKey } from '../types/game.ts'
 
 /** Una jugada del registro, con de quién es. */
 export interface AccionRegistrada {

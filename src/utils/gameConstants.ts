@@ -1,4 +1,4 @@
-import type { PlantConfig, PlantId, EnemyPlantConfig, EnemyPlantType, PlantStatKey } from '../types/game'
+import type { PlantConfig, PlantId, EnemyPlantConfig, EnemyPlantType, PlantStatKey } from '../types/game.ts'
 
 // PlantStatKey se declaraba aquí. Se movió a types/game.ts para que PlantEntity
 // pueda usarlo sin crear un ciclo de importaciones. Se re-exporta para no tocar
