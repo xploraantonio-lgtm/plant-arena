@@ -261,6 +261,18 @@ function App() {
   const [salaRepeticion, setSalaRepeticion] = useState<string | null>(null)
   /** Los nicks de los dos, para ponerlos encima de cada árbol en la batalla. */
   const [nombresEnPartida, setNombresEnPartida] = useState<{ mio: string; rival: string } | null>(null)
+  /**
+   * Los dos mazos de la sala, tal como los guardó el SERVIDOR al emparejar.
+   *
+   * Con el nivel y las mejoras de cada carta. Es lo que permite a las dos pantallas
+   * simular la misma planta: quien planta aplicaba sus mejoras desde su navegador y
+   * el rival ponía la carta básica, así que la misma planta tenía 345 de vida en un
+   * lado y 300 en el otro desde el momento de plantarla. Ver
+   * engine/mazoDeLaSala.ts.
+   *
+   * El dato ya llegaba en game_room_info; sólo se estaba tirando.
+   */
+  const [mazosDeLaSala, setMazosDeLaSala] = useState<{ mio: unknown; rival: unknown } | null>(null)
 
   /**
    * Cuando el servidor empareja, se leen la semilla y los jugadores de la sala y
@@ -291,6 +303,10 @@ function App() {
           iAm: (basica.player1_id === user?.id ? 'p1' : 'p2') as 'p1' | 'p2',
           player1: { id: basica.player1_id, username: null },
           player2: { id: basica.player2_id, username: null },
+          // Los mazos también por este camino: sin ellos las mejoras de las cartas
+          // no se pueden deducir y las dos pantallas simularían plantas distintas.
+          p1Deck: basica.p1_deck,
+          p2Deck: basica.p2_deck,
         }
       })())
       if (cancelado) return
@@ -312,6 +328,12 @@ function App() {
       setNombresEnPartida(
         miNick && suNick ? { mio: miNick, rival: suNick } : null
       )
+      // Cada uno se ve a sí mismo como jugador 1, así que el mazo «mío» es el p1 o
+      // el p2 según de qué lado esté.
+      setMazosDeLaSala({
+        mio: soyP1 ? sala.p1Deck : sala.p2Deck,
+        rival: soyP1 ? sala.p2Deck : sala.p1Deck,
+      })
       setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
       setPracticePlantId(null)
       setScreen('battle')
@@ -387,6 +409,7 @@ function App() {
     setSemillaPartida(undefined)
     setRivalId(null)
     setNombresEnPartida(null)
+    setMazosDeLaSala(null)
     setModoBuscando('friendly')
     setScreen('searching')
     void buscar('friendly', { roomCode, betGems })
@@ -402,6 +425,7 @@ function App() {
     setSemillaPartida(undefined)
     setRivalId(null)
     setNombresEnPartida(null)
+    setMazosDeLaSala(null)
     if (!buscaRival('ranked')) {
       setScreen('battle')
       return
@@ -728,6 +752,10 @@ function App() {
             opponentId={rivalId}
             nombres={nombresEnPartida}
             soyP1={soyJugador1}
+            /* Los mazos que guardó el servidor, con el nivel y las mejoras de cada
+               carta. Es lo que hace que las dos pantallas simulen la MISMA planta:
+               ver engine/mazoDeLaSala.ts. */
+            mazosDeLaSala={mazosDeLaSala}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)

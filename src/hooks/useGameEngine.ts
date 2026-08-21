@@ -21,7 +21,18 @@ import { createRng } from '../engine/rng'
 import { TICK_MS, MAX_TICKS_PER_FRAME, msToTicks } from '../engine/time'
 import { stepTick, createBattleState, type GameState } from '../engine/simulate'
 import { MARGEN_DE_RED_TICS } from '../engine/pvp'
-import { huellaDeLaPartida, tocaHuella, type HuellaEnUnTic } from '../engine/huella'
+import {
+  huellaDeLaPartida,
+  tocaHuella,
+  RETRASO_DE_HUELLA_TICS,
+  type HuellaEnUnTic,
+} from '../engine/huella'
+import {
+  reconstruirConHuellas,
+  conservarLoLocal,
+  type AccionRegistrada,
+} from '../engine/reconstruir'
+import { leerMazo, mejorasDeLaCarta, type CartaDeMazo } from '../engine/mazoDeLaSala'
 import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
@@ -144,6 +155,70 @@ export function useGameEngine() {
    */
   const huellasPendientesRef = useRef<HuellaEnUnTic[]>([])
 
+  // ── EL REGISTRO DE JUGADAS, PARA PODER REHACER LA PARTIDA ──────────────────
+  //
+  // Se guardan TODAS las jugadas de las dos partes con el tic en que ocurren. No
+  // es un historial para mirar: es lo que permite volver a montar la partida
+  // cuando una jugada llega tarde, en lugar de aplicarla fuera de su sitio.
+  //
+  // Cabe de sobra: una partida larga son unas decenas de jugadas.
+
+  /** La semilla de esta partida. Sin ella no se puede rehacer nada. */
+  const semillaRef = useRef<number>(1)
+  /** Todas las jugadas conocidas, mías y del rival. */
+  const registroRef = useRef<AccionRegistrada[]>([])
+  /** Para numerar mis jugadas antes de que el servidor les dé su identificador. */
+  const numeroDeJugadaRef = useRef<number>(0)
+  /**
+   * Cuántas veces se ha rehecho la partida.
+   *
+   * Se enseña en el panel de diagnóstico: es la medida de cuánto retraso está
+   * habiendo de verdad en las partidas de la gente.
+   */
+  const reconstruccionesRef = useRef<number>(0)
+  /**
+   * El tic más antiguo afectado por una jugada que llegó tarde, si hay alguna.
+   *
+   * No se rehace la partida en el momento de recibirla: se apunta aquí y el bucle
+   * lo hace una vez por fotograma. Las jugadas atrasadas llegan en ráfagas —la red
+   * de seguridad recupera varias de golpe— y rehacer una vez por cada una daría un
+   * tirón bien visible en un móvil.
+   */
+  const rehacerDesdeRef = useRef<number | null>(null)
+
+  /**
+   * Los dos mazos de la sala, con el nivel y las mejoras de cada carta.
+   *
+   * De aquí salen las estadísticas de las plantas de LOS DOS lados, y por eso las
+   * dos pantallas simulan la misma planta. Antes cada uno leía sus propias mejoras
+   * de su navegador y el rival plantaba la carta básica, así que la misma planta
+   * tenía 345 de vida en un lado y 300 en el otro desde el momento de ponerla —
+   * divergencia garantizada para cualquiera con una carta mejorada, sin necesidad
+   * de que se perdiera nada por la red. Ver engine/mazoDeLaSala.ts.
+   *
+   * En null fuera del 1c1, y entonces valen las mejoras del navegador: en solitario
+   * no hay nadie con quien coincidir.
+   */
+  const mazoMioRef = useRef<CartaDeMazo[] | null>(null)
+  const mazoDelRivalRef = useRef<CartaDeMazo[] | null>(null)
+
+  /**
+   * Lo que costó cada jugada mía, por si el servidor la rechaza.
+   *
+   * Plantar cobra los soles y arranca el enfriamiento en el acto, para que el clic
+   * responda sin esperar a la red. Si luego el servidor no acepta la jugada, hay
+   * que quitar la planta —en la pantalla del rival nunca existió— y entonces esos
+   * soles se habrían cobrado por nada. Aquí queda lo que hay que devolver.
+   *
+   * La clave es tic:carril:columna, que es lo que identifica la jugada tanto aquí
+   * como en la respuesta del servidor.
+   */
+  const costeDeMisJugadasRef = useRef<Map<string, { coste: number; carta: PlantId; slot: number | null }>>(
+    new Map()
+  )
+
+  const claveDeJugada = (tick: number, lane: number, col: number | null) => `${tick}:${lane}:${col}`
+
   // Los temporizadores del juego ya NO viven aquí: están en state.timers, para
   // que formen parte de la simulación y se puedan guardar y reanudar.
 
@@ -210,13 +285,31 @@ export function useGameEngine() {
      * pantallas la calculan desde el punto de vista del jugador 1 para que se
      * puedan comparar. Sin esto no se toma ninguna huella.
      */
-    soyP1?: boolean
+    soyP1?: boolean,
+    /**
+     * Los dos mazos de la sala, tal como los guardó el servidor.
+     *
+     * De aquí salen las mejoras de las cartas de los dos lados. Sin ellos se cae a
+     * las mejoras del navegador, que es lo correcto en solitario y lo que había
+     * antes en 1c1 — donde daba dos plantas distintas en cada pantalla.
+     */
+    mazos?: { mio: unknown; rival: unknown } | null
   ) => {
     stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500))
 
     ancoraMsRef.current = ancoraMs ?? null
     soyP1Ref.current = soyP1 === undefined ? null : soyP1
+    mazoMioRef.current = leerMazo(mazos?.mio)
+    mazoDelRivalRef.current = leerMazo(mazos?.rival)
     huellasPendientesRef.current = []
+    // El registro empieza vacío y con la semilla de ESTA partida: rehacer una
+    // partida con la semilla de la anterior daría otra partida distinta.
+    semillaRef.current = seed
+    registroRef.current = []
+    numeroDeJugadaRef.current = 0
+    reconstruccionesRef.current = 0
+    rehacerDesdeRef.current = null
+    costeDeMisJugadasRef.current = new Map()
     lastFrameMsRef.current = performance.now()
     accumulatorMsRef.current = 0
 
@@ -355,74 +448,174 @@ export function useGameEngine() {
     return ancoraMsRef.current === null || Date.now() >= ancoraMsRef.current
   }, [])
 
+  /**
+   * REHACE LA PARTIDA CON EL REGISTRO ENTERO Y VUELVE A DONDE ÍBAMOS.
+   *
+   * EL FALLO QUE ESTO ARREGLA, MEDIDO EN UNA PARTIDA DE VERDAD
+   *   El detector encontró esto en el segundo 59 de una partida móvil contra
+   *   ordenador: la MISMA planta con 50 de vida en una pantalla y 75 en la otra.
+   *   Veinticinco justos, que es el daño de un guisante. En un lado había
+   *   impactado un guisante más.
+   *
+   *   No faltaba ninguna jugada: una había llegado TARDE. El receptor la aplicaba
+   *   «en el tic siguiente», así que su lanzaguisantes empezaba a disparar unos
+   *   tics después que el del otro y desde ahí la cuenta iba desfasada para
+   *   siempre. Con datos móviles, los 200 ms de margen se pasan con facilidad.
+   *
+   * LA REGLA
+   *   Una jugada se aplica EN SU TIC. Si llegó tarde no se aplica más tarde: se
+   *   rehace la partida desde el tic 0 con la jugada en su sitio y se adelanta
+   *   hasta donde íbamos. Queda exactamente igual que si hubiera llegado a tiempo.
+   *
+   *   En otros juegos esto es carísimo porque hay que guardar fotos del estado.
+   *   Aquí sale gratis: el motor es determinista y todo el estado son datos planos,
+   *   generador de azar incluido. Miles de tics tardan milisegundos.
+   */
+  const rehacerLaPartida = useCallback((desdeTick: number) => {
+    const viejo = stateRef.current
+    // Sólo en 1c1: en solitario no hay nada que llegue tarde.
+    if (!viejo.isPvpMode || viejo.status !== 'playing') return
+
+    reconstruccionesRef.current += 1
+    const soyP1 = soyP1Ref.current
+
+    const { estado, huellas } = reconstruirConHuellas(
+      semillaRef.current,
+      registroRef.current,
+      viejo.tick,
+      soyP1 ?? true
+    )
+    // Los soles y los enfriamientos son sólo tuyos y no salen del registro: si se
+    // rehicieran, perderías los soles que ya habías recogido pulsando.
+    stateRef.current = conservarLoLocal(estado, viejo)
+
+    // Y las huellas que aún no han salido se cambian por las buenas.
+    //
+    // Hace falta porque la jugada tardía llega DESPUÉS de tomar la huella del tic
+    // anterior: esa huella se calculó sin ella y no cuadra con la del rival. Sin
+    // esto, el detector avisaría de una separación que ya está arreglada, y no
+    // habría forma de distinguir un aviso falso de uno de verdad.
+    //
+    // Las que ya se mandaron no se pueden tocar (el servidor no deja reescribir
+    // una huella, a propósito). Por eso salen con retraso: ver
+    // RETRASO_DE_HUELLA_TICS.
+    if (soyP1 !== null && huellasPendientesRef.current.length > 0) {
+      const buenas = new Map(
+        huellas.filter((h) => h.tick >= desdeTick).map((h) => [h.tick, h.huella])
+      )
+      if (buenas.size > 0) {
+        huellasPendientesRef.current = huellasPendientesRef.current.map((h) => {
+          const buena = buenas.get(h.tick)
+          return buena === undefined ? h : { tick: h.tick, huella: buena }
+        })
+      }
+    }
+
+    forceRender()
+  }, [forceRender])
+
+  /** Apunta una jugada mía en el registro, para poder rehacer la partida. */
+  const apuntarJugadaPropia = useCallback((jugada: Omit<AccionRegistrada, 'id' | 'mia'>) => {
+    numeroDeJugadaRef.current += 1
+    registroRef.current.push({ ...jugada, id: numeroDeJugadaRef.current, mia: true })
+  }, [])
+
   // Place plant handler
   const placePlant = useCallback(
     /**
-     * Intenta plantar. Devuelve si lo consiguió.
+     * Intenta plantar. Devuelve EL TIC en que se plantará, o null si no se pudo.
      *
-     * Importa porque en PvP la acción sólo se registra en el servidor si aquí SÍ
-     * se plantó. Antes devolvía void y el cliente la registraba igual, así que si
-     * el clic fallaba (sin soles, en enfriamiento, casilla ocupada) el rival
-     * plantaba algo que en tu pantalla no existía: las dos partidas se separaban
-     * en el momento.
+     * Devuelve el tic, y no un sí o un no, porque es el tic que hay que mandarle
+     * al servidor — y tiene que ser EXACTAMENTE el mismo que se usó aquí.
+     *
+     * Antes quien registraba lo calculaba por su cuenta, con el tic del último
+     * fotograma pintado. Entre ese fotograma y el clic el motor puede haber
+     * avanzado un tic, así que la planta entraba en mi pantalla en el tic T y en la
+     * del rival en el T-1: un tic de diferencia, que es justo la clase de desfase
+     * que acaba en «tu rival dijo otra cosa».
+     *
+     * Y devolver null cuando el clic falla también importa: si se registrara igual
+     * (sin soles, en enfriamiento, casilla ocupada) el rival plantaría algo que en
+     * tu pantalla no existe.
      */
-    (lane: number, col: number): boolean => {
+    (lane: number, col: number): number | null => {
       const state = stateRef.current
-      let plantoBien = false
       const card = state.selectedCard
       const slotIdx = state.selectedSlotIndex
 
-      if (!card || card === 'shovel' || state.status !== 'playing') return false
+      if (!card || card === 'shovel' || state.status !== 'playing') return null
       // Durante la cuenta atrás no se planta: la partida no ha empezado y el
       // servidor rechazaría la acción por venir de un tic que su reloj todavía no
       // ha alcanzado.
-      if (!haEmpezado()) return false
+      if (!haEmpezado()) return null
 
-      let rolls: PlantStatKey[] = getPlantRolls(card)
-      let cardLevel = 0
+      let rolls: PlantStatKey[]
+      let cardLevel: number
 
-      try {
-        const savedDeckInstIds = localStorage.getItem('plant_arena_active_deck_instances')
-        const savedInstances = localStorage.getItem('plant_arena_plant_instances')
-        const parsedDeckInstIds: string[] = savedDeckInstIds ? JSON.parse(savedDeckInstIds) : []
-        const parsedInstances: any[] = savedInstances ? JSON.parse(savedInstances) : []
+      if (mazoMioRef.current) {
+        // ── EN 1C1, LAS MEJORAS SALEN DEL MAZO DE LA SALA ─────────────────────
+        //
+        // Y no del navegador. Es la única forma de que el rival plante la MISMA
+        // planta: él no puede leer mi localStorage, pero los dos leemos el mazo que
+        // guardó el servidor al emparejar.
+        //
+        // Antes esto salía de aquí abajo, de localStorage, y el rival ponía la
+        // carta básica porque no le llegaba ninguna mejora. La misma planta tenía
+        // 345 de vida en una pantalla y 300 en la otra desde el momento de
+        // plantarla, y la partida acababa en «tu rival dijo otra cosa». Le pasaba a
+        // cualquiera con una carta mejorada.
+        const mejoras = mejorasDeLaCarta(mazoMioRef.current, card)
+        rolls = mejoras.statRolls
+        cardLevel = mejoras.level
+      } else {
+        // En solitario y en prácticas: las del navegador, que es lo que hay y no
+        // hay nadie con quien coincidir.
+        rolls = getPlantRolls(card)
+        cardLevel = 0
 
-        if (slotIdx !== null && parsedDeckInstIds[slotIdx]) {
-          const targetInstId = parsedDeckInstIds[slotIdx]
-          const found = parsedInstances.find((i) => i.instanceId === targetInstId)
-          if (found) {
-            rolls = found.statRolls && found.statRolls.length > 0 ? found.statRolls : []
-            cardLevel = found.level || 0
+        try {
+          const savedDeckInstIds = localStorage.getItem('plant_arena_active_deck_instances')
+          const savedInstances = localStorage.getItem('plant_arena_plant_instances')
+          const parsedDeckInstIds: string[] = savedDeckInstIds ? JSON.parse(savedDeckInstIds) : []
+          const parsedInstances: any[] = savedInstances ? JSON.parse(savedInstances) : []
+
+          if (slotIdx !== null && parsedDeckInstIds[slotIdx]) {
+            const targetInstId = parsedDeckInstIds[slotIdx]
+            const found = parsedInstances.find((i) => i.instanceId === targetInstId)
+            if (found) {
+              rolls = found.statRolls && found.statRolls.length > 0 ? found.statRolls : []
+              cardLevel = found.level || 0
+            }
           }
-        }
-      } catch {}
+        } catch {}
 
-      if (cardLevel > 0 && rolls.length === 0) {
-        const eligible = getEligibleStatsForPlant(card)
-        const mockRolls: PlantStatKey[] = []
-        for (let i = 0; i < cardLevel; i++) {
-          mockRolls.push(eligible[i % eligible.length])
+        if (cardLevel > 0 && rolls.length === 0) {
+          const eligible = getEligibleStatsForPlant(card)
+          const mockRolls: PlantStatKey[] = []
+          for (let i = 0; i < cardLevel; i++) {
+            mockRolls.push(eligible[i % eligible.length])
+          }
+          rolls = mockRolls
         }
-        rolls = mockRolls
       }
 
       const config = getScaledPlantConfig(card, rolls)
-      if (!config) return false
+      if (!config) return null
 
-      if (state.sunBank < config.cost) return false
+      if (state.sunBank < config.cost) return null
 
       // Los enfriamientos guardan el TIC en que expiran, no un instante de
       // reloj real: así se pueden reproducir.
       if (!state.isPracticeMode) {
-        if (slotIdx !== null && (state.slotCooldowns[slotIdx] || 0) > state.tick) return false
-        if (slotIdx === null && (state.cooldowns[card] || 0) > state.tick) return false
+        if (slotIdx !== null && (state.slotCooldowns[slotIdx] || 0) > state.tick) return null
+        if (slotIdx === null && (state.cooldowns[card] || 0) > state.tick) return null
       }
 
       // Check cell occupancy for static plants
       const isWalkingUnit = config.category === 'melee' || !!config.moveSpeed || card === 'chomper'
       if (!isWalkingUnit) {
         const existing = state.plants.find((p) => p.lane === lane && p.col === col && !p.isWalking)
-        if (existing) return false
+        if (existing) return null
       }
 
       // ── LO QUE SE PLANTA VA A LA COLA, NO AL CAMPO ─────────────────────────
@@ -444,9 +637,12 @@ export function useGameEngine() {
       //
       // Fuera del 1c1 el retardo es cero y todo sigue igual que antes.
       const retardo = state.isPvpMode ? MARGEN_DE_RED_TICS : 0
+      // El tic se calcula UNA vez y se devuelve. Quien lo mande al servidor tiene
+      // que usar este mismo número, no volver a calcularlo.
+      const enTic = state.tick + retardo
 
       state.pending.push({
-        atTick: state.tick + retardo,
+        atTick: enTic,
         kind: 'own_plant',
         plantId: card,
         lane,
@@ -455,8 +651,33 @@ export function useGameEngine() {
         level: cardLevel,
       })
 
+      // Al registro también, con las mejoras de la carta: si más tarde hay que
+      // rehacer la partida porque una jugada del rival llegó tarde, ésta tiene que
+      // volver a plantarse igual — misma casilla, mismo tic y mismas mejoras.
+      if (state.isPvpMode) {
+        apuntarJugadaPropia({
+          tick: enTic,
+          kind: 'plant',
+          plantId: card,
+          lane,
+          col,
+          statRolls: rolls,
+          level: cardLevel,
+        })
+      }
+
       // El cobro, el enfriamiento y el contador SÍ son inmediatos: son estado
       // local —el rival no simula tus soles— y así el clic responde al instante.
+      //
+      // Y se apunta lo que costó, porque si el servidor rechaza la jugada hay que
+      // devolverlo: la planta se quita y estos soles se habrían ido por nada.
+      if (state.isPvpMode) {
+        costeDeMisJugadasRef.current.set(claveDeJugada(enTic, lane, col), {
+          coste: config.cost,
+          carta: card,
+          slot: slotIdx,
+        })
+      }
       state.sunBank -= config.cost
       if (slotIdx !== null) {
         state.slotCooldowns[slotIdx] = state.tick + msToTicks(config.cooldownMs)
@@ -466,13 +687,12 @@ export function useGameEngine() {
       state.stats.plantsPlaced += 1
       state.selectedCard = null
       state.selectedSlotIndex = null
-      plantoBien = true
 
       soundManager.playSound('plantation', 0.6)
       forceRender()
-      return plantoBien
+      return enTic
     },
-    [forceRender, haEmpezado]
+    [forceRender, haEmpezado, apuntarJugadaPropia]
   )
 
   // Dig plant handler (removes plant by ID or by cell lane & column)
@@ -484,45 +704,99 @@ export function useGameEngine() {
    * en el mismo momento de la partida y las dos simulaciones convergen — sin que
    * ninguno tenga que esperar al otro.
    *
-   * Si llega tarde (su tic ya pasó), se aplica en el siguiente tic. Las dos
-   * pantallas se separan un poco, y eso es aceptable a propósito: quien decide el
-   * resultado es el servidor recalculando la partida desde el registro, no lo que
-   * vio un navegador.
+   * Y SI LLEGA TARDE, SE APLICA EN SU TIC IGUALMENTE.
+   *
+   * Antes se aplicaba «en el tic siguiente», que era lo único que se sabía hacer,
+   * y eso separaba las dos pantallas para siempre: se midió en una partida real,
+   * la misma planta con 50 de vida en un lado y 75 en el otro — un guisante de
+   * diferencia, porque un lanzaguisantes había empezado a disparar unos tics antes.
+   *
+   * Ahora se rehace la partida entera desde el tic 0 con la jugada en su sitio.
+   * Ver rehacerLaPartida.
    */
   const encolarAccionDelRival = useCallback(
     (accion: {
+      /**
+       * El identificador del servidor, si se conoce.
+       *
+       * Se guarda en el registro para que las jugadas del mismo tic se ordenen
+       * igual en las dos pantallas. Sin él vale el número de llegada.
+       */
+      id?: number
       tick: number
       /** 'plant' o 'dig'. Sin esto, una excavación del rival no se podía aplicar. */
       kind?: 'plant' | 'dig'
       plantId?: PlantId
       lane: number
       col?: number
-      statRolls?: PlantStatKey[]
-      level?: number
+      // Las mejoras de la carta NO vienen aquí a propósito: se sacan del mazo de la
+      // sala, que lo guardó el servidor y lo tenemos los dos. Si viajaran con la
+      // jugada, cada navegador podría decir que su carta es del nivel que quiera.
     }) => {
       const state = stateRef.current
       if (state.status !== 'playing') return false
+      if (accion.kind !== 'dig' && !accion.plantId) return
 
+      // LAS MEJORAS DE SU CARTA SALEN DE SU MAZO EN LA SALA.
+      //
+      // La jugada sólo trae la carta y la casilla: las mejoras no viajan y no hace
+      // falta que viajen, porque el mazo con el nivel y las mejoras de cada carta
+      // lo guardó el servidor al emparejar y lo tenemos los dos.
+      //
+      // Antes no se ponían, así que su planta mejorada aparecía aquí como básica:
+      // 300 de vida donde él veía 345, y las dos partidas eran distintas desde ese
+      // momento. Ver engine/mazoDeLaSala.ts.
+      const mejoras = accion.plantId
+        ? mejorasDeLaCarta(mazoDelRivalRef.current, accion.plantId)
+        : null
+
+      // Al registro siempre, con SU tic: llegue a tiempo o tarde, la partida se
+      // tiene que poder rehacer con ella en el sitio correcto.
+      numeroDeJugadaRef.current += 1
+      registroRef.current.push({
+        id: accion.id ?? numeroDeJugadaRef.current,
+        mia: false,
+        tick: accion.tick,
+        kind: accion.kind === 'dig' ? 'dig' : 'plant',
+        plantId: accion.plantId ?? null,
+        lane: accion.lane,
+        col: accion.col ?? null,
+        statRolls: mejoras?.statRolls,
+        level: mejoras?.level,
+      })
+
+      // TARDE: su tic ya pasó. No se aplica más tarde — se rehace la partida con
+      // ella en su tic, y queda igual que si hubiera llegado a tiempo.
+      //
+      // Se apunta y lo hace el bucle en el fotograma siguiente, para que una ráfaga
+      // de jugadas atrasadas cueste una sola reconstrucción y no una por cada una.
+      if (accion.tick <= state.tick) {
+        rehacerDesdeRef.current =
+          rehacerDesdeRef.current === null
+            ? accion.tick
+            : Math.min(rehacerDesdeRef.current, accion.tick)
+        return
+      }
+
+      // A tiempo: a la cola, para su tic.
       if (accion.kind === 'dig') {
         state.pending.push({
-          atTick: Math.max(state.tick + 1, accion.tick),
+          atTick: accion.tick,
           kind: 'rival_dig',
           lane: accion.lane,
           col: accion.col ?? 0,
         })
         return
       }
-      if (!accion.plantId) return
 
       state.pending.push({
-        // Nunca en el pasado: si llegó tarde, en el tic siguiente.
-        atTick: Math.max(state.tick + 1, accion.tick),
+        atTick: accion.tick,
         kind: 'rival_plant',
-        plantId: accion.plantId,
+        plantId: accion.plantId!,
         lane: accion.lane,
         col: accion.col,
-        statRolls: accion.statRolls,
-        level: accion.level,
+        statRolls: mejoras?.statRolls,
+        level: mejoras?.level,
       })
     },
     []
@@ -543,7 +817,9 @@ export function useGameEngine() {
    * pantallas tienen que quitarla en el MISMO tic.
    */
   const digPlant = useCallback(
-    (target: string | { lane: number; col: number }): { lane: number; col: number } | null => {
+    (
+      target: string | { lane: number; col: number }
+    ): { lane: number; col: number; tick: number } | null => {
       const state = stateRef.current
       let casilla: { lane: number; col: number } | null = null
 
@@ -569,16 +845,68 @@ export function useGameEngine() {
         return null
       }
 
+      const enTic = state.tick + (state.isPvpMode ? MARGEN_DE_RED_TICS : 0)
+
       state.pending.push({
-        atTick: state.tick + (state.isPvpMode ? MARGEN_DE_RED_TICS : 0),
+        atTick: enTic,
         kind: 'own_dig',
         lane: casilla.lane,
         col: casilla.col,
       })
 
+      if (state.isPvpMode) {
+        apuntarJugadaPropia({ tick: enTic, kind: 'dig', lane: casilla.lane, col: casilla.col })
+      }
+
       soundManager.playSound('plantation', 0.5)
       forceRender()
-      return casilla
+      // El tic va de vuelta por lo mismo que al plantar: el que se manda al
+      // servidor tiene que ser este, no uno recalculado con el tic del último
+      // fotograma pintado.
+      return { ...casilla, tick: enTic }
+    },
+    [forceRender, apuntarJugadaPropia]
+  )
+
+  /**
+   * Deshace una jugada mía que el SERVIDOR rechazó.
+   *
+   * Puede pasar: llegó con un tic que su reloj ya había pasado, o venía repetida.
+   * Si se quedara en mi pantalla, yo tendría una planta que en la del rival no
+   * existe — la misma divergencia de siempre, sólo que empezando por mi lado.
+   *
+   * Se quita del registro y se rehace la partida sin ella: por el mismo camino que
+   * una jugada tardía, porque es el mismo problema visto del revés.
+   */
+  const descartarAccionPropia = useCallback(
+    (tick: number, lane: number, col: number | null) => {
+      const antes = registroRef.current.length
+      registroRef.current = registroRef.current.filter(
+        (a) => !(a.mia && a.tick === tick && a.lane === lane && (a.col ?? null) === col)
+      )
+      if (registroRef.current.length === antes) return
+
+      // Y se devuelve lo que costó. La jugada no ocurrió, así que cobrarla sería
+      // quedarse con los soles del jugador por un fallo de red.
+      //
+      // El enfriamiento vuelve a cero en lugar de a lo que estaba antes: no se
+      // guarda el valor anterior, y de las dos aproximaciones posibles ésta es la
+      // que no castiga a quien no hizo nada mal.
+      const clave = claveDeJugada(tick, lane, col)
+      const cobrado = costeDeMisJugadasRef.current.get(clave)
+      if (cobrado) {
+        const state = stateRef.current
+        state.sunBank += cobrado.coste
+        if (cobrado.slot !== null) state.slotCooldowns[cobrado.slot] = 0
+        else state.cooldowns[cobrado.carta] = 0
+        if (state.stats.plantsPlaced > 0) state.stats.plantsPlaced -= 1
+        costeDeMisJugadasRef.current.delete(clave)
+      }
+
+      // Por el mismo camino agrupado que una jugada tardía.
+      rehacerDesdeRef.current =
+        rehacerDesdeRef.current === null ? tick : Math.min(rehacerDesdeRef.current, tick)
+      forceRender()
     },
     [forceRender]
   )
@@ -606,6 +934,22 @@ export function useGameEngine() {
      * de fotogramas.
      */
     const tickEngine = (nowMs: number) => {
+      // Si llegaron jugadas tarde, se rehace la partida AQUÍ y una sola vez.
+      //
+      // Se agrupan a propósito. Las jugadas atrasadas casi nunca llegan solas:
+      // cuando la conexión del rival se atasca, la red de seguridad recupera un
+      // puñado de golpe. Rehacer una vez por cada una serían varias
+      // reconstrucciones seguidas —unos 100 ms cada una en un ordenador, tres o
+      // cuatro veces eso en un móvil— y el juego daría un tirón bien visible.
+      //
+      // Rehecha desde la más antigua de todas, quedan todas en su sitio con un
+      // solo viaje.
+      if (rehacerDesdeRef.current !== null) {
+        const desde = rehacerDesdeRef.current
+        rehacerDesdeRef.current = null
+        rehacerLaPartida(desde)
+      }
+
       const state = stateRef.current
       if (state.status !== 'playing') return
 
@@ -724,7 +1068,7 @@ export function useGameEngine() {
         if (animationFrameId) cancelAnimationFrame(animationFrameId)
         if (bgIntervalId) clearInterval(bgIntervalId)
       };
-    }, [forceRender, reproducirSonido])
+    }, [forceRender, reproducirSonido, rehacerLaPartida])
 
   const state = stateRef.current
 
@@ -816,9 +1160,36 @@ export function useGameEngine() {
      */
     tomarHuellasPendientes: (): HuellaEnUnTic[] => {
       if (huellasPendientesRef.current.length === 0) return []
-      const salen = huellasPendientesRef.current
-      huellasPendientesRef.current = []
+
+      // ── POR QUÉ SALEN CON RETRASO ──────────────────────────────────────────
+      //
+      // Una jugada que llega tarde llega DESPUÉS de haber tomado la huella del
+      // tic anterior, así que esa huella se calculó sin ella. Rehacer la partida
+      // la corrige, pero si ya se hubiera mandado no habría nada que corregir: el
+      // servidor no deja reescribir una huella, a propósito.
+      //
+      // Así que la huella espera unos segundos antes de salir. Es tiempo de sobra
+      // para que llegue cualquier jugada retrasada —incluso por la red de
+      // seguridad, que repasa cada 3 s— y se rehaga la partida antes.
+      //
+      // Lo único que se paga es enterarse de una separación de verdad cuatro
+      // segundos más tarde, y eso da igual: es un diagnóstico, no el árbitro.
+      // Con la partida acabada salen todas: ya no va a llegar nada tarde, y si no
+      // se sueltan aquí se perderían los últimos controles de cada partida.
+      const acabada = stateRef.current.status !== 'playing'
+      const tope = acabada ? Infinity : stateRef.current.tick - RETRASO_DE_HUELLA_TICS
+      const salen = huellasPendientesRef.current.filter((h) => h.tick <= tope)
+      if (salen.length === 0) return []
+      huellasPendientesRef.current = huellasPendientesRef.current.filter((h) => h.tick > tope)
       return salen
     },
+    /**
+     * Cuántas veces se ha rehecho la partida por una jugada que llegó tarde.
+     *
+     * Va al panel de diagnóstico. Es la medida de cuánto retraso hay de verdad en
+     * las partidas de la gente: si sube mucho, el margen de red se queda corto.
+     */
+    reconstrucciones: reconstruccionesRef.current,
+    descartarAccionPropia,
   }
 }

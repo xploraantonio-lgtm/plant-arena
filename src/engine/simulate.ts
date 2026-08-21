@@ -314,10 +314,15 @@ export type PendingAction =
   /**
    * Una planta MÍA que llega del registro, no de un clic.
    *
-   * Sólo la usan las repeticiones: al reproducir una partida, las jugadas de
-   * quien mira tienen que aparecer en SU lado y sin espejar, mientras que las del
-   * otro van espejadas como en la partida en vivo. En una partida normal esto no
-   * ocurre nunca — ahí las tuyas las pone placePlant al pulsar.
+   * Dos sitios la usan, y por el mismo motivo: las jugadas de quien mira tienen
+   * que aparecer en SU lado y sin espejar, mientras que las del otro van espejadas
+   * como en la partida en vivo.
+   *
+   *   · las repeticiones, al reproducir una partida guardada;
+   *   · rehacer la partida cuando una jugada del rival llega tarde (ver
+   *     engine/reconstruir.ts), que vuelve a montarla desde el registro entero.
+   *
+   * En el clic normal no interviene: ahí la pone placePlant.
    */
   /**
    * Una excavación, con lado.

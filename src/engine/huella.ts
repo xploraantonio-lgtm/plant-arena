@@ -31,6 +31,21 @@ import type { PlantEntity } from '../types/game'
 export const CADA_CUANTOS_TICS = 300
 
 /**
+ * Cuántos tics espera una huella antes de salir. 120 tics son unos 4 segundos.
+ *
+ * Una jugada que llega tarde llega DESPUÉS de haber tomado la huella del tic
+ * anterior, así que esa huella se calculó sin ella y no cuadraría con la del
+ * rival. Rehacer la partida la corrige, pero sólo si aún no ha salido: el servidor
+ * no deja reescribir una huella ya mandada, a propósito.
+ *
+ * Cuatro segundos cubren de sobra cualquier retraso, incluida la red de seguridad
+ * que repasa el registro cada tres. Lo único que se paga es enterarse de una
+ * separación de verdad cuatro segundos más tarde, y eso da igual: la huella es un
+ * diagnóstico, no el árbitro.
+ */
+export const RETRASO_DE_HUELLA_TICS = 120
+
+/**
  * Una planta, resumida.
  *
  * `col` se devuelve al marco del jugador 1: las plantas del rival se guardan con

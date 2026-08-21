@@ -138,6 +138,17 @@ interface BattlefieldProps {
    * normalizadas al punto de vista del jugador 1.
    */
   soyP1?: boolean
+  /**
+   * Los dos mazos de la sala, tal como los guardó el servidor al emparejar.
+   *
+   * Con el nivel y las mejoras de cada carta. Es de donde salen las estadísticas de
+   * las plantas de LOS DOS lados, y por eso las dos pantallas simulan la misma
+   * planta: antes cada uno aplicaba sus mejoras desde su propio navegador y el
+   * rival ponía la carta básica, así que la misma planta tenía 345 de vida en un
+   * lado y 300 en el otro desde el momento de plantarla. Ver
+   * engine/mazoDeLaSala.ts.
+   */
+  mazosDeLaSala?: { mio: unknown; rival: unknown } | null
 }
 
 export default function Battlefield({
@@ -155,6 +166,7 @@ export default function Battlefield({
   opponentId = null,
   nombres = null,
   soyP1 = true,
+  mazosDeLaSala = null,
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -188,8 +200,10 @@ export default function Battlefield({
     placePlant,
     digPlant,
     encolarAccionDelRival,
+    descartarAccionPropia,
     terminarPorOrdenDelServidor,
     tomarHuellasPendientes,
+    reconstrucciones,
   } = useGameEngine()
 
   const { user } = useAuth()
@@ -258,19 +272,14 @@ export default function Battlefield({
   // que hace que las dos partidas sean la misma en lugar de dos partidas
   // paralelas contra la máquina.
 
-  /**
-   * Margen de red, en tics.
-   *
-   * La acción se programa para el tic actual MÁS esto, para que le dé tiempo a
-   * llegar al rival antes de que su partida alcance ese tic. Seis tics son unos
-   * 200 ms: suficiente para una conexión normal, y poco como retardo entre pulsar
-   * y ver la planta del otro.
-   *
-   * Si aun así llega tarde, encolarAccionDelRival la aplica en el tic siguiente y
-   * las dos pantallas se separan un poco. Eso es aceptable: el resultado lo decide
-   * el servidor recalculando el registro, no lo que vio un navegador.
-   */
-  const MARGEN_DE_RED_TICS = 6
+  // El margen de red ya no se aplica aquí, y no es un detalle de limpieza: el tic
+  // de una jugada lo calcula y lo devuelve el motor (placePlant / digPlant), y esto
+  // sólo lo reenvía. Calcularlo dos veces era el fallo — el motor va por su tic y
+  // el componente por el del último fotograma pintado, y de vez en cuando no son el
+  // mismo. Ver engine/pvp.ts para el valor del margen.
+  //
+  // Y si una jugada llega tarde de todos modos, el receptor rehace la partida con
+  // ella en su tic en lugar de aplicarla fuera de sitio: engine/reconstruir.ts.
 
   /** Número de orden de mis acciones en esta partida. Empieza en 1. */
   const ordenRef = useRef<number>(0)
@@ -305,10 +314,19 @@ export default function Battlefield({
     huellas: number
   }>({ enviadas: 0, recibidas: 0, ultimoEnvio: '—', canal: 'conectando…', enSala: 0, misEnSala: 0, huellas: 0 })
 
-  const registrarPlantacion = (carta: PlantId, lane: number, col: number) => {
+  /**
+   * @param enTic el tic que DEVOLVIÓ placePlant, no uno recalculado aquí.
+   *
+   * Antes se calculaba en esta función como `tick + MARGEN_DE_RED_TICS`, con el
+   * `tick` del último fotograma pintado. Entre ese fotograma y el clic el motor
+   * puede haber avanzado un tic, así que la planta entraba en mi pantalla en el
+   * tic T y en la del rival en el T-1. Un tic de diferencia, y desde ahí las dos
+   * partidas ya no son la misma — es la misma clase de desfase que dejaba la
+   * partida «en revisión» al final.
+   */
+  const registrarPlantacion = (carta: PlantId, lane: number, col: number, enTic: number) => {
     if (!roomId) return
     ordenRef.current += 1
-    const enTic = tick + MARGEN_DE_RED_TICS
     void SupabaseService.submitMatchAction(roomId, {
       seq: ordenRef.current,
       tick: enTic,
@@ -317,6 +335,13 @@ export default function Battlefield({
       lane,
       col,
     }).then((r) => {
+      // RECHAZADA: fuera de mi pantalla también.
+      //
+      // Si el servidor no la acepta (llegó con un tic que su reloj ya pasó, o
+      // repetida), el rival nunca la va a ver. Dejarla plantada aquí sería la
+      // divergencia de siempre empezando por mi lado: una planta que sólo existe
+      // en una de las dos pantallas.
+      if (r.error) descartarAccionPropia(enTic, lane, col)
       setDiag((d) => ({
         ...d,
         enviadas: d.enviadas + (r.error ? 0 : 1),
@@ -337,10 +362,10 @@ export default function Battlefield({
    * Mismo contador de orden que las plantaciones: el servidor exige que la pareja
    * (jugador, número de orden) no se repita en la sala.
    */
-  const registrarExcavacion = (lane: number, col: number) => {
+  /** @param enTic el tic que devolvió digPlant. Igual que al plantar. */
+  const registrarExcavacion = (lane: number, col: number, enTic: number) => {
     if (!roomId) return
     ordenRef.current += 1
-    const enTic = tick + MARGEN_DE_RED_TICS
     void SupabaseService.submitMatchAction(roomId, {
       seq: ordenRef.current,
       tick: enTic,
@@ -348,6 +373,9 @@ export default function Battlefield({
       lane,
       col,
     }).then((r) => {
+      // Igual que al plantar: si el servidor la rechaza, la planta vuelve. En la
+      // pantalla del rival nunca se excavó.
+      if (r.error) descartarAccionPropia(enTic, lane, col)
       setDiag((d) => ({
         ...d,
         enviadas: d.enviadas + (r.error ? 0 : 1),
@@ -383,6 +411,9 @@ export default function Battlefield({
       if (a.kind === 'dig') {
         setDiag((d) => ({ ...d, recibidas: d.recibidas + 1 }))
         encolarAccionDelRival({
+          // El identificador del servidor viaja al registro de jugadas: es lo que
+          // ordena igual en las dos pantallas dos jugadas del mismo tic.
+          id: a.id,
           tick: a.tick,
           kind: 'dig',
           lane: a.lane,
@@ -394,6 +425,7 @@ export default function Battlefield({
       if (a.kind !== 'plant' || !a.plant_id) return
       setDiag((d) => ({ ...d, recibidas: d.recibidas + 1 }))
       encolarAccionDelRival({
+        id: a.id,
         tick: a.tick,
         kind: 'plant',
         plantId: a.plant_id as PlantId,
@@ -588,7 +620,10 @@ export default function Battlefield({
           // El último parámetro es de qué lado estoy: sin él no se toman huellas
           // del tablero, y sin huellas no hay forma de saber si las dos pantallas
           // siguen jugando la misma partida.
-          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1)
+          // Y los mazos de la sala: de ahí salen las mejoras de las cartas de los
+          // dos lados, que es lo que hace que las dos pantallas simulen la misma
+          // planta en lugar de una mejorada contra una básica.
+          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1, mazosDeLaSala)
         })
       } else {
         // Entrenamiento contra el bot: no hay reloj que alinear, y el nivel del
@@ -596,7 +631,7 @@ export default function Battlefield({
         startGame(seed, false, undefined, userElo)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1, mazosDeLaSala])
 
   /**
    * LA HUELLA DEL TABLERO
@@ -777,8 +812,12 @@ export default function Battlefield({
           <div className="pvp-diag__linea">
             <b>en la sala</b> {diag.enSala} ({diag.misEnSala} mías) · {diag.canal}
           </div>
+          {/* «rehechas» son las veces que una jugada llegó tarde y hubo que
+              volver a montar la partida con ella en su tic. No es un fallo: es el
+              arreglo funcionando. Lo que dice es cuánto retraso está habiendo de
+              verdad — si sube mucho, el margen de red se queda corto. */}
           <div className="pvp-diag__linea">
-            <b>huellas</b> {diag.huellas}
+            <b>huellas</b> {diag.huellas} · <b>rehechas</b> {reconstrucciones}
           </div>
           <div className="pvp-diag__linea pvp-diag__linea--envio">{diag.ultimoEnvio}</div>
         </div>
@@ -840,15 +879,19 @@ export default function Battlefield({
                         // se excavó algo. Registrar un pico que no quitó nada haría
                         // que el rival borrara una planta que en tu pantalla sigue.
                         const casilla = digPlant({ lane: lane.id, col })
-                        if (casilla) registrarExcavacion(casilla.lane, casilla.col)
+                        if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick)
                       } else {
                         const carta = selectedCard
                         // SÓLO se registra si aquí de verdad se plantó. Si el clic
                         // falla (sin soles, en enfriamiento, casilla ocupada) y se
                         // registrara igual, el rival plantaría algo que en tu
                         // pantalla no existe y las dos partidas se separarían.
-                        if (placePlant(lane.id, col)) {
-                          registrarPlantacion(carta, lane.id, col)
+                        //
+                        // Y se manda EL TIC QUE DEVOLVIÓ placePlant, que es el que
+                        // se usó de verdad.
+                        const enTic = placePlant(lane.id, col)
+                        if (enTic !== null) {
+                          registrarPlantacion(carta, lane.id, col, enTic)
                         }
                       }
                     }
@@ -900,7 +943,15 @@ export default function Battlefield({
             onClick={(e) => {
               if (isShovelActive) {
                 e.stopPropagation()
-                digPlant(plant.id)
+                // Y ESTE pico también se registra.
+                //
+                // Aquí faltaba: excavar pulsando la casilla sí se mandaba al
+                // servidor, pero pulsando la planta directamente no. La planta
+                // desaparecía en tu pantalla y seguía en pie y disparando en la del
+                // rival — dos partidas distintas desde ese momento, y la mitad de
+                // los jugadores usa el pico así.
+                const casilla = digPlant(plant.id)
+                if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick)
               }
             }}
           >
