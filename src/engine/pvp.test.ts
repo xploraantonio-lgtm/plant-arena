@@ -18,7 +18,7 @@
 import { describe, it, expect } from 'vitest'
 import { crearCoordinadorPvp, MARGEN_DE_RED_TICS, type AccionDeLaPartida, type TransportePvp } from './pvp'
 import { stepTick, createBattleState, type GameState } from './simulate'
-import { huellaDeLaPartida, tocaHuella } from './huella'
+import { huellaDeLaPartida, tocaHuella, avanzarTomandoHuellas } from './huella'
 import type { PlantId } from '../types/game'
 import { TOTAL_COLUMNS } from '../utils/gameConstants'
 
@@ -721,5 +721,60 @@ describe('la huella de la partida', () => {
     const antes = huellaDeLaPartida(uno, true)
     uno.plants.reverse()
     expect(huellaDeLaPartida(uno, true)).toBe(antes)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOS CONTROLES NO SE PUEDEN SALTAR
+//
+// El detector de divergencia se estrenó y devolvió «controles = 0»: ni un solo
+// tic con huella de los DOS jugadores, o sea nada que comparar. No detectaba nada.
+//
+// La causa: se comprobaba `tick % 300 === 0` mirando el tic DESPUÉS de cada
+// fotograma, y un fotograma no avanza un tic — avanza los que hayan pasado. Uno
+// que va del 299 al 301 nunca ve el 300. Y cada cliente se salta controles
+// distintos, porque sus fotogramas no caen en los mismos momentos.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('las huellas se toman en el tic exacto, pase lo que pase con los fotogramas', () => {
+  /** Simula fotogramas que avanzan `porTanda` tics de golpe. */
+  function jugarEnTandas(semilla: number, tics: number, porTanda: number, soyP1: boolean) {
+    const estado = createBattleState(semilla, false, true)
+    const todas: Array<{ tick: number; huella: string }> = []
+    let hechos = 0
+    while (hechos < tics) {
+      const cuantos = Math.min(porTanda, tics - hechos)
+      todas.push(...avanzarTomandoHuellas(estado, () => {}, stepTick, cuantos, soyP1))
+      hechos += cuantos
+    }
+    return todas
+  }
+
+  it('un fotograma que avanza siete tics no se salta ningún control', () => {
+    // De uno en uno (el caso ideal) y de siete en siete (un fotograma lento) tienen
+    // que dar EXACTAMENTE las mismas huellas. Con la versión anterior, la de siete
+    // en siete se saltaba casi todos los controles.
+    const deUnoEnUno = jugarEnTandas(4242, 1400, 1, true)
+    const deSieteEnSiete = jugarEnTandas(4242, 1400, 7, true)
+
+    expect(deUnoEnUno.length).toBe(4)   // 300, 600, 900, 1200
+    expect(deSieteEnSiete).toEqual(deUnoEnUno)
+  })
+
+  it('ni uno que avanza ciento cincuenta, como al volver de otra pestaña', () => {
+    const normal = jugarEnTandas(77, 1000, 1, true)
+    const deGolpe = jugarEnTandas(77, 1000, 150, true)
+
+    expect(normal.map((h) => h.tick)).toEqual([300, 600, 900])
+    expect(deGolpe).toEqual(normal)
+  })
+
+  it('y dos clientes con fotogramas distintos coinciden en los mismos tics', () => {
+    // Es la propiedad que hacía falta y que faltaba: si cada uno toma controles en
+    // tics distintos, no hay NADA que comparar y el detector calla para siempre.
+    const ana = jugarEnTandas(999, 1200, 3, true)
+    const beto = jugarEnTandas(999, 1200, 11, true)
+
+    expect(ana.map((h) => h.tick)).toEqual(beto.map((h) => h.tick))
+    expect(ana.map((h) => h.tick)).toEqual([300, 600, 900, 1200])
   })
 })

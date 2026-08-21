@@ -22,7 +22,6 @@ import PlantHand from './PlantHand'
 import RelojDePartida from '../RelojDePartida/RelojDePartida'
 import { SOL_SE_RECOGE_SOLO_MS } from '../../engine/balance'
 import { TICK_MS } from '../../engine/time'
-import { huellaDeLaPartida, tocaHuella } from '../../engine/huella'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import './Battlefield.css'
@@ -190,7 +189,7 @@ export default function Battlefield({
     digPlant,
     encolarAccionDelRival,
     terminarPorOrdenDelServidor,
-    estadoDeLaPartida,
+    tomarHuellasPendientes,
   } = useGameEngine()
 
   const { user } = useAuth()
@@ -297,7 +296,14 @@ export default function Battlefield({
     /** Acciones que el SERVIDOR dice que hay en esta sala, y cuántas son mías. */
     enSala: number
     misEnSala: number
-  }>({ enviadas: 0, recibidas: 0, ultimoEnvio: '—', canal: 'conectando…', enSala: 0, misEnSala: 0 })
+    /**
+     * Huellas del tablero mandadas.
+     *
+     * Es el número que hay que mirar cuando el servidor diga «controles = 0»: si
+     * aquí sale 0 a mitad de partida, este cliente no está mandando ninguna.
+     */
+    huellas: number
+  }>({ enviadas: 0, recibidas: 0, ultimoEnvio: '—', canal: 'conectando…', enSala: 0, misEnSala: 0, huellas: 0 })
 
   const registrarPlantacion = (carta: PlantId, lane: number, col: number) => {
     if (!roomId) return
@@ -579,7 +585,10 @@ export default function Battlefield({
         void SupabaseService.startMatchClock(roomId).then((reloj) => {
           // Sin reloj (la migración 23 aún no está, o falló la llamada) se arranca
           // igual y se juega desalineado, que es peor pero mejor que no jugar.
-          startGame(seed, true, reloj?.ancoraMs)
+          // El último parámetro es de qué lado estoy: sin él no se toman huellas
+          // del tablero, y sin huellas no hay forma de saber si las dos pantallas
+          // siguen jugando la misma partida.
+          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1)
         })
       } else {
         // Entrenamiento contra el bot: no hay reloj que alinear, y el nivel del
@@ -587,7 +596,7 @@ export default function Battlefield({
         startGame(seed, false, undefined, userElo)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1])
 
   /**
    * LA HUELLA DEL TABLERO
@@ -602,17 +611,23 @@ export default function Battlefield({
    *
    * Sólo en partidas con sala: contra el bot no hay nada que comparar.
    */
-  const ultimaHuellaRef = useRef<number>(0)
+  /**
+   * Manda las huellas que haya tomado el bucle del juego.
+   *
+   * El bucle las apunta —es el único que ve todos los tics— y esto las manda. La
+   * versión anterior comprobaba `tick % 300` aquí, después de cada fotograma, y se
+   * saltaba los controles cada vez que un fotograma avanzaba más de un tic: medido
+   * en producción, «controles = 0», ni un solo tic con huella de los dos.
+   */
   useEffect(() => {
-    if (!roomId || gameStatus !== 'playing') return
-    if (!tocaHuella(tick) || ultimaHuellaRef.current === tick) return
-    ultimaHuellaRef.current = tick
-    void SupabaseService.submitMatchCheckpoint(
-      roomId,
-      tick,
-      huellaDeLaPartida(estadoDeLaPartida(), soyP1)
-    )
-  }, [tick, roomId, gameStatus, soyP1, estadoDeLaPartida])
+    if (!roomId) return
+    const pendientes = tomarHuellasPendientes()
+    if (pendientes.length === 0) return
+    for (const h of pendientes) {
+      void SupabaseService.submitMatchCheckpoint(roomId, h.tick, h.huella)
+    }
+    setDiag((d) => ({ ...d, huellas: d.huellas + pendientes.length }))
+  }, [tick, roomId, tomarHuellasPendientes])
 
   const [showSurrenderModal, setShowSurrenderModal] = useState<boolean>(false)
 
@@ -761,6 +776,9 @@ export default function Battlefield({
                 · enSala > mías   → estáis juntos: el problema es la entrega */}
           <div className="pvp-diag__linea">
             <b>en la sala</b> {diag.enSala} ({diag.misEnSala} mías) · {diag.canal}
+          </div>
+          <div className="pvp-diag__linea">
+            <b>huellas</b> {diag.huellas}
           </div>
           <div className="pvp-diag__linea pvp-diag__linea--envio">{diag.ultimoEnvio}</div>
         </div>

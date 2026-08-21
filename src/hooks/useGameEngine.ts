@@ -21,6 +21,7 @@ import { createRng } from '../engine/rng'
 import { TICK_MS, MAX_TICKS_PER_FRAME, msToTicks } from '../engine/time'
 import { stepTick, createBattleState, type GameState } from '../engine/simulate'
 import { MARGEN_DE_RED_TICS } from '../engine/pvp'
+import { huellaDeLaPartida, tocaHuella, type HuellaEnUnTic } from '../engine/huella'
 import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
@@ -127,6 +128,22 @@ export function useGameEngine() {
    */
   const ancoraMsRef = useRef<number | null>(null)
 
+  /**
+   * De qué lado estoy en la sala, para la huella del tablero.
+   *
+   * Null fuera del 1c1: contra el bot no hay con quién comparar y no se toma
+   * ninguna huella.
+   */
+  const soyP1Ref = useRef<boolean | null>(null)
+
+  /**
+   * Huellas tomadas y aún sin mandar.
+   *
+   * Se acumulan aquí porque el bucle del juego no debe hacer llamadas de red: sólo
+   * apunta, y quien pinta las recoge y las manda.
+   */
+  const huellasPendientesRef = useRef<HuellaEnUnTic[]>([])
+
   // Los temporizadores del juego ya NO viven aquí: están en state.timers, para
   // que formen parte de la simulación y se puedan guardar y reanudar.
 
@@ -187,11 +204,19 @@ export function useGameEngine() {
     esPvp: boolean = false,
     ancoraMs?: number,
     /** Tu ELO, para que el bot de entrenamiento se parezca a alguien de tu nivel. */
-    miElo?: number
+    miElo?: number,
+    /**
+     * De qué lado estás en la sala. Sólo para la huella del tablero: las dos
+     * pantallas la calculan desde el punto de vista del jugador 1 para que se
+     * puedan comparar. Sin esto no se toma ninguna huella.
+     */
+    soyP1?: boolean
   ) => {
     stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500))
 
     ancoraMsRef.current = ancoraMs ?? null
+    soyP1Ref.current = soyP1 === undefined ? null : soyP1
+    huellasPendientesRef.current = []
     lastFrameMsRef.current = performance.now()
     accumulatorMsRef.current = 0
 
@@ -628,6 +653,23 @@ export function useGameEngine() {
         // engine/simulate.ts, sin React y sin navegador, para que el servidor y los
         // tests puedan ejecutarlo igual.
         stepTick(state, reproducirSonido)
+
+        // La huella se toma AQUÍ, dentro del bucle, porque es el único sitio que
+        // ve todos los tics. Comprobarlo fuera —después del fotograma— se salta
+        // los controles cada vez que un fotograma avanza más de un tic, y eso pasa
+        // constantemente. Medido en producción: «controles = 0», ni un solo tic con
+        // huella de los dos, o sea el detector callado para siempre.
+        if (soyP1Ref.current !== null && tocaHuella(state.tick)) {
+          huellasPendientesRef.current.push({
+            tick: state.tick,
+            huella: huellaDeLaPartida(state, soyP1Ref.current),
+          })
+          // Tope por si nadie las recoge (una pestaña de fondo mucho rato): se
+          // tiran las más viejas antes que crecer sin límite.
+          if (huellasPendientesRef.current.length > 60) {
+            huellasPendientesRef.current.splice(0, huellasPendientesRef.current.length - 60)
+          }
+        }
       }
 
       forceRender()
@@ -766,17 +808,17 @@ export function useGameEngine() {
     encolarAccionDelRival,
     terminarPorOrdenDelServidor,
     /**
-     * El estado de la partida, para leerlo.
+     * Recoge las huellas tomadas y las quita de la cola.
      *
-     * Lo usa la huella del tablero, que resume la partida entera cada diez
-     * segundos para que el servidor pueda comparar las dos pantallas. Se devuelve
-     * una función y no el objeto porque el estado vive en una ref: si se devolviera
-     * el objeto, la huella se calcularía sobre la foto del último repintado y no
-     * sobre el tic de verdad.
-     *
-     * Es de LECTURA. Quien escriba aquí desde fuera se sale de la simulación y
-     * rompe justo lo que la huella viene a vigilar.
+     * Se devuelven para que las mande quien pinta: el bucle del juego no debe
+     * hacer llamadas de red. Y se vacían al recogerlas para no mandar dos veces la
+     * misma.
      */
-    estadoDeLaPartida: () => stateRef.current,
+    tomarHuellasPendientes: (): HuellaEnUnTic[] => {
+      if (huellasPendientesRef.current.length === 0) return []
+      const salen = huellasPendientesRef.current
+      huellasPendientesRef.current = []
+      return salen
+    },
   }
 }

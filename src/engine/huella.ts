@@ -83,3 +83,47 @@ export function huellaDeLaPartida(state: GameState, soyP1: boolean): string {
 export function tocaHuella(tick: number): boolean {
   return tick > 0 && tick % CADA_CUANTOS_TICS === 0
 }
+
+/** Una huella tomada en un tic de control. */
+export interface HuellaEnUnTic {
+  tick: number
+  huella: string
+}
+
+/**
+ * Avanza la partida y toma la huella EN CADA TIC DE CONTROL.
+ *
+ * ESTO ES EL ARREGLO DE UN FALLO REAL, y merece explicación porque el error es
+ * fácil de repetir.
+ *
+ * La primera versión comprobaba `tick % 300 === 0` en el componente, mirando el
+ * tic DESPUÉS de cada fotograma. Pero un fotograma no avanza un tic: avanza los
+ * que hayan pasado — dos, tres, o ciento cincuenta si la pestaña estuvo en
+ * segundo plano. Así que un fotograma que va del 299 al 301 nunca ve el 300, y
+ * ese control se pierde.
+ *
+ * Y lo peor: cada cliente se salta controles DISTINTOS, porque sus fotogramas no
+ * caen en los mismos momentos. El resultado medido fue `controles = 0`: ni un
+ * solo tic con huella de los dos, o sea nada que comparar. El detector no
+ * detectaba nada.
+ *
+ * Aquí el bucle ve TODOS los tics, así que no se salta ninguno. Y la huella se
+ * toma exactamente EN el tic de control, no después: dos huellas de tics
+ * distintos siempre saldrían diferentes y eso sería una divergencia inventada.
+ */
+export function avanzarTomandoHuellas(
+  state: GameState,
+  sonar: (nombre: string, volumen: number) => void,
+  paso: (state: GameState, sonar: (n: string, v: number) => void) => void,
+  tics: number,
+  soyP1: boolean
+): HuellaEnUnTic[] {
+  const tomadas: HuellaEnUnTic[] = []
+  for (let i = 0; i < tics; i++) {
+    paso(state, sonar)
+    if (tocaHuella(state.tick)) {
+      tomadas.push({ tick: state.tick, huella: huellaDeLaPartida(state, soyP1) })
+    }
+  }
+  return tomadas
+}
