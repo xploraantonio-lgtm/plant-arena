@@ -175,7 +175,7 @@ export default function MainMenu({
             <div className="profile-sub-row">
               <span className="badge-beta-test">🧪 Beta Test</span>
               <a
-                href="https://t.me/PlantaArena"
+                href="https://t.me/+HY1gbZZKmAE5ZDcx"
                 target="_blank"
                 rel="noreferrer"
                 className="btn-telegram-link"
