@@ -42,7 +42,30 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'tournaments' | 'seasons' | 'players' | 'rewards' | 'code' | 'referidos'>('tournaments')
+  const [activeTab, setActiveTab] = useState<'tournaments' | 'seasons' | 'players' | 'rewards' | 'code' | 'referidos' | 'partidas'>('tournaments')
+
+  /**
+   * ¿SE SEPARARON LAS DOS PANTALLAS?
+   *
+   * La pregunta que hay que poder contestar con datos antes de dejar jugar a todo
+   * el mundo, y sobre todo antes de abrir el coliseo o las guerras de clan con
+   * gemas de por medio.
+   *
+   * Cada cliente resume su tablero cada 10 segundos y lo manda; esto compara los
+   * dos resúmenes del mismo tic. Si coinciden en todos, los dos jugaron
+   * exactamente la misma partida. Antes esto sólo se podía consultar a mano con
+   * SQL después de cada prueba, que es como se ha ido diagnosticando a ciegas.
+   */
+  const [divergencias, setDivergencias] = useState<any | null>(null)
+  /**
+   * Cuántas horas atrás mirar.
+   *
+   * Importa porque las huellas se guardan desde ANTES del arreglo: las partidas
+   * viejas salen separadas y eso es el fallo que ya está corregido, no uno nuevo.
+   * Con la ventana en las horas que lleve desplegado, el veredicto es del código
+   * que está en la calle.
+   */
+  const [ventanaHoras, setVentanaHoras] = useState<number>(6)
   /**
    * El registro del comercio P2P y las temporadas de referidos.
    *
@@ -584,6 +607,16 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
           >
             🔗 Referidos y Mercado
           </button>
+          <button
+            type="button"
+            className={`admin-tab-btn ${activeTab === 'partidas' ? 'admin-tab-btn--active' : ''}`}
+            onClick={() => {
+              setActiveTab('partidas')
+              void SupabaseService.adminDivergencias(60).then(setDivergencias)
+            }}
+          >
+            🔬 ¿Partidas iguales?
+          </button>
         </div>
 
         {/* TAB 6: REFERIDOS Y EL REPARTO DEL MERCADO */}
@@ -705,6 +738,146 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
             )}
           </div>
         )}
+
+        {/* TAB 7: ¿LAS DOS PANTALLAS VEN LA MISMA PARTIDA?
+            ───────────────────────────────────────────────────────────────────
+            Es el detector de divergencias, a la vista. Hasta ahora los datos
+            estaban en la base y había que consultarlos a mano con SQL después de
+            cada prueba: así se ha ido diagnosticando a ciegas durante días.
+
+            Lo que se lee es el veredicto grande. Verde significa que se puede
+            dejar jugar a todo el mundo, y rojo que hay una partida concreta que
+            mirar — con su tic y sus dos resúmenes. */}
+        {activeTab === 'partidas' && (() => {
+          const todas: any[] = divergencias?.partidas ?? []
+          const desde = Date.now() - ventanaHoras * 3600_000
+          const enVentana = todas.filter((p) => new Date(p.jugadaEn).getTime() >= desde)
+          const conDatos = enVentana.filter((p) => Number(p.comparados) > 0)
+          const separadas = enVentana.filter((p) => p.primerTicDistinto !== null)
+
+          return (
+            <div className="admin-content-section">
+              <div className="admin-alert-banner">
+                🔬 Cada pantalla resume su tablero cada 10 segundos y lo manda.
+                Esto compara los dos resúmenes del MISMO tic: si coinciden en
+                todos, los dos jugaron exactamente la misma partida.
+                <br />
+                ⚠️ Las partidas jugadas <strong>antes</strong> del arreglo salen
+                separadas — ése es el fallo ya corregido, no uno nuevo. Pon la
+                ventana en las horas que lleve desplegada la versión nueva.
+              </div>
+
+              <div className="admin-form-group">
+                <label>Mirar sólo las últimas</label>
+                <select
+                  value={ventanaHoras}
+                  onChange={(e) => setVentanaHoras(Number(e.target.value))}
+                >
+                  <option value={1}>1 hora</option>
+                  <option value={6}>6 horas</option>
+                  <option value={24}>24 horas</option>
+                  <option value={24 * 30}>todas</option>
+                </select>
+                <button
+                  type="button"
+                  className="admin-action-btn--green"
+                  onClick={() => { void SupabaseService.adminDivergencias(60).then(setDivergencias) }}
+                >
+                  🔄 Actualizar
+                </button>
+              </div>
+
+              {divergencias === null ? (
+                <p className="admin-card-desc">Cargando…</p>
+              ) : (
+                <>
+                  {/* EL VEREDICTO. Con cero partidas comparables no dice nada, y
+                      eso hay que decirlo en lugar de dar un verde falso. */}
+                  <div
+                    className="admin-alert-banner"
+                    style={{
+                      borderColor: conDatos.length === 0 ? '#fbbf24' : separadas.length === 0 ? '#52e061' : '#ff4d4d',
+                      fontSize: '1.05rem',
+                    }}
+                  >
+                    {conDatos.length === 0
+                      ? `⚠️ Todavía no hay ninguna partida con datos que comparar en las últimas ${ventanaHoras} h. Que jueguen dos, y al menos 10 segundos.`
+                      : separadas.length === 0
+                      ? `✅ ${conDatos.length} partida(s) comparada(s) y NINGUNA se separó. Se puede dejar jugar.`
+                      : `❌ ${separadas.length} de ${conDatos.length} se separaron. Mira la tabla: la columna del tic dice dónde.`}
+                  </div>
+
+                  <div className="admin-p2p-cifras">
+                    <div className="admin-p2p-cifra">
+                      <span className="admin-p2p-cifra__num">{conDatos.length}</span>
+                      <span className="admin-p2p-cifra__lbl">Comparables</span>
+                    </div>
+                    <div className="admin-p2p-cifra">
+                      <span className="admin-p2p-cifra__num">{conDatos.length - separadas.length}</span>
+                      <span className="admin-p2p-cifra__lbl">Iguales</span>
+                    </div>
+                    <div className="admin-p2p-cifra">
+                      <span className="admin-p2p-cifra__num">{separadas.length}</span>
+                      <span className="admin-p2p-cifra__lbl">Separadas</span>
+                    </div>
+                    <div className="admin-p2p-cifra">
+                      <span className="admin-p2p-cifra__num">{enVentana.length - conDatos.length}</span>
+                      <span className="admin-p2p-cifra__lbl">Sin datos</span>
+                    </div>
+                  </div>
+
+                  <h3>📋 Partidas</h3>
+                  <div className="admin-p2p-tabla-wrap">
+                    <table className="admin-p2p-tabla">
+                      <thead>
+                        <tr>
+                          <th>Cuándo</th><th>Modo</th><th>Jugadores</th>
+                          <th>Tics comparados</th><th>Se separó en</th><th>Veredicto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {enVentana.length === 0 ? (
+                          <tr><td colSpan={6}>Ninguna partida en esta ventana.</td></tr>
+                        ) : (
+                          enVentana.map((p) => {
+                            const sinDatos = Number(p.comparados) === 0
+                            const rota = p.primerTicDistinto !== null
+                            return (
+                              <tr key={p.roomId}>
+                                <td>{new Date(p.jugadaEn).toLocaleString()}</td>
+                                <td>{p.mode}</td>
+                                <td>{p.jugadores}</td>
+                                <td>{p.comparados}</td>
+                                {/* El tic y el segundo: 30 tics son un segundo. */}
+                                <td>
+                                  {rota
+                                    ? `tic ${p.primerTicDistinto} (seg. ${Math.round(Number(p.primerTicDistinto) / 30)})`
+                                    : '—'}
+                                </td>
+                                <td>
+                                  {sinDatos ? '⚠️ sin datos' : rota ? '❌ se separaron' : '✅ iguales'}
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <p className="admin-card-desc">
+                    «Sin datos» no es un fallo: es que no hubo ningún tic con
+                    resumen de los dos — alguien se fue antes de los 10 primeros
+                    segundos, o jugó con una versión distinta. Para ver QUÉ cambió
+                    en una partida separada está{' '}
+                    <code>supabase/herramientas/comprobar-divergencias.sql</code>,
+                    consulta 3.
+                  </p>
+                </>
+              )}
+            </div>
+          )
+        })()}
 
         {/* TAB 4: CÓDIGO SECRETO POR RONDAS */}
         {activeTab === 'code' && (() => {
