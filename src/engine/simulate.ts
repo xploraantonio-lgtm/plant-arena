@@ -319,6 +319,22 @@ export type PendingAction =
    * otro van espejadas como en la partida en vivo. En una partida normal esto no
    * ocurre nunca — ahí las tuyas las pone placePlant al pulsar.
    */
+  /**
+   * Una excavación, con lado.
+   *
+   * Excavar quitaba la planta en el acto y NO se mandaba al servidor: en tu
+   * pantalla desaparecía y en la del rival seguía ahí, disparando. Las dos
+   * partidas dejaban de ser la misma en ese momento.
+   *
+   * Ahora es una acción como plantar: viaja, se aplica en un tic concreto y las
+   * dos pantallas quitan la misma planta.
+   */
+  | {
+      atTick: number
+      kind: 'own_dig' | 'rival_dig'
+      lane: number
+      col: number
+    }
   | {
       atTick: number
       kind: 'own_plant'
@@ -438,6 +454,65 @@ interface Lado {
 
 const LADO_P1: Lado = { equipo: 'p1', sentido: 1, objetivo: 'p2' }
 const LADO_P2: Lado = { equipo: 'p2', sentido: -1, objetivo: 'p1' }
+
+/**
+ * EL JALAPEÑO ARRASA UN CARRIL
+ *
+ * Esto vivía en el manejador del clic, en useGameEngine, y NO en el motor. O sea
+ * que la explosión sólo ocurría en la pantalla de quien lo plantaba: al rival le
+ * llegaba la carta por el registro, su cliente creaba una planta corriente y no
+ * mataba a nadie.
+ *
+ * Resultado: un jugador se quedaba sin carril y el otro no perdía nada. Las dos
+ * simulaciones dejaban de ser la misma partida en ese instante, y a partir de ahí
+ * cada uno jugaba una batalla distinta hasta que los dos reportaban ganadores
+ * diferentes — el «tu rival dijo otra cosa» que salía al final.
+ *
+ * Ahora es un efecto del motor, aplicado en un TIC concreto y con LADO, así que
+ * las dos pantallas lo aplican igual: cada una a las plantas del contrario. Y de
+ * paso funciona en las repeticiones, donde antes tampoco hacía nada.
+ */
+const DAÑO_DEL_JALAPENO = 1000
+const FUEGO_DEL_JALAPENO = '/game-assets/plants/jalapeno_flame_fx.png'
+
+function aplicarJalapeno(state: GameState, lado: Lado, lane: number, sonar: SonarFn): void {
+  sonar('pea_hit', 1.0)
+
+  // Al carril entero del contrario.
+  for (const victima of propias(state, lado.equipo === 'p1' ? LADO_P2 : LADO_P1)) {
+    if (victima.lane !== lane || victima.hp <= 0) continue
+    victima.hp -= DAÑO_DEL_JALAPENO
+    if (victima.hp <= 0) {
+      // Las bajas sólo cuentan para las estadísticas del jugador de esta pantalla.
+      if (lado.equipo === 'p1') {
+        state.stats.enemyPlantsDefeated += 1
+        state.stats.score += 100
+      }
+    }
+  }
+
+  // La llamarada: sólo se ve, y se apaga a los 1,2 s. Va al lado de quien lo
+  // plantó para que el CSS la espeje como cualquier otra planta suya.
+  const llama: PlantEntity = {
+    id: entityId('jalapeno-flame', state.tick, state.entityCounter++),
+    plantId: 'jalapeno',
+    statRolls: [],
+    lane,
+    x: 50,
+    hp: 1,
+    maxHp: 1,
+    lastActionTime: state.tick,
+    isWalking: false,
+    state: 'attacking',
+    spriteOverride: FUEGO_DEL_JALAPENO,
+  }
+  propias(state, lado).push(llama)
+  state.pending.push({
+    atTick: state.tick + msToTicks(1200),
+    kind: 'remove_plant',
+    plantId: llama.id,
+  })
+}
 
 /** Las plantas de un lado. */
 function propias(state: GameState, lado: Lado): PlantEntity[] {
@@ -841,7 +916,13 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
           break
 
         case 'remove_plant':
+          // De los DOS lados. Sólo miraba `plants`, y desde que el jalapeño lo
+          // aplica el motor su llamarada también puede estar en el lado del rival:
+          // ahí se quedaba para siempre, como una planta de 1 de vida metida en el
+          // combate. Y una entidad que existe en una pantalla y no en la otra
+          // separa las dos partidas, que es justo lo que esto viene a arreglar.
           state.plants = state.plants.filter((p) => p.id !== accion.plantId)
+          state.enemyPlants = state.enemyPlants.filter((p) => p.id !== accion.plantId)
           break
 
         case 'iceberg_fade': {
@@ -869,29 +950,57 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
           break
 
         case 'rival_plant':
-          state.enemyPlants.push(
-            crearPlantaDelRival(
-              state,
-              accion.plantId,
-              accion.lane,
-              accion.col,
-              accion.statRolls ?? [],
-              accion.level ?? 0
+          if (accion.plantId === 'jalapeno') {
+            aplicarJalapeno(state, LADO_P2, accion.lane, sonar)
+          } else {
+            state.enemyPlants.push(
+              crearPlantaDelRival(
+                state,
+                accion.plantId,
+                accion.lane,
+                accion.col,
+                accion.statRolls ?? [],
+                accion.level ?? 0
+              )
             )
-          )
+          }
           break
 
+        case 'own_dig':
+        case 'rival_dig': {
+          // El lado de quien excava. La columna del rival va espejada, igual que
+          // al plantar: él cuenta desde SU base.
+          const mio = accion.kind === 'own_dig'
+          const lista = mio ? state.plants : state.enemyPlants
+          const col = mio ? accion.col : TOTAL_COLUMNS - 1 - accion.col
+
+          // Se quita UNA planta fija de esa casilla. Las que caminan no se
+          // excavan: no están en una casilla.
+          const victima = lista.find((x) => x.lane === accion.lane && x.col === col && !x.isWalking)
+          if (victima) {
+            if (mio) state.plants = state.plants.filter((x) => x.id !== victima.id)
+            else state.enemyPlants = state.enemyPlants.filter((x) => x.id !== victima.id)
+          }
+          break
+        }
+
         case 'own_plant':
-          state.plants.push(
-            crearPlantaPropia(
-              state,
-              accion.plantId,
-              accion.lane,
-              accion.col,
-              accion.statRolls ?? [],
-              accion.level ?? 0
+          // El jalapeño no deja planta: explota. Y explota AQUÍ, en el motor, para
+          // que las dos pantallas lo apliquen en el mismo tic y al lado correcto.
+          if (accion.plantId === 'jalapeno') {
+            aplicarJalapeno(state, LADO_P1, accion.lane, sonar)
+          } else {
+            state.plants.push(
+              crearPlantaPropia(
+                state,
+                accion.plantId,
+                accion.lane,
+                accion.col,
+                accion.statRolls ?? [],
+                accion.level ?? 0
+              )
             )
-          )
+          }
           break
       }
     }
@@ -1151,9 +1260,23 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   // izquierda. Todo lo demás —cadencias, daños, habilidades, área— sale de la
   // carta y es idéntico.
   // ───────────────────────────────────────────────────────────────────────────
+  // ── EL ORDEN IMPORTA, Y ESTABA TORCIDO ────────────────────────────────────
+  //
+  // Era P1 → proyectiles → P2. Con ese orden, un guisante disparado por P1 se
+  // movía en el MISMO tic en que nacía, y uno de P2 no: nacía después de que los
+  // proyectiles se hubieran movido.
+  //
+  // No parece nada, pero cada jugador se simula a sí mismo como P1. Así que el
+  // mismo guisante iba un tic por delante en la pantalla de quien lo disparó y un
+  // tic por detrás en la del rival — un tic es 0,9 de campo, y basta para que una
+  // planta muera en una pantalla y sobreviva en la otra. A partir de ahí las dos
+  // partidas se separan solas.
+  //
+  // Ahora los dos lados actúan y DESPUÉS se mueve todo. Los dos lados reciben el
+  // mismo trato, que es la única forma de que las dos pantallas coincidan.
   procesarLado(state, LADO_P1, dt, sonar)
-  moverProyectiles(state, dt, sonar)
   procesarLado(state, LADO_P2, dt, sonar)
+  moverProyectiles(state, dt, sonar)
 
 
   // ───────────────────────────────────────────────────────────────────────────

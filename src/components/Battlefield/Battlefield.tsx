@@ -309,6 +309,36 @@ export default function Battlefield({
     })
   }
 
+  /**
+   * Registra una excavación.
+   *
+   * Antes no se registraba: el pico quitaba la planta en tu pantalla y no salía
+   * del navegador, así que en la del rival seguía en pie y disparando. Con eso,
+   * las dos simulaciones dejaban de ser la misma partida en cuanto alguien usaba
+   * el pico — y al final cada uno reportaba un ganador distinto.
+   *
+   * Mismo contador de orden que las plantaciones: el servidor exige que la pareja
+   * (jugador, número de orden) no se repita en la sala.
+   */
+  const registrarExcavacion = (lane: number, col: number) => {
+    if (!roomId) return
+    ordenRef.current += 1
+    const enTic = tick + MARGEN_DE_RED_TICS
+    void SupabaseService.submitMatchAction(roomId, {
+      seq: ordenRef.current,
+      tick: enTic,
+      kind: 'dig',
+      lane,
+      col,
+    }).then((r) => {
+      setDiag((d) => ({
+        ...d,
+        enviadas: d.enviadas + (r.error ? 0 : 1),
+        ultimoEnvio: r.error ? `✗ ${r.error}` : `✓ pico @tic ${enTic}`,
+      }))
+    })
+  }
+
   useEffect(() => {
     if (!roomId || !currentUserId) return
 
@@ -330,10 +360,25 @@ export default function Battlefield({
       aplicadasRef.current.add(a.id)
       if (a.id > ultimaAccionRef.current) ultimaAccionRef.current = a.id
 
+      // El pico del rival. Antes se descartaba aquí —sólo se miraba 'plant'— así
+      // que su planta excavada seguía en pie en tu pantalla: dos partidas
+      // distintas desde ese momento.
+      if (a.kind === 'dig') {
+        setDiag((d) => ({ ...d, recibidas: d.recibidas + 1 }))
+        encolarAccionDelRival({
+          tick: a.tick,
+          kind: 'dig',
+          lane: a.lane,
+          col: a.col ?? 0,
+        })
+        return
+      }
+
       if (a.kind !== 'plant' || !a.plant_id) return
       setDiag((d) => ({ ...d, recibidas: d.recibidas + 1 }))
       encolarAccionDelRival({
         tick: a.tick,
+        kind: 'plant',
         plantId: a.plant_id as PlantId,
         lane: a.lane,
         col: a.col ?? undefined,
@@ -737,7 +782,11 @@ export default function Battlefield({
                   onClick={() => {
                     if (selectedCard && isP1Side) {
                       if (selectedCard === 'shovel') {
-                        digPlant({ lane: lane.id, col })
+                        // Igual que al plantar: sólo se registra si aquí de verdad
+                        // se excavó algo. Registrar un pico que no quitó nada haría
+                        // que el rival borrara una planta que en tu pantalla sigue.
+                        const casilla = digPlant({ lane: lane.id, col })
+                        if (casilla) registrarExcavacion(casilla.lane, casilla.col)
                       } else {
                         const carta = selectedCard
                         // SÓLO se registra si aquí de verdad se plantó. Si el clic

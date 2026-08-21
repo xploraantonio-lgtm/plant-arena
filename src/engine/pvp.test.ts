@@ -16,10 +16,10 @@
 // uno aparece en la partida del otro, y que las dos simulaciones acaban iguales.
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
-import { crearCoordinadorPvp, type AccionDeLaPartida, type TransportePvp } from './pvp'
+import { crearCoordinadorPvp, MARGEN_DE_RED_TICS, type AccionDeLaPartida, type TransportePvp } from './pvp'
 import { stepTick, createBattleState, type GameState } from './simulate'
 import type { PlantId } from '../types/game'
-import { PLANT_CONFIGS, BASE_LEFT_END_X, BASE_RIGHT_START_X, TOTAL_COLUMNS } from '../utils/gameConstants'
+import { TOTAL_COLUMNS } from '../utils/gameConstants'
 
 /**
  * El servidor de mentira.
@@ -123,7 +123,20 @@ function cliente(miId: string, transporte: TransportePvp, semilla = 4242, ancora
   const coord = crearCoordinadorPvp({
     miId,
     estado: () => estado,
-    encolar: (a) =>
+    // Lo mismo que hace useGameEngine.encolarAccionDelRival. Está duplicado
+    // aquí, y por eso este test comprueba una COPIA del cliente: si el hook
+    // cambia y esto no, el test deja de reflejar la realidad.
+    encolar: (a) => {
+      if (a.kind === 'dig') {
+        estado.pending.push({
+          atTick: Math.max(estado.tick + 1, a.tick),
+          kind: 'rival_dig',
+          lane: a.lane,
+          col: a.col ?? 0,
+        })
+        return
+      }
+      if (!a.plantId) return
       estado.pending.push({
         // Nunca en el pasado: si llegó tarde, en el tic siguiente.
         atTick: Math.max(estado.tick + 1, a.tick),
@@ -131,7 +144,8 @@ function cliente(miId: string, transporte: TransportePvp, semilla = 4242, ancora
         plantId: a.plantId,
         lane: a.lane,
         col: a.col,
-      }),
+      })
+    },
     transporte,
   })
 
@@ -140,32 +154,26 @@ function cliente(miId: string, transporte: TransportePvp, semilla = 4242, ancora
     coord,
 
     /**
-     * Planta como lo hace el cliente real: PRIMERO en local y luego se registra.
+     * Planta como lo hace el cliente real: A LA COLA con el margen de red, y
+     * después se registra en el servidor.
      *
-     * Los dos pasos importan. registrarPlantacion sólo habla con el servidor; si el
-     * test se quedara ahí, quien planta no tendría la planta en su propia partida y
-     * sólo la vería el rival. (La primera versión de este test hacía justo eso y
-     * fallaba por ello, no por el código.)
+     * LO DEL MARGEN ES EL FONDO DEL ASUNTO. Antes esta función —y el cliente de
+     * verdad— metía la planta en el campo EN ESTE TIC, y al servidor la mandaba
+     * con el tic actual más el margen. Así que existía en el tic T en una pantalla
+     * y en el T+6 en la otra: doscientos milisegundos de diferencia que se
+     * multiplican hasta que cada uno ve otra batalla.
+     *
+     * Todas las jugadas entran con el mismo retardo, la propia incluida. Es la
+     * regla del lockstep y es lo único que hace que las dos simulaciones sean la
+     * misma partida.
      */
     async plantar(carta: PlantId, lane: number, col: number) {
-      const config = PLANT_CONFIGS[carta]
-      const camina = config.category === 'melee' || !!config.moveSpeed || carta === 'chomper'
-      const anchoCol = (BASE_RIGHT_START_X - BASE_LEFT_END_X) / TOTAL_COLUMNS
-      estado.plants.push({
-        id: `mia-${carta}-${lane}-${col}-${estado.tick}`,
+      estado.pending.push({
+        atTick: estado.tick + MARGEN_DE_RED_TICS,
+        kind: 'own_plant',
         plantId: carta,
-        statRolls: [],
         lane,
-        col: camina ? undefined : col,
-        x: camina ? BASE_LEFT_END_X + 1 : BASE_LEFT_END_X + col * anchoCol + anchoCol / 2,
-        hp: config.maxHp,
-        maxHp: config.maxHp,
-        damage: config.damage,
-        attackSpeedMs: config.attackSpeedMs,
-        moveSpeed: config.moveSpeed,
-        lastActionTime: estado.tick,
-        isWalking: camina,
-        state: camina ? 'walking' : 'idle',
+        col,
       })
       await coord.registrarPlantacion(carta, lane, col)
     },
@@ -392,5 +400,249 @@ describe('lo que el servidor rechaza, y por qué', () => {
     await transporte.enviar({ seq: 1, tick: 106, kind: 'plant', plantId: 'sunflower', lane: 0, col: 3 })
 
     expect(srv.acciones).toHaveLength(1)
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA COMPROBACIÓN QUE FALTABA: ¿SIGUEN SIENDO LA MISMA PARTIDA?
+//
+// Los tests de arriba comprueban que lo que planta uno LLEGA al otro. Eso no es
+// suficiente, y por eso se nos escapó: llegaba, pero se aplicaba en un tic
+// distinto del que se había aplicado en local, y con el jalapeño ni se aplicaba
+// el efecto. Las dos partidas se separaban despacio y al final los dos clientes
+// reportaban ganadores distintos — «tu rival dijo otra cosa», partida en revisión
+// y nadie cobraba.
+//
+// Lo que se mide aquí es la IGUALDAD de las dos simulaciones, que es la propiedad
+// de la que depende todo el 1c1.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Las dos pantallas describen la misma partida, cruzada.
+ *
+ * Cada jugador se ve a sí mismo a la izquierda, así que:
+ *   · mi base es su base rival, y al revés;
+ *   · mis plantas son sus enemigas;
+ *   · y una planta mía en la x aparece en la 100 − x en su pantalla (el campo va
+ *     de 15 a 85, así que espejar es 100 − x).
+ */
+function esLaMismaPartida(a: GameState, b: GameState) {
+  expect(a.tick).toBe(b.tick)
+
+  // Las bases, cruzadas. Es lo que decide quién gana, así que es lo que más
+  // importa que coincida.
+  expect(a.p1BaseHp).toBeCloseTo(b.p2BaseHp, 6)
+  expect(a.p2BaseHp).toBeCloseTo(b.p1BaseHp, 6)
+
+  expect(a.plants.length).toBe(b.enemyPlants.length)
+  expect(a.enemyPlants.length).toBe(b.plants.length)
+
+  // Los proyectiles, espejados. Son el detector más fino que hay: un desfase de
+  // cinco tics en cuándo empieza a disparar una planta se ve aquí en cuanto vuela
+  // el primer guisante, mucho antes de que se note en la vida de una base.
+  expect(a.projectiles.length).toBe(b.projectiles.length)
+  expect(a.projectiles.map((x) => `${x.lane}|${(x.x).toFixed(3)}`).sort())
+    .toEqual(b.projectiles.map((x) => `${x.lane}|${(100 - x.x).toFixed(3)}`).sort())
+
+  // Y planta por planta: misma carta, mismo carril, misma vida y posición espejada.
+  const huella = (p: { plantId: string; lane: number; x: number; hp: number }, espejar: boolean) =>
+    `${p.plantId}|${p.lane}|${(espejar ? 100 - p.x : p.x).toFixed(3)}|${p.hp.toFixed(3)}`
+
+  expect(a.plants.map((p) => huella(p, false)).sort())
+    .toEqual(b.enemyPlants.map((p) => huella(p, true)).sort())
+  expect(a.enemyPlants.map((p) => huella(p, false)).sort())
+    .toEqual(b.plants.map((p) => huella(p, true)).sort())
+}
+
+describe('las dos simulaciones son la misma partida', () => {
+  /** Levanta dos clientes conectados por el servidor de mentira. */
+  function dos() {
+    const srv = servidorDeMentira()
+    const ana = cliente('ana', srv.para('ana'))
+    const beto = cliente('beto', srv.para('beto'))
+    srv.escuchar('ana', (x) => ana.coord.recibir(x))
+    srv.escuchar('beto', (x) => beto.coord.recibir(x))
+    return { srv, ana, beto }
+  }
+
+  /** Avanza los dos clientes en paralelo, tic a tic, como el reloj común. */
+  function correrLosDos(srv: any, ana: any, beto: any, hasta: number) {
+    for (let t = 1; t <= hasta; t++) {
+      srv.ponerTic(t)
+      stepTick(ana.estado, () => {})
+      stepTick(beto.estado, () => {})
+    }
+  }
+
+  it('coinciden en TODO momento, no sólo al final', async () => {
+    const { srv, ana, beto } = dos()
+    srv.ponerTic(0)
+
+    const jugadas: Array<[any, PlantId, number, number, number]> = [
+      [ana,  'sunflower' as PlantId, 0, 1, 10],
+      [beto, 'sunflower' as PlantId, 1, 1, 20],
+      [ana,  'peashooter' as PlantId, 1, 3, 40],
+      [beto, 'peashooter' as PlantId, 0, 3, 60],
+      [ana,  'wallnut' as PlantId, 2, 5, 90],
+      [beto, 'peashooter' as PlantId, 2, 4, 150],
+    ]
+
+    // Se comprueba cada 100 tics MIENTRAS se juega, y no al terminar.
+    //
+    // Comparar sólo el final no vale: cuando la partida acaba las dos bases están
+    // a cero y el campo vacío, así que dos partidas distintas se parecen mucho.
+    // (La primera versión de este test hacía eso y pasaba con el fallo puesto.)
+    let siguiente = 0
+    for (let t = 1; t <= 2500; t++) {
+      srv.ponerTic(t)
+      while (siguiente < jugadas.length && jugadas[siguiente][4] === t) {
+        const [quien, carta, lane, col] = jugadas[siguiente]
+        await quien.plantar(carta, lane, col)
+        siguiente += 1
+      }
+      stepTick(ana.estado, () => {})
+      stepTick(beto.estado, () => {})
+
+      if (t % 100 === 0) {
+        // Si esto falla, las dos pantallas ya están jugando partidas distintas y
+        // el tic dice exactamente cuándo empezaron a separarse.
+        esLaMismaPartida(ana.estado, beto.estado)
+      }
+    }
+
+    // Y que de verdad ha pasado algo: sin combate, coincidir no prueba nada.
+    expect(ana.estado.stats.plantsPlaced + ana.estado.plants.length).toBeGreaterThan(0)
+    expect(ana.estado.p2BaseHp).toBeLessThan(600)
+  })
+
+  it('el jalapeño arrasa el mismo carril en las dos pantallas', async () => {
+    // Éste es el peor de los dos fallos. El daño del jalapeño vivía en el
+    // manejador del clic, no en el motor: quien lo plantaba se llevaba el carril
+    // del rival por delante, y en la pantalla del rival no moría nadie.
+    const { srv, ana, beto } = dos()
+    srv.ponerTic(0)
+
+    // Beto pone tres plantas en el carril 1. En la pantalla de Ana son enemigas.
+    for (const col of [2, 3, 4]) {
+      srv.ponerTic(10)
+      await beto.plantar('sunflower' as PlantId, 1, col)
+    }
+    correrLosDos(srv, ana, beto, 60)
+
+    expect(beto.estado.plants.length).toBe(3)
+    expect(ana.estado.enemyPlants.length).toBe(3)
+
+    // Y Ana tira un jalapeño a ese carril.
+    srv.ponerTic(61)
+    await ana.plantar('jalapeno' as PlantId, 1, 0)
+    correrLosDos(srv, ana, beto, 120)
+
+    // Las tres, fuera en LAS DOS pantallas.
+    expect(beto.estado.plants.length).toBe(0)
+    expect(ana.estado.enemyPlants.length).toBe(0)
+    esLaMismaPartida(ana.estado, beto.estado)
+  })
+
+  it('y no deja planta: el jalapeño explota y desaparece', async () => {
+    const { srv, ana, beto } = dos()
+    srv.ponerTic(0)
+    srv.ponerTic(10)
+    await ana.plantar('jalapeno' as PlantId, 0, 0)
+
+    // La llamarada se ve un momento…
+    correrLosDos(srv, ana, beto, 30)
+    expect(ana.estado.plants.length).toBe(1)
+    expect(ana.estado.plants[0].spriteOverride).toContain('jalapeno')
+
+    // …y a los 1,2 s ya no está, en las dos pantallas.
+    correrLosDos(srv, ana, beto, 100)
+    expect(ana.estado.plants.length).toBe(0)
+    expect(beto.estado.enemyPlants.length).toBe(0)
+  })
+})
+
+describe('el pico también viaja', () => {
+  it('lo que uno excava desaparece en las dos pantallas', async () => {
+    // Antes esto no salía del navegador: la planta se quitaba en tu pantalla y en
+    // la del rival seguía en pie disparando. Bastaba un pico para que los dos
+    // estuvierais jugando partidas distintas.
+    const srv = servidorDeMentira()
+    const ana = cliente('ana', srv.para('ana'))
+    const beto = cliente('beto', srv.para('beto'))
+    srv.escuchar('ana', (x) => ana.coord.recibir(x))
+    srv.escuchar('beto', (x) => beto.coord.recibir(x))
+
+    srv.ponerTic(10)
+    await ana.plantar('sunflower' as PlantId, 1, 4)
+    for (let t = 11; t <= 40; t++) {
+      srv.ponerTic(t)
+      stepTick(ana.estado, () => {})
+      stepTick(beto.estado, () => {})
+    }
+    expect(ana.estado.plants.length).toBe(1)
+    expect(beto.estado.enemyPlants.length).toBe(1)
+
+    // Ana la excava.
+    srv.ponerTic(41)
+    ana.estado.pending.push({
+      atTick: ana.estado.tick + MARGEN_DE_RED_TICS,
+      kind: 'own_dig',
+      lane: 1,
+      col: 4,
+    })
+    await ana.coord.registrarExcavacion(1, 4)
+
+    for (let t = 42; t <= 80; t++) {
+      srv.ponerTic(t)
+      stepTick(ana.estado, () => {})
+      stepTick(beto.estado, () => {})
+    }
+
+    expect(ana.estado.plants.length).toBe(0)
+    expect(beto.estado.enemyPlants.length).toBe(0)
+  })
+
+  it('la columna del pico se espeja, como al plantar', async () => {
+    // Si no se espejara, el rival borraría la planta de su propia mitad: la de
+    // otro carril y otro sitio. Peor que no borrar nada.
+    const srv = servidorDeMentira()
+    const ana = cliente('ana', srv.para('ana'))
+    const beto = cliente('beto', srv.para('beto'))
+    srv.escuchar('ana', (x) => ana.coord.recibir(x))
+    srv.escuchar('beto', (x) => beto.coord.recibir(x))
+
+    // Beto pone dos: una en la columna 4 y otra en la 5.
+    srv.ponerTic(10)
+    await beto.plantar('sunflower' as PlantId, 0, 4)
+    await beto.plantar('sunflower' as PlantId, 0, 5)
+    for (let t = 11; t <= 40; t++) {
+      srv.ponerTic(t)
+      stepTick(ana.estado, () => {})
+      stepTick(beto.estado, () => {})
+    }
+    expect(ana.estado.enemyPlants.length).toBe(2)
+
+    // Y excava SÓLO la de la columna 4.
+    srv.ponerTic(41)
+    beto.estado.pending.push({
+      atTick: beto.estado.tick + MARGEN_DE_RED_TICS,
+      kind: 'own_dig',
+      lane: 0,
+      col: 4,
+    })
+    await beto.coord.registrarExcavacion(0, 4)
+    for (let t = 42; t <= 80; t++) {
+      srv.ponerTic(t)
+      stepTick(ana.estado, () => {})
+      stepTick(beto.estado, () => {})
+    }
+
+    // Queda una sola, y es la misma en las dos pantallas.
+    expect(beto.estado.plants.length).toBe(1)
+    expect(ana.estado.enemyPlants.length).toBe(1)
+    expect(beto.estado.plants[0].col).toBe(5)
+    // Espejada: la 5 de él es la 6 en la pantalla de Ana.
+    expect(ana.estado.enemyPlants[0].col).toBe(TOTAL_COLUMNS - 1 - 5)
   })
 })

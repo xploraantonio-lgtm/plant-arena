@@ -17,9 +17,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 // La única lectura de reloj real que queda es la del bucle, para saber cuántos
 // tics completos han pasado. No entra en la lógica de juego.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createRng, entityId } from '../engine/rng'
+import { createRng } from '../engine/rng'
 import { TICK_MS, MAX_TICKS_PER_FRAME, msToTicks } from '../engine/time'
 import { stepTick, createBattleState, type GameState } from '../engine/simulate'
+import { MARGEN_DE_RED_TICS } from '../engine/pvp'
 import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
@@ -354,7 +355,6 @@ export function useGameEngine() {
 
       let rolls: PlantStatKey[] = getPlantRolls(card)
       let cardLevel = 0
-      let instanceId: string | undefined = undefined
 
       try {
         const savedDeckInstIds = localStorage.getItem('plant_arena_active_deck_instances')
@@ -368,7 +368,6 @@ export function useGameEngine() {
           if (found) {
             rolls = found.statRolls && found.statRolls.length > 0 ? found.statRolls : []
             cardLevel = found.level || 0
-            instanceId = found.instanceId
           }
         }
       } catch {}
@@ -394,9 +393,6 @@ export function useGameEngine() {
         if (slotIdx === null && (state.cooldowns[card] || 0) > state.tick) return false
       }
 
-      const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
-      const cellCenterX = BASE_LEFT_END_X + col * colWidth + colWidth / 2
-
       // Check cell occupancy for static plants
       const isWalkingUnit = config.category === 'melee' || !!config.moveSpeed || card === 'chomper'
       if (!isWalkingUnit) {
@@ -404,83 +400,38 @@ export function useGameEngine() {
         if (existing) return false
       }
 
-      // Jalapeño Instant Lane-Clearing Explosion!
-      if (card === 'jalapeno') {
-        state.sunBank -= config.cost
-        if (slotIdx !== null) {
-          state.slotCooldowns[slotIdx] = state.tick + msToTicks(config.cooldownMs)
-        } else {
-          state.cooldowns[card] = state.tick + msToTicks(config.cooldownMs)
-        }
-        state.stats.plantsPlaced += 1
-        state.selectedCard = null
-        state.selectedSlotIndex = null
+      // ── LO QUE SE PLANTA VA A LA COLA, NO AL CAMPO ─────────────────────────
+      //
+      // Aquí estaba el fallo que separaba las dos partidas.
+      //
+      // La planta se creaba EN ESTE TIC, y al servidor se mandaba con el tic
+      // actual MÁS el margen de red. Así que en tu pantalla existía en el tic T y
+      // en la del rival en el T+6: doscientos milisegundos de diferencia en cuándo
+      // empieza a disparar, cuándo mata y cuándo pega a la base. Sobre tres
+      // minutos, esa diferencia se multiplica hasta que cada uno está viendo otra
+      // batalla — y al final los dos reportan ganadores distintos y la partida
+      // queda en revisión sin repartir nada.
+      //
+      // La regla del 1c1 es que TODAS las jugadas entran con el mismo retardo, la
+      // propia incluida. Se paga con 200 ms entre pulsar y ver la planta; es el
+      // precio conocido de un lockstep y es lo que hace que las dos simulaciones
+      // sean la misma.
+      //
+      // Fuera del 1c1 el retardo es cero y todo sigue igual que antes.
+      const retardo = state.isPvpMode ? MARGEN_DE_RED_TICS : 0
 
-        soundManager.playSound('pea_hit', 1.0)
-
-        // Inflict 1000 damage to ALL enemies in this lane
-        const laneEnemies = state.enemyPlants.filter((e) => e.lane === lane && e.hp > 0)
-        laneEnemies.forEach((e) => {
-          e.hp -= 1000
-          if (e.hp <= 0) {
-            state.stats.enemyPlantsDefeated += 1
-            state.stats.score += 100
-          }
-        })
-
-        // Temporary full-lane flame visual explosion wave that disappears after 1200ms
-        const tempFlame: PlantEntity = {
-          id: entityId('jalapeno-flame', state.tick, state.entityCounter++),
-          plantId: 'jalapeno',
-          instanceId,
-          level: cardLevel,
-          statRolls: rolls,
-          lane,
-          col,
-          x: 50, // Center of lane for full-width flame wave
-          hp: 1,
-          maxHp: 1,
-          lastActionTime: state.tick,
-          isWalking: false,
-          state: 'attacking',
-          spriteOverride: '/game-assets/plants/jalapeno_flame_fx.png'
-        }
-        state.plants.push(tempFlame)
-        // La llama se apaga a los 1,2 s, contados en tics.
-        state.pending.push({
-          atTick: state.tick + msToTicks(1200),
-          kind: 'remove_plant',
-          plantId: tempFlame.id,
-        })
-
-        forceRender()
-        // El jalapeño SÍ se plantó: sale por aquí porque su efecto es inmediato y
-        // no deja planta permanente. Devolver false lo habría dejado fuera del
-        // registro y el rival no vería la llamarada.
-        return true
-      }
-
-      const newPlant: PlantEntity = {
-        id: entityId('plant', state.tick, state.entityCounter++),
+      state.pending.push({
+        atTick: state.tick + retardo,
+        kind: 'own_plant',
         plantId: card,
-        instanceId,
-        level: cardLevel,
-        // Las mejoras se congelan aquí, al plantar. El bucle ya no las relee.
-        statRolls: rolls,
-        damage: config.damage,
-        attackSpeedMs: config.attackSpeedMs,
-        moveSpeed: config.moveSpeed,
         lane,
         col,
-        x: cellCenterX,
-        hp: config.maxHp,
-        maxHp: config.maxHp,
-        lastActionTime: state.tick,
-        isWalking: isWalkingUnit,
-        state: isWalkingUnit ? 'walking' : 'idle',
-      }
+        statRolls: rolls,
+        level: cardLevel,
+      })
 
-      state.plants.push(newPlant)
+      // El cobro, el enfriamiento y el contador SÍ son inmediatos: son estado
+      // local —el rival no simula tus soles— y así el clic responde al instante.
       state.sunBank -= config.cost
       if (slotIdx !== null) {
         state.slotCooldowns[slotIdx] = state.tick + msToTicks(config.cooldownMs)
@@ -516,7 +467,9 @@ export function useGameEngine() {
   const encolarAccionDelRival = useCallback(
     (accion: {
       tick: number
-      plantId: PlantId
+      /** 'plant' o 'dig'. Sin esto, una excavación del rival no se podía aplicar. */
+      kind?: 'plant' | 'dig'
+      plantId?: PlantId
       lane: number
       col?: number
       statRolls?: PlantStatKey[]
@@ -524,6 +477,18 @@ export function useGameEngine() {
     }) => {
       const state = stateRef.current
       if (state.status !== 'playing') return false
+
+      if (accion.kind === 'dig') {
+        state.pending.push({
+          atTick: Math.max(state.tick + 1, accion.tick),
+          kind: 'rival_dig',
+          lane: accion.lane,
+          col: accion.col ?? 0,
+        })
+        return
+      }
+      if (!accion.plantId) return
+
       state.pending.push({
         // Nunca en el pasado: si llegó tarde, en el tic siguiente.
         atTick: Math.max(state.tick + 1, accion.tick),
@@ -538,27 +503,57 @@ export function useGameEngine() {
     []
   )
 
+  /**
+   * Excava una planta propia. Devuelve la casilla excavada, o null.
+   *
+   * Devuelve la casilla porque en 1c1 hay que MANDARLA al servidor. Antes se
+   * quitaba en local y no se registraba: la planta desaparecía en tu pantalla y
+   * seguía disparando en la del rival, así que las dos partidas dejaban de ser la
+   * misma en cuanto alguien usaba el pico.
+   *
+   * Viaja la CASILLA y no el identificador de la entidad: los identificadores del
+   * rival son otros y no le sirven de nada.
+   *
+   * Y entra con el mismo retardo de red que plantar, por lo mismo: las dos
+   * pantallas tienen que quitarla en el MISMO tic.
+   */
   const digPlant = useCallback(
-    (target: string | { lane: number; col: number }) => {
+    (target: string | { lane: number; col: number }): { lane: number; col: number } | null => {
       const state = stateRef.current
+      let casilla: { lane: number; col: number } | null = null
+
       if (typeof target === 'string') {
-        state.plants = state.plants.filter((p) => p.id !== target)
+        const p = state.plants.find((x) => x.id === target)
+        if (p && p.col !== undefined && !p.isWalking) casilla = { lane: p.lane, col: p.col }
       } else {
         const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
-        const cellCenterX = BASE_LEFT_END_X + target.col * colWidth + colWidth / 2
-
-        const plantToDig = state.plants.find(
-          (p) =>
-            p.lane === target.lane &&
-            (p.col === target.col || Math.abs(p.x - cellCenterX) < colWidth * 0.8)
+        const centro = BASE_LEFT_END_X + target.col * colWidth + colWidth / 2
+        const p = state.plants.find(
+          (x) =>
+            x.lane === target.lane &&
+            !x.isWalking &&
+            (x.col === target.col || Math.abs(x.x - centro) < colWidth * 0.8)
         )
-        if (plantToDig) {
-          state.plants = state.plants.filter((p) => p.id !== plantToDig.id)
-        }
+        if (p && p.col !== undefined) casilla = { lane: p.lane, col: p.col }
       }
+
       state.selectedCard = null
+
+      if (!casilla) {
+        forceRender()
+        return null
+      }
+
+      state.pending.push({
+        atTick: state.tick + (state.isPvpMode ? MARGEN_DE_RED_TICS : 0),
+        kind: 'own_dig',
+        lane: casilla.lane,
+        col: casilla.col,
+      })
+
       soundManager.playSound('plantation', 0.5)
       forceRender()
+      return casilla
     },
     [forceRender]
   )

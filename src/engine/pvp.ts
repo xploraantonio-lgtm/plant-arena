@@ -59,6 +59,14 @@ export interface CoordinadorPvp {
    * registrara un clic fallido, el rival plantaría algo que aquí no existe.
    */
   registrarPlantacion(carta: PlantId, lane: number, col: number): Promise<void>
+  /**
+   * Registra una excavación propia.
+   *
+   * Sólo se llama si en local SÍ se excavó algo. Antes esto no existía: el pico
+   * quitaba la planta en tu pantalla y no salía de tu navegador, así que en la del
+   * rival seguía en pie y disparando.
+   */
+  registrarExcavacion(lane: number, col: number): Promise<void>
   /** Aplica una acción que llegó por el canal en vivo. */
   recibir(a: AccionDeLaPartida): void
   /** Pide al servidor todo lo de la sala y aplica lo que falte. */
@@ -85,7 +93,8 @@ export function crearCoordinadorPvp(opciones: {
   /** Encola la carta del rival para su tic. */
   encolar: (a: {
     tick: number
-    plantId: PlantId
+    kind?: 'plant' | 'dig'
+    plantId?: PlantId
     lane: number
     col?: number
   }) => void
@@ -126,10 +135,16 @@ export function crearCoordinadorPvp(opciones: {
     aplicadas.add(a.id)
     if (a.id > ultimaVista) ultimaVista = a.id
 
+    if (a.kind === 'dig') {
+      diag.recibidas += 1
+      encolar({ tick: a.tick, kind: 'dig', lane: a.lane, col: a.col ?? 0 })
+      return
+    }
     if (a.kind !== 'plant' || !a.plantId) return
     diag.recibidas += 1
     encolar({
       tick: a.tick,
+      kind: 'plant',
       plantId: a.plantId as PlantId,
       lane: a.lane,
       col: a.col ?? undefined,
@@ -137,6 +152,24 @@ export function crearCoordinadorPvp(opciones: {
   }
 
   return {
+    async registrarExcavacion(lane, col) {
+      orden += 1
+      const enTic = estado().tick + MARGEN_DE_RED_TICS
+      const r = await transporte.enviar({
+        seq: orden,
+        tick: enTic,
+        kind: 'dig',
+        lane,
+        col,
+      })
+      if (r.error) {
+        diag.ultimoEnvio = `✗ ${r.error}`
+      } else {
+        diag.enviadas += 1
+        diag.ultimoEnvio = `✓ pico @tic ${enTic}`
+      }
+    },
+
     async registrarPlantacion(carta, lane, col) {
       orden += 1
       const enTic = estado().tick + MARGEN_DE_RED_TICS
