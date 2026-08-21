@@ -255,10 +255,30 @@
 
 .ref-ranking {
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
   list-style: none;
   display: flex;
   flex-direction: column;
+  max-height: 14rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.ref-ranking::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ref-ranking::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
+}
+
+.ref-ranking::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 10px;
 }
 
 .ref-ranking li {
@@ -287,12 +307,30 @@
 
 .ref-amigos {
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
   list-style: none;
   display: flex;
   flex-direction: column;
   max-height: 14rem;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.ref-amigos::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ref-amigos::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
+}
+
+.ref-amigos::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 10px;
 }
 
 .ref-amigos li {

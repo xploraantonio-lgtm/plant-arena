@@ -459,6 +459,35 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.leaderboard-loading-state,
+.leaderboard-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 12px;
+  padding: 40px 20px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  flex: 1;
+}
+
+.leaderboard-few-users-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .leaderboard-podium {
@@ -466,6 +495,13 @@
   grid-template-columns: 1fr 1.1fr 1fr;
   gap: 12px;
   align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.podium-card--placeholder {
+  visibility: hidden;
+  border: none;
+  background: transparent;
 }
 
 .podium-card {
@@ -557,10 +593,31 @@
 /* LEADERBOARD TABLE */
 .leaderboard-table-wrap {
   flex: 1;
+  min-height: 0;
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(251, 191, 36, 0.3);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.leaderboard-table-wrap::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.leaderboard-table-wrap::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
+}
+
+.leaderboard-table-wrap::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 10px;
 }
 
 .leaderboard-table {
@@ -571,7 +628,11 @@
 }
 
 .leaderboard-table th {
-  background: rgba(30, 41, 59, 0.9);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(8px);
   color: #fbbf24;
   font-weight: 900;
   padding: 8px 12px;
@@ -652,6 +713,7 @@
 
 /* STICKY BOTTOM USER POSITION BANNER */
 .leaderboard-my-rank-banner {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -710,6 +772,7 @@
   flex-direction: column;
   gap: 12px;
   height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -772,7 +835,36 @@
 
 .referral-table-wrap {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #fbbf24 rgba(15, 23, 42, 0.6);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.referral-table-wrap::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.referral-table-wrap::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 10px;
+}
+
+.referral-table-wrap::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 10px;
+}
+
+.referral-table-wrap .leaderboard-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(8px);
 }
 
 .referral-tier-pill {

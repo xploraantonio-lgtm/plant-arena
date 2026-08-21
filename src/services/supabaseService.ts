@@ -172,18 +172,41 @@ export const SupabaseService = {
   // ---------------------------------------------------------------------------
   // GLOBAL RANKING & LEADERBOARDS (REAL DATA)
   // ---------------------------------------------------------------------------
-  async getGlobalLeaderboard(limit: number = 50): Promise<ProfileRow[]> {
+  async getGlobalLeaderboard(limit?: number): Promise<ProfileRow[]> {
     if (!isSupabaseConfigured()) return []
     try {
       // De la VISTA, no de la tabla: la vista ya deja fuera a las cuentas
       // marcadas como que no compiten (la del dueño, las de prueba). La regla vive
       // en el servidor a propósito: si la pusiera el cliente, bastaría con no
       // ponerla para volver a salir en la clasificación.
-      const { data, error } = await supabase
+      let query = supabase
         .from('leaderboard')
         .select(PUBLIC_PROFILE_COLUMNS)
         .order('elo_rating', { ascending: false })
-        .limit(limit)
+
+      if (typeof limit === 'number' && limit > 0) {
+        query = query.limit(limit)
+      }
+
+      let { data, error } = await query
+      if (error) {
+        // Respaldo contra la tabla profiles si la vista leaderboard no estuviera disponible
+        let fbQuery = supabase
+          .from('profiles')
+          .select(PUBLIC_PROFILE_COLUMNS)
+          .order('elo_rating', { ascending: false })
+
+        if (typeof limit === 'number' && limit > 0) {
+          fbQuery = fbQuery.limit(limit)
+        }
+
+        const fbRes = await fbQuery
+        if (!fbRes.error && fbRes.data) {
+          data = fbRes.data
+          error = null
+        }
+      }
+
       if (error) {
         logError('getGlobalLeaderboard', error)
         return []
