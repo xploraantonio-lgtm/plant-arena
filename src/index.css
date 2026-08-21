@@ -17,3 +17,43 @@ body {
   font-family: Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* ── Aviso de versión nueva ──────────────────────────────────────────────────
+   Va por encima de todo y no tapa nada importante: aparece un momento antes de
+   que el juego se recargue solo. Hace falta porque dos jugadores con versiones
+   distintas del motor no juegan la misma partida. */
+
+.aviso-version {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f2418;
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.aviso-version button {
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fde047;
+  background: #0f2418;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.aviso-version button:hover { background: #1a3d28; }
+.aviso-version button:focus-visible { outline: 3px solid #0f2418; outline-offset: 2px; }

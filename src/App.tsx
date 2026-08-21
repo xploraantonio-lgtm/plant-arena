@@ -28,6 +28,7 @@ import AuthModal from './components/Auth/AuthModal'
 import AdminPanel from './components/Admin/AdminPanel'
 
 import { UserManager } from './utils/userManager'
+import { useVersionDelJuego } from './hooks/useVersionDelJuego'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -61,6 +62,21 @@ function App() {
   const [activeOpeningResult, setActiveOpeningResult] = useState<PackDropResult | PackDropResult[] | null>(null)
   const [lastOpenedPackType, setLastOpenedPackType] = useState<PackId | null>(null)
   const [activeAppAlert, setActiveAppAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
+
+  /**
+   * VERSIÓN NUEVA PUBLICADA
+   *
+   * Recarga sola cuando es seguro. Hace falta porque la partida es una simulación
+   * determinista: dos jugadores con versiones distintas del motor no juegan la
+   * misma partida, cada uno calcula un ganador y la partida acaba en revisión sin
+   * repartir nada. Pedir «recargad» no funciona; esto sí.
+   *
+   * En mitad de una batalla NO se recarga: sería echar a alguien de su propia
+   * partida y, con apuesta, hacerle perder las gemas.
+   */
+  const { nueva: hayVersionNueva, recargar: recargarVersion } = useVersionDelJuego(
+    screen === 'battle'
+  )
 
   const [userElo, setUserElo] = useState<number>(1000)
   const [customArenaBg, setCustomArenaBg] = useState<string | undefined>(undefined)
@@ -548,6 +564,15 @@ function App() {
   if (screen === 'landing') {
     return (
       <>
+        {/* El mismo aviso que en el juego: la pantalla de entrada tiene su propio
+            `return`, así que si no se pone aquí también, quien esté aquí ve
+            recargarse la página sin explicación. */}
+        {hayVersionNueva && (
+          <div className="aviso-version" role="status">
+            <span>🔄 Hay una versión nueva del juego.</span>
+            <button type="button" onClick={recargarVersion}>Actualizar ahora</button>
+          </div>
+        )}
         <LandingPage
           onPlayGame={handleGoToGame}
           isLoggedIn={Boolean(user)}
@@ -576,6 +601,19 @@ function App() {
 
   return (
     <>
+      {/* AVISO DE VERSIÓN NUEVA
+          Se recarga solo en cuanto el jugador esté fuera de la batalla; el cartel
+          es para que no parezca que el navegador se ha vuelto loco. Durante la
+          batalla se queda ahí sin recargar: sacar a alguien de su propia partida
+          —y en un amistoso con apuesta, de sus gemas— sería peor que dejarle
+          acabarla. */}
+      {hayVersionNueva && (
+        <div className="aviso-version" role="status">
+          <span>🔄 Hay una versión nueva del juego.</span>
+          <button type="button" onClick={recargarVersion}>Actualizar ahora</button>
+        </div>
+      )}
+
       <GameFrame>
         {screen === 'menu' && (
           <MainMenu
