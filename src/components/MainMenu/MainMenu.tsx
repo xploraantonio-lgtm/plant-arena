@@ -45,6 +45,8 @@ interface MainMenuProps {
   colosseumCurrentStreak?: number
   colosseumMaxStreak?: number
   onPlay: () => void
+  /** Duelo amistoso: código de sala privada y apuesta opcional. */
+  onPlayFriendly?: (roomCode: string, betGems: number) => void
   onStartColosseumMatch?: (betGems: ColosseumBetAmount, usedTicket: boolean) => void
   onStartTournamentMatch?: (opponentName: string, tournamentId: string) => void
   onOpenCollection?: () => void
@@ -79,6 +81,7 @@ export default function MainMenu({
   colosseumCurrentStreak = 0,
   colosseumMaxStreak = 0,
   onPlay,
+  onPlayFriendly,
   onStartColosseumMatch,
   onStartTournamentMatch,
   onOpenCollection,
@@ -490,6 +493,7 @@ export default function MainMenu({
         onSelectRanked={onPlay}
         onSelectColosseum={() => setIsColosseumModalOpen(true)}
         onSelectTournament={() => setIsTournamentModalOpen(true)}
+        onSelectFriendly={onPlayFriendly}
       />
 
       {/* COLOSSEUM MODAL */}

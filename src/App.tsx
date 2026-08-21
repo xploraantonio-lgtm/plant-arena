@@ -339,6 +339,33 @@ function App() {
     }
   }
 
+  /**
+   * DUELO AMISTOSO
+   *
+   * El código hace la sala privada: el servidor sólo empareja a quien tenga
+   * exactamente el mismo, así que a tu sala no entra nadie más — espera a tu amigo
+   * y en cuanto entra, empieza.
+   *
+   * La apuesta va con la búsqueda porque se cobra al ENTRAR a la cola: si no
+   * aparece nadie y se cancela, hay una retención concreta que devolver. Y sólo se
+   * cruzan dos jugadores que hayan puesto la MISMA cantidad, que es lo que hace de
+   * acuerdo sin necesidad de negociar.
+   */
+  const handlePlayFriendly = (roomCode: string, betGems: number) => {
+    setBattleMatchMode('ranked')   // el campo se pinta igual; el modo real es del servidor
+    setColosseumConfig(null)
+    setTournamentOpponent(null)
+    setPracticePlantId(null)
+    setCustomArenaBg(undefined)
+    setSalaId(null)
+    setSemillaPartida(undefined)
+    setRivalId(null)
+    setNombresEnPartida(null)
+    setModoBuscando('friendly')
+    setScreen('searching')
+    void buscar('friendly', { roomCode, betGems })
+  }
+
   const handlePlayNormal = () => {
     setBattleMatchMode('ranked')
     setColosseumConfig(null)
@@ -564,6 +591,7 @@ function App() {
             colosseumCurrentStreak={colosseumCurrentStreak}
             colosseumMaxStreak={colosseumMaxStreak}
             onPlay={handlePlayNormal}
+            onPlayFriendly={handlePlayFriendly}
             onStartColosseumMatch={handleStartColosseumMatch}
             onOpenMisPartidas={() => setScreen('partidas')}
             onStartTournamentMatch={handleStartTournamentMatch}
