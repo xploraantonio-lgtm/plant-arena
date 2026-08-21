@@ -608,31 +608,58 @@ function procesarLado(state: GameState, lado: Lado, dt: number, sonar: SonarFn):
     // ── GIRASOL ───────────────────────────────────────────────────────────────
     if (planta.plantId === 'sunflower' || planta.plantId === 'twinsunflower') {
       const esDoble = planta.plantId === 'twinsunflower'
-      // Intervalo propio, no el del sol del cielo. Los dos valían 6 s, y por eso
-      // el girasol se pagaba a sí mismo en 12 segundos: era un impresor de soles.
-      // Los números y el razonamiento están en engine/balance.ts.
       const cada = esDoble ? GIRASOL_DOBLE_MS : GIRASOL_MS
+
       if (state.tick - planta.lastActionTime > msToTicks(cada)) {
         planta.lastActionTime = state.tick
-        const cuantos = esDoble ? SOLES_POR_CICLO_GIRASOL_DOBLE : SOLES_POR_CICLO_GIRASOL
 
-        if (lado.equipo === 'p1') {
-          // Los tuyos caen al campo y los recoges tú pulsando.
-          for (let i = 0; i < cuantos; i++) {
+        const cuantos = esDoble
+          ? SOLES_POR_CICLO_GIRASOL_DOBLE
+          : SOLES_POR_CICLO_GIRASOL
+
+        // ============================================================
+        // PARIDAD DETERMINISTA
+        //
+        // MUY IMPORTANTE:
+        // aunque los soles del rival no se dibujen en esta pantalla,
+        // AMBOS lados deben consumir exactamente:
+        //
+        //   - el mismo número de entityCounter
+        //   - el mismo número de nextFloat()
+        //
+        // De lo contrario Twin Sunflower/Girasol cambia el RNG global
+        // de una perspectiva y los siguientes soles/procesos salen
+        // distintos.
+        // ============================================================
+
+        for (let i = 0; i < cuantos; i++) {
+          const contador = state.entityCounter++
+          const variacionX = nextFloat(state.rng)
+
+          if (lado.equipo === 'p1') {
             state.suns.push({
-              id: entityId('sun-flower', state.tick, state.entityCounter++),
-              x: planta.x + (nextFloat(state.rng) * 6 - 3),
+              id: entityId(
+                'sun-flower',
+                state.tick,
+                contador
+              ),
+              x: planta.x + (variacionX * 6 - 3),
               y: 20 + planta.lane * 20 + 5,
               targetY: 20 + planta.lane * 20 + 10,
               value: SUN_VALUE,
               createdAt: state.tick,
             })
           }
-        } else {
-          // Los del rival van directos a su banco: sus soles los recoge él en SU
-          // pantalla, y aquí no se pueden pulsar. La cantidad y el ritmo son los
-          // mismos, que es lo que importa para que el juego sea el mismo.
-          sumarSoles(state, 'p2', cuantos * SUN_VALUE)
+        }
+
+        if (lado.equipo === 'p2') {
+          // No dibujamos los soles del rival en nuestra pantalla.
+          // Su economía real se valida desde SU perspectiva.
+          sumarSoles(
+            state,
+            'p2',
+            cuantos * SUN_VALUE
+          )
         }
       }
     }

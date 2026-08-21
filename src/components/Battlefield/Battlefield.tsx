@@ -673,6 +673,9 @@ export default function Battlefield({
     if (gameStatus === 'victory' || gameStatus === 'defeat') {
       hasHandledEndRef.current = true
 
+      // Detener la música de batalla inmediatamente.
+      soundManager.stopBgm()
+
       // ── PARTIDA REAL: LO LIQUIDA EL SERVIDOR ───────────────────────────────
       //
       // Con sala, quien reparte ELO, cofres y gemas es report_match_result, y
@@ -693,15 +696,49 @@ export default function Battlefield({
 
           const verificacion = await SupabaseService.verifyMatch(roomId)
 
-          if (verificacion.status === 'verified' || verificacion.status === 'settled') {
+          if (
+            verificacion.status === 'verified' ||
+            verificacion.status === 'settled'
+          ) {
             const s = verificacion.settlement ?? {}
+
+            const ganadorServidor = verificacion.winnerId ?? null
+            const yoGaneServidor =
+              ganadorServidor !== null &&
+              ganadorServidor === currentUserId
+
             setResultadoServidor({
               success: true,
               status: 'liquidada',
-              eloGained: typeof s.eloGained === 'number' ? s.eloGained : undefined,
-              eloLost: typeof s.eloLost === 'number' ? s.eloLost : undefined,
-              payout: typeof s.payout === 'number' ? s.payout : undefined,
+
+              // NUNCA mostrar el premio del ganador a ambos clientes.
+              eloGained:
+                yoGaneServidor &&
+                typeof s.eloGained === 'number'
+                  ? s.eloGained
+                  : undefined,
+
+              eloLost:
+                !yoGaneServidor &&
+                typeof s.eloLost === 'number'
+                  ? s.eloLost
+                  : undefined,
+
+              payout:
+                yoGaneServidor &&
+                typeof s.payout === 'number'
+                  ? s.payout
+                  : 0,
             })
+
+            // El resultado FINAL mostrado también lo manda el servidor.
+            // No confiar en lo que creyó ver este navegador.
+            if (ganadorServidor) {
+              terminarPorOrdenDelServidor(
+                yoGaneServidor ? 'victory' : 'defeat'
+              )
+            }
+
             return
           }
 
@@ -774,7 +811,7 @@ export default function Battlefield({
         }
       }
     }
-  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete, roomId, opponentId, currentUserId, tournamentOpponent?.tournamentId])
+  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete, roomId, opponentId, currentUserId, tournamentOpponent?.tournamentId, terminarPorOrdenDelServidor])
 
   useEffect(() => {
     if (practicePlantId) {
@@ -848,6 +885,8 @@ export default function Battlefield({
   }
 
   const handleConfirmSurrender = () => {
+    soundManager.stopBgm()
+
     setShowSurrenderModal(false)
     hasHandledEndRef.current = true
     surrenderGame()
@@ -884,10 +923,33 @@ export default function Battlefield({
   }
 
   const handlePlayAgain = () => {
+    soundManager.stopBgm()
+
     hasHandledEndRef.current = false
+    setResultadoServidor(null)
     setBattleSummaryResult(null)
-    // Sin semilla a propósito: volver a jugar es una partida NUEVA. Reutilizar la
-    // de la sala daría exactamente la misma partida otra vez, enemigos incluidos.
+    setColosseumResult(null)
+    setTournamentResult(null)
+
+    // ============================================================
+    // ONLINE
+    //
+    // Una game_room terminada JAMÁS puede reutilizarse.
+    // Para jugar nuevamente necesitamos matchmaking y roomId NUEVO.
+    // ============================================================
+    if (roomId) {
+      MatchActionOutbox.discardRoom(roomId)
+
+      soundManager.playBgm('menu')
+
+      if (onBackToMenu) {
+        onBackToMenu()
+      }
+
+      return
+    }
+
+    // Sólo entrenamiento/local puede reiniciar en el sitio.
     startGame()
   }
 
@@ -1369,8 +1431,10 @@ export default function Battlefield({
                   <p className="resultado-servidor__ok">
                     ✅ Partida Confirmada
                     {typeof resultadoServidor.eloGained === 'number' &&
-                      gameStatus === 'victory' &&
                       ` +${resultadoServidor.eloGained} 🏆`}
+                    {typeof resultadoServidor.eloLost === 'number' &&
+                      resultadoServidor.eloLost > 0 &&
+                      ` -${resultadoServidor.eloLost} 🏆`}
                     {typeof resultadoServidor.payout === 'number' &&
                       resultadoServidor.payout > 0 &&
                       ` · +${resultadoServidor.payout} 💎`}

@@ -29,6 +29,7 @@ import {
 
 const TOPE_DE_SEGURIDAD = msToTicks(TOPE_DE_PARTIDA_MS) + 600
 const ENGINE_AUTORITATIVO = 'auth-v1'
+const MAX_CATCHUP_TICKS = msToTicks(5000)
 const ESTADISTICAS_VALIDAS = new Set<PlantStatKey>([
   'hp',
   'damage',
@@ -570,6 +571,46 @@ export function recalcularGanadorAutoritativo(
     stepTick(vistaP1, () => {})
     stepTick(vistaP2, () => {})
     pasos += 1
+  }
+
+  // ============================================================
+  // CATCH-UP DE PERSPECTIVAS
+  //
+  // Antes el árbitro se detenía en cuanto UNA vista terminaba.
+  //
+  // Ejemplo:
+  //   vista P1 = victory
+  //   vista P2 = playing durante 2 ticks más
+  //
+  // El código antiguo comparaba:
+  //   P1 = ganador
+  //   P2 = null
+  //
+  // y lo declaraba engine_divergence.
+  //
+  // Ya no aceptamos NUEVAS decisiones después del primer final,
+  // pero dejamos terminar los efectos que YA estaban dentro del
+  // motor/pending/projectiles.
+  // ============================================================
+
+  let catchup = 0
+
+  while (
+    (vistaP1.status === 'playing' ||
+      vistaP2.status === 'playing') &&
+    pasos < topeTics &&
+    catchup < MAX_CATCHUP_TICKS
+  ) {
+    if (vistaP1.status === 'playing') {
+      stepTick(vistaP1, () => {})
+    }
+
+    if (vistaP2.status === 'playing') {
+      stepTick(vistaP2, () => {})
+    }
+
+    pasos += 1
+    catchup += 1
   }
 
   const ganadorP1 = ganadorDesdeVistaP1(vistaP1)
