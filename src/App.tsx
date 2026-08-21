@@ -438,7 +438,36 @@ function App() {
   const guardarMazoAntesDeBuscar = async (
     instanceIdsOverride?: string[]
   ): Promise<boolean> => {
-    const ids = instanceIdsOverride ?? activeDeckInstances
+    let ids = instanceIdsOverride ?? activeDeckInstances
+
+    // Usuarios que tenían el Jardín abierto antes del hotfix pueden
+    // conservar IDs locales antiguos como "inst_base_jalapeno".
+    // Los convertimos a las UUID reales recién creadas en servidor.
+    if (ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
+      const inventario = await SupabaseService.myInventory()
+
+      if (!inventario) {
+        return false
+      }
+
+      ids = ids
+        .map((id) => {
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+            return id
+          }
+
+          if (id.startsWith('inst_base_')) {
+            const plantId = id.replace('inst_base_', '')
+
+            return inventario.instances.find(
+              (inst) => inst.plantId === plantId
+            )?.instanceId
+          }
+
+          return undefined
+        })
+        .filter((id): id is string => Boolean(id))
+    }
 
     if (ids.length < 3 || ids.length > 6) {
       setActiveAppAlert({
