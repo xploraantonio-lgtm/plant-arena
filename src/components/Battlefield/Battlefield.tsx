@@ -22,6 +22,7 @@ import PlantHand from './PlantHand'
 import RelojDePartida from '../RelojDePartida/RelojDePartida'
 import { SOL_SE_RECOGE_SOLO_MS } from '../../engine/balance'
 import { TICK_MS } from '../../engine/time'
+import { huellaDeLaPartida, tocaHuella } from '../../engine/huella'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import './Battlefield.css'
@@ -130,6 +131,14 @@ interface BattlefieldProps {
    * es quién. Contra el bot no hay nombres y se cae a las etiquetas de siempre.
    */
   nombres?: { mio: string; rival: string } | null
+  /**
+   * Si soy el jugador 1 de la sala.
+   *
+   * Lo necesita la huella del tablero: cada jugador se ve a sí mismo a la
+   * izquierda, así que las dos huellas sólo se pueden comparar si las dos están
+   * normalizadas al punto de vista del jugador 1.
+   */
+  soyP1?: boolean
 }
 
 export default function Battlefield({
@@ -146,6 +155,7 @@ export default function Battlefield({
   seed,
   opponentId = null,
   nombres = null,
+  soyP1 = true,
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -180,6 +190,7 @@ export default function Battlefield({
     digPlant,
     encolarAccionDelRival,
     terminarPorOrdenDelServidor,
+    estadoDeLaPartida,
   } = useGameEngine()
 
   const { user } = useAuth()
@@ -577,6 +588,31 @@ export default function Battlefield({
       }
     }
   }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo])
+
+  /**
+   * LA HUELLA DEL TABLERO
+   *
+   * Cada diez segundos, un resumen de la partida al servidor. El servidor compara
+   * las dos huellas del mismo tic; si no coinciden, se sabe EN QUÉ TIC se
+   * separaron las dos pantallas.
+   *
+   * Esto no decide quién gana: es un detector. Antes, cuando las dos pantallas se
+   * separaban, lo único que llegaba era el «tu rival dijo otra cosa» al final —
+   * cuando ya no se puede averiguar nada. Con esto queda el sitio exacto.
+   *
+   * Sólo en partidas con sala: contra el bot no hay nada que comparar.
+   */
+  const ultimaHuellaRef = useRef<number>(0)
+  useEffect(() => {
+    if (!roomId || gameStatus !== 'playing') return
+    if (!tocaHuella(tick) || ultimaHuellaRef.current === tick) return
+    ultimaHuellaRef.current = tick
+    void SupabaseService.submitMatchCheckpoint(
+      roomId,
+      tick,
+      huellaDeLaPartida(estadoDeLaPartida(), soyP1)
+    )
+  }, [tick, roomId, gameStatus, soyP1, estadoDeLaPartida])
 
   const [showSurrenderModal, setShowSurrenderModal] = useState<boolean>(false)
 

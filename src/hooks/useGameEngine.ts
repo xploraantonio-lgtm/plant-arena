@@ -765,5 +765,18 @@ export function useGameEngine() {
     digPlant,
     encolarAccionDelRival,
     terminarPorOrdenDelServidor,
+    /**
+     * El estado de la partida, para leerlo.
+     *
+     * Lo usa la huella del tablero, que resume la partida entera cada diez
+     * segundos para que el servidor pueda comparar las dos pantallas. Se devuelve
+     * una función y no el objeto porque el estado vive en una ref: si se devolviera
+     * el objeto, la huella se calcularía sobre la foto del último repintado y no
+     * sobre el tic de verdad.
+     *
+     * Es de LECTURA. Quien escriba aquí desde fuera se sale de la simulación y
+     * rompe justo lo que la huella viene a vigilar.
+     */
+    estadoDeLaPartida: () => stateRef.current,
   }
 }

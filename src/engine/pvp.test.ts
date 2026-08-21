@@ -18,6 +18,7 @@
 import { describe, it, expect } from 'vitest'
 import { crearCoordinadorPvp, MARGEN_DE_RED_TICS, type AccionDeLaPartida, type TransportePvp } from './pvp'
 import { stepTick, createBattleState, type GameState } from './simulate'
+import { huellaDeLaPartida, tocaHuella } from './huella'
 import type { PlantId } from '../types/game'
 import { TOTAL_COLUMNS } from '../utils/gameConstants'
 
@@ -644,5 +645,81 @@ describe('el pico también viaja', () => {
     expect(beto.estado.plants[0].col).toBe(5)
     // Espejada: la 5 de él es la 6 en la pantalla de Ana.
     expect(ana.estado.enemyPlants[0].col).toBe(TOTAL_COLUMNS - 1 - 5)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA HUELLA: DOS PANTALLAS DE ACUERDO DAN LA MISMA CADENA
+//
+// Es el detector que se lleva a producción. Su valor depende entero de una
+// propiedad: que dos tableros IDÉNTICOS produzcan huellas idénticas aunque cada
+// jugador se vea a sí mismo a la izquierda. Si no, todas las partidas parecerían
+// divergentes y el aviso no valdría nada — peor que no tenerlo.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('la huella de la partida', () => {
+  function dosEnAcuerdo() {
+    const srv = servidorDeMentira()
+    const ana = cliente('ana', srv.para('ana'))
+    const beto = cliente('beto', srv.para('beto'))
+    srv.escuchar('ana', (x) => ana.coord.recibir(x))
+    srv.escuchar('beto', (x) => beto.coord.recibir(x))
+    return { srv, ana, beto }
+  }
+
+  it('dos pantallas de acuerdo dan la MISMA huella, cada una desde su lado', async () => {
+    const { srv, ana, beto } = dosEnAcuerdo()
+    srv.ponerTic(0)
+
+    const jugadas: Array<[any, PlantId, number, number, number]> = [
+      [ana,  'peashooter' as PlantId, 0, 2, 10],
+      [beto, 'wallnut' as PlantId,    0, 5, 20],
+      [ana,  'sunflower' as PlantId,  2, 1, 40],
+      [beto, 'peashooter' as PlantId, 1, 3, 70],
+    ]
+
+    let siguiente = 0
+    for (let t = 1; t <= 900; t++) {
+      srv.ponerTic(t)
+      while (siguiente < jugadas.length && jugadas[siguiente][4] === t) {
+        const [quien, carta, lane, col] = jugadas[siguiente]
+        await quien.plantar(carta, lane, col)
+        siguiente += 1
+      }
+      stepTick(ana.estado, () => {})
+      stepTick(beto.estado, () => {})
+
+      if (tocaHuella(t)) {
+        // Ana es la jugadora 1 de la sala; Beto el 2. Cada uno resume desde su
+        // pantalla y las dos cadenas tienen que salir iguales.
+        expect(
+          huellaDeLaPartida(beto.estado, false),
+          `las huellas se separaron en el tic ${t}`
+        ).toBe(huellaDeLaPartida(ana.estado, true))
+      }
+    }
+  })
+
+  it('y si de verdad se separan, la huella lo dice', () => {
+    // Se fabrica una diferencia a mano: una planta de más en un lado. Si la huella
+    // no la viera, no serviría para nada.
+    const a = createBattleState(5, false, true)
+    const b = createBattleState(5, false, true)
+    a.pending.push({ atTick: 1, kind: 'own_plant', plantId: 'wallnut' as PlantId, lane: 0, col: 3 })
+    for (let i = 0; i < 5; i++) { stepTick(a, () => {}); stepTick(b, () => {}) }
+
+    expect(huellaDeLaPartida(a, true)).not.toBe(huellaDeLaPartida(b, false))
+  })
+
+  it('la huella no cambia si sólo cambia el orden de las plantas', () => {
+    // Las listas se ordenan antes de resumir. Sin eso, dos tableros iguales con
+    // las plantas guardadas en otro orden parecerían distintos.
+    const uno = createBattleState(9, false, true)
+    uno.pending.push({ atTick: 1, kind: 'own_plant', plantId: 'wallnut' as PlantId, lane: 0, col: 2 })
+    uno.pending.push({ atTick: 1, kind: 'own_plant', plantId: 'peashooter' as PlantId, lane: 0, col: 4 })
+    for (let i = 0; i < 4; i++) stepTick(uno, () => {})
+
+    const antes = huellaDeLaPartida(uno, true)
+    uno.plants.reverse()
+    expect(huellaDeLaPartida(uno, true)).toBe(antes)
   })
 })

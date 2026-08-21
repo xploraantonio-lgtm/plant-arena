@@ -80,6 +80,15 @@ function App() {
 
   const [userElo, setUserElo] = useState<number>(1000)
   const [customArenaBg, setCustomArenaBg] = useState<string | undefined>(undefined)
+  /**
+   * Si soy el jugador 1 de la sala.
+   *
+   * Lo necesita la huella del tablero: cada jugador se ve a sí mismo a la
+   * izquierda, así que para que las dos huellas se puedan comparar hay que
+   * normalizarlas al punto de vista del jugador 1 — y para eso hay que saber si se
+   * es el 1 o el 2.
+   */
+  const [soyJugador1, setSoyJugador1] = useState<boolean>(true)
 
   useEffect(() => {
     const handlePopState = () => {
@@ -294,6 +303,7 @@ function App() {
       setSalaId(sala.id)
       setSemillaPartida(Number(sala.seed))
       const soyP1 = sala.iAm === 'p1'
+      setSoyJugador1(soyP1)
       setRivalId(soyP1 ? sala.player2.id : sala.player1.id)
       const miNick = soyP1 ? sala.player1.username : sala.player2.username
       const suNick = soyP1 ? sala.player2.username : sala.player1.username
@@ -717,6 +727,7 @@ function App() {
             seed={semillaPartida}
             opponentId={rivalId}
             nombres={nombresEnPartida}
+            soyP1={soyJugador1}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)

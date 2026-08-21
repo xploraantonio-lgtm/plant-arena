@@ -774,6 +774,71 @@ export const SupabaseService = {
   // piden unas decenas de filas y el motor hace el resto.
   // ---------------------------------------------------------------------------
 
+  /**
+   * Manda la huella del tablero.
+   *
+   * Es un detector, no un árbitro: el servidor compara las dos huellas del mismo
+   * tic y si no coinciden se sabe EN QUÉ TIC se separaron las dos pantallas. Antes
+   * sólo llegaba el aviso de "tu rival dijo otra cosa" al final, cuando ya no se
+   * puede averiguar nada.
+   *
+   * Si falla, se calla: perder una huella no debe estropear una partida.
+   */
+  async submitMatchCheckpoint(roomId: string, tick: number, huella: string): Promise<void> {
+    if (!isSupabaseConfigured()) return
+    try {
+      await (supabase.rpc as any)('submit_match_checkpoint', {
+        p_room_id: roomId,
+        p_tick: tick,
+        p_huella: huella,
+      })
+    } catch {
+      // A propósito en silencio.
+    }
+  },
+
+  /** ¿Se separaron las dos pantallas en esta partida, y dónde? */
+  async matchDivergence(roomId: string): Promise<{
+    comparados: number
+    divergio: boolean
+    primerTic: number | null
+    huellaP1: string | null
+    huellaP2: string | null
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('match_divergence', {
+        p_room_id: roomId,
+      })
+      if (error) {
+        logError('matchDivergence', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('matchDivergence', e)
+      return null
+    }
+  },
+
+  /** El resumen de divergencias para el panel. Sólo admin. */
+  async adminDivergencias(limite = 50): Promise<any | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('admin_divergencias', {
+        p_limite: limite,
+      })
+      if (error) {
+        logError('adminDivergencias', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('adminDivergencias', e)
+      return null
+    }
+  },
+
   /** Mis partidas terminadas, de la más reciente a la más antigua. */
   async myMatches(limite = 20): Promise<Array<{
     roomId: string
