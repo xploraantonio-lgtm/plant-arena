@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { SupabaseService, type MisReferidos } from '../../services/supabaseService'
 import { soundManager } from '../../utils/audioManager'
 import { enlaceDeReferido } from '../../utils/direccionPublica'
@@ -64,6 +64,17 @@ export default function PanelDeReferidos() {
   const [restante, setRestante] = useState(0)
   /** Lo que se escribe en el cuadro del código, cuando se llegó sin enlace. */
   const [codigoEscrito, setCodigoEscrito] = useState('')
+
+  // Estados de paginación y búsqueda para "Tus invitados"
+  const [amigosBusqueda, setAmigosBusqueda] = useState('')
+  const [amigosPagina, setAmigosPagina] = useState(1)
+  const [amigosTamanoPagina, setAmigosTamanoPagina] = useState<number | 'all'>(10)
+  const amigosListaRef = useRef<HTMLUListElement>(null)
+
+  // Estados de paginación para "Los que más invitan"
+  const [rankingPagina, setRankingPagina] = useState(1)
+  const [rankingTamanoPagina, setRankingTamanoPagina] = useState<number | 'all'>(10)
+  const rankingListaRef = useRef<HTMLOListElement>(null)
 
   const cargar = useCallback(async () => {
     const d = await SupabaseService.myReferrals()
@@ -187,6 +198,53 @@ export default function PanelDeReferidos() {
   const premiosDeLaMeta = datos.premios.filter(
     (p) => p.meta === (datos.metaActual ?? datos.metaSiguiente ?? 50)
   )
+
+  // Amigos filtrados y paginados
+  const amigosFiltrados = useMemo(() => {
+    const q = amigosBusqueda.trim().toLowerCase()
+    if (!datos?.amigos) return []
+    if (!q) return datos.amigos
+    return datos.amigos.filter((a) => (a.nombre || '').toLowerCase().includes(q))
+  }, [datos?.amigos, amigosBusqueda])
+
+  const totalAmigos = amigosFiltrados.length
+  const tamanoRealAmigos = amigosTamanoPagina === 'all' ? (totalAmigos || 1) : amigosTamanoPagina
+  const totalPaginasAmigos = Math.max(1, Math.ceil(totalAmigos / tamanoRealAmigos))
+  const paginaAmigosActual = Math.min(amigosPagina, totalPaginasAmigos)
+
+  const amigosPaginados = useMemo(() => {
+    if (amigosTamanoPagina === 'all') return amigosFiltrados
+    const start = (paginaAmigosActual - 1) * tamanoRealAmigos
+    return amigosFiltrados.slice(start, start + tamanoRealAmigos)
+  }, [amigosFiltrados, paginaAmigosActual, tamanoRealAmigos, amigosTamanoPagina])
+
+  const inicioAmigos = totalAmigos === 0 ? 0 : (paginaAmigosActual - 1) * tamanoRealAmigos + 1
+  const finAmigos = amigosTamanoPagina === 'all' ? totalAmigos : Math.min(paginaAmigosActual * tamanoRealAmigos, totalAmigos)
+
+  const handleAmigosPagina = (nueva: number) => {
+    soundManager.playSound('click', 0.2)
+    setAmigosPagina(nueva)
+    amigosListaRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Ranking de referidos paginado
+  const totalRanking = datos?.ranking?.length ?? 0
+  const tamanoRealRanking = rankingTamanoPagina === 'all' ? (totalRanking || 1) : rankingTamanoPagina
+  const totalPaginasRanking = Math.max(1, Math.ceil(totalRanking / tamanoRealRanking))
+  const paginaRankingActual = Math.min(rankingPagina, totalPaginasRanking)
+
+  const rankingPaginado = useMemo(() => {
+    if (!datos?.ranking) return []
+    if (rankingTamanoPagina === 'all') return datos.ranking
+    const start = (paginaRankingActual - 1) * tamanoRealRanking
+    return datos.ranking.slice(start, start + tamanoRealRanking)
+  }, [datos?.ranking, paginaRankingActual, tamanoRealRanking, rankingTamanoPagina])
+
+  const handleRankingPagina = (nueva: number) => {
+    soundManager.playSound('click', 0.2)
+    setRankingPagina(nueva)
+    rankingListaRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="ref-panel">
@@ -424,40 +482,198 @@ export default function PanelDeReferidos() {
       {/* ── EL RANKING ───────────────────────────────────────────────────── */}
       {datos.ranking.length > 0 && (
         <div className="ref-bloque">
-          <h3 className="ref-titulo">📋 Los que más invitan</h3>
-          <ol className="ref-ranking">
-            {datos.ranking.map((r) => (
+          <div className="ref-bloque-header">
+            <h3 className="ref-titulo">📋 Los que más invitan ({datos.ranking.length})</h3>
+            {datos.ranking.length > 5 && (
+              <div className="ref-tamano-selector">
+                <span className="ref-tamano-lbl">Ver:</span>
+                {[10, 20].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`ref-tamano-btn ${rankingTamanoPagina === s ? 'ref-tamano-btn--activo' : ''}`}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.2)
+                      setRankingTamanoPagina(s)
+                      setRankingPagina(1)
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={`ref-tamano-btn ${rankingTamanoPagina === 'all' ? 'ref-tamano-btn--activo' : ''}`}
+                  onClick={() => {
+                    soundManager.playSound('click', 0.2)
+                    setRankingTamanoPagina('all')
+                    setRankingPagina(1)
+                  }}
+                >
+                  Todos
+                </button>
+              </div>
+            )}
+          </div>
+
+          <ol className="ref-ranking" ref={rankingListaRef}>
+            {rankingPaginado.map((r) => (
               <li key={r.puesto}>
                 <span className="ref-ranking__pos">{r.puesto}</span>
                 <span className="ref-ranking__nombre">{r.nombre ?? 'Jugador'}</span>
-                <span className="ref-ranking__num">{r.validos}</span>
+                <span className="ref-ranking__num">{r.validos} amigos</span>
               </li>
             ))}
           </ol>
+
+          {totalPaginasRanking > 1 && (
+            <div className="ref-paginacion">
+              <span className="ref-paginacion-info">
+                Pág. {paginaRankingActual} de {totalPaginasRanking}
+              </span>
+              <div className="ref-paginacion-btns">
+                <button
+                  type="button"
+                  className="ref-pag-btn"
+                  disabled={paginaRankingActual <= 1}
+                  onClick={() => handleRankingPagina(paginaRankingActual - 1)}
+                >
+                  ‹ Ant
+                </button>
+                <button
+                  type="button"
+                  className="ref-pag-btn"
+                  disabled={paginaRankingActual >= totalPaginasRanking}
+                  onClick={() => handleRankingPagina(paginaRankingActual + 1)}
+                >
+                  Sig ›
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── MIS AMIGOS ───────────────────────────────────────────────────── */}
       <div className="ref-bloque">
-        <h3 className="ref-titulo">👥 Tus invitados ({datos.total})</h3>
+        <div className="ref-bloque-header">
+          <h3 className="ref-titulo">👥 Tus invitados ({datos.total})</h3>
+          {datos.amigos.length > 5 && (
+            <div className="ref-tamano-selector">
+              <span className="ref-tamano-lbl">Ver:</span>
+              {[10, 25].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`ref-tamano-btn ${amigosTamanoPagina === s ? 'ref-tamano-btn--activo' : ''}`}
+                  onClick={() => {
+                    soundManager.playSound('click', 0.2)
+                    setAmigosTamanoPagina(s)
+                    setAmigosPagina(1)
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`ref-tamano-btn ${amigosTamanoPagina === 'all' ? 'ref-tamano-btn--activo' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.2)
+                  setAmigosTamanoPagina('all')
+                  setAmigosPagina(1)
+                }}
+              >
+                Todos
+              </button>
+            </div>
+          )}
+        </div>
+
+        {datos.amigos.length > 4 && (
+          <div className="ref-search-box">
+            <span className="ref-search-icon">🔍</span>
+            <input
+              type="text"
+              className="ref-search-input"
+              placeholder="Buscar amigo por nombre..."
+              value={amigosBusqueda}
+              onChange={(e) => {
+                setAmigosBusqueda(e.target.value)
+                setAmigosPagina(1)
+              }}
+            />
+            {amigosBusqueda && (
+              <button
+                type="button"
+                className="ref-search-clear"
+                onClick={() => {
+                  setAmigosBusqueda('')
+                  setAmigosPagina(1)
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+
         {datos.amigos.length === 0 ? (
           <p className="ref-sub">
             Nadie todavía. Comparte tu enlace por WhatsApp, Discord o Telegram.
           </p>
+        ) : amigosPaginados.length === 0 ? (
+          <p className="ref-sub">
+            No se encontró ningún invitado que coincida con "{amigosBusqueda}".
+          </p>
         ) : (
-          <ul className="ref-amigos">
-            {datos.amigos.map((a, i) => (
-              <li key={`${a.nombre}-${i}`} className={a.valido ? 'ref-amigo--ok' : ''}>
-                <span className="ref-amigo__nombre">{a.nombre ?? 'Jugador'}</span>
-                <span className="ref-amigo__copas">{a.copas} copas</span>
-                <span className="ref-amigo__estado">
-                  {a.valido
-                    ? a.oroCobrado ? '✓ cobrado' : '✓ cuenta'
-                    : `faltan ${Math.max(0, datos.copasNecesarias - a.copas)}`}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="ref-amigos" ref={amigosListaRef}>
+              {amigosPaginados.map((a, i) => (
+                <li key={`${a.nombre}-${i}`} className={a.valido ? 'ref-amigo--ok' : ''}>
+                  <span className="ref-amigo__nombre">{a.nombre ?? 'Jugador'}</span>
+                  <span className="ref-amigo__copas">{a.copas} copas</span>
+                  <span className="ref-amigo__estado">
+                    {a.valido
+                      ? a.oroCobrado ? '✓ cobrado' : '✓ cuenta'
+                      : `faltan ${Math.max(0, datos.copasNecesarias - a.copas)}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="ref-paginacion">
+              <span className="ref-paginacion-info">
+                {totalAmigos === 0
+                  ? '0 invitados'
+                  : `Mostrando ${inicioAmigos} - ${finAmigos} de ${totalAmigos} invitados`}
+              </span>
+
+              {totalPaginasAmigos > 1 && (
+                <div className="ref-paginacion-btns">
+                  <button
+                    type="button"
+                    className="ref-pag-btn"
+                    disabled={paginaAmigosActual <= 1}
+                    onClick={() => handleAmigosPagina(paginaAmigosActual - 1)}
+                  >
+                    ‹ Ant
+                  </button>
+                  <span className="ref-pag-num">
+                    {paginaAmigosActual} / {totalPaginasAmigos}
+                  </span>
+                  <button
+                    type="button"
+                    className="ref-pag-btn"
+                    disabled={paginaAmigosActual >= totalPaginasAmigos}
+                    onClick={() => handleAmigosPagina(paginaAmigosActual + 1)}
+                  >
+                    Sig ›
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

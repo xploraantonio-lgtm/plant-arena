@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
-import { enlaceDeReferido } from '../../utils/direccionPublica'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { SupabaseService } from '../../services/supabaseService'
 import { UserManager } from '../../utils/userManager'
@@ -41,10 +40,24 @@ interface ReferralLeaderboardUser {
   isCurrentUser?: boolean
 }
 
+function generatePageNumbers(current: number, total: number): (number | string)[] {
+  if (total <= 5) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const pages: (number | string)[] = []
+  if (current <= 3) {
+    pages.push(1, 2, 3, 4, '...', total)
+  } else if (current >= total - 2) {
+    pages.push(1, '...', total - 3, total - 2, total - 1, total)
+  } else {
+    pages.push(1, '...', current - 1, current, current + 1, '...', total)
+  }
+  return pages
+}
+
 export default function Ranking({ userElo, userProfile, hasVipPass = false, onBack }: RankingProps) {
   const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
-  const [copiedLink, setCopiedLink] = useState(false)
 
   const currentArena = getArenaForElo(userElo)
   const [previewArenaId, setPreviewArenaId] = useState<number>(currentArena.id)
@@ -65,6 +78,20 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
   const [realLeaderboard, setRealLeaderboard] = useState<LeaderboardUser[]>([])
   const [userRank, setUserRank] = useState<number | null>(null)
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState<boolean>(true)
+
+  // Leaderboard pagination & search states
+  const [leaderboardSearch, setLeaderboardSearch] = useState<string>('')
+  const [leaderboardPage, setLeaderboardPage] = useState<number>(1)
+  const [leaderboardPageSize, setLeaderboardPageSize] = useState<number | 'all'>(20)
+  const leaderboardTableRef = useRef<HTMLDivElement>(null)
+
+  // Referral leaderboard state
+  const [referralLeaderboard, setReferralLeaderboard] = useState<ReferralLeaderboardUser[]>([])
+  const [isLoadingReferrals, setIsLoadingReferrals] = useState<boolean>(false)
+  const [referralSearch, setReferralSearch] = useState<string>('')
+  const [referralPage, setReferralPage] = useState<number>(1)
+  const [referralPageSize, setReferralPageSize] = useState<number | 'all'>(20)
+  const referralTableRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let mounted = true
@@ -104,13 +131,95 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
       if (mounted) setUserRank(r)
     }).catch(() => {})
 
+    // Cargar ranking real de referidos
+    setIsLoadingReferrals(true)
+    SupabaseService.myReferrals().then((refData) => {
+      if (!mounted) return
+      setIsLoadingReferrals(false)
+      if (refData?.ranking && refData.ranking.length > 0) {
+        const mapped: ReferralLeaderboardUser[] = refData.ranking.map((r) => {
+          const isMe = Boolean(r.nombre && r.nombre.trim().toLowerCase() === myUsername)
+          return {
+            rank: r.puesto,
+            username: r.nombre || 'Jugador',
+            clan: '-',
+            referredCount: r.validos,
+            earnedUsd: r.validos * 1.0,
+            tierBadge: r.validos >= 25 ? '👑 Embajador VIP' : r.validos >= 10 ? '⭐ Influencer' : r.validos >= 5 ? '🥉 Promotor' : '🌱 Iniciado',
+            avatar: r.avatar || '/game-assets/greenfoot/transparentsunflower.png',
+            isCurrentUser: isMe,
+          }
+        })
+        setReferralLeaderboard(mapped)
+      }
+    }).catch(() => {
+      if (mounted) setIsLoadingReferrals(false)
+    })
+
     return () => {
       mounted = false
     }
   }, [userProfile, userElo])
 
   const leaderboardData = realLeaderboard
-  const filteredReferralLeaderboard: ReferralLeaderboardUser[] = []
+
+  // Ranked Table Filtered and Paginated
+  const filteredTableUsers = useMemo(() => {
+    const query = leaderboardSearch.trim().toLowerCase()
+    if (!query) {
+      // Sin búsqueda: podio se encarga de los primeros 3, tabla muestra los puestos 4 en adelante
+      return leaderboardData.slice(3)
+    }
+    // Con búsqueda: busca entre todos los jugadores
+    return leaderboardData.filter((u) => u.username.toLowerCase().includes(query))
+  }, [leaderboardData, leaderboardSearch])
+
+  const totalLeaderboardCount = filteredTableUsers.length
+  const leaderboardItemsPerPage = leaderboardPageSize === 'all' ? (totalLeaderboardCount || 1) : leaderboardPageSize
+  const totalLeaderboardPages = Math.max(1, Math.ceil(totalLeaderboardCount / leaderboardItemsPerPage))
+  const currentLeaderboardPage = Math.min(leaderboardPage, totalLeaderboardPages)
+
+  const paginatedLeaderboardUsers = useMemo(() => {
+    if (leaderboardPageSize === 'all') return filteredTableUsers
+    const start = (currentLeaderboardPage - 1) * leaderboardItemsPerPage
+    return filteredTableUsers.slice(start, start + leaderboardItemsPerPage)
+  }, [filteredTableUsers, currentLeaderboardPage, leaderboardItemsPerPage, leaderboardPageSize])
+
+  const leaderboardStartIdx = totalLeaderboardCount === 0 ? 0 : (currentLeaderboardPage - 1) * leaderboardItemsPerPage + 1
+  const leaderboardEndIdx = leaderboardPageSize === 'all' ? totalLeaderboardCount : Math.min(currentLeaderboardPage * leaderboardItemsPerPage, totalLeaderboardCount)
+
+  const handleLeaderboardPageChange = (newPage: number) => {
+    soundManager.playSound('click', 0.3)
+    setLeaderboardPage(newPage)
+    leaderboardTableRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Referral Leaderboard Filtered and Paginated
+  const filteredReferralUsers = useMemo(() => {
+    const query = referralSearch.trim().toLowerCase()
+    if (!query) return referralLeaderboard
+    return referralLeaderboard.filter((u) => u.username.toLowerCase().includes(query))
+  }, [referralLeaderboard, referralSearch])
+
+  const totalReferralCount = filteredReferralUsers.length
+  const referralItemsPerPage = referralPageSize === 'all' ? (totalReferralCount || 1) : referralPageSize
+  const totalReferralPages = Math.max(1, Math.ceil(totalReferralCount / referralItemsPerPage))
+  const currentReferralPage = Math.min(referralPage, totalReferralPages)
+
+  const paginatedReferralUsers = useMemo(() => {
+    if (referralPageSize === 'all') return filteredReferralUsers
+    const start = (currentReferralPage - 1) * referralItemsPerPage
+    return filteredReferralUsers.slice(start, start + referralItemsPerPage)
+  }, [filteredReferralUsers, currentReferralPage, referralItemsPerPage, referralPageSize])
+
+  const referralStartIdx = totalReferralCount === 0 ? 0 : (currentReferralPage - 1) * referralItemsPerPage + 1
+  const referralEndIdx = referralPageSize === 'all' ? totalReferralCount : Math.min(currentReferralPage * referralItemsPerPage, totalReferralCount)
+
+  const handleReferralPageChange = (newPage: number) => {
+    soundManager.playSound('click', 0.3)
+    setReferralPage(newPage)
+    referralTableRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="ranking-screen" style={{ backgroundImage: `url(${background})` }}>
@@ -288,68 +397,128 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                 </div>
               ) : (
                 <>
-                  {/* TOP 3 PODIUM */}
-                  <div className="leaderboard-podium">
-                    {/* 2nd Place */}
-                    {leaderboardData[1] ? (
-                      <div className={`podium-card podium-card--silver ${leaderboardData[1].isCurrentUser ? 'podium-card--user' : ''}`}>
-                        <span className="podium-rank">🥈 #2</span>
-                        <span className={`podium-name ${leaderboardData[1].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                          {leaderboardData[1].isCurrentUser && hasVipPass && '👑 '}
-                          {leaderboardData[1].username} {leaderboardData[1].isCurrentUser && '(TÚ)'}
-                        </span>
-                        <span className="podium-clan">{leaderboardData[1].clan}</span>
-                        <span className="podium-elo">🏆 {leaderboardData[1].elo} Copas</span>
-                        <div className="podium-best-plant">
-                          <img src={leaderboardData[1].bestPlantImg} alt="" className="podium-plant-img" />
-                          <span>{leaderboardData[1].bestPlantName}</span>
+                  {/* TOP 3 PODIUM (solo visible cuando no hay búsqueda activa) */}
+                  {!leaderboardSearch.trim() && (
+                    <div className="leaderboard-podium">
+                      {/* 2nd Place */}
+                      {leaderboardData[1] ? (
+                        <div className={`podium-card podium-card--silver ${leaderboardData[1].isCurrentUser ? 'podium-card--user' : ''}`}>
+                          <span className="podium-rank">🥈 #2</span>
+                          <span className={`podium-name ${leaderboardData[1].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                            {leaderboardData[1].isCurrentUser && hasVipPass && '👑 '}
+                            {leaderboardData[1].username} {leaderboardData[1].isCurrentUser && '(TÚ)'}
+                          </span>
+                          <span className="podium-clan">{leaderboardData[1].clan}</span>
+                          <span className="podium-elo">🏆 {leaderboardData[1].elo} Copas</span>
+                          <div className="podium-best-plant">
+                            <img src={leaderboardData[1].bestPlantImg} alt="" className="podium-plant-img" />
+                            <span>{leaderboardData[1].bestPlantName}</span>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="podium-card podium-card--placeholder" />
-                    )}
+                      ) : (
+                        <div className="podium-card podium-card--placeholder" />
+                      )}
 
-                    {/* 1st Place */}
-                    {leaderboardData[0] && (
-                      <div className={`podium-card podium-card--gold ${leaderboardData[0].isCurrentUser ? 'podium-card--user' : ''}`}>
-                        <span className="podium-crown">👑</span>
-                        <span className="podium-rank">🥇 #1 CAMPEÓN</span>
-                        <span className={`podium-name ${leaderboardData[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                          {leaderboardData[0].isCurrentUser && hasVipPass && '👑 '}
-                          {leaderboardData[0].username} {leaderboardData[0].isCurrentUser && '(TÚ)'}
-                        </span>
-                        <span className="podium-clan">{leaderboardData[0].clan}</span>
-                        <span className="podium-elo">🏆 {leaderboardData[0].elo} Copas</span>
-                        <div className="podium-best-plant">
-                          <img src={leaderboardData[0].bestPlantImg} alt="" className="podium-plant-img" />
-                          <span>{leaderboardData[0].bestPlantName}</span>
+                      {/* 1st Place */}
+                      {leaderboardData[0] && (
+                        <div className={`podium-card podium-card--gold ${leaderboardData[0].isCurrentUser ? 'podium-card--user' : ''}`}>
+                          <span className="podium-crown">👑</span>
+                          <span className="podium-rank">🥇 #1 CAMPEÓN</span>
+                          <span className={`podium-name ${leaderboardData[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                            {leaderboardData[0].isCurrentUser && hasVipPass && '👑 '}
+                            {leaderboardData[0].username} {leaderboardData[0].isCurrentUser && '(TÚ)'}
+                          </span>
+                          <span className="podium-clan">{leaderboardData[0].clan}</span>
+                          <span className="podium-elo">🏆 {leaderboardData[0].elo} Copas</span>
+                          <div className="podium-best-plant">
+                            <img src={leaderboardData[0].bestPlantImg} alt="" className="podium-plant-img" />
+                            <span>{leaderboardData[0].bestPlantName}</span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* 3rd Place */}
-                    {leaderboardData[2] ? (
-                      <div className={`podium-card podium-card--bronze ${leaderboardData[2].isCurrentUser ? 'podium-card--user' : ''}`}>
-                        <span className="podium-rank">🥉 #3</span>
-                        <span className={`podium-name ${leaderboardData[2].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                          {leaderboardData[2].isCurrentUser && hasVipPass && '👑 '}
-                          {leaderboardData[2].username} {leaderboardData[2].isCurrentUser && '(TÚ)'}
-                        </span>
-                        <span className="podium-clan">{leaderboardData[2].clan}</span>
-                        <span className="podium-elo">🏆 {leaderboardData[2].elo} Copas</span>
-                        <div className="podium-best-plant">
-                          <img src={leaderboardData[2].bestPlantImg} alt="" className="podium-plant-img" />
-                          <span>{leaderboardData[2].bestPlantName}</span>
+                      {/* 3rd Place */}
+                      {leaderboardData[2] ? (
+                        <div className={`podium-card podium-card--bronze ${leaderboardData[2].isCurrentUser ? 'podium-card--user' : ''}`}>
+                          <span className="podium-rank">🥉 #3</span>
+                          <span className={`podium-name ${leaderboardData[2].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                            {leaderboardData[2].isCurrentUser && hasVipPass && '👑 '}
+                            {leaderboardData[2].username} {leaderboardData[2].isCurrentUser && '(TÚ)'}
+                          </span>
+                          <span className="podium-clan">{leaderboardData[2].clan}</span>
+                          <span className="podium-elo">🏆 {leaderboardData[2].elo} Copas</span>
+                          <div className="podium-best-plant">
+                            <img src={leaderboardData[2].bestPlantImg} alt="" className="podium-plant-img" />
+                            <span>{leaderboardData[2].bestPlantName}</span>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="podium-card podium-card--placeholder" />
-                    )}
+                      ) : (
+                        <div className="podium-card podium-card--placeholder" />
+                      )}
+                    </div>
+                  )}
+
+                  {/* TOOLBAR: BUSCADOR + SELECTOR DE ELEMENTOS */}
+                  <div className="leaderboard-toolbar">
+                    <div className="leaderboard-search-box">
+                      <span className="leaderboard-search-icon">🔍</span>
+                      <input
+                        type="text"
+                        className="leaderboard-search-input"
+                        placeholder="Buscar jugador por nombre..."
+                        value={leaderboardSearch}
+                        onChange={(e) => {
+                          setLeaderboardSearch(e.target.value)
+                          setLeaderboardPage(1)
+                        }}
+                      />
+                      {leaderboardSearch && (
+                        <button
+                          type="button"
+                          className="leaderboard-search-clear"
+                          onClick={() => {
+                            setLeaderboardSearch('')
+                            setLeaderboardPage(1)
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="leaderboard-size-selector">
+                      <span className="leaderboard-size-lbl">Ver:</span>
+                      {[10, 20, 50].map((size) => (
+                        <button
+                          key={size}
+                          type="button"
+                          className={`leaderboard-size-btn ${leaderboardPageSize === size ? 'leaderboard-size-btn--active' : ''}`}
+                          onClick={() => {
+                            soundManager.playSound('click', 0.2)
+                            setLeaderboardPageSize(size)
+                            setLeaderboardPage(1)
+                          }}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className={`leaderboard-size-btn ${leaderboardPageSize === 'all' ? 'leaderboard-size-btn--active' : ''}`}
+                        onClick={() => {
+                          soundManager.playSound('click', 0.2)
+                          setLeaderboardPageSize('all')
+                          setLeaderboardPage(1)
+                        }}
+                      >
+                        Todos ({totalLeaderboardCount})
+                      </button>
+                    </div>
                   </div>
 
                   {/* RANKS 4+ LEADERBOARD TABLE (SCROLLABLE TABLE OF ALL USERS) */}
-                  <div className="leaderboard-table-wrap">
-                    {leaderboardData.length > 3 ? (
+                  <div className="leaderboard-table-wrap" ref={leaderboardTableRef}>
+                    {paginatedLeaderboardUsers.length > 0 ? (
                       <table className="leaderboard-table">
                         <thead>
                           <tr>
@@ -363,8 +532,8 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           </tr>
                         </thead>
                         <tbody>
-                          {leaderboardData.slice(3).map((usr) => (
-                            <tr key={usr.rank} className={usr.isCurrentUser ? 'row--user' : ''}>
+                          {paginatedLeaderboardUsers.map((usr) => (
+                            <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'row--user' : ''}>
                               <td className="col-rank">#{usr.rank}</td>
                               <td className="col-user">
                                 <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>
@@ -394,7 +563,81 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                       </table>
                     ) : (
                       <div className="leaderboard-few-users-note">
-                        <span>⭐ Mostrando {leaderboardData.length} {leaderboardData.length === 1 ? 'jugador registrado' : 'jugadores registrados'} en el podio.</span>
+                        {leaderboardSearch ? (
+                          <span>🔎 No se encontraron jugadores que coincidan con "{leaderboardSearch}".</span>
+                        ) : (
+                          <span>⭐ Mostrando {leaderboardData.length} {leaderboardData.length === 1 ? 'jugador registrado' : 'jugadores registrados'} en el podio.</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* BARRA DE PAGINACIÓN */}
+                  <div className="leaderboard-pagination">
+                    <div className="pagination-info">
+                      <span>
+                        {totalLeaderboardCount === 0
+                          ? '0 jugadores'
+                          : `Mostrando ${leaderboardStartIdx} - ${leaderboardEndIdx} de ${totalLeaderboardCount} jugadores`}
+                      </span>
+                    </div>
+
+                    {totalLeaderboardPages > 1 && (
+                      <div className="pagination-controls">
+                        <button
+                          type="button"
+                          className="pagination-btn pagination-btn--nav"
+                          disabled={currentLeaderboardPage <= 1}
+                          onClick={() => handleLeaderboardPageChange(1)}
+                          title="Primera página"
+                        >
+                          ««
+                        </button>
+                        <button
+                          type="button"
+                          className="pagination-btn pagination-btn--nav"
+                          disabled={currentLeaderboardPage <= 1}
+                          onClick={() => handleLeaderboardPageChange(currentLeaderboardPage - 1)}
+                          title="Página anterior"
+                        >
+                          ‹ Ant
+                        </button>
+
+                        <div className="pagination-pages">
+                          {generatePageNumbers(currentLeaderboardPage, totalLeaderboardPages).map((p, idx) =>
+                            p === '...' ? (
+                              <span key={`dots-lb-${idx}`} className="pagination-dots">…</span>
+                            ) : (
+                              <button
+                                key={`page-lb-${p}`}
+                                type="button"
+                                className={`pagination-btn ${p === currentLeaderboardPage ? 'pagination-btn--active' : ''}`}
+                                onClick={() => handleLeaderboardPageChange(Number(p))}
+                              >
+                                {p}
+                              </button>
+                            )
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          className="pagination-btn pagination-btn--nav"
+                          disabled={currentLeaderboardPage >= totalLeaderboardPages}
+                          onClick={() => handleLeaderboardPageChange(currentLeaderboardPage + 1)}
+                          title="Página siguiente"
+                        >
+                          Sig ›
+                        </button>
+                        <button
+                          type="button"
+                          className="pagination-btn pagination-btn--nav"
+                          disabled={currentLeaderboardPage >= totalLeaderboardPages}
+                          onClick={() => handleLeaderboardPageChange(totalLeaderboardPages)}
+                          title="Última página"
+                        >
+                          »»
+                        </button>
                       </div>
                     )}
                   </div>
@@ -430,83 +673,195 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
         {activeTab === 'referrals' && (
           <div className="ranking-tab-pane">
             <div className="referral-ranking-layout">
-              {/* TOP SUMMARY BANNER */}
-              <div className="referral-summary-banner">
-                <div className="referral-summary-left">
-                  <span className="referral-summary-tag">💰 PROGRAMA DE AFILIADOS & REFERIDOS</span>
-                  <h3 className="referral-summary-title">Gana $1.00 USD por cada amigo que alcance 1000 Copas</h3>
-                  <p className="referral-summary-sub">
-                    Comparte tu enlace de invitación único y escala en la clasificación para obtener insignias exclusivas.
-                  </p>
+              {/* TOOLBAR REFERIDOS */}
+              <div className="leaderboard-toolbar">
+                <div className="leaderboard-search-box">
+                  <span className="leaderboard-search-icon">🔍</span>
+                  <input
+                    type="text"
+                    className="leaderboard-search-input"
+                    placeholder="Buscar en ranking de referidos..."
+                    value={referralSearch}
+                    onChange={(e) => {
+                      setReferralSearch(e.target.value)
+                      setReferralPage(1)
+                    }}
+                  />
+                  {referralSearch && (
+                    <button
+                      type="button"
+                      className="leaderboard-search-clear"
+                      onClick={() => {
+                        setReferralSearch('')
+                        setReferralPage(1)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
-                <div className="referral-summary-actions">
+
+                <div className="leaderboard-size-selector">
+                  <span className="leaderboard-size-lbl">Ver:</span>
+                  {[10, 20, 50].map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      className={`leaderboard-size-btn ${referralPageSize === size ? 'leaderboard-size-btn--active' : ''}`}
+                      onClick={() => {
+                        soundManager.playSound('click', 0.2)
+                        setReferralPageSize(size)
+                        setReferralPage(1)
+                      }}
+                    >
+                      {size}
+                    </button>
+                  ))}
                   <button
                     type="button"
-                    className="referral-copy-btn"
+                    className={`leaderboard-size-btn ${referralPageSize === 'all' ? 'leaderboard-size-btn--active' : ''}`}
                     onClick={() => {
-                      soundManager.playSound('click', 0.5)
-                      // El código sale del perfil sincronizado con el servidor
-                      // (profiles.referral_code). El apaño de poner 'ARENA' cuando
-                      // faltaba producía un enlace muerto: mejor no copiar nada.
-                      navigator.clipboard?.writeText(
-                        enlaceDeReferido(UserManager.getProfile().referralCode)
-                      )
-                      setCopiedLink(true)
-                      setTimeout(() => setCopiedLink(false), 2000)
+                      soundManager.playSound('click', 0.2)
+                      setReferralPageSize('all')
+                      setReferralPage(1)
                     }}
                   >
-                    {copiedLink ? '✅ ¡ENLACE COPIADO!' : '📋 COPIAR MI ENLACE'}
+                    Todos ({totalReferralCount})
                   </button>
                 </div>
               </div>
 
               {/* REFERRAL LEADERBOARD TABLE */}
-              <div className="leaderboard-table-wrap referral-table-wrap">
-                <table className="leaderboard-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '60px' }}>POS</th>
-                      <th>JUGADOR</th>
-                      <th>CLAN</th>
-                      <th style={{ textAlign: 'center' }}>AMIGOS ACTIVOS</th>
-                      <th style={{ textAlign: 'center' }}>GANANCIAS (USD)</th>
-                      <th style={{ textAlign: 'right' }}>RANGO DE EMBAJADOR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReferralLeaderboard.map((usr) => (
-                      <tr key={usr.rank} className={usr.isCurrentUser ? 'row--user' : ''}>
-                        <td className="col-rank">
-                          {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
-                        </td>
-                        <td className="col-user">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <img
-                              src={usr.avatar}
-                              alt=""
-                              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
-                            />
-                            <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>
-                              {usr.isCurrentUser && hasVipPass && '👑 '}
-                              {usr.username}
-                            </strong>
-                            {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
-                          </div>
-                        </td>
-                        <td className="col-clan">{usr.clan}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8' }}>
-                          👥 {usr.referredCount} Amigos
-                        </td>
-                        <td style={{ textAlign: 'center', fontWeight: 900, color: '#4ade80' }}>
-                          ${usr.earnedUsd.toFixed(2)} USD
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <span className="referral-tier-pill">{usr.tierBadge}</span>
-                        </td>
+              <div className="leaderboard-table-wrap referral-table-wrap" ref={referralTableRef}>
+                {isLoadingReferrals ? (
+                  <div className="leaderboard-loading-state">
+                    <span>⏳ Cargando clasificación de referidos...</span>
+                  </div>
+                ) : paginatedReferralUsers.length > 0 ? (
+                  <table className="leaderboard-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '60px' }}>POS</th>
+                        <th>JUGADOR</th>
+                        <th>CLAN</th>
+                        <th style={{ textAlign: 'center' }}>AMIGOS ACTIVOS</th>
+                        <th style={{ textAlign: 'center' }}>GANANCIAS (USD)</th>
+                        <th style={{ textAlign: 'right' }}>RANGO DE EMBAJADOR</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {paginatedReferralUsers.map((usr) => (
+                        <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'row--user' : ''}>
+                          <td className="col-rank">
+                            {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
+                          </td>
+                          <td className="col-user">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <img
+                                src={usr.avatar}
+                                alt=""
+                                style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
+                              />
+                              <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>
+                                {usr.isCurrentUser && hasVipPass && '👑 '}
+                                {usr.username}
+                              </strong>
+                              {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
+                            </div>
+                          </td>
+                          <td className="col-clan">{usr.clan}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8' }}>
+                            👥 {usr.referredCount} Amigos
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: 900, color: '#4ade80' }}>
+                            ${usr.earnedUsd.toFixed(2)} USD
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span className="referral-tier-pill">{usr.tierBadge}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="leaderboard-few-users-note">
+                    {referralSearch ? (
+                      <span>🔎 No se encontraron referidores con "{referralSearch}".</span>
+                    ) : (
+                      <span>🌱 Aún no hay líderes de referidos registrados en esta temporada. ¡Sé el primero en invitar!</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* BARRA DE PAGINACIÓN REFERIDOS */}
+              <div className="leaderboard-pagination">
+                <div className="pagination-info">
+                  <span>
+                    {totalReferralCount === 0
+                      ? '0 referidores'
+                      : `Mostrando ${referralStartIdx} - ${referralEndIdx} de ${totalReferralCount} referidores`}
+                  </span>
+                </div>
+
+                {totalReferralPages > 1 && (
+                  <div className="pagination-controls">
+                    <button
+                      type="button"
+                      className="pagination-btn pagination-btn--nav"
+                      disabled={currentReferralPage <= 1}
+                      onClick={() => handleReferralPageChange(1)}
+                      title="Primera página"
+                    >
+                      ««
+                    </button>
+                    <button
+                      type="button"
+                      className="pagination-btn pagination-btn--nav"
+                      disabled={currentReferralPage <= 1}
+                      onClick={() => handleReferralPageChange(currentReferralPage - 1)}
+                      title="Página anterior"
+                    >
+                      ‹ Ant
+                    </button>
+
+                    <div className="pagination-pages">
+                      {generatePageNumbers(currentReferralPage, totalReferralPages).map((p, idx) =>
+                        p === '...' ? (
+                          <span key={`dots-ref-${idx}`} className="pagination-dots">…</span>
+                        ) : (
+                          <button
+                            key={`page-ref-${p}`}
+                            type="button"
+                            className={`pagination-btn ${p === currentReferralPage ? 'pagination-btn--active' : ''}`}
+                            onClick={() => handleReferralPageChange(Number(p))}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="pagination-btn pagination-btn--nav"
+                      disabled={currentReferralPage >= totalReferralPages}
+                      onClick={() => handleReferralPageChange(currentReferralPage + 1)}
+                      title="Página siguiente"
+                    >
+                      Sig ›
+                    </button>
+                    <button
+                      type="button"
+                      className="pagination-btn pagination-btn--nav"
+                      disabled={currentReferralPage >= totalReferralPages}
+                      onClick={() => handleReferralPageChange(totalReferralPages)}
+                      title="Última página"
+                    >
+                      »»
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
