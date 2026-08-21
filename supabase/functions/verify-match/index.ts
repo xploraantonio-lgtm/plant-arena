@@ -312,6 +312,36 @@ Deno.serve(async (req) => {
     }
     if (faltaMs > 0) await dormir(faltaMs)
 
+    // ============================================================
+    // RANKED/FRIENDLY: si el replay no pudo decidir y vamos a
+    // depender del consenso, esperamos los DOS reportes ANTES de
+    // congelar la sala.
+    //
+    // Así nunca necesitamos liberar una sala ya congelada sólo
+    // porque falta un reporte.
+    // ============================================================
+
+    const candidatoAConsensoAntesDelLock =
+      (room.mode === 'ranked' || room.mode === 'friendly') &&
+      resultado.ganador === null &&
+      !(resultado.motivo === 'true_draw' && resultado.consistente) &&
+      resultado.ilegales.length === 0
+
+    if (candidatoAConsensoAntesDelLock) {
+      room = await cargarSala()
+
+      const consensoPrevio = consensoReportado(room)
+
+      if (!consensoPrevio.completo) {
+        return json({
+          ok: true,
+          status: 'pending',
+          retryAfterMs: 1000,
+          reason: 'waiting_for_second_client_report',
+        })
+      }
+    }
+
     // ── CONGELAR ────────────────────────────────────────────────────────────
     const { data: inicioVerificacion, error: beginError } = await admin.rpc(
       'begin_match_verification',
@@ -434,31 +464,8 @@ Deno.serve(async (req) => {
       permiteConsenso &&
       resultado.ilegales.length === 0
     ) {
-      // Uno de los dos clientes todavía no alcanzó a reportar.
-      // No marcar la partida como failed todavía.
       if (!consenso.completo) {
-        const { error: releaseError } = await admin.rpc(
-          'release_match_verification',
-          {
-            p_room_id: roomId,
-            p_note: 'waiting_for_second_client_report',
-          }
-        )
-
-        if (releaseError) {
-          throw new Error(
-            `release_waiting_reports_failed:${releaseError.message}`
-          )
-        }
-
-        lockedRoomId = null
-
-        return json({
-          ok: true,
-          status: 'pending',
-          retryAfterMs: 1000,
-          reason: 'waiting_for_second_client_report',
-        })
+        throw new Error('client_reports_missing_after_verification_lock')
       }
 
       // Los dos clientes vieron EXACTAMENTE el mismo ganador.
