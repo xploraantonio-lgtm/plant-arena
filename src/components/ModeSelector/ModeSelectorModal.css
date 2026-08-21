@@ -432,40 +432,75 @@
   border-color: #64748b;
 }
 
-/* ── El duelo amistoso ───────────────────────────────────────────────────────
-   Un código y una cantidad, y nada más. Todo lo que hace falta para que dos
-   amigos jueguen: el código hace la sala privada y la cantidad, si es la misma en
-   los dos, es la apuesta. */
+/* ── El duelo amistoso (VISTA DEDICADA) ─────────────────────────────────── */
 
-.friendly-panel {
-  margin-top: 14px;
-  padding: 14px 16px;
-  background: rgba(7, 20, 13, 0.85);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  border-radius: 12px;
-  color: #e2e8f0;
+.mode-selector-card--friendly {
+  max-width: 520px;
+  border-color: #34d399;
+  box-shadow: 0 0 35px rgba(52, 211, 153, 0.35);
+  animation: friendlyFadeIn 0.2s ease-out;
 }
 
-.friendly-panel__titulo {
-  margin: 0 0 4px;
-  font-size: 16px;
+@keyframes friendlyFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.friendly-panel-dedicated {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.friendly-back-header-btn {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  font-size: 11px;
   font-weight: 800;
-  color: #7dd3fc;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.friendly-back-header-btn:hover {
+  border-color: #34d399;
+  color: #ffffff;
+  background: rgba(16, 185, 129, 0.2);
+  transform: translateX(-2px);
+}
+
+.friendly-panel-body {
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 14px;
+  padding: 16px;
+  gap: 8px;
 }
 
 .friendly-panel__nota {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 12px;
   line-height: 1.5;
   color: #94a3b8;
 }
 
+.friendly-panel__nota strong {
+  color: #fde047;
+}
+
 .friendly-panel__etiqueta {
   display: block;
+  margin-top: 4px;
   margin-bottom: 4px;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #cbd5e1;
 }
@@ -474,7 +509,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .friendly-panel__codigo,
@@ -484,12 +519,12 @@
   padding: 8px 10px;
   font-family: ui-monospace, Consolas, monospace;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.16em;
   text-align: center;
-  color: #7dd3fc;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #34d399;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1.5px solid rgba(52, 211, 153, 0.5);
   border-radius: 8px;
 }
 
@@ -497,49 +532,119 @@
   letter-spacing: normal;
   color: #fde047;
   border-color: rgba(251, 191, 36, 0.55);
-  max-width: 8rem;
+  max-width: 7rem;
 }
 
 .friendly-panel__codigo:focus-visible,
-.friendly-panel__apuesta:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.friendly-panel__apuesta:focus-visible {
+  outline: 3px solid #34d399;
+  outline-offset: 2px;
+}
 
-.friendly-panel__gemas { font-size: 18px; }
+.friendly-panel__gemas {
+  font-size: 18px;
+}
+
+.friendly-presets {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.friendly-preset-btn {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.friendly-preset-btn:hover:not(:disabled) {
+  border-color: #fbbf24;
+  color: #ffffff;
+}
+
+.friendly-preset-btn--active {
+  background: linear-gradient(180deg, #d97706 0%, #b45309 100%) !important;
+  border-color: #fde047 !important;
+  color: #ffffff !important;
+}
+
+.friendly-preset-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 
 .friendly-panel__btn {
   padding: 8px 12px;
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
   color: #e2e8f0;
-  background: rgba(148, 163, 184, 0.18);
+  background: rgba(30, 41, 59, 0.9);
   border: 1px solid rgba(203, 213, 225, 0.35);
   border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
-.friendly-panel__btn:hover { background: rgba(148, 163, 184, 0.3); }
-.friendly-panel__btn:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.friendly-panel__btn:hover {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: #34d399;
+  color: #ffffff;
+}
 
-/* Lo que se está apostando, dicho en gemas y sin letra pequeña: es dinero. */
+.friendly-panel__btn--copy {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.friendly-panel__btn--copy:hover {
+  background: rgba(56, 189, 248, 0.2);
+  color: #ffffff;
+}
+
+.friendly-panel__btn--back {
+  background: #334155;
+  border-color: #64748b;
+  flex: 1;
+}
+
 .friendly-panel__aviso {
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.5;
+  margin: 4px 0 10px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  line-height: 1.45;
   color: #fde68a;
   background: rgba(251, 191, 36, 0.1);
   border: 1px solid rgba(251, 191, 36, 0.45);
   border-radius: 8px;
 }
 
-.friendly-panel__aviso strong { color: #fde047; }
+.friendly-panel__aviso--free {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.friendly-panel__aviso strong {
+  color: #fde047;
+}
 
 .friendly-panel__acciones {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  margin-top: 4px;
 }
 
-.friendly-panel__acciones .mode-card__action-btn { flex: 1; }
+.friendly-panel__acciones .mode-card__action-btn {
+  flex: 2;
+  padding: 10px 14px;
+  font-size: 12px;
+}
