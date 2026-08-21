@@ -46,11 +46,19 @@ type RoomRow = {
   engine_version: string
   verification_status: string
   verification_note: string | null
+
   player1_id: string
   player2_id: string
+
   p1_deck: unknown
   p2_deck: unknown
+
   server_winner_id: string | null
+
+  // Reportes de los dos navegadores.
+  // En Ranked/Friendly sólo sirven como fallback de consenso.
+  p1_reported_winner: string | null
+  p2_reported_winner: string | null
 }
 
 type ActionRow = {
@@ -114,6 +122,47 @@ function payloadAuditoria(resultado: ReturnType<typeof recalcularGanadorAutorita
   }
 }
 
+function consensoReportado(
+  room: RoomRow
+): {
+  completo: boolean
+  coinciden: boolean
+  winnerId: string | null
+} {
+  const p1 = room.p1_reported_winner
+  const p2 = room.p2_reported_winner
+
+  if (!p1 || !p2) {
+    return {
+      completo: false,
+      coinciden: false,
+      winnerId: null,
+    }
+  }
+
+  if (p1 !== p2) {
+    return {
+      completo: true,
+      coinciden: false,
+      winnerId: null,
+    }
+  }
+
+  if (p1 !== room.player1_id && p1 !== room.player2_id) {
+    return {
+      completo: true,
+      coinciden: false,
+      winnerId: null,
+    }
+  }
+
+  return {
+    completo: true,
+    coinciden: true,
+    winnerId: p1,
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405)
@@ -169,7 +218,25 @@ Deno.serve(async (req) => {
       const { data, error } = await admin
         .from('game_rooms')
         .select(
-          'id,mode,seed,status,settled_at,created_at,started_at,engine_version,verification_status,verification_note,player1_id,player2_id,p1_deck,p2_deck,server_winner_id',
+          [
+            'id',
+            'mode',
+            'seed',
+            'status',
+            'settled_at',
+            'created_at',
+            'started_at',
+            'engine_version',
+            'verification_status',
+            'verification_note',
+            'player1_id',
+            'player2_id',
+            'p1_deck',
+            'p2_deck',
+            'server_winner_id',
+            'p1_reported_winner',
+            'p2_reported_winner',
+          ].join(','),
         )
         .eq('id', roomId)
         .single()
@@ -337,6 +404,109 @@ Deno.serve(async (req) => {
       if (error) throw new Error(`draw_settle_failed:${error.message}`)
       lockedRoomId = null
       return json({ ok: true, status: 'verified_draw', settlement: data })
+    }
+
+    // ============================================================
+    // FALLBACK SEGURO PARA RANKED / FRIENDLY
+    //
+    // El replay sigue siendo la primera autoridad.
+    //
+    // Pero si el motor tuvo engine_divergence/no_result y:
+    //
+    //  1. NO encontró acciones ilegales;
+    //  2. P1 reportó un ganador;
+    //  3. P2 reportó exactamente EL MISMO ganador;
+    //
+    // entonces en Ranked/Friendly aceptamos el consenso.
+    //
+    // IMPORTANTE:
+    // COLOSSEUM NO entra aquí.
+    // Una partida con valor/gemas continúa siendo fail-closed.
+    // ============================================================
+
+    const permiteConsenso =
+      room.mode === 'ranked' ||
+      room.mode === 'friendly'
+
+    const consenso = consensoReportado(room)
+
+    if (
+      permiteConsenso &&
+      resultado.ilegales.length === 0
+    ) {
+      // Uno de los dos clientes todavía no alcanzó a reportar.
+      // No marcar la partida como failed todavía.
+      if (!consenso.completo) {
+        const { error: releaseError } = await admin.rpc(
+          'release_match_verification',
+          {
+            p_room_id: roomId,
+            p_note: 'waiting_for_second_client_report',
+          }
+        )
+
+        if (releaseError) {
+          throw new Error(
+            `release_waiting_reports_failed:${releaseError.message}`
+          )
+        }
+
+        lockedRoomId = null
+
+        return json({
+          ok: true,
+          status: 'pending',
+          retryAfterMs: 1000,
+          reason: 'waiting_for_second_client_report',
+        })
+      }
+
+      // Los dos clientes vieron EXACTAMENTE el mismo ganador.
+      if (
+        consenso.coinciden &&
+        consenso.winnerId
+      ) {
+        const payloadConsenso = {
+          ...audit,
+
+          resolutionSource: 'ranked_client_consensus',
+          authoritativeReplayReason: resultado.motivo,
+
+          clientReports: {
+            p1: room.p1_reported_winner,
+            p2: room.p2_reported_winner,
+            agreed: true,
+          },
+        }
+
+        const { data, error } = await admin.rpc(
+          'settle_verified_match',
+          {
+            p_room_id: roomId,
+            p_winner_id: consenso.winnerId,
+            p_payload: payloadConsenso,
+          }
+        )
+
+        if (error) {
+          throw new Error(
+            `consensus_settle_failed:${error.message}`
+          )
+        }
+
+        lockedRoomId = null
+
+        return json({
+          ok: true,
+          status: 'verified',
+          winnerId: consenso.winnerId,
+          reason: 'ranked_client_consensus',
+          settlement: data,
+        })
+      }
+
+      // Ambos reportaron, pero NO coinciden.
+      // Ahí sí no inventamos ganador.
     }
 
     // Fail closed. Aquí NO hay refund, NO hay ELO y NO hay payout.
