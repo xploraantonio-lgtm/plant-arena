@@ -5,6 +5,10 @@ import { useGameEngine } from '../../hooks/useGameEngine'
 import { useAuth } from '../../hooks/useAuth'
 import { SupabaseService } from '../../services/supabaseService'
 import {
+  MatchActionOutbox,
+  type MatchActionIntent,
+} from '../../services/matchActionOutbox'
+import {
   PLANT_CONFIGS,
   LANES_CONFIG,
   BASE_LEFT_END_X,
@@ -197,6 +201,8 @@ export default function Battlefield({
     startGame,
     startPracticeGame,
     surrenderGame,
+    prepararRecogidaSol,
+    confirmarRecogidaSol,
     collectSun,
     placePlant,
     digPlant,
@@ -288,6 +294,51 @@ export default function Battlefield({
   const ultimaAccionRef = useRef<number>(0)
   const aplicadasRef = useRef<Set<number>>(new Set())
 
+  const redBloqueadaRef = useRef(false)
+  const [redBloqueada, setRedBloqueada] = useState(false)
+  const outboxAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    outboxAbortRef.current = controller
+    return () => {
+      controller.abort()
+      outboxAbortRef.current = null
+    }
+  }, [roomId])
+
+  /** Helper único para TODAS las acciones PvP con outbox e idempotencia. */
+  const enviarAccionAutoritativa = async (
+    action: MatchActionIntent,
+    callbacks: {
+      onAck?: () => void
+      onRejected?: (error: string) => void
+    } = {}
+  ) => {
+    if (!roomId) return
+
+    redBloqueadaRef.current = true
+    setRedBloqueada(true)
+
+    const result = await MatchActionOutbox.deliver(
+      roomId,
+      action,
+      outboxAbortRef.current?.signal
+    )
+
+    if (result.status === 'ack') {
+      callbacks.onAck?.()
+    } else if (result.status === 'rejected') {
+      callbacks.onRejected?.(result.error)
+    }
+
+    // cancelled ocurre al desmontar; no hay que tocar un motor que ya no existe.
+    if (result.status !== 'cancelled') {
+      redBloqueadaRef.current = false
+      setRedBloqueada(false)
+    }
+  }
+
   /**
    * DIAGNÓSTICO DEL PVP
    *
@@ -334,30 +385,34 @@ export default function Battlefield({
   ) => {
     if (!roomId) return
     ordenRef.current += 1
-    void SupabaseService.submitMatchAction(roomId, {
-      seq: ordenRef.current,
-      tick: enTic,
-      issuedTick: enTic - MARGEN_DE_RED_TICS,
-      kind: 'plant',
-      plantId: carta,
-      lane,
-      col,
-      slot,
-    }).then((r) => {
-      // RECHAZADA: fuera de mi pantalla también.
-      //
-      // Si el servidor no la acepta (llegó con un tic que su reloj ya pasó, o
-      // repetida), el rival nunca la va a ver. Dejarla plantada aquí sería la
-      // divergencia de siempre empezando por mi lado: una planta que sólo existe
-      // en una de las dos pantallas.
-      if (r.error) descartarAccionPropia(enTic, lane, col)
-      setDiag((d) => ({
-        ...d,
-        enviadas: d.enviadas + (r.error ? 0 : 1),
-        // El error del servidor tal cual: es lo que dice POR QUÉ se rechazó.
-        ultimoEnvio: r.error ? `✗ ${r.error}` : `✓ ${carta} [slot ${slot}] @tic ${enTic}`,
-      }))
-    })
+    void enviarAccionAutoritativa(
+      {
+        seq: ordenRef.current,
+        tick: enTic,
+        issuedTick: enTic - MARGEN_DE_RED_TICS,
+        kind: 'plant',
+        plantId: carta,
+        lane,
+        col,
+        slot,
+      },
+      {
+        onRejected: (error) => {
+          descartarAccionPropia(enTic, lane, col)
+          setDiag((d) => ({
+            ...d,
+            ultimoEnvio: `✗ ${error}`,
+          }))
+        },
+        onAck: () => {
+          setDiag((d) => ({
+            ...d,
+            enviadas: d.enviadas + 1,
+            ultimoEnvio: `✓ ${carta} [slot ${slot}] @tic ${enTic}`,
+          }))
+        },
+      }
+    )
   }
 
   /**
@@ -375,47 +430,79 @@ export default function Battlefield({
   const registrarExcavacion = (lane: number, col: number, enTic: number) => {
     if (!roomId) return
     ordenRef.current += 1
-    void SupabaseService.submitMatchAction(roomId, {
-      seq: ordenRef.current,
-      tick: enTic,
-      issuedTick: enTic - MARGEN_DE_RED_TICS,
-      kind: 'dig',
-      lane,
-      col,
-    }).then((r) => {
-      // Igual que al plantar: si el servidor la rechaza, la planta vuelve. En la
-      // pantalla del rival nunca se excavó.
-      if (r.error) descartarAccionPropia(enTic, lane, col)
-      setDiag((d) => ({
-        ...d,
-        enviadas: d.enviadas + (r.error ? 0 : 1),
-        ultimoEnvio: r.error ? `✗ ${r.error}` : `✓ pico @tic ${enTic}`,
-      }))
-    })
+    void enviarAccionAutoritativa(
+      {
+        seq: ordenRef.current,
+        tick: enTic,
+        issuedTick: enTic - MARGEN_DE_RED_TICS,
+        kind: 'dig',
+        lane,
+        col,
+      },
+      {
+        onRejected: (error) => {
+          descartarAccionPropia(enTic, lane, col)
+          setDiag((d) => ({
+            ...d,
+            ultimoEnvio: `✗ ${error}`,
+          }))
+        },
+        onAck: () => {
+          setDiag((d) => ({
+            ...d,
+            enviadas: d.enviadas + 1,
+            ultimoEnvio: `✓ pico @tic ${enTic}`,
+          }))
+        },
+      }
+    )
   }
 
   const recogerSolAutorizado = (sunId: string) => {
-    // collectSun muta la economía y devuelve EL tic exacto usado por el motor.
-    const issuedTick = collectSun(sunId)
-    if (issuedTick === null || !roomId) return
+    // PvE/práctica: no hay árbitro remoto.
+    if (!roomId) {
+      collectSun(sunId)
+      return
+    }
+
+    if (redBloqueadaRef.current) return
+
+    // Sólo observa el tic y confirma que el sol existe. NO suma economía todavía.
+    const issuedTick = prepararRecogidaSol(sunId)
+    if (issuedTick === null) return
 
     ordenRef.current += 1
-    void SupabaseService.submitMatchAction(roomId, {
-      seq: ordenRef.current,
-      tick: issuedTick,
-      issuedTick,
-      kind: 'collect',
-      targetId: sunId,
-      lane: null,
-      col: null,
-      slot: null,
-    }).then((r) => {
-      setDiag((d) => ({
-        ...d,
-        enviadas: d.enviadas + (r.error ? 0 : 1),
-        ultimoEnvio: r.error ? `✗ sol: ${r.error}` : `✓ sol @tic ${issuedTick}`,
-      }))
-    })
+
+    void enviarAccionAutoritativa(
+      {
+        seq: ordenRef.current,
+        tick: issuedTick,
+        issuedTick,
+        kind: 'collect',
+        targetId: sunId,
+        lane: null,
+        col: null,
+        slot: null,
+      },
+      {
+        onAck: () => {
+          // Si mientras esperaba se auto-recogió, devuelve false y no suma dos veces.
+          confirmarRecogidaSol(sunId)
+          setDiag((d) => ({
+            ...d,
+            enviadas: d.enviadas + 1,
+            ultimoEnvio: `✓ sol @tic ${issuedTick}`,
+          }))
+        },
+        onRejected: (error) => {
+          // No hay rollback: todavía NO habíamos sumado este sol.
+          setDiag((d) => ({
+            ...d,
+            ultimoEnvio: `✗ sol: ${error}`,
+          }))
+        },
+      }
+    )
   }
 
   useEffect(() => {
@@ -910,6 +997,11 @@ export default function Battlefield({
             <b>huellas</b> {diag.huellas} · <b>rehechas</b> {reconstrucciones}
           </div>
           <div className="pvp-diag__linea pvp-diag__linea--envio">{diag.ultimoEnvio}</div>
+          {redBloqueada && (
+            <div className="pvp-diag__linea">
+              ⏳ Sincronizando acción con el servidor…
+            </div>
+          )}
         </div>
       )}
 
@@ -963,6 +1055,7 @@ export default function Battlefield({
                     pointerEvents: isP1Side ? 'auto' : 'none',
                   }}
                   onClick={() => {
+                    if (roomId && redBloqueadaRef.current) return
                     if (selectedCard && isP1Side) {
                       if (selectedCard === 'shovel') {
                         // Igual que al plantar: sólo se registra si aquí de verdad

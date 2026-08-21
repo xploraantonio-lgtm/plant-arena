@@ -140,11 +140,21 @@ Deno.serve(async (req) => {
     const token = authHeader.replace(/^Bearer\s+/i, '').trim()
     if (!token) return json({ ok: false, error: 'unauthorized' }, 401)
 
-    const { data: authData, error: authError } = await admin.auth.getUser(token)
-    if (authError || !authData.user) {
-      return json({ ok: false, error: 'unauthorized' }, 401)
+    // Dos callers válidos:
+    //   1) un jugador autenticado que participe en la sala;
+    //   2) el worker verify-pending usando service_role.
+    //
+    // Nunca se expone service_role al navegador. El worker vive en Edge.
+    const internalWorker = token === serviceRole
+    let uid: string | null = null
+
+    if (!internalWorker) {
+      const { data: authData, error: authError } = await admin.auth.getUser(token)
+      if (authError || !authData.user) {
+        return json({ ok: false, error: 'unauthorized' }, 401)
+      }
+      uid = authData.user.id
     }
-    const uid = authData.user.id
 
     let body: { roomId?: string }
     try {
@@ -179,7 +189,7 @@ Deno.serve(async (req) => {
     }
 
     let room = await cargarSala()
-    if (uid !== room.player1_id && uid !== room.player2_id) {
+    if (!internalWorker && uid !== room.player1_id && uid !== room.player2_id) {
       return json({ ok: false, error: 'forbidden' }, 403)
     }
 
@@ -254,6 +264,14 @@ Deno.serve(async (req) => {
     }
     if (inicioVerificacion?.locked) {
       return json({ ok: false, status: 'failed', reviewRequired: true })
+    }
+    if (inicioVerificacion?.busy) {
+      return json({
+        ok: true,
+        status: 'pending',
+        busy: true,
+        retryAfterMs: 1000,
+      })
     }
     lockedRoomId = roomId
 

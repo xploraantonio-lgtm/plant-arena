@@ -416,15 +416,21 @@ export function useGameEngine() {
 
   }, [forceRender])
 
-  // Collect sun handler
-  const collectSun = useCallback(
-    (sunId: string): number | null => {
+  const prepararRecogidaSol = useCallback((sunId: string): number | null => {
+    const state = stateRef.current
+    const sol = state.suns.find((s) => s.id === sunId)
+    if (!sol) return null
+    return state.tick
+  }, [])
+
+  const confirmarRecogidaSol = useCallback(
+    (sunId: string): boolean => {
       const state = stateRef.current
       const sol = state.suns.find((s) => s.id === sunId)
-      if (!sol) return null
 
-      // Éste es el tic que el árbitro necesita para reconstruir la economía.
-      const issuedTick = state.tick
+      // Puede haberse auto-recogido mientras llegaba el ACK. En ese caso no se
+      // suma dos veces: el estado ya contiene el valor.
+      if (!sol) return false
 
       state.suns = state.suns.filter((s) => s.id !== sunId)
       state.sunBank += sol.value
@@ -432,9 +438,19 @@ export function useGameEngine() {
       state.stats.score += 50
       soundManager.playSound('points', 0.6)
       forceRender()
-      return issuedTick
+      return true
     },
     [forceRender]
+  )
+
+  const collectSun = useCallback(
+    (sunId: string): number | null => {
+      const issuedTick = prepararRecogidaSol(sunId)
+      if (issuedTick === null) return null
+      confirmarRecogidaSol(sunId)
+      return issuedTick
+    },
+    [prepararRecogidaSol, confirmarRecogidaSol]
   )
 
   /**
@@ -1153,6 +1169,8 @@ export function useGameEngine() {
     startGame,
     startPracticeGame,
     surrenderGame,
+    prepararRecogidaSol,
+    confirmarRecogidaSol,
     collectSun,
     placePlant,
     digPlant,
