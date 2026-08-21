@@ -169,6 +169,49 @@ export const SupabaseService = {
     }
   },
 
+  async saveActiveDeck(
+    instanceIds: string[]
+  ): Promise<{ success: boolean; cards?: number; error?: string }> {
+    if (!isSupabaseConfigured()) {
+      return {
+        success: false,
+        error: 'Supabase no configurado',
+      }
+    }
+
+    try {
+      const { data, error } = await (supabase.rpc as any)(
+        'save_active_deck',
+        {
+          p_instance_ids: instanceIds,
+        }
+      )
+
+      if (error) {
+        logError('saveActiveDeck', error)
+        return {
+          success: false,
+          error: error.message,
+        }
+      }
+
+      return {
+        success: Boolean(data?.success),
+        cards:
+          typeof data?.cards === 'number'
+            ? data.cards
+            : undefined,
+      }
+    } catch (e: any) {
+      logError('saveActiveDeck', e)
+
+      return {
+        success: false,
+        error: e?.message ?? 'No se pudo guardar el mazo',
+      }
+    }
+  },
+
   // ---------------------------------------------------------------------------
   // GLOBAL RANKING & LEADERBOARDS (REAL DATA)
   // ---------------------------------------------------------------------------

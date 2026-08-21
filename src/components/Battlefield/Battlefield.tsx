@@ -745,12 +745,11 @@ export default function Battlefield({
         setTournamentResult(resolved)
       }
 
-      // Con sala, el reparto es del servidor y ya se pidió arriba. Si además se
-      // ejecutara el camino del cliente, se llamaría a award_victory_chest por
-      // segunda vez y se pintaría un ELO calculado aquí que no tiene por qué
-      // coincidir con el que aplicó el servidor: dos cifras distintas para la
-      // misma partida.
-      const reparteElCliente = !roomId
+      // Ranked sin roomId = entrenamiento/bot.
+      // Nunca inventar ELO ni cofres en el navegador.
+      // Ranked real sólo cambia ELO mediante el árbitro del servidor.
+      const reparteElCliente =
+        !roomId && matchMode !== 'ranked'
 
       if (gameStatus === 'victory') {
         if (reparteElCliente && onBattleComplete) {
@@ -862,6 +861,13 @@ export default function Battlefield({
       void SupabaseService.surrenderMatch(roomId).then((r) => {
         setResultadoServidor(r)
       })
+      return
+    }
+
+    // Ranked sin sala es entrenamiento contra bot.
+    // Rendirse aquí tampoco debe modificar ELO local.
+    if (matchMode === 'ranked') {
+      setBattleSummaryResult(null)
       return
     }
 

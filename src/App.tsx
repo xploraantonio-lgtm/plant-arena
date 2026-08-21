@@ -173,6 +173,26 @@ function App() {
     }
   }, [profile])
 
+  useEffect(() => {
+    if (!user?.id || screen !== 'menu') return
+
+    let cancelado = false
+
+    void SupabaseService.myBalance().then((balance) => {
+      if (cancelado || !balance) return
+
+      const eloReal = Number(balance.elo_rating)
+
+      if (Number.isFinite(eloReal)) {
+        setUserElo(eloReal)
+      }
+    })
+
+    return () => {
+      cancelado = true
+    }
+  }, [screen, user?.id])
+
   /**
    * EL ENLACE DE INVITACIÓN
    *
@@ -415,7 +435,48 @@ function App() {
     void buscar('friendly', { roomCode, betGems })
   }
 
-  const handlePlayNormal = () => {
+  const guardarMazoAntesDeBuscar = async (
+    instanceIdsOverride?: string[]
+  ): Promise<boolean> => {
+    const ids = instanceIdsOverride ?? activeDeckInstances
+
+    if (ids.length < 3 || ids.length > 6) {
+      setActiveAppAlert({
+        title: 'MAZO INVÁLIDO',
+        message: 'Debes seleccionar entre 3 y 6 plantas antes de jugar.',
+        icon: '⚠️',
+      })
+      return false
+    }
+
+    const resultado = await SupabaseService.saveActiveDeck(ids)
+
+    if (!resultado.success) {
+      setActiveAppAlert({
+        title: 'NO SE PUDO GUARDAR EL MAZO',
+        message:
+          resultado.error ??
+          'No se pudo sincronizar tu mazo con el servidor.',
+        icon: '⚠️',
+      })
+      return false
+    }
+
+    return true
+  }
+
+  const handlePlayNormal = async (
+    instanceIdsOverride?: string[]
+  ) => {
+    // El mazo se guarda ANTES de entrar a matchmaking.
+    // Así game_rooms.p1_deck / p2_deck reciben exactamente
+    // las cartas que el jugador tiene seleccionadas.
+    const mazoGuardado = await guardarMazoAntesDeBuscar(
+      instanceIdsOverride
+    )
+
+    if (!mazoGuardado) return
+
     setBattleMatchMode('ranked')
     setColosseumConfig(null)
     setTournamentOpponent(null)
@@ -426,12 +487,15 @@ function App() {
     setRivalId(null)
     setNombresEnPartida(null)
     setMazosDeLaSala(null)
+
     if (!buscaRival('ranked')) {
       setScreen('battle')
       return
     }
+
     setModoBuscando('ranked')
     setScreen('searching')
+
     void buscar('ranked')
   }
 

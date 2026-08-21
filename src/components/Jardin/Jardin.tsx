@@ -46,7 +46,7 @@ interface JardinProps {
   plantInstances?: PlantCardInstance[]
   onUpdateDeck: (newDeck: PlantId[], instanceIds?: string[]) => void
   onBack: () => void
-  onPlay: () => void
+  onPlay: (instanceIds?: string[]) => void | Promise<void>
   onOpenCollection: () => void
   onOpenShop: () => void
   onOpenPack: (instanceId: string) => void
@@ -280,18 +280,36 @@ export default function Jardin({
     }
   }
 
-  const handlePlayClick = () => {
+  const handlePlayClick = async () => {
     const currentPlantIds = deckInstanceIds
-      .map((id) => displayedCards.find((c) => c.instanceId === id)?.plantId)
+      .map(
+        (id) =>
+          displayedCards.find((c) => c.instanceId === id)?.plantId
+      )
       .filter(Boolean) as PlantId[]
-    if (currentPlantIds.length >= 3) {
-      onUpdateDeck(currentPlantIds, deckInstanceIds)
-      try {
-        localStorage.setItem('plant_arena_active_deck', JSON.stringify(currentPlantIds))
-        localStorage.setItem('plant_arena_active_deck_instances', JSON.stringify(deckInstanceIds))
-      } catch {}
-      onPlay()
+
+    if (currentPlantIds.length < 3 || currentPlantIds.length > 6) {
+      return
     }
+
+    onUpdateDeck(currentPlantIds, deckInstanceIds)
+
+    try {
+      localStorage.setItem(
+        'plant_arena_active_deck',
+        JSON.stringify(currentPlantIds)
+      )
+
+      localStorage.setItem(
+        'plant_arena_active_deck_instances',
+        JSON.stringify(deckInstanceIds)
+      )
+    } catch {}
+
+    // IMPORTANTE:
+    // manda las instancias exactas que el usuario está viendo,
+    // no espera a que React actualice el estado del padre.
+    await onPlay(deckInstanceIds)
   }
 
   return (
