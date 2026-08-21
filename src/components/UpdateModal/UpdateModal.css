@@ -1,0 +1,373 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   UPDATE MODAL & BANNER - PLANT ARENA
+   Ventana emergente estilizada para notificar al usuario sobre nuevas versiones
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.update-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: updateFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes updateFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.update-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0c1524 100%);
+  border: 2px solid #22c55e;
+  border-radius: 24px;
+  padding: 30px 24px 24px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+  box-shadow:
+    0 0 45px rgba(34, 197, 94, 0.35),
+    0 25px 60px rgba(0, 0, 0, 0.85);
+  animation: updateCardPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: hidden;
+}
+
+.update-modal-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #10b981, #22c55e, #facc15, #22c55e, #10b981);
+  background-size: 200% 100%;
+  animation: updateGlowBorder 3s linear infinite;
+}
+
+@keyframes updateGlowBorder {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+@keyframes updateCardPop {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Icon Container */
+.update-icon-wrapper {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.05));
+  border: 2px solid rgba(34, 197, 94, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  box-shadow: 0 0 25px rgba(34, 197, 94, 0.35);
+  animation: updatePulse 2s ease-in-out infinite;
+}
+
+@keyframes updatePulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 25px rgba(34, 197, 94, 0.35);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 35px rgba(34, 197, 94, 0.6);
+  }
+}
+
+.update-icon-spin {
+  display: inline-block;
+  animation: updateSpin 8s linear infinite;
+}
+
+@keyframes updateSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Badge */
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4ade80;
+}
+
+.update-badge-dot {
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #22c55e;
+  animation: updateDotFlash 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes updateDotFlash {
+  from { opacity: 0.4; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+/* Content */
+.update-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.update-title {
+  margin: 0;
+  font-family: 'Luckiest Guy', 'Inter', Arial, sans-serif;
+  font-size: 24px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(135deg, #ffffff 30%, #86efac 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.update-description {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  max-width: 400px;
+}
+
+.update-description strong {
+  color: #fde047;
+}
+
+/* Feature hints box */
+.update-notes-box {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.update-notes-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+.update-notes-item span:first-child {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* Reload button */
+.update-btn-reload {
+  position: relative;
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border: none;
+  border-radius: 14px;
+  color: #ffffff;
+  font-family: 'Inter', Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.update-btn-reload::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 70%
+  );
+  transform: rotate(25deg);
+  animation: updateBtnShine 3s infinite;
+}
+
+@keyframes updateBtnShine {
+  0% { transform: translateX(-100%) rotate(25deg); }
+  30%, 100% { transform: translateX(100%) rotate(25deg); }
+}
+
+.update-btn-reload:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  box-shadow: 0 6px 25px rgba(34, 197, 94, 0.55);
+}
+
+.update-btn-reload:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 10px rgba(34, 197, 94, 0.4);
+}
+
+.update-btn-reload:focus-visible {
+  outline: 3px solid #86efac;
+  outline-offset: 3px;
+}
+
+/* Countdown subtext */
+.update-countdown-text {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: -6px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   FLOATING BATTLE BANNER
+   Banner discreto no intrusivo mientras el jugador está en batalla
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.update-battle-banner {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1.5px solid #22c55e;
+  border-radius: 50px;
+  padding: 8px 18px 8px 14px;
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(34, 197, 94, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: updateBannerSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 90vw;
+}
+
+@keyframes updateBannerSlideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.update-battle-banner__icon {
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  animation: updateSpin 6s linear infinite;
+}
+
+.update-battle-banner__text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+}
+
+.update-battle-banner__text strong {
+  color: #4ade80;
+}
+
+.update-battle-banner__btn {
+  padding: 5px 12px;
+  background: #22c55e;
+  color: #06111f;
+  font-size: 12px;
+  font-weight: 800;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.update-battle-banner__btn:hover {
+  background: #4ade80;
+  transform: scale(1.04);
+}
+
+@media (max-width: 500px) {
+  .update-modal-card {
+    padding: 24px 18px 20px;
+    border-radius: 20px;
+    gap: 14px;
+  }
+
+  .update-title {
+    font-size: 20px;
+  }
+
+  .update-description {
+    font-size: 13px;
+  }
+
+  .update-battle-banner {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+
+  .update-battle-banner__text {
+    font-size: 11px;
+  }
+
+  .update-battle-banner__btn {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+}

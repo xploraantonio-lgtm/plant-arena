@@ -69,12 +69,13 @@ export async function hayVersionNueva(): Promise<boolean> {
  * paquete no llegan a coincidir (un despliegue a medias, una caché intermedia):
  * mejor quedarse con la versión vieja que recargar sin parar.
  */
-export function recargarParaActualizar(): void {
+export function recargarParaActualizar(forzar = false): void {
   try {
-    if (sessionStorage.getItem(MARCA_DE_RECARGA) === VERSION_DE_ESTE_PAQUETE) return
+    if (!forzar && sessionStorage.getItem(MARCA_DE_RECARGA) === VERSION_DE_ESTE_PAQUETE) return
     sessionStorage.setItem(MARCA_DE_RECARGA, VERSION_DE_ESTE_PAQUETE)
   } catch {
     // Sin sessionStorage se recarga igual: es mejor eso que jugar desincronizado.
   }
   window.location.reload()
 }
+

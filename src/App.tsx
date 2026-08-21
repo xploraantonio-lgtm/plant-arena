@@ -29,6 +29,7 @@ import AdminPanel from './components/Admin/AdminPanel'
 
 import { UserManager } from './utils/userManager'
 import { useVersionDelJuego } from './hooks/useVersionDelJuego'
+import UpdateModal from './components/UpdateModal/UpdateModal'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -74,9 +75,11 @@ function App() {
    * En mitad de una batalla NO se recarga: sería echar a alguien de su propia
    * partida y, con apuesta, hacerle perder las gemas.
    */
-  const { nueva: hayVersionNueva, recargar: recargarVersion } = useVersionDelJuego(
-    screen === 'battle'
-  )
+  const {
+    nueva: hayVersionNueva,
+    segundosParaRecarga,
+    recargar: recargarVersion,
+  } = useVersionDelJuego(screen === 'battle')
 
   const [userElo, setUserElo] = useState<number>(1000)
   const [customArenaBg, setCustomArenaBg] = useState<string | undefined>(undefined)
@@ -691,15 +694,14 @@ function App() {
   if (screen === 'landing') {
     return (
       <>
-        {/* El mismo aviso que en el juego: la pantalla de entrada tiene su propio
-            `return`, así que si no se pone aquí también, quien esté aquí ve
-            recargarse la página sin explicación. */}
-        {hayVersionNueva && (
-          <div className="aviso-version" role="status">
-            <span>🔄 Hay una versión nueva del juego.</span>
-            <button type="button" onClick={recargarVersion}>Actualizar ahora</button>
-          </div>
-        )}
+        {/* Ventana emergente / banner de actualización */}
+        <UpdateModal
+          isOpen={hayVersionNueva}
+          isBattle={false}
+          countdownSeconds={segundosParaRecarga}
+          onReload={recargarVersion}
+        />
+
         <LandingPage
           onPlayGame={handleGoToGame}
           isLoggedIn={Boolean(user)}
@@ -728,18 +730,14 @@ function App() {
 
   return (
     <>
-      {/* AVISO DE VERSIÓN NUEVA
-          Se recarga solo en cuanto el jugador esté fuera de la batalla; el cartel
-          es para que no parezca que el navegador se ha vuelto loco. Durante la
-          batalla se queda ahí sin recargar: sacar a alguien de su propia partida
-          —y en un amistoso con apuesta, de sus gemas— sería peor que dejarle
-          acabarla. */}
-      {hayVersionNueva && (
-        <div className="aviso-version" role="status">
-          <span>🔄 Hay una versión nueva del juego.</span>
-          <button type="button" onClick={recargarVersion}>Actualizar ahora</button>
-        </div>
-      )}
+      {/* Ventana emergente / banner de actualización */}
+      <UpdateModal
+        isOpen={hayVersionNueva}
+        isBattle={screen === 'battle'}
+        countdownSeconds={segundosParaRecarga}
+        onReload={recargarVersion}
+      />
+
 
       <GameFrame>
         {screen === 'menu' && (
