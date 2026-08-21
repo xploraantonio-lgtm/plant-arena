@@ -1119,6 +1119,10 @@ export default function Battlefield({
             }}
             onClick={(e) => {
               if (isShovelActive) {
+                if (roomId && redBloqueadaRef.current) {
+                  e.stopPropagation()
+                  return
+                }
                 e.stopPropagation()
                 // Y ESTE pico también se registra.
                 //

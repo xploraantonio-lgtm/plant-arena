@@ -110,10 +110,14 @@ Deno.serve(async (req) => {
           body = { error: `invalid_json_${response.status}` }
         }
 
+        if (body.busy === true || body.status === 'busy') {
+          processed.push({ roomId, status: 'busy' })
+          continue
+        }
+
         if (
           body.status === 'pending' ||
-          body.status === 'verificando' ||
-          body.status === 'busy'
+          body.status === 'verificando'
         ) {
           const retryAfterMs =
             typeof body.retryAfterMs === 'number'

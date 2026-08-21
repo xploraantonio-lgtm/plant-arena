@@ -174,6 +174,23 @@ BEGIN
     );
   END IF;
 
+  IF v_room.verification_status = 'verifying' THEN
+    RETURN jsonb_build_object(
+      'ok', TRUE,
+      'scheduled', FALSE,
+      'busy', TRUE,
+      'status', 'verifying'
+    );
+  END IF;
+
+  IF v_room.verification_status <> 'pending' THEN
+    RETURN jsonb_build_object(
+      'ok', TRUE,
+      'scheduled', FALSE,
+      'status', v_room.verification_status
+    );
+  END IF;
+
   UPDATE public.game_rooms
      SET verification_status = 'pending',
          verification_started_at = NULL,
