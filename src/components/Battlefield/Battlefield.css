@@ -749,6 +749,11 @@
   box-shadow: 0 0 30px rgba(224, 67, 67, 0.4);
 }
 
+.game-card--draw {
+  border-color: #ffd700;
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+}
+
 .game-card__title {
   font-family: 'Arial Black', sans-serif;
   font-size: 28px;

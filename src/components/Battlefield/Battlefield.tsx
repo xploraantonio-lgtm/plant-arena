@@ -537,10 +537,10 @@ export default function Battlefield({
 
       setResultadoServidor({
         success: true,
-        status: r.noWinner ? 'resultado_en_disputa' : 'liquidada',
+        status: r.noWinner ? 'empate_verificado' : 'liquidada',
         payout: 0,
       })
-      // Sin ganador (disputa o abandono sin reportes) se muestra como derrota
+      // Sin ganador (empate o abandono sin reportes) se muestra como derrota
       // pero sin premio: el aviso de arriba explica que no se repartió nada.
       terminarPorOrdenDelServidor(r.iWon ? 'victory' : 'defeat')
     }
@@ -1218,14 +1218,18 @@ export default function Battlefield({
         >
           <div
             className={`game-card ${
-              gameStatus === 'victory'
+              ['empate_verificado', 'resultado_en_disputa'].includes(resultadoServidor?.status ?? '')
+                ? 'game-card--draw'
+                : gameStatus === 'victory'
                 ? 'game-card--victory'
                 : 'game-card--defeat'
             }`}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="game-card__title">
-              {gameStatus === 'victory'
+              {['empate_verificado', 'resultado_en_disputa'].includes(resultadoServidor?.status ?? '')
+                ? '¡EMPATE!'
+                : gameStatus === 'victory'
                 ? '¡VICTORIA!'
                 : battleSummaryResult?.isSurrendered
                 ? '🏳️ ¡TE HAS RENDIDO!'
@@ -1253,9 +1257,9 @@ export default function Battlefield({
                     ⚠️ La partida quedó bloqueada para revisión. No se entregó ELO ni pago automático.
                   </p>
                 )}
-                {resultadoServidor?.status === 'empate_verificado' && (
+                {['empate_verificado', 'resultado_en_disputa'].includes(resultadoServidor?.status ?? '') && (
                   <p className="resultado-servidor__esperando">
-                    🤝 Empate verificado por el servidor.
+                    🤝 Empate
                   </p>
                 )}
                 {resultadoServidor?.status === 'liquidada' && (
