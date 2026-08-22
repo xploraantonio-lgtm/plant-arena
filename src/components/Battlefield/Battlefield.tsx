@@ -1127,8 +1127,8 @@ export default function Battlefield({
         </div>
       )}
 
-      {/* Start Overlay */}
-      {gameStatus === 'ready' && !practicePlantId && (
+      {/* Start Overlay (Sólo PvE local / sin sala remota) */}
+      {gameStatus === 'ready' && !practicePlantId && !roomId && (
         <div
           className="game-overlay"
           onClick={(e) => e.stopPropagation()}
@@ -1144,6 +1144,22 @@ export default function Battlefield({
             <button className="game-button" type="button" onClick={() => startGame()}>
               ¡EMPEZAR COMBATE!
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Espera de inicio de sala remota (Ranked / PvP / Rival Semilla) */}
+      {gameStatus === 'ready' && !practicePlantId && Boolean(roomId) && (
+        <div
+          className="game-overlay"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="game-card" onClick={(e) => e.stopPropagation()}>
+            <h2 className="game-card__title">Preparando partida…</h2>
+            <p className="game-card__text">
+              Sincronizando con el servidor. La batalla comenzará en breve.
+            </p>
           </div>
         </div>
       )}

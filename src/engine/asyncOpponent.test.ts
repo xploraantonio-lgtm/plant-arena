@@ -963,5 +963,199 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(controllerReconstruido.sunBank).toBe(0)
     expect(estadoReconstruido.p2SunBank).toBe(0)
   })
+
+  // 54. Test obligatorio de latencia: Intención asíncrona recibida tarde reconstruye y converge al 100%
+  it('54. Intención asíncrona recibida tarde detecta lag, reconstruye el timeline y converge exactamente con la ejecución limpia', () => {
+    const seed = 99999
+    const deckP1: CartaDeMazo[] = [{ slot: 0, plantId: 'peashooter', level: 0, statRolls: [] }]
+    const deckP2: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // Intención histórica del rival: plantar girasol en tic 310 (cuando alcanza 50 soles)
+    const lateIntent: AsyncOpponentIntent = {
+      seq: 1,
+      tick: 310,
+      issuedTick: 310,
+      kind: 'plant',
+      plantId: 'sunflower',
+      slot: 0,
+      lane: 2,
+      col: 2,
+    }
+
+    // A) Ejecución limpia de referencia que conocía la intención desde tic 0
+    const { estado: estadoLimpio, controller: controllerLimpio } = reconstruirPartidaAsync(
+      seed,
+      deckP1,
+      deckP2,
+      [lateIntent],
+      [],
+      330
+    )
+
+    // B) Simulación del cliente que avanza hasta tic 330 SIN conocer la intención (buffer vacío por lag de red)
+    const { estado: estadoDesincronizado } = reconstruirPartidaAsync(
+      seed,
+      deckP1,
+      deckP2,
+      [],
+      [],
+      330
+    )
+    expect(estadoDesincronizado.enemyPlants.length).toBe(0) // No tiene la planta
+    expect(estadoDesincronizado.p2SunBank).toBeGreaterThan(0) // No gastó soles
+
+    // C) En tic 330 llega el paquete del feed con la intención de tic 310
+    const currentTick = 330
+    const nuevasIntenciones = [lateIntent]
+    const buffer: AsyncOpponentIntent[] = []
+    let rehacerDesde: number | null = null
+
+    // Lógica equivalente a useGameEngine.incorporarIntencionesAsync
+    const clavesExistentes = new Set(
+      buffer.map((i) => `${i.seq ?? ''}_${i.issuedTick ?? i.tick}_${i.kind}_${i.lane}_${i.col ?? ''}`)
+    )
+    let tickMasAntiguoNuevo: number | null = null
+
+    for (const n of nuevasIntenciones) {
+      const clave = `${n.seq ?? ''}_${n.issuedTick ?? n.tick}_${n.kind}_${n.lane}_${n.col ?? ''}`
+      if (clavesExistentes.has(clave)) continue
+      clavesExistentes.add(clave)
+      buffer.push(n)
+      const issuedTick = Number(n.issuedTick ?? n.tick)
+      if (Number.isInteger(issuedTick) && issuedTick >= 0) {
+        tickMasAntiguoNuevo =
+          tickMasAntiguoNuevo === null ? issuedTick : Math.min(tickMasAntiguoNuevo, issuedTick)
+      }
+    }
+
+    // D) Detección de intención tardía:
+    expect(tickMasAntiguoNuevo).toBe(310)
+    expect(tickMasAntiguoNuevo! <= currentTick).toBe(true)
+    if (tickMasAntiguoNuevo !== null && tickMasAntiguoNuevo <= currentTick) {
+      rehacerDesde = tickMasAntiguoNuevo
+    }
+    expect(rehacerDesde).toBe(310)
+
+    // E) Reconstrucción obligatoria con el buffer actualizado hasta currentTick (330)
+    const { estado: estadoReconstruido, controller: controllerReconstruido } = reconstruirPartidaAsync(
+      seed,
+      deckP1,
+      deckP2,
+      buffer,
+      [],
+      currentTick
+    )
+
+    // F) Comparación exhaustiva con la ejecución limpia de referencia:
+    expect(estadoReconstruido.tick).toBe(estadoLimpio.tick)
+    expect(estadoReconstruido.p1BaseHp).toBe(estadoLimpio.p1BaseHp)
+    expect(estadoReconstruido.p2BaseHp).toBe(estadoLimpio.p2BaseHp)
+    expect(estadoReconstruido.enemyPlants.length).toBe(estadoLimpio.enemyPlants.length)
+    expect(estadoReconstruido.enemyPlants[0].plantId).toBe(estadoLimpio.enemyPlants[0].plantId)
+    expect(estadoReconstruido.enemyPlants[0].lane).toBe(estadoLimpio.enemyPlants[0].lane)
+    expect(estadoReconstruido.enemyPlants[0].x).toBe(estadoLimpio.enemyPlants[0].x)
+    expect(estadoReconstruido.enemyPlants[0].hp).toBe(estadoLimpio.enemyPlants[0].hp)
+    expect(estadoReconstruido.plants.length).toBe(estadoLimpio.plants.length)
+    expect(estadoReconstruido.p2SunBank).toBe(estadoLimpio.p2SunBank)
+    expect(controllerReconstruido.sunBank).toBe(controllerLimpio.sunBank)
+    expect(controllerReconstruido.nextIntentIndex).toBe(controllerLimpio.nextIntentIndex)
+    expect(controllerReconstruido.pendingRetry).toBe(controllerLimpio.pendingRetry)
+    expect(controllerReconstruido.stats.intentionsExecuted).toBe(controllerLimpio.stats.intentionsExecuted)
+    expect(controllerReconstruido.slotCooldowns).toEqual(controllerLimpio.slotCooldowns)
+  })
+
+  // 55. Intención futura recibida a tiempo NO dispara reconstrucción
+  it('55. Intención futura recibida a tiempo se agrega al buffer sin solicitar reconstrucción', () => {
+    const currentTick = 100
+    const buffer: AsyncOpponentIntent[] = []
+    const nuevasIntenciones: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 150, issuedTick: 150, kind: 'plant', plantId: 'peashooter', slot: 0, lane: 1, col: 1 },
+    ]
+
+    const clavesExistentes = new Set(
+      buffer.map((i) => `${i.seq ?? ''}_${i.issuedTick ?? i.tick}_${i.kind}_${i.lane}_${i.col ?? ''}`)
+    )
+    let tickMasAntiguoNuevo: number | null = null
+    let rehacerDesde: number | null = null
+
+    for (const n of nuevasIntenciones) {
+      const clave = `${n.seq ?? ''}_${n.issuedTick ?? n.tick}_${n.kind}_${n.lane}_${n.col ?? ''}`
+      if (clavesExistentes.has(clave)) continue
+      clavesExistentes.add(clave)
+      buffer.push(n)
+      const issuedTick = Number(n.issuedTick ?? n.tick)
+      if (Number.isInteger(issuedTick) && issuedTick >= 0) {
+        tickMasAntiguoNuevo =
+          tickMasAntiguoNuevo === null ? issuedTick : Math.min(tickMasAntiguoNuevo, issuedTick)
+      }
+    }
+
+    if (tickMasAntiguoNuevo !== null && tickMasAntiguoNuevo <= currentTick) {
+      rehacerDesde = tickMasAntiguoNuevo
+    }
+
+    // Se incorporó al buffer pero NO necesita rehacer porque aún no ha ocurrido
+    expect(buffer.length).toBe(1)
+    expect(tickMasAntiguoNuevo).toBe(150)
+    expect(rehacerDesde).toBeNull()
+  })
+
+  // 56. Intención repetida / duplicada es ignorada y no dispara reconstrucción
+  it('56. Intenciones repetidas no modifican el buffer ni disparan reconstrucción', () => {
+    const currentTick = 200
+    const intent: AsyncOpponentIntent = {
+      seq: 1,
+      tick: 50,
+      issuedTick: 50,
+      kind: 'plant',
+      plantId: 'sunflower',
+      slot: 0,
+      lane: 1,
+      col: 1,
+    }
+    const buffer: AsyncOpponentIntent[] = [intent]
+    const clavesExistentes = new Set(
+      buffer.map((i) => `${i.seq ?? ''}_${i.issuedTick ?? i.tick}_${i.kind}_${i.lane}_${i.col ?? ''}`)
+    )
+
+    let huboNuevas = false
+    let tickMasAntiguoNuevo: number | null = null
+    let rehacerDesde: number | null = null
+
+    // Intentar incorporar la misma intención
+    for (const n of [intent]) {
+      const clave = `${n.seq ?? ''}_${n.issuedTick ?? n.tick}_${n.kind}_${n.lane}_${n.col ?? ''}`
+      if (clavesExistentes.has(clave)) continue
+      clavesExistentes.add(clave)
+      buffer.push(n)
+      huboNuevas = true
+      const issuedTick = Number(n.issuedTick ?? n.tick)
+      if (Number.isInteger(issuedTick) && issuedTick >= 0) {
+        tickMasAntiguoNuevo =
+          tickMasAntiguoNuevo === null ? issuedTick : Math.min(tickMasAntiguoNuevo, issuedTick)
+      }
+    }
+
+    if (huboNuevas && tickMasAntiguoNuevo !== null && tickMasAntiguoNuevo <= currentTick) {
+      rehacerDesde = tickMasAntiguoNuevo
+    }
+
+    expect(huboNuevas).toBe(false)
+    expect(buffer.length).toBe(1)
+    expect(rehacerDesde).toBeNull()
+  })
+
+  // 57. Battlefield UX no muestra PVE ni PC en salas con roomId
+  it('57. Battlefield no muestra overlay PVE / PC cuando existe roomId', () => {
+    const bfPath = join(process.cwd(), 'src', 'components', 'Battlefield', 'Battlefield.tsx')
+    const bfContent = readFileSync(bfPath, 'utf8')
+
+    // El overlay de PvE sólo aparece con !roomId
+    expect(bfContent).toMatch(/gameStatus === 'ready' && !practicePlantId && !roomId/i)
+
+    // Cuando roomId está presente, muestra pantalla neutra de espera
+    expect(bfContent).toMatch(/gameStatus === 'ready' && !practicePlantId && Boolean\(roomId\)/i)
+    expect(bfContent).toMatch(/Preparando partida…/i)
+  })
 })
 

@@ -219,6 +219,8 @@ export function useGameEngine() {
 
   /**
    * Incorpora intenciones del Rival Semilla recibidas progresivamente desde el servidor.
+   * Si una intención llega tarde (su issuedTick <= stateRef.current.tick), marca rehacerDesdeRef
+   * para que el bucle de juego ejecute una reconstrucción determinista exacta desde ese tic.
    */
   const incorporarIntencionesAsync = useCallback((nuevasIntenciones: any[]) => {
     if (!nuevasIntenciones || nuevasIntenciones.length === 0) return
@@ -228,17 +230,40 @@ export function useGameEngine() {
     )
 
     let huboNuevas = false
+    let tickMasAntiguoNuevo: number | null = null
+
     for (const n of nuevasIntenciones) {
       const clave = `${n.seq ?? ''}_${n.issuedTick ?? n.tick}_${n.kind}_${n.lane}_${n.col ?? ''}`
-      if (!clavesExistentes.has(clave)) {
-        clavesExistentes.add(clave)
-        buffer.push(n)
-        huboNuevas = true
+      if (clavesExistentes.has(clave)) continue
+
+      clavesExistentes.add(clave)
+      buffer.push(n)
+      huboNuevas = true
+
+      const issuedTick = Number(n.issuedTick ?? n.tick)
+      if (Number.isInteger(issuedTick) && issuedTick >= 0) {
+        tickMasAntiguoNuevo =
+          tickMasAntiguoNuevo === null
+            ? issuedTick
+            : Math.min(tickMasAntiguoNuevo, issuedTick)
       }
     }
 
-    if (huboNuevas && asyncOpponentRef.current) {
+    if (!huboNuevas) return
+
+    if (asyncOpponentRef.current) {
       asyncOpponentRef.current.intents = normalizarIntenciones(buffer)
+    }
+
+    const currentTick = stateRef.current.tick
+    if (
+      tickMasAntiguoNuevo !== null &&
+      tickMasAntiguoNuevo <= currentTick
+    ) {
+      rehacerDesdeRef.current =
+        rehacerDesdeRef.current === null
+          ? tickMasAntiguoNuevo
+          : Math.min(rehacerDesdeRef.current, tickMasAntiguoNuevo)
     }
   }, [])
 
