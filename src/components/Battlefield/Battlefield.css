@@ -1392,3 +1392,53 @@
 @media (prefers-reduced-motion: reduce) {
   .sun-item--se-va { animation: none; opacity: 0.85; }
 }
+
+/* ── CONFIRMACIÓN DE PARTIDA ─────────────────────────────── */
+
+.game-card--loading {
+  border-color: #facc15;
+  box-shadow: 0 0 30px rgba(250, 204, 21, 0.30);
+}
+
+.resultado-servidor__cargando {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  margin: 0;
+  padding: 14px 18px;
+
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-radius: 10px;
+
+  background: rgba(15, 23, 42, 0.55);
+
+  color: #fef3c7;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.resultado-servidor__spinner {
+  width: 20px;
+  height: 20px;
+
+  flex: 0 0 20px;
+
+  border: 3px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #facc15;
+
+  border-radius: 50%;
+
+  animation: resultado-servidor-spin 0.75s linear infinite;
+}
+
+@keyframes resultado-servidor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

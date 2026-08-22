@@ -233,6 +233,23 @@ export default function Battlefield({
     error?: string
   } | null>(null)
 
+  const esperandoConfirmacionServidor =
+    Boolean(roomId) &&
+    (
+      resultadoServidor === null ||
+      ['verificando', 'verificacion_pendiente'].includes(
+        resultadoServidor.status ?? ''
+      )
+    )
+
+  const resultadoEnRevision =
+    resultadoServidor?.status === 'revision_servidor'
+
+  const resultadoEmpatado =
+    ['empate_verificado', 'resultado_en_disputa'].includes(
+      resultadoServidor?.status ?? ''
+    )
+
   const [battleSummaryResult, setBattleSummaryResult] = useState<{
     eloChange?: number
     newElo?: number
@@ -1383,7 +1400,11 @@ export default function Battlefield({
         >
           <div
             className={`game-card ${
-              ['empate_verificado', 'resultado_en_disputa'].includes(resultadoServidor?.status ?? '')
+              esperandoConfirmacionServidor
+                ? 'game-card--loading'
+                : resultadoEmpatado
+                ? 'game-card--draw'
+                : resultadoEnRevision
                 ? 'game-card--draw'
                 : gameStatus === 'victory'
                 ? 'game-card--victory'
@@ -1392,7 +1413,11 @@ export default function Battlefield({
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="game-card__title">
-              {['empate_verificado', 'resultado_en_disputa'].includes(resultadoServidor?.status ?? '')
+              {esperandoConfirmacionServidor
+                ? 'CARGANDO...'
+                : resultadoEnRevision
+                ? 'PARTIDA EN REVISIÓN'
+                : resultadoEmpatado
                 ? '¡EMPATE!'
                 : gameStatus === 'victory'
                 ? '¡VICTORIA!'
@@ -1407,212 +1432,224 @@ export default function Battlefield({
                 verlo en lugar de creer que ya cobró. */}
             {roomId && (
               <div className="resultado-servidor">
-                {!resultadoServidor && (
-                  <p className="resultado-servidor__esperando">
-                    Enviando el resultado…
-                  </p>
+                {esperandoConfirmacionServidor && (
+                  <div className="resultado-servidor__cargando">
+                    <span
+                      className="resultado-servidor__spinner"
+                      aria-hidden="true"
+                    />
+                    <span>Cargando...</span>
+                  </div>
                 )}
-                {['verificando', 'verificacion_pendiente'].includes(resultadoServidor?.status ?? '') && (
-                  <p className="resultado-servidor__esperando">
-                    🔐 El servidor está reconstruyendo y verificando la partida…
-                  </p>
-                )}
+
                 {resultadoServidor?.status === 'revision_servidor' && (
                   <p className="resultado-servidor__disputa">
-                    ⚠️ La partida quedó bloqueada para revisión. No se entregó ELO ni pago automático.
+                    ⚠️ Empate Tecnico No se modificó el ELO.
                   </p>
                 )}
-                {['empate_verificado', 'resultado_en_disputa'].includes(resultadoServidor?.status ?? '') && (
+
+                {resultadoEmpatado && (
                   <p className="resultado-servidor__esperando">
-                    🤝 Empate
+                    🤝 Partida empatada
                   </p>
                 )}
+
                 {resultadoServidor?.status === 'liquidada' && (
                   <p className="resultado-servidor__ok">
                     ✅ Partida Confirmada
+
                     {typeof resultadoServidor.eloGained === 'number' &&
                       ` +${resultadoServidor.eloGained} 🏆`}
+
                     {typeof resultadoServidor.eloLost === 'number' &&
                       resultadoServidor.eloLost > 0 &&
                       ` -${resultadoServidor.eloLost} 🏆`}
+
                     {typeof resultadoServidor.payout === 'number' &&
                       resultadoServidor.payout > 0 &&
                       ` · +${resultadoServidor.payout} 💎`}
                   </p>
                 )}
-                {resultadoServidor?.error && (
-                  <p className="resultado-servidor__disputa">
-                    No se pudo enviar el resultado: {resultadoServidor.error}
-                  </p>
-                )}
+
+                {!esperandoConfirmacionServidor &&
+                  resultadoServidor?.error && (
+                    <p className="resultado-servidor__disputa">
+                      {resultadoServidor.error}
+                    </p>
+                  )}
               </div>
             )}
 
-            {/* ELO BADGE */}
-            {battleSummaryResult?.eloChange !== undefined && (
-              <div
-                className={`elo-result-badge ${
-                  battleSummaryResult.eloChange >= 0
-                    ? 'elo-result-badge--win'
-                    : 'elo-result-badge--loss'
-                }`}
-              >
-                <span>
-                  {battleSummaryResult.eloChange >= 0
-                    ? `🏆 +${battleSummaryResult.eloChange} COPAS`
-                    : `🏆 ${battleSummaryResult.eloChange} COPAS`}
-                </span>
-                <span className="elo-result-badge__total">
-                  (Total: {battleSummaryResult.newElo || userElo} 🏆)
-                </span>
-              </div>
-            )}
-
-            <div className="game-card__stats">
-              <p>☀️ Soles Recolectados: {stats.sunsCollected}</p>
-              <p>🌱 Plantas Enemigas Eliminadas: {stats.enemyPlantsDefeated}</p>
-              <p>🌻 Plantas Colocadas: {stats.plantsPlaced}</p>
-            </div>
-
-            {/* VICTORY FREE PACK REWARD DISPLAY */}
-            {gameStatus === 'victory' && (
-              <div className="victory-pack-reward">
-                {battleSummaryResult?.packResult?.awarded ? (
-                  <div className="victory-pack-reward__box">
-                    <span className="victory-pack-reward__title">
-                      🎁 ¡NUEVO SOBRE DE BATALLA OBTENIDO!
-                    </span>
-                    <div className="victory-pack-reward__card">
-                      <img
-                        src="/game-assets/greenfoot/seed_pack_pvp.png"
-                        alt="Sobre de Batalla PvP"
-                        className="victory-pack-reward__img"
-                      />
-                      <div className="victory-pack-reward__info">
-                        <span className="victory-pack-reward__name">
-                          SOBRE DE BATALLA (1 CARTA)
-                        </span>
-                        <span className="victory-pack-reward__timer">
-                          ⏳ Tiempo de Espera: <strong>{battleSummaryResult.packResult.durationHours} hora(s)</strong>
-                        </span>
-                        <span className="victory-pack-reward__loc">
-                          📍 Guardado en tu Slot de Sobres del Menú
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : battleSummaryResult?.packResult?.isSlotsFull ? (
-                  <div className="victory-pack-reward__full">
-                    ⚠️ <strong>SLOTS DE SOBRES LLENOS (4/4)</strong>
-                    <br />
-                    Abre un sobre en el Menú Principal para liberar espacio.
-                  </div>
-                ) : null}
-
-                {/* COLOSSEUM MATCH REWARD CARD */}
-                {matchMode === 'colosseum' && colosseumResult && (
-                  <div className="colosseum-battle-payout-box">
-                    {gameStatus === 'victory' ? (
-                      <>
-                        <div className="colosseum-payout-header">
-                          <span>🏛️ ¡VICTORIA EN EL COLISEO!</span>
-                        </div>
-                        <div className="colosseum-payout-gems">
-                          + {colosseumResult.payoutGems} GEMAS 💎
-                        </div>
-                        <div className="colosseum-payout-streak">
-                          🔥 Racha Actual: <strong>{colosseumResult.newStreak} victorias seguidas</strong>
-                        </div>
-                        {colosseumResult.isNewRecord && (
-                          <div className="colosseum-payout-record">
-                            👑 ¡NUEVO RÉCORD DE TEMPORADA! ({colosseumResult.newMaxStreak} Victorias)
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div className="colosseum-payout-header colosseum-payout-header--defeat">
-                          <span>💀 DERROTA EN EL COLISEO</span>
-                        </div>
-                        <div className="colosseum-payout-loss">
-                          {colosseumConfig?.usedTicket
-                            ? '🎟️ 1 Ticket de Coliseo consumido'
-                            : `💎 -${colosseumConfig?.betGems || 0.5} Gemas`}
-                        </div>
-                        <div className="colosseum-payout-streak" style={{ color: '#ef4444' }}>
-                          🔥 Racha actual reiniciada a 0 (Récord máximo preservado)
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* TOURNAMENT ROUND REWARD CARD */}
-                {matchMode === 'tournament' && tournamentResult && (
+            {!esperandoConfirmacionServidor && (
+              <>
+                {/* ELO BADGE */}
+                {battleSummaryResult?.eloChange !== undefined && (
                   <div
-                    className="colosseum-battle-payout-box"
-                    style={{ borderColor: '#a855f7', boxShadow: '0 0 20px rgba(168, 85, 247, 0.35)' }}
+                    className={`elo-result-badge ${
+                      battleSummaryResult.eloChange >= 0
+                        ? 'elo-result-badge--win'
+                        : 'elo-result-badge--loss'
+                    }`}
                   >
-                    {gameStatus === 'victory' ? (
-                      <>
-                        <div className="colosseum-payout-header" style={{ color: '#d8b4fe' }}>
-                          🏆 ¡VICTORIA EN EL TORNEO!
+                    <span>
+                      {battleSummaryResult.eloChange >= 0
+                        ? `🏆 +${battleSummaryResult.eloChange} COPAS`
+                        : `🏆 ${battleSummaryResult.eloChange} COPAS`}
+                    </span>
+                    <span className="elo-result-badge__total">
+                      (Total: {battleSummaryResult.newElo || userElo} 🏆)
+                    </span>
+                  </div>
+                )}
+
+                <div className="game-card__stats">
+                  <p>☀️ Soles Recolectados: {stats.sunsCollected}</p>
+                  <p>🌱 Plantas Enemigas Eliminadas: {stats.enemyPlantsDefeated}</p>
+                  <p>🌻 Plantas Colocadas: {stats.plantsPlaced}</p>
+                </div>
+
+                {/* VICTORY FREE PACK REWARD DISPLAY */}
+                {gameStatus === 'victory' && (
+                  <div className="victory-pack-reward">
+                    {battleSummaryResult?.packResult?.awarded ? (
+                      <div className="victory-pack-reward__box">
+                        <span className="victory-pack-reward__title">
+                          🎁 ¡NUEVO SOBRE DE BATALLA OBTENIDO!
+                        </span>
+                        <div className="victory-pack-reward__card">
+                          <img
+                            src="/game-assets/greenfoot/seed_pack_pvp.png"
+                            alt="Sobre de Batalla PvP"
+                            className="victory-pack-reward__img"
+                          />
+                          <div className="victory-pack-reward__info">
+                            <span className="victory-pack-reward__name">
+                              SOBRE DE BATALLA (1 CARTA)
+                            </span>
+                            <span className="victory-pack-reward__timer">
+                              ⏳ Tiempo de Espera: <strong>{battleSummaryResult.packResult.durationHours} hora(s)</strong>
+                            </span>
+                            <span className="victory-pack-reward__loc">
+                              📍 Guardado en tu Slot de Sobres del Menú
+                            </span>
+                          </div>
                         </div>
-                        <div className="colosseum-payout-gems" style={{ color: '#4ade80' }}>
-                          +1 VICTORIA (Total: 🔥 {tournamentResult.userWins})
-                        </div>
-                        <div className="colosseum-payout-streak">
-                          📊 Posición Actual: <strong>#{TournamentManager.getUserRank(tournamentResult)}</strong> | Vidas: {Array.from({ length: 3 }).map((_, i) => (
-                            <span key={i}>{i < 3 - tournamentResult.userLosses ? '❤️' : '💔'}</span>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="colosseum-payout-header colosseum-payout-header--defeat">
-                          💔 DERROTA EN EL TORNEO
-                        </div>
-                        <div className="colosseum-payout-loss">
-                          Perdiste 1 vida ({Math.max(0, 3 - tournamentResult.userLosses)}/3 restantes)
-                        </div>
-                        <div className="colosseum-payout-streak" style={{ color: tournamentResult.isEliminated ? '#ef4444' : '#fdba74' }}>
-                          {tournamentResult.isEliminated
-                            ? '💀 ¡HAS SIDO ELIMINADO DEL TORNEO! (3/3 derrotas)'
-                            : `⚠️ Aún tienes ${3 - tournamentResult.userLosses} vida(s) para seguir buscando partidas.`}
-                        </div>
-                      </>
+                      </div>
+                    ) : battleSummaryResult?.packResult?.isSlotsFull ? (
+                      <div className="victory-pack-reward__full">
+                        ⚠️ <strong>SLOTS DE SOBRES LLENOS (4/4)</strong>
+                        <br />
+                        Abre un sobre en el Menú Principal para liberar espacio.
+                      </div>
+                    ) : null}
+
+                    {/* COLOSSEUM MATCH REWARD CARD */}
+                    {matchMode === 'colosseum' && colosseumResult && (
+                      <div className="colosseum-battle-payout-box">
+                        {gameStatus === 'victory' ? (
+                          <>
+                            <div className="colosseum-payout-header">
+                              <span>🏛️ ¡VICTORIA EN EL COLISEO!</span>
+                            </div>
+                            <div className="colosseum-payout-gems">
+                              + {colosseumResult.payoutGems} GEMAS 💎
+                            </div>
+                            <div className="colosseum-payout-streak">
+                              🔥 Racha Actual: <strong>{colosseumResult.newStreak} victorias seguidas</strong>
+                            </div>
+                            {colosseumResult.isNewRecord && (
+                              <div className="colosseum-payout-record">
+                                👑 ¡NUEVO RÉCORD DE TEMPORADA! ({colosseumResult.newMaxStreak} Victorias)
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="colosseum-payout-header colosseum-payout-header--defeat">
+                              <span>💀 DERROTA EN EL COLISEO</span>
+                            </div>
+                            <div className="colosseum-payout-loss">
+                              {colosseumConfig?.usedTicket
+                                ? '🎟️ 1 Ticket de Coliseo consumido'
+                                : `💎 -${colosseumConfig?.betGems || 0.5} Gemas`}
+                            </div>
+                            <div className="colosseum-payout-streak" style={{ color: '#ef4444' }}>
+                              🔥 Racha actual reiniciada a 0 (Récord máximo preservado)
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* TOURNAMENT ROUND REWARD CARD */}
+                    {matchMode === 'tournament' && tournamentResult && (
+                      <div
+                        className="colosseum-battle-payout-box"
+                        style={{ borderColor: '#a855f7', boxShadow: '0 0 20px rgba(168, 85, 247, 0.35)' }}
+                      >
+                        {gameStatus === 'victory' ? (
+                          <>
+                            <div className="colosseum-payout-header" style={{ color: '#d8b4fe' }}>
+                              🏆 ¡VICTORIA EN EL TORNEO!
+                            </div>
+                            <div className="colosseum-payout-gems" style={{ color: '#4ade80' }}>
+                              +1 VICTORIA (Total: 🔥 {tournamentResult.userWins})
+                            </div>
+                            <div className="colosseum-payout-streak">
+                              📊 Posición Actual: <strong>#{TournamentManager.getUserRank(tournamentResult)}</strong> | Vidas: {Array.from({ length: 3 }).map((_, i) => (
+                                <span key={i}>{i < 3 - tournamentResult.userLosses ? '❤️' : '💔'}</span>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="colosseum-payout-header colosseum-payout-header--defeat">
+                              💔 DERROTA EN EL TORNEO
+                            </div>
+                            <div className="colosseum-payout-loss">
+                              Perdiste 1 vida ({Math.max(0, 3 - tournamentResult.userLosses)}/3 restantes)
+                            </div>
+                            <div className="colosseum-payout-streak" style={{ color: tournamentResult.isEliminated ? '#ef4444' : '#fdba74' }}>
+                              {tournamentResult.isEliminated
+                                ? '💀 ¡HAS SIDO ELIMINADO DEL TORNEO! (3/3 derrotas)'
+                                : `⚠️ Aún tienes ${3 - tournamentResult.userLosses} vida(s) para seguir buscando partidas.`}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
+
+                <div className="game-card__prompt">
+                  ¿Deseas seguir jugando o regresar al menú?
+                </div>
+
+                <div className="game-card__actions">
+                  <button
+                    className="game-button"
+                    type="button"
+                    onClick={handlePlayAgain}
+                  >
+                    🎮 SEGUIR JUGANDO
+                  </button>
+                  {onBackToMenu && (
+                    <button
+                      className="game-button game-button--secondary"
+                      type="button"
+                      onClick={() => {
+                        soundManager.playBgm('menu')
+                        onBackToMenu()
+                      }}
+                    >
+                      🏠 MENÚ PRINCIPAL
+                    </button>
+                  )}
+                </div>
+              </>
             )}
-
-            <div className="game-card__prompt">
-              ¿Deseas seguir jugando o regresar al menú?
-            </div>
-
-            <div className="game-card__actions">
-              <button
-                className="game-button"
-                type="button"
-                onClick={handlePlayAgain}
-              >
-                🎮 SEGUIR JUGANDO
-              </button>
-              {onBackToMenu && (
-                <button
-                  className="game-button game-button--secondary"
-                  type="button"
-                  onClick={() => {
-                    soundManager.playBgm('menu')
-                    onBackToMenu()
-                  }}
-                >
-                  🏠 MENÚ PRINCIPAL
-                </button>
-              )}
-            </div>
           </div>
+
         </div>
       )}
 

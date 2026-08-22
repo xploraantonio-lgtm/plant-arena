@@ -958,24 +958,47 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
           break
 
         case 'iceberg_fade': {
-          // Sólo si el hielo sigue en el campo: pudo derretirlo un enemigo.
-          const hielo = state.plants.find((p) => p.id === accion.plantId)
+          // Puede pertenecer a cualquiera de los dos equipos.
+          // Antes sólo buscábamos state.plants; una Iceberg del rival
+          // podía quedarse viva únicamente en una perspectiva.
+          const hielo =
+            state.plants.find(
+              (p) => p.id === accion.plantId
+            ) ??
+            state.enemyPlants.find(
+              (p) => p.id === accion.plantId
+            )
+
           if (hielo) {
-            hielo.spriteOverride = '/game-assets/plants/iceberglettuce_hd.png'
+            hielo.spriteOverride =
+              '/game-assets/plants/iceberglettuce_hd.png'
+
             aunNoVencen.push({
               atTick: state.tick + msToTicks(300),
               kind: 'remove_plant',
               plantId: accion.plantId,
             })
           }
+
           break
         }
 
         case 'clear_heal_fx': {
-          const aliado = state.plants.find((p) => p.id === accion.plantId)
-          if (aliado) aliado.isHealingFx = false
+          const aliado =
+            state.plants.find(
+              (p) => p.id === accion.plantId
+            ) ??
+            state.enemyPlants.find(
+              (p) => p.id === accion.plantId
+            )
+
+          if (aliado) {
+            aliado.isHealingFx = false
+          }
+
           break
         }
+
 
         case 'spawn_projectile':
           state.projectiles.push(accion.projectile)
