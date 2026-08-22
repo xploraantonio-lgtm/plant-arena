@@ -297,7 +297,6 @@ function App() {
    */
   const [mazosDeLaSala, setMazosDeLaSala] = useState<{ mio: unknown; rival: unknown } | null>(null)
   const [partidaAsincrona, setPartidaAsincrona] = useState<boolean>(false)
-  const [accionesSnapshotAsincronas, setAccionesSnapshotAsincronas] = useState<unknown>(null)
 
   /**
    * Cuando el servidor empareja, se leen la semilla y los jugadores de la sala y
@@ -323,7 +322,6 @@ function App() {
           p1Deck: basica.p1_deck,
           p2Deck: basica.is_async_match ? basica.async_deck_snapshot : basica.p2_deck,
           isAsyncMatch: basica.is_async_match,
-          asyncActionsSnapshot: basica.async_actions_snapshot,
         }
       })())
       if (cancelado) return
@@ -346,7 +344,6 @@ function App() {
         rival: soyP1 ? sala.p2Deck : sala.p1Deck,
       })
       setPartidaAsincrona(Boolean((sala as any).isAsyncMatch))
-      setAccionesSnapshotAsincronas((sala as any).asyncActionsSnapshot ?? null)
       setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
       setPracticePlantId(null)
       setScreen('battle')
@@ -816,7 +813,6 @@ function App() {
                ver engine/mazoDeLaSala.ts. */
             mazosDeLaSala={mazosDeLaSala}
             isAsyncMatch={partidaAsincrona}
-            asyncActionsSnapshot={accionesSnapshotAsincronas}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)

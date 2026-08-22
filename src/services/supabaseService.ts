@@ -1106,13 +1106,12 @@ export const SupabaseService = {
     async_avatar_id?: string | null
     async_rating_snapshot?: number | null
     async_deck_snapshot?: unknown
-    async_actions_snapshot?: unknown
   } | null> {
     if (!isSupabaseConfigured()) return null
     try {
       const { data, error } = await supabase
         .from('game_rooms')
-        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status, is_async_match, async_opponent_id, async_display_name, async_avatar_id, async_rating_snapshot, async_deck_snapshot, async_actions_snapshot')
+        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status, is_async_match, async_opponent_id, async_display_name, async_avatar_id, async_rating_snapshot, async_deck_snapshot')
         .eq('id', roomId)
         .single()
       if (error) {
@@ -1122,6 +1121,36 @@ export const SupabaseService = {
       return data as any
     } catch (e) {
       logError('getGameRoom', e)
+      return null
+    }
+  },
+
+  /**
+   * Pide al servidor las intenciones del Rival Semilla hasta la ventana autorizada.
+   */
+  async pollRankedAsyncIntents(
+    roomId: string,
+    clientTick: number
+  ): Promise<{
+    ok: boolean
+    serverTick?: number
+    maxRevealedTick?: number
+    intents?: any[]
+    error?: string
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('poll_ranked_async_intents', {
+        p_room_id: roomId,
+        p_client_tick: clientTick,
+      })
+      if (error) {
+        logError('pollRankedAsyncIntents', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('pollRankedAsyncIntents', e)
       return null
     }
   },

@@ -381,6 +381,7 @@ BEGIN
   SELECT * INTO v_candidate
     FROM public.ranked_async_opponents
    WHERE active = TRUE
+     AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
      AND rating_snapshot BETWEEN (v_player_elo - 200) AND (v_player_elo + 200)
      AND id <> ALL(v_recent)
    ORDER BY random()
@@ -391,6 +392,7 @@ BEGIN
     SELECT * INTO v_candidate
       FROM public.ranked_async_opponents
      WHERE active = TRUE
+       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
        AND rating_snapshot BETWEEN (v_player_elo - 200) AND (v_player_elo + 200)
      ORDER BY random()
      LIMIT 1;
@@ -401,6 +403,7 @@ BEGIN
     SELECT * INTO v_candidate
       FROM public.ranked_async_opponents
      WHERE active = TRUE
+       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
        AND rating_snapshot BETWEEN (v_player_elo - 400) AND (v_player_elo + 400)
        AND id <> ALL(v_recent)
      ORDER BY random()
@@ -412,6 +415,7 @@ BEGIN
     SELECT * INTO v_candidate
       FROM public.ranked_async_opponents
      WHERE active = TRUE
+       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
        AND rating_snapshot BETWEEN (v_player_elo - 400) AND (v_player_elo + 400)
      ORDER BY random()
      LIMIT 1;
@@ -422,6 +426,7 @@ BEGIN
     SELECT * INTO v_candidate
       FROM public.ranked_async_opponents
      WHERE active = TRUE
+       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
        AND id <> ALL(v_recent)
      ORDER BY random()
      LIMIT 1;
@@ -432,6 +437,7 @@ BEGIN
     SELECT * INTO v_candidate
       FROM public.ranked_async_opponents
      WHERE active = TRUE
+       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
      ORDER BY random()
      LIMIT 1;
   END IF;
@@ -440,11 +446,30 @@ BEGIN
     RETURN jsonb_build_object('matched', FALSE, 'error', 'no_hay_candidato_semilla');
   END IF;
 
-  -- ── GENERAR METADATOS INVENTADOS Y SEMILLA RNG NUEVA ──────────────────────
+  -- ── GENERAR METADATOS INVENTADOS Y SEMILLA RNG NUEVA GARANTIZADA ──────────
   v_random_name := v_names[1 + floor(random() * array_length(v_names, 1))::INTEGER];
   v_random_avatar := v_avatars[1 + floor(random() * array_length(v_avatars, 1))::INTEGER];
-  -- Semilla RNG completamente NUEVA e independiente
-  v_new_seed := FLOOR(100000 + random() * 899999)::INTEGER;
+
+  -- Garantizar por código que la semilla sea nueva e independiente
+  DECLARE
+    v_source_seed INTEGER;
+    v_seed_attempts INTEGER := 0;
+  BEGIN
+    SELECT seed INTO v_source_seed FROM public.game_rooms WHERE id = v_candidate.source_room_id;
+    LOOP
+      v_new_seed := FLOOR(100000 + random() * 899999)::INTEGER;
+      v_seed_attempts := v_seed_attempts + 1;
+      EXIT WHEN (v_source_seed IS NULL OR v_new_seed <> v_source_seed)
+        AND NOT EXISTS (
+          SELECT 1 FROM public.game_rooms
+           WHERE async_opponent_id = v_candidate.id
+             AND seed = v_new_seed
+        );
+      IF v_seed_attempts > 100 THEN
+        RAISE EXCEPTION 'No se pudo generar una seed única para el Rival Semilla tras 100 intentos';
+      END IF;
+    END LOOP;
+  END;
 
   -- ── CREAR LA SALA ASÍNCRONA ───────────────────────────────────────────────
   INSERT INTO public.game_rooms (
@@ -710,7 +735,6 @@ BEGIN
                  END,
     'iAm',       CASE WHEN v_uid = v_room.player1_id THEN 'p1' ELSE 'p2' END,
     'isAsyncMatch', COALESCE(v_room.is_async_match, FALSE),
-    'asyncActionsSnapshot', CASE WHEN v_room.is_async_match THEN v_room.async_actions_snapshot ELSE NULL END,
     'startedAt', v_room.started_at,
     'serverNow', NOW()
   );
@@ -719,6 +743,85 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.game_room_info(UUID) FROM anon, PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.game_room_info(UUID) TO authenticated;
+
+
+-- -----------------------------------------------------------------------------
+-- 6.1 FEED AUTORIZADO DE INTENCIONES ASÍNCRONAS (poll_ranked_async_intents)
+-- -----------------------------------------------------------------------------
+/**
+ * Entrega las intenciones del Rival Semilla únicamente hasta la ventana de tiempo
+ * autorizada (~5 s por delante del servidor o cliente).
+ * Protege contra ingeniería inversa y lectura del plan completo de la partida.
+ */
+CREATE OR REPLACE FUNCTION public.poll_ranked_async_intents(
+  p_room_id UUID,
+  p_client_tick INTEGER
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_room RECORD;
+  v_opp RECORD;
+  v_inicio TIMESTAMPTZ;
+  v_server_tick INTEGER;
+  v_max_reveal_tick INTEGER;
+  v_intents JSONB;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
+  SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada'; END IF;
+
+  IF NOT COALESCE(v_room.is_async_match, FALSE) THEN
+    RAISE EXCEPTION 'Esta sala no es asíncrona';
+  END IF;
+
+  IF v_room.player1_id <> v_uid THEN
+    RAISE EXCEPTION 'No participas en esta partida';
+  END IF;
+
+  SELECT * INTO v_opp FROM public.ranked_async_opponents WHERE id = v_room.async_opponent_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', TRUE, 'intents', '[]'::JSONB);
+  END IF;
+
+  -- Calcular tic del servidor para controlar solicitudes maliciosas
+  v_inicio := COALESCE(v_room.started_at, v_room.created_at);
+  v_server_tick := GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (clock_timestamp() - v_inicio)) * 1000.0 / 33.0)::INTEGER);
+
+  -- Ventana de anticipación permitida: máx 150 tics (~5 s) por delante del servidor o cliente
+  v_max_reveal_tick := GREATEST(COALESCE(p_client_tick, 0), v_server_tick) + 150;
+
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'seq', (elem->>'seq')::INTEGER,
+      'tick', (elem->>'tick')::INTEGER,
+      'issuedTick', COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER),
+      'kind', elem->>'kind',
+      'plantId', elem->>'plantId',
+      'slot', (elem->>'slot')::INTEGER,
+      'lane', (elem->>'lane')::INTEGER,
+      'col', (elem->>'col')::INTEGER
+    ) ORDER BY COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) ASC
+  ), '[]'::JSONB)
+  INTO v_intents
+  FROM jsonb_array_elements(v_opp.actions_snapshot) AS elem
+  WHERE COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) <= v_max_reveal_tick;
+
+  RETURN jsonb_build_object(
+    'ok', TRUE,
+    'serverTick', v_server_tick,
+    'maxRevealedTick', v_max_reveal_tick,
+    'intents', v_intents
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.poll_ranked_async_intents(UUID, INTEGER) FROM anon, PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.poll_ranked_async_intents(UUID, INTEGER) TO authenticated;
 
 
 -- -----------------------------------------------------------------------------

@@ -155,7 +155,6 @@ interface BattlefieldProps {
    */
   mazosDeLaSala?: { mio: unknown; rival: unknown } | null
   isAsyncMatch?: boolean
-  asyncActionsSnapshot?: unknown
 }
 
 export default function Battlefield({
@@ -175,7 +174,6 @@ export default function Battlefield({
   soyP1 = true,
   mazosDeLaSala = null,
   isAsyncMatch = false,
-  asyncActionsSnapshot = null,
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -212,6 +210,7 @@ export default function Battlefield({
     digPlant,
     encolarAccionDelRival,
     descartarAccionPropia,
+    incorporarIntencionesAsync,
     terminarPorOrdenDelServidor,
     tomarHuellasPendientes,
     reconstrucciones,
@@ -527,7 +526,7 @@ export default function Battlefield({
   }
 
   useEffect(() => {
-    if (!roomId || !currentUserId) return
+    if (!roomId || !currentUserId || isAsyncMatch) return
 
     /** Aplica una acción del rival; las propias ya están plantadas en local. */
     const aplicar = (a: {
@@ -626,7 +625,32 @@ export default function Battlefield({
       dejarDeEscuchar()
       clearInterval(reloj)
     }
-  }, [roomId, currentUserId, encolarAccionDelRival])
+  }, [roomId, currentUserId, encolarAccionDelRival, isAsyncMatch])
+
+  // ── FEED DE INTENCIONES ASÍNCRONAS (RIVAL SEMILLA RANKED) ──────────────────
+  // En lugar de descargar todo el plan futuro al inicio, se consulta periódicamente
+  // una ventana acotada (~5 s) autorizada por el servidor.
+  useEffect(() => {
+    if (!roomId || !isAsyncMatch) return
+    let cancelado = false
+
+    const refrescarIntencionesAsync = async () => {
+      if (cancelado) return
+      const res = await SupabaseService.pollRankedAsyncIntents(roomId, tick)
+      if (cancelado || !res || !res.ok || !Array.isArray(res.intents)) return
+      if (res.intents.length > 0) {
+        incorporarIntencionesAsync(res.intents)
+      }
+    }
+
+    void refrescarIntencionesAsync()
+    const reloj = setInterval(() => { void refrescarIntencionesAsync() }, 2500)
+
+    return () => {
+      cancelado = true
+      clearInterval(reloj)
+    }
+  }, [roomId, isAsyncMatch, tick, incorporarIntencionesAsync])
 
   // ── EL FINAL LLEGA A LOS DOS LADOS ─────────────────────────────────────────
   //
@@ -863,7 +887,7 @@ export default function Battlefield({
           // Y los mazos de la sala: de ahí salen las mejoras de las cartas de los
           // dos lados, que es lo que hace que las dos pantallas simulen la misma
           // planta en lugar de una mejorada contra una básica.
-          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, asyncActionsSnapshot)
+          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch)
         })
       } else {
         // Entrenamiento contra el bot: no hay reloj que alinear, y el nivel del
@@ -871,7 +895,7 @@ export default function Battlefield({
         startGame(seed, false, undefined, userElo)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1, mazosDeLaSala, isAsyncMatch, asyncActionsSnapshot])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1, mazosDeLaSala, isAsyncMatch])
 
   /**
    * LA HUELLA DEL TABLERO
@@ -884,25 +908,17 @@ export default function Battlefield({
    * separaban, lo único que llegaba era el «tu rival dijo otra cosa» al final —
    * cuando ya no se puede averiguar nada. Con esto queda el sitio exacto.
    *
-   * Sólo en partidas con sala: contra el bot no hay nada que comparar.
-   */
-  /**
-   * Manda las huellas que haya tomado el bucle del juego.
-   *
-   * El bucle las apunta —es el único que ve todos los tics— y esto las manda. La
-   * versión anterior comprobaba `tick % 300` aquí, después de cada fotograma, y se
-   * saltaba los controles cada vez que un fotograma avanzaba más de un tic: medido
-   * en producción, «controles = 0», ni un solo tic con huella de los dos.
+   * Sólo en partidas con sala y PvP humano: contra bot o Rival Semilla no hay nada que comparar.
    */
   useEffect(() => {
-    if (!roomId) return
+    if (!roomId || isAsyncMatch) return
     const pendientes = tomarHuellasPendientes()
     if (pendientes.length === 0) return
     for (const h of pendientes) {
       void SupabaseService.submitMatchCheckpoint(roomId, h.tick, h.huella)
     }
     setDiag((d) => ({ ...d, huellas: d.huellas + pendientes.length }))
-  }, [tick, roomId, tomarHuellasPendientes])
+  }, [tick, roomId, tomarHuellasPendientes, isAsyncMatch])
 
   const [showSurrenderModal, setShowSurrenderModal] = useState<boolean>(false)
 

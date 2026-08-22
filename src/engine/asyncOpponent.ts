@@ -611,3 +611,59 @@ export function simulateAsyncMatch(
     telemetria: controller.stats,
   }
 }
+
+/**
+ * Reconstruye la partida asíncrona desde el tic 0 hasta `hastaTick`.
+ * Reproduce las acciones propias de P1 y avanza el AsyncOpponentController
+ * de forma determinista para que el cliente quede sincronizado al 100% tras
+ * descartar o corregir una jugada local.
+ */
+export function reconstruirPartidaAsync(
+  seed: number,
+  p1Deck: CartaDeMazo[] | null | undefined,
+  asyncDeckSnapshot: CartaDeMazo[],
+  asyncIntents: AsyncOpponentIntent[] | any[],
+  p1Acciones: any[],
+  hastaTick: number
+): { estado: GameState; controller: AsyncOpponentController } {
+  const mazoP1Limpio = p1Deck ?? []
+  const estado = createBattleState(seed, false, true)
+  const normalizedIntents = normalizarIntenciones(asyncIntents)
+  const controller = createAsyncOpponentController(asyncDeckSnapshot, normalizedIntents)
+
+  // Encolar acciones de P1 en estado.pending con su tic correspondiente
+  for (const a of p1Acciones) {
+    const atTick = Math.max(1, a.tick)
+    if (a.kind === 'dig') {
+      estado.pending.push({
+        atTick,
+        kind: 'own_dig',
+        lane: a.lane,
+        col: a.col ?? 0,
+      })
+      continue
+    }
+
+    const plantId = a.plantId ?? a.plant_id ?? a.plant
+    if (esPlantId(plantId)) {
+      const cartaP1 = resolverCartaRival(mazoP1Limpio, plantId, a.slot)
+      const statRolls = rollsValidos(cartaP1?.statRolls ?? a.statRolls)
+      estado.pending.push({
+        atTick,
+        kind: 'own_plant',
+        plantId,
+        lane: a.lane,
+        col: a.col ?? undefined,
+        statRolls,
+        level: statRolls.length > 0 ? statRolls.length : (cartaP1?.level ?? a.level ?? 0),
+      })
+    }
+  }
+
+  while (estado.tick < hastaTick && estado.status === 'playing') {
+    stepAsyncOpponent(controller, estado)
+    stepTick(estado, () => {})
+  }
+
+  return { estado, controller }
+}

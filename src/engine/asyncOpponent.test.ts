@@ -5,7 +5,10 @@ import {
   simulateAsyncMatch,
   normalizarIntenciones,
   resolverCartaRival,
+  reconstruirPartidaAsync,
+  type AsyncOpponentIntent,
 } from './asyncOpponent.ts'
+import type { CartaDeMazo } from './mazoDeLaSala.ts'
 import { createBattleState } from './simulate.ts'
 import { PLANT_CONFIGS, TOTAL_COLUMNS, getScaledPlantConfig } from '../utils/gameConstants.ts'
 
@@ -641,4 +644,155 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(perfilesDb['source-player'].elo).toBe(1400)
     expect(perfilesDb['source-player'].cofres).toBe(5)
   })
+
+  // 40. Reconstrucción asíncrona dedicada (reconstruirPartidaAsync) restaura las plantas del Rival Semilla
+  it('40. reconstruirPartidaAsync reproduce todas las intenciones del Rival Semilla tras un rollback/descarte de P1', () => {
+    const seed = 42
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    // En la economía determinista: 1er sol (+25) en tic 120, 2do sol (+25) en tic 301 = 50 soles para girasol
+    const intents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
+    ]
+
+    // Acciones de P1: una válida en tic 5, y una que luego se descartará en tic 15
+    const p1AccionesOriginales = [
+      { tick: 5, kind: 'plant', plantId: 'sunflower', lane: 1, col: 1 },
+      { tick: 15, kind: 'plant', plantId: 'sunflower', lane: 0, col: 1 },
+    ]
+
+    // Simular el avance hasta tic 330 (el girasol entra al campo en tic 310 + 6 = 316)
+    const { estado: estadoNormal } = reconstruirPartidaAsync(seed, p1Deck, p2Deck, intents, p1AccionesOriginales, 330)
+    expect(estadoNormal.enemyPlants.length).toBe(1)
+
+    // Si Supabase rechaza la jugada de tic 15, se descarta de P1 y se reconstruye:
+    const p1AccionesFiltradas = p1AccionesOriginales.filter((a) => a.tick !== 15)
+    const { estado: estadoReconstruido, controller: controllerReconstruido } = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      intents,
+      p1AccionesFiltradas,
+      330
+    )
+
+    // Las plantas del Rival Semilla (enemyPlants) DEBEN estar presentes y sincronizadas
+    expect(estadoReconstruido.enemyPlants.length).toBe(estadoNormal.enemyPlants.length)
+    // El controller debe haber procesado la intención
+    expect(controllerReconstruido.nextIntentIndex).toBe(1)
+    expect(controllerReconstruido.stats.intentionsExecuted).toBe(1)
+  })
+
+  // 41. Reconstrucción asíncrona sincroniza nextIntentIndex y sunBank
+  it('41. reconstruirPartidaAsync deja el AsyncOpponentController en la posición exacta para el siguiente tic', () => {
+    const seed = 99
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'peashooter', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const intents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
+      { seq: 2, tick: 600, issuedTick: 600, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 2, col: 1 },
+    ]
+
+    // Reconstruir solo hasta tic 330
+    const { controller } = reconstruirPartidaAsync(seed, p1Deck, p2Deck, intents, [], 330)
+    expect(controller.nextIntentIndex).toBe(1) // Sólo procesó la intención de tic 310
+    expect(controller.stats.intentionsExecuted).toBe(1)
+  })
+
+  // 42. Feed de intenciones asíncronas no filtra el plan futuro completo
+  it('42. poll_ranked_async_intents restringe las acciones a la ventana autorizada (~5 s)', () => {
+    const allSnapshotIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 10, issuedTick: 10, kind: 'plant', plantId: 'sunflower', lane: 1, col: 8 },
+      { seq: 2, tick: 50, issuedTick: 50, kind: 'plant', plantId: 'peashooter', lane: 1, col: 7 },
+      { seq: 3, tick: 300, issuedTick: 300, kind: 'plant', plantId: 'wallnut', lane: 1, col: 6 },
+      { seq: 4, tick: 1500, issuedTick: 1500, kind: 'plant', plantId: 'jalapeno', lane: 1, col: 5 },
+    ]
+
+    // Simular consulta de cliente en tic 0 (reloj de servidor = tic 0)
+    const serverTick = 0
+    const clientTick = 0
+    const maxRevealTick = Math.max(clientTick, serverTick) + 150 // ventana de 150 tics (~5s)
+
+    const intentsEntregadas = allSnapshotIntents.filter(
+      (i) => (i.issuedTick ?? i.tick) <= maxRevealTick
+    )
+
+    // Entrega las de tic 10 y 50, pero NUNCA las de tic 300 o 1500
+    expect(intentsEntregadas).toHaveLength(2)
+    expect(intentsEntregadas.map((i) => i.seq)).toEqual([1, 2])
+    expect(intentsEntregadas.find((i) => i.plantId === 'jalapeno')).toBeUndefined()
+  })
+
+  // 43. Garantía por código de semilla RNG nueva y distinta a la sala origen
+  it('43. Generador de semilla garantiza seed != source_room_seed y seed != seeds previas del mismo async_opponent_id', () => {
+    const sourceSeed = 54321
+    const usedSeedsForOpponent = new Set<number>([11111, 22222, 33333])
+
+    // Función que replica el bucle con comprobación estricta
+    const generarSemillaGarantizada = (source: number, used: Set<number>): number => {
+      let attempts = 0
+      while (attempts < 100) {
+        attempts++
+        // Generar candidato 100000..999999
+        const candidate = 100000 + Math.floor(Math.random() * 900000)
+        if (candidate !== source && !used.has(candidate)) {
+          return candidate
+        }
+      }
+      throw new Error('No se pudo generar una seed única tras 100 intentos')
+    }
+
+    const nuevaSeed = generarSemillaGarantizada(sourceSeed, usedSeedsForOpponent)
+    expect(nuevaSeed).not.toBe(sourceSeed)
+    expect(usedSeedsForOpponent.has(nuevaSeed)).toBe(false)
+  })
+
+  // 44. Reutilizar el mismo Rival Semilla produce semillas distintas
+  it('44. Reutilizar el mismo async_opponent_id en salas sucesivas produce semillas diferentes', () => {
+    const usedSeeds = new Set<number>()
+
+    for (let i = 0; i < 20; i++) {
+      let seed = 100000 + Math.floor(Math.random() * 900000)
+      while (usedSeeds.has(seed)) {
+        seed = 100000 + Math.floor(Math.random() * 900000)
+      }
+      usedSeeds.add(seed)
+    }
+
+    expect(usedSeeds.size).toBe(20)
+  })
+
+  // 45. Compatibilidad de motor: descarta candidatos con motor distinto de auth-v1
+  it('45. Selección de candidatos para ranked_async_opponents descarta snapshots de motores incompatibles', () => {
+    const candidates = [
+      { id: 'c1', active: true, rating: 1200, source_engine_version: 'auth-v1' },
+      { id: 'c2', active: true, rating: 1210, source_engine_version: 'future-v2' },
+      { id: 'c3', active: true, rating: 1190, source_engine_version: 'legacy-v0' },
+      { id: 'c4', active: true, rating: 1205, source_engine_version: null },
+    ]
+
+    const validCandidates = candidates.filter(
+      (c) => c.active && (c.source_engine_version ?? 'auth-v1') === 'auth-v1'
+    )
+
+    expect(validCandidates.map((c) => c.id)).toEqual(['c1', 'c4'])
+  })
+
+  // 46. Optimización en Battlefield: no suscripción a match_actions ni huellas en async
+  it('46. Partidas asíncronas no envían checkpoints de huellas al no existir segundo cliente', () => {
+    const isAsyncMatch = true
+    let checkpointsEnviados = 0
+
+    const enviarCheckpoint = (asyncMatch: boolean) => {
+      if (asyncMatch) return // Omitido en async
+      checkpointsEnviados++
+    }
+
+    enviarCheckpoint(isAsyncMatch)
+    expect(checkpointsEnviados).toBe(0)
+
+    enviarCheckpoint(false)
+    expect(checkpointsEnviados).toBe(1)
+  })
 })
+

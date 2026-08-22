@@ -40,6 +40,8 @@ import {
 import {
   createAsyncOpponentController,
   stepAsyncOpponent,
+  reconstruirPartidaAsync,
+  normalizarIntenciones,
   type AsyncOpponentController,
 } from '../engine/asyncOpponent'
 import { nivelPorElo } from '../engine/bot'
@@ -211,6 +213,34 @@ export function useGameEngine() {
    */
   const mazoMioRef = useRef<CartaDeMazo[] | null>(null)
   const mazoDelRivalRef = useRef<CartaDeMazo[] | null>(null)
+  const isAsyncMatchRef = useRef<boolean>(false)
+  const asyncOpponentDeckRef = useRef<CartaDeMazo[] | null>(null)
+  const asyncOpponentActionsBufferRef = useRef<any[]>([])
+
+  /**
+   * Incorpora intenciones del Rival Semilla recibidas progresivamente desde el servidor.
+   */
+  const incorporarIntencionesAsync = useCallback((nuevasIntenciones: any[]) => {
+    if (!nuevasIntenciones || nuevasIntenciones.length === 0) return
+    const buffer = asyncOpponentActionsBufferRef.current
+    const clavesExistentes = new Set(
+      buffer.map((i) => `${i.seq ?? ''}_${i.issuedTick ?? i.tick}_${i.kind}_${i.lane}_${i.col ?? ''}`)
+    )
+
+    let huboNuevas = false
+    for (const n of nuevasIntenciones) {
+      const clave = `${n.seq ?? ''}_${n.issuedTick ?? n.tick}_${n.kind}_${n.lane}_${n.col ?? ''}`
+      if (!clavesExistentes.has(clave)) {
+        clavesExistentes.add(clave)
+        buffer.push(n)
+        huboNuevas = true
+      }
+    }
+
+    if (huboNuevas && asyncOpponentRef.current) {
+      asyncOpponentRef.current.intents = normalizarIntenciones(buffer)
+    }
+  }, [])
 
   /**
    * Lo que costó cada jugada mía, por si el servidor la rechaza.
@@ -305,7 +335,7 @@ export function useGameEngine() {
      */
     mazos?: { mio: unknown; rival: unknown } | null,
     isAsyncMatch?: boolean,
-    asyncActionsSnapshot?: unknown
+    initialAsyncIntents?: unknown
   ) => {
     stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500))
 
@@ -313,10 +343,17 @@ export function useGameEngine() {
     soyP1Ref.current = soyP1 === undefined ? null : soyP1
     mazoMioRef.current = leerMazo(mazos?.mio)
     mazoDelRivalRef.current = leerMazo(mazos?.rival)
+    isAsyncMatchRef.current = Boolean(isAsyncMatch)
 
-    if (isAsyncMatch && mazos?.rival && asyncActionsSnapshot) {
-      asyncOpponentRef.current = createAsyncOpponentController(mazos.rival, asyncActionsSnapshot)
+    if (isAsyncMatch && mazos?.rival) {
+      const deck = leerMazo(mazos.rival)
+      asyncOpponentDeckRef.current = deck
+      const initialIntents = Array.isArray(initialAsyncIntents) ? [...initialAsyncIntents] : []
+      asyncOpponentActionsBufferRef.current = initialIntents
+      asyncOpponentRef.current = createAsyncOpponentController(deck, normalizarIntenciones(initialIntents))
     } else {
+      asyncOpponentDeckRef.current = null
+      asyncOpponentActionsBufferRef.current = []
       asyncOpponentRef.current = null
     }
 
@@ -515,6 +552,23 @@ export function useGameEngine() {
     if (!viejo.isPvpMode || viejo.status !== 'playing') return
 
     reconstruccionesRef.current += 1
+
+    // ── RAMA ASÍNCRONA (RIVAL SEMILLA RANKED) ─────────────────────────────────
+    if (isAsyncMatchRef.current && asyncOpponentDeckRef.current) {
+      const { estado, controller } = reconstruirPartidaAsync(
+        semillaRef.current,
+        mazoMioRef.current,
+        asyncOpponentDeckRef.current,
+        asyncOpponentActionsBufferRef.current,
+        registroRef.current.filter((r) => r.mia),
+        viejo.tick
+      )
+      asyncOpponentRef.current = controller
+      stateRef.current = conservarLoLocal(estado, viejo)
+      forceRender()
+      return
+    }
+
     const soyP1 = soyP1Ref.current
 
     const { estado, huellas } = reconstruirConHuellas(
@@ -1235,5 +1289,6 @@ export function useGameEngine() {
      */
     reconstrucciones: reconstruccionesRef.current,
     descartarAccionPropia,
+    incorporarIntencionesAsync,
   }
 }
