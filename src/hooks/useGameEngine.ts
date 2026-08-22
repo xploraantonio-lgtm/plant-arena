@@ -507,27 +507,40 @@ export function useGameEngine() {
   const confirmarRecogidaSol = useCallback(
     (sunId: string, issuedTick?: number, seq?: number): boolean => {
       const state = stateRef.current
-      const sol = state.suns.find((s) => s.id === sunId)
 
-      // Puede haberse auto-recogido mientras llegaba el ACK. En ese caso no se
-      // suma dos veces: el estado ya contiene el valor.
+      // 1. REGISTRO AUTORITATIVO EN HISTORIAL ASYNC (SIEMPRE QUE SEA ASYNC)
+      // Debe registrarse aunque el sol ya no esté visualmente o se haya auto-recogido,
+      // deduplicando por seq o (kind + targetId + issuedTick) para evitar duplicados.
+      if (isAsyncMatchRef.current) {
+        const yaRegistrada =
+          typeof seq === 'number' && Number.isFinite(seq)
+            ? accionesP1AsyncRef.current.some((a) => a.seq === seq)
+            : accionesP1AsyncRef.current.some(
+                (a) => a.kind === 'collect' && a.targetId === sunId && a.issuedTick === (issuedTick ?? state.tick)
+              )
+
+        if (!yaRegistrada) {
+          const ticRecogida =
+            typeof issuedTick === 'number' && Number.isFinite(issuedTick) ? issuedTick : state.tick
+          accionesP1AsyncRef.current.push({
+            seq,
+            tick: ticRecogida,
+            issuedTick: ticRecogida,
+            kind: 'collect',
+            targetId: sunId,
+          })
+        }
+      }
+
+      // 2. EFECTO VISUAL / LOCAL INMEDIATO
+      // Si mientras esperaba se auto-recogió (o ya no existe), NO se suma dos veces en local.
+      const sol = state.suns.find((s) => s.id === sunId)
       if (!sol) return false
 
       state.suns = state.suns.filter((s) => s.id !== sunId)
       state.sunBank += sol.value
       state.stats.sunsCollected += 1
       state.stats.score += 50
-
-      if (isAsyncMatchRef.current) {
-        const ticRecogida = typeof issuedTick === 'number' && Number.isFinite(issuedTick) ? issuedTick : state.tick
-        accionesP1AsyncRef.current.push({
-          seq,
-          tick: ticRecogida,
-          issuedTick: ticRecogida,
-          kind: 'collect',
-          targetId: sunId,
-        })
-      }
 
       soundManager.playSound('points', 0.6)
       forceRender()
@@ -674,10 +687,16 @@ export function useGameEngine() {
      * (sin soles, en enfriamiento, casilla ocupada) el rival plantaría algo que en
      * tu pantalla no existe.
      */
-    (lane: number, col: number): number | null => {
+    (
+      lane: number,
+      col: number,
+      cartaOverride?: PlantId,
+      slotOverride?: number | null,
+      seq?: number
+    ): number | null => {
       const state = stateRef.current
-      const card = state.selectedCard
-      const slotIdx = state.selectedSlotIndex
+      const card = cartaOverride ?? state.selectedCard
+      const slotIdx = slotOverride !== undefined ? slotOverride : state.selectedSlotIndex
 
       if (!card || card === 'shovel' || state.status !== 'playing') return null
       // Durante la cuenta atrás no se planta: la partida no ha empezado y el
@@ -803,17 +822,25 @@ export function useGameEngine() {
       }
 
       if (isAsyncMatchRef.current) {
-        accionesP1AsyncRef.current.push({
-          tick: enTic,
-          issuedTick: state.tick,
-          kind: 'plant',
-          plantId: card,
-          lane,
-          col,
-          slot: slotIdx,
-          statRolls: rolls,
-          level: cardLevel,
-        })
+        const yaExiste =
+          typeof seq === 'number' && Number.isFinite(seq)
+            ? accionesP1AsyncRef.current.some((a) => a.seq === seq)
+            : false
+
+        if (!yaExiste) {
+          accionesP1AsyncRef.current.push({
+            seq,
+            tick: enTic,
+            issuedTick: state.tick,
+            kind: 'plant',
+            plantId: card,
+            lane,
+            col,
+            slot: slotIdx,
+            statRolls: rolls,
+            level: cardLevel,
+          })
+        }
       }
 
       // El cobro, el enfriamiento y el contador SÍ son inmediatos: son estado
@@ -969,8 +996,9 @@ export function useGameEngine() {
    */
   const digPlant = useCallback(
     (
-      target: string | { lane: number; col: number }
-    ): { lane: number; col: number; tick: number } | null => {
+      target: string | { lane: number; col: number },
+      seq?: number
+    ): { lane: number; col: number; tick: number; seq?: number } | null => {
       const state = stateRef.current
       let casilla: { lane: number; col: number } | null = null
 
@@ -1010,13 +1038,21 @@ export function useGameEngine() {
       }
 
       if (isAsyncMatchRef.current) {
-        accionesP1AsyncRef.current.push({
-          tick: enTic,
-          issuedTick: state.tick,
-          kind: 'dig',
-          lane: casilla.lane,
-          col: casilla.col,
-        })
+        const yaExiste =
+          typeof seq === 'number' && Number.isFinite(seq)
+            ? accionesP1AsyncRef.current.some((a) => a.seq === seq)
+            : false
+
+        if (!yaExiste) {
+          accionesP1AsyncRef.current.push({
+            seq,
+            tick: enTic,
+            issuedTick: state.tick,
+            kind: 'dig',
+            lane: casilla.lane,
+            col: casilla.col,
+          })
+        }
       }
 
       soundManager.playSound('plantation', 0.5)
@@ -1024,7 +1060,7 @@ export function useGameEngine() {
       // El tic va de vuelta por lo mismo que al plantar: el que se manda al
       // servidor tiene que ser este, no uno recalculado con el tic del último
       // fotograma pintado.
-      return { ...casilla, tick: enTic }
+      return { ...casilla, tick: enTic, seq }
     },
     [forceRender, apuntarJugadaPropia]
   )
@@ -1040,16 +1076,20 @@ export function useGameEngine() {
    * una jugada tardía, porque es el mismo problema visto del revés.
    */
   const descartarAccionPropia = useCallback(
-    (tick: number, lane: number, col: number | null) => {
+    (tick: number, lane: number, col: number | null, seq?: number) => {
       const antes = registroRef.current.length
       registroRef.current = registroRef.current.filter(
         (a) => !(a.mia && a.tick === tick && a.lane === lane && (a.col ?? null) === col)
       )
 
       const antesAsync = accionesP1AsyncRef.current.length
-      accionesP1AsyncRef.current = accionesP1AsyncRef.current.filter(
-        (a) => !(a.tick === tick && a.lane === lane && (a.col ?? null) === col)
-      )
+      if (typeof seq === 'number' && Number.isFinite(seq)) {
+        accionesP1AsyncRef.current = accionesP1AsyncRef.current.filter((a) => a.seq !== seq)
+      } else {
+        accionesP1AsyncRef.current = accionesP1AsyncRef.current.filter(
+          (a) => !(a.tick === tick && a.lane === lane && (a.col ?? null) === col)
+        )
+      }
 
       if (registroRef.current.length === antes && accionesP1AsyncRef.current.length === antesAsync) return
 

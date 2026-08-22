@@ -402,13 +402,14 @@ export default function Battlefield({
     lane: number,
     col: number,
     enTic: number,
-    slot: number
+    slot: number,
+    seq?: number
   ) => {
     if (!roomId) return
-    ordenRef.current += 1
+    const seqAccion = typeof seq === 'number' && Number.isFinite(seq) ? seq : ++ordenRef.current
     void enviarAccionAutoritativa(
       {
-        seq: ordenRef.current,
+        seq: seqAccion,
         tick: enTic,
         issuedTick: enTic - MARGEN_DE_RED_TICS,
         kind: 'plant',
@@ -419,7 +420,7 @@ export default function Battlefield({
       },
       {
         onRejected: (error) => {
-          descartarAccionPropia(enTic, lane, col)
+          descartarAccionPropia(enTic, lane, col, seqAccion)
           setDiag((d) => ({
             ...d,
             ultimoEnvio: `✗ ${error}`,
@@ -448,12 +449,12 @@ export default function Battlefield({
    * (jugador, número de orden) no se repita en la sala.
    */
   /** @param enTic el tic que devolvió digPlant. Igual que al plantar. */
-  const registrarExcavacion = (lane: number, col: number, enTic: number) => {
+  const registrarExcavacion = (lane: number, col: number, enTic: number, seq?: number) => {
     if (!roomId) return
-    ordenRef.current += 1
+    const seqAccion = typeof seq === 'number' && Number.isFinite(seq) ? seq : ++ordenRef.current
     void enviarAccionAutoritativa(
       {
-        seq: ordenRef.current,
+        seq: seqAccion,
         tick: enTic,
         issuedTick: enTic - MARGEN_DE_RED_TICS,
         kind: 'dig',
@@ -462,7 +463,7 @@ export default function Battlefield({
       },
       {
         onRejected: (error) => {
-          descartarAccionPropia(enTic, lane, col)
+          descartarAccionPropia(enTic, lane, col, seqAccion)
           setDiag((d) => ({
             ...d,
             ultimoEnvio: `✗ ${error}`,
@@ -492,11 +493,11 @@ export default function Battlefield({
     const issuedTick = prepararRecogidaSol(sunId)
     if (issuedTick === null) return
 
-    ordenRef.current += 1
+    const seqAccion = ++ordenRef.current
 
     void enviarAccionAutoritativa(
       {
-        seq: ordenRef.current,
+        seq: seqAccion,
         tick: issuedTick,
         issuedTick,
         kind: 'collect',
@@ -507,8 +508,8 @@ export default function Battlefield({
       },
       {
         onAck: () => {
-          // Si mientras esperaba se auto-recogió, devuelve false y no suma dos veces.
-          confirmarRecogidaSol(sunId, issuedTick, ordenRef.current)
+          // Registra la acción autoritativa con el seq inmutable capturado al enviarla
+          confirmarRecogidaSol(sunId, issuedTick, seqAccion)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
@@ -1199,14 +1200,16 @@ export default function Battlefield({
                         // Igual que al plantar: sólo se registra si aquí de verdad
                         // se excavó algo. Registrar un pico que no quitó nada haría
                         // que el rival borrara una planta que en tu pantalla sigue.
-                        const casilla = digPlant({ lane: lane.id, col })
-                        if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick)
+                        const seq = roomId ? ++ordenRef.current : undefined
+                        const casilla = digPlant({ lane: lane.id, col }, seq)
+                        if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
                       } else {
                         const carta = selectedCard
                         const slot = selectedSlotIndex
-                        const enTic = placePlant(lane.id, col)
+                        const seq = roomId ? ++ordenRef.current : undefined
+                        const enTic = placePlant(lane.id, col, undefined, undefined, seq)
                         if (enTic !== null && slot !== null) {
-                          registrarPlantacion(carta, lane.id, col, enTic, slot)
+                          registrarPlantacion(carta, lane.id, col, enTic, slot, seq)
                         }
                       }
                     }
@@ -1269,8 +1272,9 @@ export default function Battlefield({
                 // desaparecía en tu pantalla y seguía en pie y disparando en la del
                 // rival — dos partidas distintas desde ese momento, y la mitad de
                 // los jugadores usa el pico así.
-                const casilla = digPlant(plant.id)
-                if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick)
+                const seq = roomId ? ++ordenRef.current : undefined
+                const casilla = digPlant(plant.id, seq)
+                if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
               }
             }}
           >

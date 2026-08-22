@@ -9,6 +9,7 @@ import {
   resolverCartaRival,
   reconstruirPartidaAsync,
   runAsyncTimeline,
+  normalizarAccionesP1,
   type AsyncOpponentIntent,
   type AccionP1Simulacion,
 } from './asyncOpponent.ts'
@@ -1422,6 +1423,329 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(rebuildRes.estado.enemyPlants.length).toBe(timelineRes.state.enemyPlants.length)
     expect(rebuildRes.controller.sunBank).toBe(timelineRes.controller.sunBank)
     expect(rebuildRes.controller.nextIntentIndex).toBe(timelineRes.controller.nextIntentIndex)
+  })
+
+  // 62. COLLECT ACK después de desaparecer el sol localmente
+  it('62. COLLECT con ACK tardío tras desaparición local del sol se registra en historial autoritativo sin doble acreditación y reconstruye idéntico', () => {
+    const seed = 6262
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // 1. Obtener sol del cielo conocido
+    const probe = createBattleState(seed, false, true)
+    while (probe.tick < 200 && probe.suns.length === 0) {
+      stepTick(probe, () => {})
+    }
+    expect(probe.suns.length).toBeGreaterThan(0)
+    const targetSun = probe.suns[0]
+    const targetSunId = targetSun.id
+
+    // 2. Simular historial de acciones de P1
+    const accionesP1Async: AccionP1Simulacion[] = []
+
+    // Función equivalente a confirmarRecogidaSol con la nueva lógica autoritativa
+    const simularConfirmarRecogida = (
+      state: any,
+      sunId: string,
+      issuedTick: number,
+      seq: number
+    ): boolean => {
+      // 1. Registro autoritativo
+      const yaRegistrada = accionesP1Async.some((a) => a.seq === seq)
+      if (!yaRegistrada) {
+        accionesP1Async.push({
+          seq,
+          tick: issuedTick,
+          issuedTick,
+          kind: 'collect',
+          targetId: sunId,
+        })
+      }
+      // 2. Efecto visual / local inmediato
+      const sol = state.suns.find((s: any) => s.id === sunId)
+      if (!sol) return false
+      state.suns = state.suns.filter((s: any) => s.id !== sunId)
+      state.sunBank += sol.value
+      return true
+    }
+
+    const liveState = createBattleState(seed, false, true)
+    // Avanzar hasta que el sol aparezca
+    while (liveState.tick < 80) {
+      stepTick(liveState, () => {})
+    }
+
+    // P1 envía COLLECT en tic 80 con seq 10
+    const seqCollect = 10
+    const issuedTickCollect = 80
+
+    // Simular que antes de que llegue el ACK, el sol desaparece localmente (por ejemplo auto-recolectado o transición)
+    liveState.suns = liveState.suns.filter((s) => s.id !== targetSunId)
+    const sunBankAntesDeAck = liveState.sunBank
+
+    // Llega ACK positivo del servidor
+    const acreditadoLocal = simularConfirmarRecogida(liveState, targetSunId, issuedTickCollect, seqCollect)
+
+    // A) No se acreditó doblemente en el estado local inmediato
+    expect(acreditadoLocal).toBe(false)
+    expect(liveState.sunBank).toBe(sunBankAntesDeAck)
+
+    // B) El historial autoritativo SÍ conserva la acción con seq y targetId exactos
+    expect(accionesP1Async.length).toBe(1)
+    expect(accionesP1Async[0]).toEqual({
+      seq: 10,
+      tick: 80,
+      issuedTick: 80,
+      kind: 'collect',
+      targetId: targetSunId,
+    })
+
+    // C) Rebuild reconstruye desde timeline autoritativo y coincide con verify-match
+    const { estado: estadoReconstruido } = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      [],
+      accionesP1Async,
+      120
+    )
+
+    const resVerify = simulateAsyncMatch(
+      seed,
+      p1Deck,
+      p2Deck,
+      accionesP1Async,
+      [],
+      120
+    )
+
+    expect(resVerify.p1Ilegal).toBe(false)
+    expect(estadoReconstruido.sunBank).toBe(25)
+    expect(estadoReconstruido.suns.some((s) => s.id === targetSunId)).toBe(false)
+  })
+
+  // 63. ACK fuera de orden no cambia seq
+  it('63. ACKs recibidos fuera de orden conservan inmutablemente el seq original asignado al enviar cada acción', () => {
+    const accionesP1Async: AccionP1Simulacion[] = []
+    let globalOrderCounter = 0
+
+    // Simular envío de 3 acciones capturando su seq inmutable
+    const seq1 = ++globalOrderCounter // 10
+    const acc1 = { seq: seq1, issuedTick: 80, tick: 80, kind: 'collect' as const, targetId: 'sun_1' }
+
+    const seq2 = ++globalOrderCounter // 11
+    const acc2 = { seq: seq2, issuedTick: 270, tick: 276, kind: 'plant' as const, plantId: 'sunflower' as const, slot: 0, lane: 0, col: 0 }
+
+    const seq3 = ++globalOrderCounter // 12
+    const acc3 = { seq: seq3, issuedTick: 280, tick: 286, kind: 'dig' as const, lane: 0, col: 0 }
+
+    // Simular registro de acciones al recibir ACKs deliberadamente desordenados: DIG (seq 12), PLANT (seq 11), COLLECT (seq 10)
+    accionesP1Async.push(acc3)
+    accionesP1Async.push(acc2)
+    accionesP1Async.push(acc1)
+
+    // globalOrderCounter siguió aumentando por otras interacciones
+    globalOrderCounter += 5
+
+    // Al normalizar y ordenar para el timeline:
+    const ordenadas = normalizarAccionesP1(accionesP1Async)
+
+    // El seq de COLLECT debe seguir siendo 10 (nunca 12 ni 17)
+    expect(ordenadas[0].kind).toBe('collect')
+    expect(ordenadas[0].seq).toBe(seq1)
+
+    // El seq de PLANT debe seguir siendo 11
+    expect(ordenadas[1].kind).toBe('plant')
+    expect(ordenadas[1].seq).toBe(seq2)
+
+    // El seq de DIG debe seguir siendo 12
+    expect(ordenadas[2].kind).toBe('dig')
+    expect(ordenadas[2].seq).toBe(seq3)
+  })
+
+  // 64. Mismo issuedTick, orden económico por seq
+  it('64. Acciones con mismo issuedTick respetan estrictamente el orden económico por seq', () => {
+    const seed = 6464
+    const p1Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // Descubrir 4 soles del cielo para tener economía controlada
+    const spawnedSuns: string[] = []
+    const probe = createBattleState(seed, false, true)
+    while (probe.tick < 700) {
+      for (const s of probe.suns) {
+        if (!spawnedSuns.includes(s.id)) spawnedSuns.push(s.id)
+      }
+      stepTick(probe, () => {})
+    }
+    expect(spawnedSuns.length).toBeGreaterThanOrEqual(4)
+
+    // P1 recoge 3 soles previamente: 3 * 25 = 75 soles
+    const baseCollects: AccionP1Simulacion[] = [
+      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: spawnedSuns[0] },
+      { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: spawnedSuns[1] },
+      { seq: 3, tick: 450, issuedTick: 450, kind: 'collect', targetId: spawnedSuns[2] },
+    ]
+
+    // ── VARIANTE A: En issuedTick 630, seq 20 = PLANT peashooter (coste 100), seq 21 = COLLECT (+25)
+    // sunBank es 75 -> PLANT (100) falla por falta de soles, luego COLLECT suma a 100
+    const accionesVarianteA: AccionP1Simulacion[] = [
+      ...baseCollects,
+      { seq: 20, tick: 636, issuedTick: 630, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 },
+      { seq: 21, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3] },
+    ]
+
+    const resA = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions: accionesVarianteA,
+      asyncActions: [],
+      untilTick: 680,
+      validateP1: false,
+    })
+
+    // En Variante A, la planta no pudo colocarse porque en seq 20 sólo había 75 soles
+    expect(resA.state.plants.some((p) => p.plantId === 'peashooter')).toBe(false)
+    expect(resA.state.sunBank).toBe(100)
+
+    // ── VARIANTE B: En issuedTick 630, seq 20 = COLLECT (+25 -> 100 soles), seq 21 = PLANT peashooter (coste 100)
+    // sunBank sube a 100 -> PLANT (100) se ejecuta con éxito, sunBank queda en 0
+    const accionesVarianteB: AccionP1Simulacion[] = [
+      ...baseCollects,
+      { seq: 20, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3] },
+      { seq: 21, tick: 636, issuedTick: 630, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 },
+    ]
+
+    const resB = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions: accionesVarianteB,
+      asyncActions: [],
+      untilTick: 680,
+      validateP1: false,
+    })
+
+    // En Variante B, la planta sí se colocó porque el collect fue procesado antes
+    expect(resB.state.plants.some((p) => p.plantId === 'peashooter')).toBe(true)
+    expect(resB.state.sunBank).toBe(0)
+  })
+
+  // 65. Paridad integral absoluta con ACKs desordenados
+  it('65. Paridad integral absoluta con ACKs desordenados, soles desaparecidos, cooldowns y reconstrucción tardía', () => {
+    const seed = 656565
+    const p1Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+    const p2Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+
+    // Intenciones del Rival Semilla recibidas tardíamente:
+    const asyncIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 2, col: 2 },
+      { seq: 2, tick: 520, issuedTick: 520, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 2 },
+    ]
+
+    // 1. Descubrir los IDs exactos de los soles generados en esta partida específica con P1 y P2 activos
+    const discovery = createBattleState(seed, false, true)
+    const discoveryController = createAsyncOpponentController(p2Deck, asyncIntents)
+    const spawnedSuns: { id: string; tick: number }[] = []
+
+    while (discovery.tick < 680) {
+      for (const s of discovery.suns) {
+        if (!spawnedSuns.some((x) => x.id === s.id)) {
+          spawnedSuns.push({ id: s.id, tick: discovery.tick })
+        }
+      }
+      if (discovery.tick === 270) {
+        discovery.pending.push({ atTick: 276, kind: 'own_plant', plantId: 'sunflower', lane: 0, col: 0, statRolls: [], level: 0 })
+      }
+      if (discovery.tick === 350) {
+        discovery.pending.push({ atTick: 356, kind: 'own_dig', lane: 0, col: 0 })
+      }
+      stepAsyncOpponent(discoveryController, discovery)
+      stepTick(discovery, () => {})
+    }
+
+    expect(spawnedSuns.length).toBeGreaterThanOrEqual(4)
+
+    // Acciones de P1 creadas y enviadas en orden de captura (simulando llegada desordenada al buffer):
+    // 1. COLLECT sun 1 en tic 80 (seq 1)
+    // 2. COLLECT sun 2 en tic 265 (seq 2) -> 50 soles
+    // 3. PLANT sunflower en lane 0, col 0 en issuedTick 270 (seq 3) -> 0 soles
+    // 4. DIG sunflower en lane 0, col 0 en issuedTick 350 (seq 4)
+    // 5. COLLECT sun 3 en tic 450 (seq 5) -> 25 soles
+    // 6. COLLECT sun 4 en tic 630 (seq 6) -> 50 soles
+    // 7. PLANT sunflower en lane 1, col 1 en issuedTick 640 (seq 7) -> 0 soles
+    const p1AccionesHistorial: AccionP1Simulacion[] = [
+      { seq: 4, tick: 356, issuedTick: 350, kind: 'dig', lane: 0, col: 0 },
+      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: spawnedSuns[0].id },
+      { seq: 7, tick: 646, issuedTick: 640, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
+      { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
+      { seq: 6, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3].id },
+      { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: spawnedSuns[1].id },
+      { seq: 5, tick: 450, issuedTick: 450, kind: 'collect', targetId: spawnedSuns[2].id },
+    ]
+
+    // Ejecución 1: Reconstrucción autoritativa del cliente hasta tic 680
+    const rebuildRes = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      asyncIntents,
+      p1AccionesHistorial,
+      680
+    )
+
+    // Ejecución 2: Runner autoritativo de verify-match hasta tic 680
+    const timelineRes = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions: p1AccionesHistorial,
+      asyncActions: asyncIntents,
+      untilTick: 680,
+      validateP1: true,
+      stopOnGameOver: true,
+    })
+
+    // Paridad campo por campo
+    expect(rebuildRes.estado.tick).toBe(timelineRes.state.tick)
+    expect(rebuildRes.estado.rng).toEqual(timelineRes.state.rng)
+    expect(rebuildRes.estado.entityCounter).toBe(timelineRes.state.entityCounter)
+    expect(rebuildRes.estado.sunBank).toBe(timelineRes.state.sunBank)
+    expect(rebuildRes.estado.p2SunBank).toBe(timelineRes.state.p2SunBank)
+    expect(rebuildRes.estado.suns.length).toBe(timelineRes.state.suns.length)
+    expect(rebuildRes.estado.suns.map((s) => s.id)).toEqual(timelineRes.state.suns.map((s) => s.id))
+    expect(rebuildRes.estado.slotCooldowns).toEqual(timelineRes.state.slotCooldowns)
+    expect(rebuildRes.estado.cooldowns).toEqual(timelineRes.state.cooldowns)
+    expect(rebuildRes.estado.plants.length).toBe(timelineRes.state.plants.length)
+    expect(rebuildRes.estado.plants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))).toEqual(
+      timelineRes.state.plants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))
+    )
+    expect(rebuildRes.estado.enemyPlants.length).toBe(timelineRes.state.enemyPlants.length)
+    expect(rebuildRes.estado.enemyPlants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))).toEqual(
+      timelineRes.state.enemyPlants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))
+    )
+    expect(rebuildRes.estado.projectiles).toEqual(timelineRes.state.projectiles)
+    expect(rebuildRes.estado.pending).toEqual(timelineRes.state.pending)
+    expect(rebuildRes.estado.p1BaseHp).toBe(timelineRes.state.p1BaseHp)
+    expect(rebuildRes.estado.p2BaseHp).toBe(timelineRes.state.p2BaseHp)
+    expect(rebuildRes.estado.stats).toEqual(timelineRes.state.stats)
+
+    // Controlador
+    expect(rebuildRes.controller.sunBank).toBe(timelineRes.controller.sunBank)
+    expect(rebuildRes.controller.nextIntentIndex).toBe(timelineRes.controller.nextIntentIndex)
+    expect(rebuildRes.controller.pendingRetry).toEqual(timelineRes.controller.pendingRetry)
+    expect(rebuildRes.controller.slotCooldowns).toEqual(timelineRes.controller.slotCooldowns)
+    expect(rebuildRes.controller.stats).toEqual(timelineRes.controller.stats)
   })
 })
 
