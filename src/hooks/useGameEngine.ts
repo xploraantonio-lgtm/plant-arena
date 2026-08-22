@@ -41,24 +41,25 @@ import {
   createAsyncOpponentControllerFromValidated,
   stepAsyncOpponent,
   reconstruirPartidaAsync,
+  debeCongelarMotorRankedAsync,
   type AsyncOpponentController,
 } from '../engine/asyncOpponent'
 import {
   validarMazoAsyncRanked,
   validarYNormalizarIntencionesAsyncRanked,
-  validarIntencionAsyncRankedEstricta,
-  sonIntencionesP2Identicas,
+  incorporarLoteIntencionesP2,
   type InconsistenciaHistorialP1,
   type AccionP1RankedEstricta,
   type AsyncOpponentIntentRankedEstricta,
+  type ResultadoIncorporarLoteP2,
 } from '../engine/asyncP1History'
 import {
-  ejecutarCapturaCollectP1,
   ejecutarCapturaPlantP1,
   ejecutarCapturaDigP1,
   ejecutarDescarteAccionP1,
-  confirmarAccionP1Async,
-  rechazarAccionP1Async,
+  confirmarAccionP1ConSesion,
+  rechazarAccionP1ConSesion,
+  confirmarRecogidaSolConSesion,
 } from '../engine/asyncP1Capture'
 import { nivelPorElo } from '../engine/bot'
 import type {
@@ -213,20 +214,6 @@ export function useGameEngine() {
    * tirón bien visible en un móvil.
    */
   const rehacerDesdeRef = useRef<number | null>(null)
-
-  /**
-   * Los dos mazos de la sala, con el nivel y las mejoras de cada carta.
-   *
-   * De aquí salen las estadísticas de las plantas de LOS DOS lados, y por eso las
-   * dos pantallas simulan la misma planta. Antes cada uno leía sus propias mejoras
-   * de su navegador y el rival plantaba la carta básica, así que la misma planta
-   * tenía 345 de vida en un lado y 300 en el otro desde el momento de ponerla —
-   * divergencia garantizada para cualquiera con una carta mejorada, sin necesidad
-   * de que se perdiera nada por la red. Ver engine/mazoDeLaSala.ts.
-   *
-   * En null fuera del 1c1, y entonces valen las mejoras del navegador: en solitario
-   * no hay nadie con quien coincidir.
-   */
   const mazoMioRef = useRef<CartaDeMazo[] | null>(null)
   const mazoDelRivalRef = useRef<CartaDeMazo[] | null>(null)
   const isAsyncMatchRef = useRef<boolean>(false)
@@ -269,96 +256,67 @@ export function useGameEngine() {
 
   /**
    * Incorpora intenciones del Rival Semilla recibidas progresivamente desde el servidor.
-   * Validación estricta fail-closed: sin deduplicación por coordenadas, sin inferencia de campos.
-   * Deduplica exclusivamente por `seq`. Mismo seq con contenido distinto -> SEQ_CONFLICT.
+   * Validación estricta fail-closed con atomicidad total y deduplicación por `seq`.
    */
   const incorporarIntencionesAsync = useCallback(
-    (nuevasIntenciones: unknown, generation?: number): boolean => {
+    (nuevasIntenciones: unknown, generation?: number): ResultadoIncorporarLoteP2 => {
       if (generation !== undefined && generation !== sessionGenerationRef.current) {
-        return false
+        return {
+          ok: false,
+          reason: 'TIMELINE_INCONSISTENT',
+          details: 'Callback P2 descartado: generación de sesión obsoleta',
+          maxAcceptedSeq: null,
+        }
       }
       if (rankedAsyncInconsistencyRef.current !== null) {
-        return false
-      }
-      if (!Array.isArray(nuevasIntenciones)) {
-        marcarInconsistenciaRanked({
-          reason: 'INVALID_ASYNC_PLAN',
-          details: `Lote de intenciones P2 debe ser un array, recibido: ${typeof nuevasIntenciones}`,
-        })
-        return false
-      }
-      if (nuevasIntenciones.length === 0) return true
-
-      const buffer = asyncOpponentActionsBufferRef.current
-      const nuevasAceptadas: AsyncOpponentIntentRankedEstricta[] = []
-      let tickMasAntiguoNuevo: number | null = null
-
-      for (const n of nuevasIntenciones) {
-        const val = validarIntencionAsyncRankedEstricta(n)
-        if (!val.ok) {
-          marcarInconsistenciaRanked({
-            reason: val.reason,
-            seq: val.seq,
-            issuedTick: val.issuedTick,
-            details: val.details,
-          })
-          return false
-        }
-
-        const intent = val.intencion
-        const existente = buffer.find((i) => i.seq === intent.seq)
-        if (existente) {
-          if (sonIntencionesP2Identicas(existente, intent)) {
-            // Idempotente: misma secuencia y contenido idéntico
-            continue
-          }
-          // Conflicto de secuencia: misma secuencia con contenido distinto
-          marcarInconsistenciaRanked({
-            reason: 'SEQ_CONFLICT',
-            seq: intent.seq,
-            issuedTick: intent.issuedTick,
-            details: `Conflicto en lote incremental P2: seq ${intent.seq} recibido con contenido distinto`,
-          })
-          return false
-        }
-
-        nuevasAceptadas.push(intent)
-        if (Number.isInteger(intent.issuedTick) && intent.issuedTick >= 0) {
-          tickMasAntiguoNuevo =
-            tickMasAntiguoNuevo === null
-              ? intent.issuedTick
-              : Math.min(tickMasAntiguoNuevo, intent.issuedTick)
+        return {
+          ok: false,
+          reason: rankedAsyncInconsistencyRef.current.reason,
+          seq: rankedAsyncInconsistencyRef.current.seq,
+          issuedTick: rankedAsyncInconsistencyRef.current.issuedTick,
+          details: rankedAsyncInconsistencyRef.current.details,
+          maxAcceptedSeq: null,
         }
       }
 
-      if (nuevasAceptadas.length === 0) return true
-
-      buffer.push(...nuevasAceptadas)
-      buffer.sort((a, b) => {
-        if (a.issuedTick !== b.issuedTick) return a.issuedTick - b.issuedTick
-        return a.seq - b.seq
+      const res = incorporarLoteIntencionesP2({
+        bufferActual: asyncOpponentActionsBufferRef.current,
+        nuevasIntenciones,
+        currentTick: stateRef.current.tick,
+        pendingP1Count: accionesP1PendingRef.current.length,
       })
 
-      if (asyncOpponentRef.current) {
-        asyncOpponentRef.current.intents = [...buffer]
+      if (!res.ok) {
+        marcarInconsistenciaRanked({
+          reason: res.reason,
+          seq: res.seq,
+          issuedTick: res.issuedTick,
+          details: res.details,
+        })
+        return res
       }
 
-      const currentTick = stateRef.current.tick
-      if (
-        tickMasAntiguoNuevo !== null &&
-        tickMasAntiguoNuevo <= currentTick
-      ) {
-        if (accionesP1PendingRef.current.length > 0) {
-          reconciliationStateRef.current = 'reconciling_pending'
-          setReconciliationState('reconciling_pending')
+      // Commit atómico al estado
+      if (res.nuevasAceptadas.length > 0) {
+        asyncOpponentActionsBufferRef.current = res.nuevoBuffer
+        if (asyncOpponentRef.current) {
+          asyncOpponentRef.current.intents = [...res.nuevoBuffer]
         }
+      }
+
+      if (res.requiresReconcilingPending) {
+        reconciliationStateRef.current = 'reconciling_pending'
+        setReconciliationState('reconciling_pending')
+      }
+
+      if (res.requiresRebuild && res.tickMasAntiguoNuevo !== null) {
         rehacerDesdeRef.current =
           rehacerDesdeRef.current === null
-            ? tickMasAntiguoNuevo
-            : Math.min(rehacerDesdeRef.current, tickMasAntiguoNuevo)
+            ? res.tickMasAntiguoNuevo
+            : Math.min(rehacerDesdeRef.current, res.tickMasAntiguoNuevo)
       }
 
-      return true
+      return res
     },
     [marcarInconsistenciaRanked]
   )
@@ -639,10 +597,9 @@ export function useGameEngine() {
 
   const confirmarRecogidaSol = useCallback(
     (sunId: string, issuedTick?: number, seq?: number, generation?: number): boolean => {
-      if (generation !== undefined && generation !== sessionGenerationRef.current) {
-        return false
-      }
-      const res = ejecutarCapturaCollectP1({
+      const res = confirmarRecogidaSolConSesion({
+        currentGeneration: sessionGenerationRef.current,
+        callbackGeneration: generation,
         isAsyncMatch: isAsyncMatchRef.current,
         sunId,
         issuedTick,
@@ -653,12 +610,14 @@ export function useGameEngine() {
       })
 
       if (!res.ok) {
-        marcarInconsistenciaRanked({
-          reason: res.reason,
-          seq: res.seq,
-          issuedTick: res.issuedTick,
-          details: res.details,
-        })
+        if (!res.stale) {
+          marcarInconsistenciaRanked({
+            reason: res.reason,
+            seq: res.seq,
+            issuedTick: res.issuedTick,
+            details: res.details,
+          })
+        }
         return false
       }
 
@@ -1205,23 +1164,24 @@ export function useGameEngine() {
    */
   const confirmarAccionP1 = useCallback(
     (seq?: number, generation?: number): boolean => {
-      if (generation !== undefined && generation !== sessionGenerationRef.current) {
-        return false
-      }
       if (!isAsyncMatchRef.current || seq === undefined || seq === null) return true
 
-      const res = confirmarAccionP1Async({
+      const res = confirmarAccionP1ConSesion({
+        currentGeneration: sessionGenerationRef.current,
+        callbackGeneration: generation,
         pending: accionesP1PendingRef.current,
         accepted: accionesP1AceptadasRef.current,
         seq,
       })
 
       if (!res.ok) {
-        marcarInconsistenciaRanked({
-          reason: res.reason,
-          seq: res.seq,
-          details: res.details,
-        })
+        if (!res.stale) {
+          marcarInconsistenciaRanked({
+            reason: res.reason,
+            seq: res.seq,
+            details: res.details,
+          })
+        }
         return false
       }
 
@@ -1258,11 +1218,10 @@ export function useGameEngine() {
    */
   const descartarAccionPropia = useCallback(
     (tick: number, lane: number, col: number | null, seq?: number, generation?: number) => {
-      if (generation !== undefined && generation !== sessionGenerationRef.current) {
-        return
-      }
       if (isAsyncMatchRef.current) {
-        const resRechazo = rechazarAccionP1Async({
+        const resRechazo = rechazarAccionP1ConSesion({
+          currentGeneration: sessionGenerationRef.current,
+          callbackGeneration: generation,
           pending: accionesP1PendingRef.current,
           accepted: accionesP1AceptadasRef.current,
           seq,
@@ -1272,11 +1231,13 @@ export function useGameEngine() {
         })
 
         if (!resRechazo.ok) {
-          marcarInconsistenciaRanked({
-            reason: resRechazo.reason,
-            seq: resRechazo.seq,
-            details: resRechazo.details,
-          })
+          if (!resRechazo.stale) {
+            marcarInconsistenciaRanked({
+              reason: resRechazo.reason,
+              seq: resRechazo.seq,
+              details: resRechazo.details,
+            })
+          }
           return
         }
 
@@ -1376,21 +1337,21 @@ export function useGameEngine() {
       const state = stateRef.current
       if (state.status !== 'playing') return
 
-      if (isAsyncMatchRef.current) {
-        if (
-          rankedAsyncInconsistencyRef.current !== null ||
-          reconciliationStateRef.current === 'inconsistent' ||
-          reconciliationStateRef.current === 'reconciling_pending'
-        ) {
-          // FAIL-CLOSED: En estado de inconsistencia o reconciliación de acciones pendientes,
-          // el bucle competitivo de Ranked Async queda 100% congelado.
-          // No avanzar tick, no mover proyectiles, no dañar bases, no generar soles,
-          // no ejecutar P2, no alcanzar victoria/derrota, no generar nuevas huellas.
-          lastFrameMsRef.current = nowMs
-          accumulatorMsRef.current = 0
-          forceRender()
-          return
-        }
+      if (
+        debeCongelarMotorRankedAsync({
+          isAsyncMatch: isAsyncMatchRef.current,
+          rankedAsyncInconsistency: rankedAsyncInconsistencyRef.current,
+          reconciliationState: reconciliationStateRef.current,
+        })
+      ) {
+        // FAIL-CLOSED: En estado de inconsistencia o reconciliación de acciones pendientes,
+        // el bucle competitivo de Ranked Async queda 100% congelado.
+        // No avanzar tick, no mover proyectiles, no dañar bases, no generar soles,
+        // no ejecutar P2, no alcanzar victoria/derrota, no generar nuevas huellas.
+        lastFrameMsRef.current = nowMs
+        accumulatorMsRef.current = 0
+        forceRender()
+        return
       }
 
       // Tope de 5 s como antes: si la pestaña estuvo en segundo plano, se

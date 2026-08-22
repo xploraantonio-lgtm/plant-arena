@@ -19,6 +19,10 @@ import {
   validarMazoAsyncRanked,
   sonIntencionesP2Identicas,
   issuedTickP1Legacy,
+  debeCongelarMotorRankedAsync,
+  ejecutarPasoSimulacionAsync,
+  resolverLiquidacionPartida,
+  incorporarLoteIntencionesP2,
   type AsyncOpponentIntent,
   type AccionP1Simulacion,
 } from './asyncOpponent.ts'
@@ -29,6 +33,9 @@ import {
   ejecutarDescarteAccionP1,
   confirmarAccionP1Async,
   rechazarAccionP1Async,
+  confirmarAccionP1ConSesion,
+  rechazarAccionP1ConSesion,
+  confirmarRecogidaSolConSesion,
 } from './asyncP1Capture.ts'
 import {
   validarYNormalizarAccionesP1Ranked,
@@ -3230,85 +3237,344 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(sonIntencionesP2Identicas(a, diffKind)).toBe(false)
   })
 
-  // 122. Bucle de congelación: stepAsyncOpponent no se ejecuta si la simulación está congelada por inconsistencia
-  it('122. En estado de congelación por inconsistencia, el juego no avanza ticks ni ejecuta P2', () => {
+  // 122. Bucle de congelación: stepAsyncOpponent y stepTick no se ejecutan si la simulación está congelada por inconsistencia
+  it('122. ejecutarPasoSimulacionAsync en estado de freeze por inconsistencia o hold no avanza ticks ni altera el estado', () => {
     const state = createBattleState(123, false, true)
     const initialTick = state.tick
     const initialSun = state.sunBank
-    // Simular freeze en tickEngine
-    const isFrozen = true
-    if (!isFrozen) {
-      stepTick(state, () => {})
-    }
+    const initialP1Hp = state.p1BaseHp
+    const initialP2Hp = state.p2BaseHp
+
+    expect(debeCongelarMotorRankedAsync({
+      isAsyncMatch: true,
+      rankedAsyncInconsistency: { reason: 'TIMELINE_INCONSISTENT' },
+      reconciliationState: 'inconsistent',
+    })).toBe(true)
+
+    // Paso con inconsistencia -> debe congelar fail-closed
+    const resFreeze = ejecutarPasoSimulacionAsync({
+      isAsyncMatch: true,
+      rankedAsyncInconsistency: { reason: 'TIMELINE_INCONSISTENT' },
+      reconciliationState: 'inconsistent',
+      state,
+      controller: null,
+    })
+
+    expect(resFreeze.frozen).toBe(true)
+    expect(resFreeze.tickAvanzado).toBe(false)
     expect(state.tick).toBe(initialTick)
     expect(state.sunBank).toBe(initialSun)
+    expect(state.p1BaseHp).toBe(initialP1Hp)
+    expect(state.p2BaseHp).toBe(initialP2Hp)
+
+    // Paso saludable -> avanza simulación normalmente
+    const resHealthy = ejecutarPasoSimulacionAsync({
+      isAsyncMatch: true,
+      rankedAsyncInconsistency: null,
+      reconciliationState: 'healthy',
+      state,
+      controller: null,
+    })
+
+    expect(resHealthy.frozen).toBe(false)
+    expect(resHealthy.tickAvanzado).toBe(true)
+    expect(state.tick).toBe(initialTick + 1)
   })
 
-  // 123. Session generation stale callback en confirmarAccionP1
-  it('123. confirmarAccionP1Async rechaza o ignora llamadas con generación de sesión obsoleta', () => {
-    const currentGeneration: number = 2
-    const staleGeneration: number = 1
-    const shouldIgnore = staleGeneration !== currentGeneration
-    expect(shouldIgnore).toBe(true)
-  })
+  // 123. Session generation stale callback en confirmarAccionP1ConSesion
+  it('123. confirmarAccionP1ConSesion rechaza llamadas con generación de sesión obsoleta sin mutar arrays', () => {
+    const pending = [{ seq: 10, tick: 16, issuedTick: 10, kind: 'plant' as const, plantId: 'peashooter' as const, lane: 0 }]
+    const accepted: any[] = []
 
-  // 124. Session generation stale callback en descartarAccionPropia
-  it('124. rechazarAccionP1Async es ignorado cuando la generación de sesión es obsoleta', () => {
-    const currentGeneration: number = 5
-    const callbackGeneration: number = 4
-    const isStale = callbackGeneration !== currentGeneration
-    expect(isStale).toBe(true)
-  })
+    // Callback desfasado (generación 4 en sesión actual 5)
+    const resStale = confirmarAccionP1ConSesion({
+      currentGeneration: 5,
+      callbackGeneration: 4,
+      pending,
+      accepted,
+      seq: 10,
+    })
 
-  // 125. Session generation stale callback en confirmarRecogidaSol
-  it('125. confirmarRecogidaSol es ignorado cuando la generación de sesión es obsoleta', () => {
-    const currentGeneration: number = 3
-    const callbackGeneration: number = 2
-    const isStale = callbackGeneration !== currentGeneration
-    expect(isStale).toBe(true)
-  })
+    expect(resStale.ok).toBe(false)
+    expect(resStale.stale).toBe(true)
+    if (resStale.stale) {
+      expect(resStale.reason).toBe('STALE_SESSION')
+      expect(resStale.pending.length).toBe(1)
+      expect(resStale.accepted.length).toBe(0)
+    }
 
-  // 126. incorporarIntencionesAsync rechaza lote no array con INVALID_ASYNC_PLAN
-  it('126. incorporarIntencionesAsync valida que el lote entrante sea un array y rechaza objetos o null', () => {
-    const valObj = validarYNormalizarIntencionesAsyncRanked({ some: 'object' })
-    expect(valObj.ok).toBe(false)
-    if (!valObj.ok) expect(valObj.reason).toBe('INVALID_ASYNC_PLAN')
-  })
+    // Callback sincronizado (generación 5)
+    const resOk = confirmarAccionP1ConSesion({
+      currentGeneration: 5,
+      callbackGeneration: 5,
+      pending,
+      accepted,
+      seq: 10,
+    })
 
-  // 127. incorporarIntencionesAsync detecta SEQ_CONFLICT en lote incremental
-  it('127. incorporarIntencionesAsync detecta SEQ_CONFLICT ante mismo seq con contenido distinto', () => {
-    const buffer = [{ seq: 1, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 }]
-    const incoming = [{ seq: 1, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 2 }]
-    const val = validarIntencionAsyncRankedEstricta(incoming[0])
-    expect(val.ok).toBe(true)
-    if (val.ok) {
-      const existing = buffer.find(i => i.seq === val.intencion.seq)
-      expect(existing).toBeDefined()
-      if (existing) {
-        const identical = sonIntencionesP2Identicas(existing, val.intencion)
-        expect(identical).toBe(false)
-      }
+    expect(resOk.ok).toBe(true)
+    expect(resOk.stale).toBe(false)
+    if (resOk.ok) {
+      expect(resOk.pending.length).toBe(0)
+      expect(resOk.accepted.length).toBe(1)
+      expect(resOk.accepted[0].seq).toBe(10)
     }
   })
 
-  // 128. incorporarIntencionesAsync ignora lotes de generaciones de sesión anteriores
-  it('128. incorporarIntencionesAsync descarta lotes si la generación recibida no coincide con la actual', () => {
-    const currentSessionGeneration: number = 7
-    const incomingGeneration: number = 6
-    const isStale = incomingGeneration !== currentSessionGeneration
-    expect(isStale).toBe(true)
+  // 124. Session generation stale callback en rechazarAccionP1ConSesion
+  it('124. rechazarAccionP1ConSesion es ignorado cuando la generación de sesión es obsoleta sin reembolsar ni mutar registro', () => {
+    const pending = [{ seq: 10, tick: 16, issuedTick: 10, kind: 'plant' as const, plantId: 'peashooter' as const, lane: 0, col: 0 }]
+    const registro = [{ id: 1, kind: 'plant' as const, mia: true, tick: 16, lane: 0, col: 0, carta: 'peashooter' as const }]
+    const costeDeMisJugadas = new Map<string, { coste: number; carta: any; slot: number | null }>([
+      ['16:0:0', { coste: 100, carta: 'peashooter', slot: 0 }],
+    ])
+    const state = createBattleState(1, false, true)
+    state.sunBank = 0
+
+    // Callback desfasado
+    const resStale = rechazarAccionP1ConSesion({
+      currentGeneration: 5,
+      callbackGeneration: 4,
+      pending,
+      accepted: [],
+      seq: 10,
+      state,
+      costeDeMisJugadas,
+      registro,
+    })
+
+    expect(resStale.ok).toBe(false)
+    expect(resStale.stale).toBe(true)
+    expect(state.sunBank).toBe(0) // No reembolsó soles
+    if (resStale.stale) {
+      expect(resStale.pending.length).toBe(1)
+      expect(resStale.nuevoRegistro.length).toBe(1)
+    }
+
+    // Callback sincronizado
+    const resOk = rechazarAccionP1ConSesion({
+      currentGeneration: 5,
+      callbackGeneration: 5,
+      pending,
+      accepted: [],
+      seq: 10,
+      state,
+      costeDeMisJugadas,
+      registro,
+    })
+
+    expect(resOk.ok).toBe(true)
+    expect(resOk.stale).toBe(false)
+    expect(state.sunBank).toBe(100) // Reembolso exitoso
+    if (resOk.ok) {
+      expect(resOk.pending.length).toBe(0)
+      expect(resOk.nuevoRegistro.length).toBe(0)
+    }
   })
 
-  // 129. Estado de hold/reconciling: resultado local no tiene autoridad sin verify-match
-  it('129. Durante hold o verificación pendiente, el estado local no tiene autoridad y verify-match es la única fuente de verdad', () => {
-    const localStatus: string = 'victory'
-    const verificationStatus: string = 'revision_servidor'
-    const finalOutcome = verificationStatus === 'verified' ? localStatus : 'revision_servidor'
-    expect(finalOutcome).toBe('revision_servidor')
+  // 125. Session generation stale callback en confirmarRecogidaSolConSesion
+  it('125. confirmarRecogidaSolConSesion es ignorado cuando la generación de sesión es obsoleta', () => {
+    const state = createBattleState(1, false, true)
+    state.sunBank = 0
+    state.suns = [
+      { id: 'sun_1', value: 25, x: 0, y: 0, targetY: 50, createdAt: 10 },
+    ]
+
+    // Callback desfasado
+    const resStale = confirmarRecogidaSolConSesion({
+      currentGeneration: 3,
+      callbackGeneration: 2,
+      isAsyncMatch: true,
+      sunId: 'sun_1',
+      issuedTick: 10,
+      seq: 1,
+      state,
+    })
+
+    expect(resStale.ok).toBe(false)
+    expect(resStale.stale).toBe(true)
+    expect(state.sunBank).toBe(0)
+    expect(state.suns.length).toBe(1)
+
+    // Callback sincronizado
+    const resOk = confirmarRecogidaSolConSesion({
+      currentGeneration: 3,
+      callbackGeneration: 3,
+      isAsyncMatch: true,
+      sunId: 'sun_1',
+      issuedTick: 10,
+      seq: 1,
+      state,
+    })
+
+    expect(resOk.ok).toBe(true)
+    expect(resOk.stale).toBe(false)
+    expect(state.sunBank).toBe(25)
+    expect(state.suns.length).toBe(0)
   })
 
-  // 130. issuedTickP1Legacy no se utiliza en el pipeline estricto de Ranked Asíncrono
-  it('130. issuedTickP1Legacy está aislado y validarAccionP1RankedEstricta exige issuedTick explícito', () => {
+  // 126. incorporarLoteIntencionesP2 rechaza lote no array con INVALID_ASYNC_PLAN
+  it('126. incorporarLoteIntencionesP2 valida que el lote entrante sea un array y rechaza objetos, null o strings', () => {
+    const resNull = incorporarLoteIntencionesP2({ bufferActual: [], nuevasIntenciones: null })
+    expect(resNull.ok).toBe(false)
+    expect(resNull.maxAcceptedSeq).toBe(null)
+    if (!resNull.ok) expect(resNull.reason).toBe('INVALID_ASYNC_PLAN')
+
+    const resObj = incorporarLoteIntencionesP2({ bufferActual: [], nuevasIntenciones: { not: 'an array' } })
+    expect(resObj.ok).toBe(false)
+    expect(resObj.maxAcceptedSeq).toBe(null)
+    if (!resObj.ok) expect(resObj.reason).toBe('INVALID_ASYNC_PLAN')
+  })
+
+  // 127. incorporarLoteIntencionesP2 detecta duplicado conflictivo dentro del MISMO lote
+  it('127. incorporarLoteIntencionesP2 detecta SEQ_CONFLICT ante mismo seq con contenido distinto dentro del mismo lote', () => {
+    const incoming = [
+      { seq: 25, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 },
+      { seq: 25, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 2 },
+    ]
+    const bufferActual: any[] = []
+
+    const res = incorporarLoteIntencionesP2({ bufferActual, nuevasIntenciones: incoming })
+
+    expect(res.ok).toBe(false)
+    expect(res.maxAcceptedSeq).toBe(null)
+    if (!res.ok) {
+      expect(res.reason).toBe('SEQ_CONFLICT')
+      expect(res.seq).toBe(25)
+    }
+    expect(bufferActual.length).toBe(0) // Buffer intacto
+  })
+
+  // 128. incorporarLoteIntencionesP2 deduplica idénticos dentro del MISMO lote
+  it('128. incorporarLoteIntencionesP2 acepta duplicados idénticos dentro del mismo lote como idempotentes', () => {
+    const intentA = { seq: 25, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 }
+    const incoming = [intentA, { ...intentA }]
+
+    const res = incorporarLoteIntencionesP2({ bufferActual: [], nuevasIntenciones: incoming })
+
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.maxAcceptedSeq).toBe(25)
+      expect(res.nuevoBuffer.length).toBe(1)
+      expect(res.nuevasAceptadas.length).toBe(1)
+    }
+  })
+
+  // 129. incorporarLoteIntencionesP2 garantiza atomicidad total del lote
+  it('129. incorporarLoteIntencionesP2 no incorpora intenciones previas si un elemento posterior del lote falla', () => {
+    const incoming = [
+      { seq: 20, issuedTick: 5, tick: 11, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 },
+      { seq: 21, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 },
+      { seq: 21, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 1 }, // conflicto con el anterior
+    ]
+    const bufferActual: any[] = []
+
+    const res = incorporarLoteIntencionesP2({ bufferActual, nuevasIntenciones: incoming })
+
+    expect(res.ok).toBe(false)
+    expect(res.maxAcceptedSeq).toBe(null)
+    if (!res.ok) {
+      expect(res.reason).toBe('SEQ_CONFLICT')
+      expect(res.seq).toBe(21)
+    }
+    expect(bufferActual.length).toBe(0) // Nada del lote fue incorporado
+  })
+
+  // 130. incorporarLoteIntencionesP2 devuelve maxAcceptedSeq para alimentar el cursor
+  it('130. incorporarLoteIntencionesP2 devuelve maxAcceptedSeq correcto basado exclusivamente en seqs validados', () => {
+    const incoming = [
+      { seq: 40, issuedTick: 10, tick: 16, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 },
+      { seq: 41, issuedTick: 20, tick: 26, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 },
+      { seq: 42, issuedTick: 30, tick: 36, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0 },
+    ]
+
+    const res = incorporarLoteIntencionesP2({ bufferActual: [], nuevasIntenciones: incoming })
+
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.maxAcceptedSeq).toBe(42)
+      expect(res.nuevasAceptadas.length).toBe(3)
+    }
+  })
+
+  // 131. resolverLiquidacionPartida: Servidor verificado sobrepone cualquier resultado local
+  it('131. resolverLiquidacionPartida otorga el resultado y ELO autoritativo del servidor incluso si el cliente creyó haber ganado', () => {
+    const res = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'user_p1',
+      serverVerification: {
+        status: 'verified',
+        winnerSide: 2, // Ganó P2 en el servidor
+        settlement: {
+          eloLost: 15,
+          eloGained: 0,
+          payout: 0,
+        },
+      },
+    })
+
+    expect(res.mostrarResultado).toBe(true)
+    expect(res.resultadoFinal).toBe('defeat')
+    expect(res.statusServidor).toBe('liquidada')
+    expect(res.eloLost).toBe(15)
+    expect(res.eloGained).toBeUndefined()
+  })
+
+  // 132. resolverLiquidacionPartida: Servidor fallido no otorga victoria local ni altera ELO
+  it('132. resolverLiquidacionPartida con status failed entra en revision_servidor sin declarar ganador ni tocar ELO', () => {
+    const res = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'user_p1',
+      serverVerification: {
+        status: 'failed',
+        error: 'divergence_detected',
+      },
+    })
+
+    expect(res.mostrarResultado).toBe(false)
+    expect(res.resultadoFinal).toBe('hold')
+    expect(res.statusServidor).toBe('revision_servidor')
+    expect(res.eloGained).toBeUndefined()
+    expect(res.eloLost).toBeUndefined()
+  })
+
+  // 133. resolverLiquidacionPartida: Servidor pending mantiene la pantalla en hold
+  it('133. resolverLiquidacionPartida con status pending mantiene verificacion_pendiente', () => {
+    const res = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'user_p1',
+      serverVerification: {
+        status: 'pending',
+      },
+    })
+
+    expect(res.mostrarResultado).toBe(false)
+    expect(res.resultadoFinal).toBe('hold')
+    expect(res.statusServidor).toBe('verificacion_pendiente')
+  })
+
+  // 134. resolverLiquidacionPartida: Servidor verified_draw declara empate verificado
+  it('134. resolverLiquidacionPartida con status verified_draw declara empate verificado sin premios', () => {
+    const res = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'user_p1',
+      serverVerification: {
+        status: 'verified_draw',
+      },
+    })
+
+    expect(res.mostrarResultado).toBe(true)
+    expect(res.resultadoFinal).toBe('draw')
+    expect(res.statusServidor).toBe('empate_verificado')
+    expect(res.payout).toBe(0)
+  })
+
+  // 135. issuedTickP1Legacy no se utiliza en el pipeline estricto de Ranked Asíncrono
+  it('135. issuedTickP1Legacy está aislado y validarAccionP1RankedEstricta exige issuedTick explícito', () => {
     const legacyCalculated = issuedTickP1Legacy({ tick: 100, kind: 'plant' } as any)
     expect(legacyCalculated).toBe(94) // 100 - MARGEN_DE_RED_TICS (6)
 

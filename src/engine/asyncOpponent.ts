@@ -1073,6 +1073,130 @@ export function reconstruirPartidaAsync(
   return { ok: true, estado: res.state, controller: res.controller }
 }
 
+export interface CondicionFreezeMotorAsync {
+  isAsyncMatch: boolean
+  rankedAsyncInconsistency: unknown | null
+  reconciliationState: 'healthy' | 'reconciling_pending' | 'inconsistent'
+}
+
+/**
+ * Determina de forma pura si el bucle competitivo de Ranked Async debe congelarse (Fail-Closed).
+ */
+export function debeCongelarMotorRankedAsync(cond: CondicionFreezeMotorAsync): boolean {
+  if (!cond.isAsyncMatch) return false
+  return (
+    cond.rankedAsyncInconsistency !== null ||
+    cond.reconciliationState === 'inconsistent' ||
+    cond.reconciliationState === 'reconciling_pending'
+  )
+}
+
+export interface ParametrosPasoSimulacionAsync extends CondicionFreezeMotorAsync {
+  state: GameState
+  controller: AsyncOpponentController | null
+  reproducirSonido?: () => void
+}
+
+export type ResultadoPasoSimulacionAsync =
+  | { frozen: true; tickAvanzado: false }
+  | { frozen: false; tickAvanzado: true }
+
+/**
+ * Ejecuta un paso atómico de simulación respetando la política de freeze fail-closed.
+ */
+export function ejecutarPasoSimulacionAsync(
+  params: ParametrosPasoSimulacionAsync
+): ResultadoPasoSimulacionAsync {
+  if (debeCongelarMotorRankedAsync(params)) {
+    return { frozen: true, tickAvanzado: false }
+  }
+
+  if (params.controller) {
+    stepAsyncOpponent(params.controller, params.state)
+  }
+  stepTick(params.state, params.reproducirSonido ?? ((_s: string) => {}))
+  return { frozen: false, tickAvanzado: true }
+}
+
+export interface VerificacionServidorPayload {
+  status?: 'verified' | 'settled' | 'verified_draw' | 'pending' | 'failed' | string
+  winnerSide?: 1 | 2 | null
+  winnerId?: string | null
+  settlement?: {
+    eloGained?: number
+    eloLost?: number
+    payout?: number
+  }
+  error?: string
+}
+
+export interface ResultadoLiquidacionMatch {
+  mostrarResultado: boolean
+  resultadoFinal: 'victory' | 'defeat' | 'draw' | 'hold'
+  statusServidor: 'liquidada' | 'empate_verificado' | 'verificacion_pendiente' | 'revision_servidor'
+  eloGained?: number
+  eloLost?: number
+  payout: number
+  error?: string
+}
+
+/**
+ * Resuelve autoritativamente la liquidación de la partida a partir de la respuesta de verify-match.
+ * Durante fallos, retenciones o verificaciones pendientes, el estado local no tiene autoridad
+ * y JAMÁS se otorga victoria/derrota ni cambio de ELO local.
+ */
+export function resolverLiquidacionPartida(options: {
+  isAsyncMatch: boolean
+  soyP1: boolean
+  currentUserId: string | null
+  serverVerification: VerificacionServidorPayload
+}): ResultadoLiquidacionMatch {
+  const { isAsyncMatch, soyP1, currentUserId, serverVerification } = options
+  const status = serverVerification.status
+
+  if (status === 'verified' || status === 'settled') {
+    const yoGaneServidor = isAsyncMatch
+      ? serverVerification.winnerSide === 1
+      : (serverVerification.winnerId === currentUserId || serverVerification.winnerSide === (soyP1 ? 1 : 2))
+    const s = serverVerification.settlement ?? {}
+    return {
+      mostrarResultado: true,
+      resultadoFinal: yoGaneServidor ? 'victory' : 'defeat',
+      statusServidor: 'liquidada',
+      eloGained: yoGaneServidor && typeof s.eloGained === 'number' ? s.eloGained : undefined,
+      eloLost: !yoGaneServidor && typeof s.eloLost === 'number' ? s.eloLost : undefined,
+      payout: yoGaneServidor && typeof s.payout === 'number' ? s.payout : 0,
+    }
+  }
+
+  if (status === 'verified_draw') {
+    return {
+      mostrarResultado: true,
+      resultadoFinal: 'draw',
+      statusServidor: 'empate_verificado',
+      payout: 0,
+    }
+  }
+
+  if (status === 'pending') {
+    return {
+      mostrarResultado: false,
+      resultadoFinal: 'hold',
+      statusServidor: 'verificacion_pendiente',
+      payout: 0,
+    }
+  }
+
+  // status === 'failed' u otros errores de verificación
+  return {
+    mostrarResultado: false,
+    resultadoFinal: 'hold',
+    statusServidor: 'revision_servidor',
+    payout: 0,
+    error: serverVerification.error ?? 'La verificación automática encontró una inconsistencia. No se liquidó la partida.',
+  }
+}
+
 export {
   validarAccionP1RankedEstricta,
   validarYNormalizarAccionesP1Ranked,
@@ -1083,5 +1207,15 @@ export {
   sonAccionesIdenticas,
   validarMazoAsyncRanked,
   validarIntencionAsyncRankedEstricta,
+  validarYNormalizarIntencionesAsyncRanked,
   sonIntencionesP2Identicas,
+  incorporarLoteIntencionesP2,
+  type ParametrosIncorporarLoteP2,
+  type ResultadoIncorporarLoteP2,
 } from './asyncP1History.ts'
+
+export {
+  confirmarAccionP1ConSesion,
+  rechazarAccionP1ConSesion,
+  confirmarRecogidaSolConSesion,
+} from './asyncP1Capture.ts'

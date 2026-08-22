@@ -528,3 +528,102 @@ export function ejecutarDescarteAccionP1(
 
   return { ok: true, eliminado: true, nuevoHistorial, nuevoRegistro }
 }
+
+export interface ParametrosConfirmarAccionConSesion {
+  currentGeneration: number
+  callbackGeneration?: number
+  pending: AccionP1RankedEstricta[]
+  accepted: AccionP1RankedEstricta[]
+  seq?: number
+}
+
+export type ResultadoConfirmarAccionConSesion =
+  | { ok: true; stale: false; pending: AccionP1RankedEstricta[]; accepted: AccionP1RankedEstricta[]; accion?: AccionP1RankedEstricta }
+  | { ok: false; stale: true; reason: 'STALE_SESSION'; details: string; pending: AccionP1RankedEstricta[]; accepted: AccionP1RankedEstricta[] }
+  | { ok: false; stale: false; reason: InconsistenciaHistorialP1; seq?: number; details?: string }
+
+export function confirmarAccionP1ConSesion(
+  params: ParametrosConfirmarAccionConSesion
+): ResultadoConfirmarAccionConSesion {
+  const { currentGeneration, callbackGeneration, pending, accepted, seq } = params
+  if (callbackGeneration !== undefined && callbackGeneration !== currentGeneration) {
+    return {
+      ok: false,
+      stale: true,
+      reason: 'STALE_SESSION',
+      details: `Generación de sesión obsoleta (${callbackGeneration} vs ${currentGeneration})`,
+      pending,
+      accepted,
+    }
+  }
+
+  const res = confirmarAccionP1Async({ pending, accepted, seq })
+  if (!res.ok) {
+    return { ok: false, stale: false, reason: res.reason, seq: res.seq, details: res.details }
+  }
+  return { ok: true, stale: false, pending: res.pending, accepted: res.accepted, accion: res.accionConfirmada }
+}
+
+export interface ParametrosRechazarAccionConSesion {
+  currentGeneration: number
+  callbackGeneration?: number
+  pending: AccionP1RankedEstricta[]
+  accepted: AccionP1RankedEstricta[]
+  seq?: number
+  state: GameState
+  costeDeMisJugadas: Map<string, { coste: number; carta: PlantId; slot: number | null }>
+  registro: AccionRegistrada[]
+}
+
+export type ResultadoRechazarAccionConSesion =
+  | { ok: true; stale: false; pending: AccionP1RankedEstricta[]; nuevoRegistro: AccionRegistrada[]; accion?: AccionP1RankedEstricta }
+  | { ok: false; stale: true; reason: 'STALE_SESSION'; details: string; pending: AccionP1RankedEstricta[]; nuevoRegistro: AccionRegistrada[] }
+  | { ok: false; stale: false; reason: InconsistenciaHistorialP1; seq?: number; details?: string }
+
+export function rechazarAccionP1ConSesion(
+  params: ParametrosRechazarAccionConSesion
+): ResultadoRechazarAccionConSesion {
+  const { currentGeneration, callbackGeneration, pending, accepted, seq, state, costeDeMisJugadas, registro } = params
+  if (callbackGeneration !== undefined && callbackGeneration !== currentGeneration) {
+    return {
+      ok: false,
+      stale: true,
+      reason: 'STALE_SESSION',
+      details: `Generación de sesión obsoleta (${callbackGeneration} vs ${currentGeneration})`,
+      pending,
+      nuevoRegistro: registro,
+    }
+  }
+
+  const res = rechazarAccionP1Async({ pending, accepted, seq, state, costeDeMisJugadas, registro })
+  if (!res.ok) {
+    return { ok: false, stale: false, reason: res.reason, seq: res.seq, details: res.details }
+  }
+  return { ok: true, stale: false, pending: res.pending, nuevoRegistro: res.nuevoRegistro, accion: res.accionRechazada }
+}
+
+export interface ParametrosConfirmarRecogidaSolConSesion extends ParametrosCapturaCollectP1 {
+  currentGeneration: number
+  callbackGeneration?: number
+}
+
+export type ResultadoConfirmarRecogidaSolConSesion =
+  | (ResultadoCapturaCollectP1 & { stale: false })
+  | { ok: false; stale: true; reason: 'STALE_SESSION'; details: string }
+
+export function confirmarRecogidaSolConSesion(
+  params: ParametrosConfirmarRecogidaSolConSesion
+): ResultadoConfirmarRecogidaSolConSesion {
+  const { currentGeneration, callbackGeneration, ...captureParams } = params
+  if (callbackGeneration !== undefined && callbackGeneration !== currentGeneration) {
+    return {
+      ok: false,
+      stale: true,
+      reason: 'STALE_SESSION',
+      details: `Generación de sesión obsoleta (${callbackGeneration} vs ${currentGeneration})`,
+    }
+  }
+
+  const res = ejecutarCapturaCollectP1(captureParams)
+  return { ...res, stale: false }
+}

@@ -29,6 +29,7 @@ import { MARGEN_DE_RED_TICS } from '../../engine/pvp'
 import { TICK_MS } from '../../engine/time'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
+import { resolverLiquidacionPartida } from '../../engine/asyncOpponent'
 import './Battlefield.css'
 
 /** Un segundo antes de que el sol se recoja solo: momento de avisar. */
@@ -638,15 +639,18 @@ export default function Battlefield({
         ultimaSeqAsyncRef.current
       )
       if (cancelado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
-      if (!res?.ok || !Array.isArray(res.intents)) return
-      if (res.intents.length > 0) {
-        const ok = incorporarIntencionesAsync(res.intents, capturedGeneration)
-        if (ok) {
-          ultimaSeqAsyncRef.current = Math.max(
-            ultimaSeqAsyncRef.current,
-            ...res.intents.map((i: any) => Number(i.seq) || 0)
-          )
-        }
+
+      // A) Error de red / transporte / res inexistente / res.ok === false -> Reintentar en el siguiente ciclo sin marcar corrupción
+      if (!res || res.ok === false) return
+
+      // B) res.ok === true pero res.intents no es array o intenciones malformadas -> PROTOCOL_INCONSISTENCY / INVALID_ASYNC_PLAN
+      // incorporarIntencionesAsync valida res.intents y si es inválido marca inconsistencia, congela el bucle y devuelve ok: false
+      const resultado = incorporarIntencionesAsync(res.intents, capturedGeneration)
+      if (resultado.ok && typeof resultado.maxAcceptedSeq === 'number') {
+        ultimaSeqAsyncRef.current = Math.max(
+          ultimaSeqAsyncRef.current,
+          resultado.maxAcceptedSeq
+        )
       }
     }
 
@@ -761,79 +765,25 @@ export default function Battlefield({
             return
           }
 
-          if (
-            verificacion.status === 'verified' ||
-            verificacion.status === 'settled'
-          ) {
-            const s = verificacion.settlement ?? {}
-
-            const yoGaneServidor = isAsyncMatch
-              ? verificacion.winnerSide === 1
-              : (verificacion.winnerId === currentUserId || (verificacion.winnerSide === (soyP1 ? 1 : 2)))
-
-            const hayResultadoAutoritativo = isAsyncMatch
-              ? (verificacion.winnerSide === 1 || verificacion.winnerSide === 2)
-              : Boolean(verificacion.winnerId || verificacion.winnerSide)
-
-            setResultadoServidor({
-              success: true,
-              status: 'liquidada',
-
-              // NUNCA mostrar el premio del ganador a ambos clientes.
-              eloGained:
-                yoGaneServidor &&
-                typeof s.eloGained === 'number'
-                  ? s.eloGained
-                  : undefined,
-
-              eloLost:
-                !yoGaneServidor &&
-                typeof s.eloLost === 'number'
-                  ? s.eloLost
-                  : undefined,
-
-              payout:
-                yoGaneServidor &&
-                typeof s.payout === 'number'
-                  ? s.payout
-                  : 0,
-            })
-
-            // El resultado FINAL mostrado también lo manda el servidor.
-            // No confiar en lo que creyó ver este navegador.
-            if (hayResultadoAutoritativo) {
-              terminarPorOrdenDelServidor(
-                yoGaneServidor ? 'victory' : 'defeat'
-              )
-            }
-
-            return
-          }
-
-          if (verificacion.status === 'verified_draw') {
-            setResultadoServidor({ success: true, status: 'empate_verificado', payout: 0 })
-            return
-          }
-
-          if (verificacion.status === 'failed') {
-            setResultadoServidor({
-              success: false,
-              status: 'revision_servidor',
-              error: 'La verificación automática encontró una inconsistencia. No se liquidó la partida.',
-            })
-            return
-          }
-
-          if (verificacion.status === 'pending') {
-            setResultadoServidor({ success: true, status: 'verificacion_pendiente' })
-            return
-          }
+          const liq = resolverLiquidacionPartida({
+            isAsyncMatch,
+            soyP1,
+            currentUserId,
+            serverVerification: verificacion,
+          })
 
           setResultadoServidor({
-            success: false,
-            status: 'revision_servidor',
-            error: verificacion.error ?? 'No se pudo verificar la partida.',
+            success: liq.statusServidor === 'liquidada' || liq.statusServidor === 'empate_verificado' || liq.statusServidor === 'verificacion_pendiente',
+            status: liq.statusServidor,
+            eloGained: liq.eloGained,
+            eloLost: liq.eloLost,
+            payout: liq.payout,
+            error: liq.error,
           })
+
+          if (liq.mostrarResultado && (liq.resultadoFinal === 'victory' || liq.resultadoFinal === 'defeat')) {
+            terminarPorOrdenDelServidor(liq.resultadoFinal)
+          }
         })()
       }
 

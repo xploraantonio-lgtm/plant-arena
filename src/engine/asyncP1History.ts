@@ -810,3 +810,145 @@ export function validarYNormalizarIntencionesAsyncRanked(
 
   return { ok: true, intenciones: validadas }
 }
+
+export interface ParametrosIncorporarLoteP2 {
+  bufferActual: readonly AsyncOpponentIntentRankedEstricta[]
+  nuevasIntenciones: unknown
+  currentTick?: number
+  pendingP1Count?: number
+}
+
+export type ResultadoIncorporarLoteP2 =
+  | {
+      ok: true
+      nuevoBuffer: AsyncOpponentIntentRankedEstricta[]
+      nuevasAceptadas: AsyncOpponentIntentRankedEstricta[]
+      maxAcceptedSeq: number | null
+      tickMasAntiguoNuevo: number | null
+      requiresRebuild: boolean
+      requiresReconcilingPending: boolean
+    }
+  | {
+      ok: false
+      reason: InconsistenciaHistorialP1
+      seq?: number
+      issuedTick?: number
+      details?: string
+      maxAcceptedSeq: null
+    }
+
+/**
+ * Incorpora un lote progresivo de intenciones del Rival Semilla con atomicidad estricta y deduplicación por seq.
+ * Compara contra el buffer existente Y contra intenciones procesadas en el mismo lote.
+ * Si alguna intención falla o presenta SEQ_CONFLICT, aborta sin mutar nada.
+ */
+export function incorporarLoteIntencionesP2(
+  params: ParametrosIncorporarLoteP2
+): ResultadoIncorporarLoteP2 {
+  const { bufferActual, nuevasIntenciones, currentTick = 0, pendingP1Count = 0 } = params
+
+  if (!Array.isArray(nuevasIntenciones)) {
+    return {
+      ok: false,
+      reason: 'INVALID_ASYNC_PLAN',
+      details: `Lote de intenciones P2 debe ser un array, recibido: ${typeof nuevasIntenciones}`,
+      maxAcceptedSeq: null,
+    }
+  }
+
+  if (nuevasIntenciones.length === 0) {
+    const maxExisting = bufferActual.reduce<number | null>(
+      (max, i) => (max === null ? i.seq : Math.max(max, i.seq)),
+      null
+    )
+    return {
+      ok: true,
+      nuevoBuffer: [...bufferActual],
+      nuevasAceptadas: [],
+      maxAcceptedSeq: maxExisting,
+      tickMasAntiguoNuevo: null,
+      requiresRebuild: false,
+      requiresReconcilingPending: false,
+    }
+  }
+
+  // 1. Inicializar mapa con las intenciones ya existentes en el buffer
+  const mapaSeq = new Map<number, AsyncOpponentIntentRankedEstricta>()
+  for (const item of bufferActual) {
+    mapaSeq.set(item.seq, item)
+  }
+
+  const nuevasAceptadas: AsyncOpponentIntentRankedEstricta[] = []
+  let tickMasAntiguoNuevo: number | null = null
+  let maxSeqEncontrado: number | null = bufferActual.reduce<number | null>(
+    (max, i) => (max === null ? i.seq : Math.max(max, i.seq)),
+    null
+  )
+
+  // 2. Validar TODO el lote antes de realizar cualquier commit (atomicidad)
+  for (const raw of nuevasIntenciones) {
+    const val = validarIntencionAsyncRankedEstricta(raw)
+    if (!val.ok) {
+      return {
+        ok: false,
+        reason: val.reason,
+        seq: val.seq,
+        issuedTick: val.issuedTick,
+        details: val.details,
+        maxAcceptedSeq: null,
+      }
+    }
+
+    const intent = val.intencion
+    maxSeqEncontrado = maxSeqEncontrado === null ? intent.seq : Math.max(maxSeqEncontrado, intent.seq)
+
+    // Comparar contra buffer previo Y contra intenciones aceptadas en este mismo lote
+    const existente = mapaSeq.get(intent.seq)
+    if (existente) {
+      if (sonIntencionesP2Identicas(existente, intent)) {
+        // Idempotente: misma secuencia y contenido idéntico
+        continue
+      }
+      // Conflicto de secuencia: misma secuencia con contenido distinto
+      return {
+        ok: false,
+        reason: 'SEQ_CONFLICT',
+        seq: intent.seq,
+        issuedTick: intent.issuedTick,
+        details: `Conflicto de secuencia P2: seq ${intent.seq} recibido con contenido distinto en el lote o buffer`,
+        maxAcceptedSeq: null,
+      }
+    }
+
+    mapaSeq.set(intent.seq, intent)
+    nuevasAceptadas.push(intent)
+
+    if (Number.isInteger(intent.issuedTick) && intent.issuedTick >= 0) {
+      tickMasAntiguoNuevo =
+        tickMasAntiguoNuevo === null
+          ? intent.issuedTick
+          : Math.min(tickMasAntiguoNuevo, intent.issuedTick)
+    }
+  }
+
+  // 3. Commit atómico si no hubo errores
+  const nuevoBuffer = [...bufferActual, ...nuevasAceptadas]
+  nuevoBuffer.sort((a, b) => {
+    if (a.issuedTick !== b.issuedTick) return a.issuedTick - b.issuedTick
+    return a.seq - b.seq
+  })
+
+  const isLate = tickMasAntiguoNuevo !== null && tickMasAntiguoNuevo <= currentTick
+  const requiresReconcilingPending = isLate && pendingP1Count > 0
+  const requiresRebuild = isLate
+
+  return {
+    ok: true,
+    nuevoBuffer,
+    nuevasAceptadas,
+    maxAcceptedSeq: maxSeqEncontrado,
+    tickMasAntiguoNuevo,
+    requiresRebuild,
+    requiresReconcilingPending,
+  }
+}
