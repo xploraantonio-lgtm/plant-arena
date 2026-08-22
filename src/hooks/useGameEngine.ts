@@ -605,7 +605,7 @@ export function useGameEngine() {
     if (isAsyncMatchRef.current && asyncOpponentDeckRef.current) {
       const selectedCard = viejo.selectedCard
       const selectedSlotIndex = viejo.selectedSlotIndex
-      const { estado, controller } = reconstruirPartidaAsync(
+      const rebuildRes = reconstruirPartidaAsync(
         semillaRef.current,
         mazoMioRef.current,
         asyncOpponentDeckRef.current,
@@ -613,8 +613,19 @@ export function useGameEngine() {
         accionesP1AsyncRef.current,
         viejo.tick
       )
-      asyncOpponentRef.current = controller
-      stateRef.current = estado
+
+      if (!rebuildRes.ok) {
+        console.warn('[RankedAsync] Rebuild falló cerrado por inconsistencia autoritativa:', {
+          reason: rebuildRes.reason,
+          seq: rebuildRes.seq,
+          issuedTick: rebuildRes.issuedTick,
+        })
+        // FAIL CLOSED: No instalar una timeline corrupta o aproximada en stateRef.current
+        return
+      }
+
+      asyncOpponentRef.current = rebuildRes.controller
+      stateRef.current = rebuildRes.estado
       stateRef.current.selectedCard = selectedCard
       stateRef.current.selectedSlotIndex = selectedSlotIndex
       forceRender()
@@ -1066,8 +1077,7 @@ export function useGameEngine() {
       const antesAsync = accionesP1AsyncRef.current.length
       accionesP1AsyncRef.current = descartarAccionP1Async(
         accionesP1AsyncRef.current,
-        seq,
-        { tick, lane, col }
+        seq
       )
 
       if (registroRef.current.length === antes && accionesP1AsyncRef.current.length === antesAsync) return

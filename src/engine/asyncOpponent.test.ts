@@ -11,7 +11,9 @@ import {
   runAsyncTimeline,
   normalizarAccionesP1,
   registrarAccionP1Async,
+  registrarAccionP1AsyncDetallado,
   descartarAccionP1Async,
+  validarAccionP1RankedEstricta,
   type AsyncOpponentIntent,
   type AccionP1Simulacion,
 } from './asyncOpponent.ts'
@@ -663,17 +665,17 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     ]
 
     // Acciones de P1: una válida en tic 5, y una que luego se descartará en tic 15
-    const p1AccionesOriginales = [
-      { tick: 5, kind: 'plant', plantId: 'sunflower', lane: 1, col: 1 },
-      { tick: 15, kind: 'plant', plantId: 'sunflower', lane: 0, col: 1 },
+    const p1AccionesOriginales: AccionP1Simulacion[] = [
+      { seq: 1, tick: 5, issuedTick: 5, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
+      { seq: 2, tick: 15, issuedTick: 15, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 1 },
     ]
 
     // Simular el avance hasta tic 330 (el girasol entra al campo en tic 310 + 6 = 316)
     const { estado: estadoNormal } = reconstruirPartidaAsync(seed, p1Deck, p2Deck, intents, p1AccionesOriginales, 330)
     expect(estadoNormal.enemyPlants.length).toBe(1)
 
-    // Si Supabase rechaza la jugada de tic 15, se descarta de P1 y se reconstruye:
-    const p1AccionesFiltradas = p1AccionesOriginales.filter((a) => a.tick !== 15)
+    // Si Supabase rechaza la jugada de tic 15, se descarta de P1 por seq 2 y se reconstruye:
+    const p1AccionesFiltradas = descartarAccionP1Async(p1AccionesOriginales, 2)
     const { estado: estadoReconstruido, controller: controllerReconstruido } = reconstruirPartidaAsync(
       seed,
       p1Deck,
@@ -1870,6 +1872,407 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(rebuildRes.controller.pendingRetry).toEqual(timelineRes.controller.pendingRetry)
     expect(rebuildRes.controller.slotCooldowns).toEqual(timelineRes.controller.slotCooldowns)
     expect(rebuildRes.controller.stats).toEqual(timelineRes.controller.stats)
+  })
+
+  // 69. Acción sin seq falla cerrado con MISSING_SEQ y no se inserta ni se simula
+  it('69. Acción sin seq en Ranked Async falla cerrado con MISSING_SEQ', () => {
+    const accionInvalida = {
+      issuedTick: 100,
+      tick: 106,
+      kind: 'plant',
+      plantId: 'peashooter',
+      slot: 0,
+      lane: 0,
+      col: 0,
+    }
+
+    const val = validarAccionP1RankedEstricta(accionInvalida)
+    expect(val.ok).toBe(false)
+    if (!val.ok) {
+      expect(val.reason).toBe('MISSING_SEQ')
+    }
+
+    const historial: AccionP1Simulacion[] = []
+    const regDetallado = registrarAccionP1AsyncDetallado(historial, accionInvalida)
+    expect(regDetallado.ok).toBe(false)
+    if (!regDetallado.ok) {
+      expect(regDetallado.reason).toBe('MISSING_SEQ')
+    }
+    expect(historial.length).toBe(0)
+
+    // En runner autoritativo
+    const runRes = runAsyncTimeline({
+      seed: 42,
+      p1Deck: [{ slot: 0, plantId: 'peashooter', level: 0, statRolls: [] }],
+      asyncDeck: [{ slot: 0, plantId: 'peashooter', level: 0, statRolls: [] }],
+      p1Actions: [accionInvalida],
+      asyncActions: [],
+      untilTick: 200,
+      strictAuthoritativeHistory: true,
+    })
+    expect(runRes.ok).toBe(false)
+    expect(runRes.reason).toBe('MISSING_SEQ')
+  })
+
+  // 70. issuedTick ausente falla con MISSING_ISSUED_TICK (sin usar tick como sustituto)
+  it('70. issuedTick ausente falla cerrado con MISSING_ISSUED_TICK sin inferir desde tick', () => {
+    const accionSinIssuedTick = {
+      seq: 10,
+      tick: 80,
+      kind: 'collect',
+      targetId: 'sun_123',
+    }
+
+    const val = validarAccionP1RankedEstricta(accionSinIssuedTick)
+    expect(val.ok).toBe(false)
+    if (!val.ok) {
+      expect(val.reason).toBe('MISSING_ISSUED_TICK')
+      expect(val.seq).toBe(10)
+    }
+
+    const historial: AccionP1Simulacion[] = []
+    const resReg = registrarAccionP1AsyncDetallado(historial, accionSinIssuedTick)
+    expect(resReg.ok).toBe(false)
+    if (!resReg.ok) {
+      expect(resReg.reason).toBe('MISSING_ISSUED_TICK')
+    }
+    expect(historial.length).toBe(0)
+  })
+
+  // 71. id no se deriva como seq en Ranked Async nuevo
+  it('71. id no se sustituye como seq en el flujo estricto', () => {
+    const accionConIdSinSeq = {
+      id: 123,
+      issuedTick: 80,
+      tick: 80,
+      kind: 'collect',
+      targetId: 'sun_abc',
+    }
+
+    const val = validarAccionP1RankedEstricta(accionConIdSinSeq)
+    expect(val.ok).toBe(false)
+    if (!val.ok) {
+      expect(val.reason).toBe('MISSING_SEQ')
+    }
+
+    const historial: AccionP1Simulacion[] = []
+    expect(registrarAccionP1Async(historial, accionConIdSinSeq)).toBe(false)
+    expect(historial.length).toBe(0)
+  })
+
+  // 72. COLLECT sin targetId falla con MISSING_TARGET_ID
+  it('72. COLLECT sin targetId no modifica sunBank y falla con MISSING_TARGET_ID', () => {
+    const collectVacio1 = { seq: 30, issuedTick: 100, tick: 100, kind: 'collect' }
+    const collectVacio2 = { seq: 31, issuedTick: 100, tick: 100, kind: 'collect', targetId: '' }
+    const collectVacio3 = { seq: 32, issuedTick: 100, tick: 100, kind: 'collect', targetId: '   ' }
+
+    expect(validarAccionP1RankedEstricta(collectVacio1).ok).toBe(false)
+    expect((validarAccionP1RankedEstricta(collectVacio1) as any).reason).toBe('MISSING_TARGET_ID')
+    expect(validarAccionP1RankedEstricta(collectVacio2).ok).toBe(false)
+    expect((validarAccionP1RankedEstricta(collectVacio2) as any).reason).toBe('MISSING_TARGET_ID')
+    expect(validarAccionP1RankedEstricta(collectVacio3).ok).toBe(false)
+    expect((validarAccionP1RankedEstricta(collectVacio3) as any).reason).toBe('MISSING_TARGET_ID')
+
+    const historial: AccionP1Simulacion[] = []
+    expect(registrarAccionP1Async(historial, collectVacio1)).toBe(false)
+    expect(historial.length).toBe(0)
+  })
+
+  // 73. PLANT incompleta o inválida se rechaza estructuralmente
+  it('73. PLANT con plantId, slot, lane o col inválidos falla con INVALID_PLANT_DATA', () => {
+    const casosInvalidos = [
+      { seq: 1, issuedTick: 10, tick: 10, kind: 'plant', plantId: 'planta_inexistente', slot: 0, lane: 0, col: 0 },
+      { seq: 2, issuedTick: 10, tick: 10, kind: 'plant', plantId: 'peashooter', slot: -1, lane: 0, col: 0 },
+      { seq: 3, issuedTick: 10, tick: 10, kind: 'plant', plantId: 'peashooter', slot: 6, lane: 0, col: 0 },
+      { seq: 4, issuedTick: 10, tick: 10, kind: 'plant', plantId: 'peashooter', slot: 0, lane: 3, col: 0 },
+      { seq: 5, issuedTick: 10, tick: 10, kind: 'plant', plantId: 'peashooter', slot: 0, lane: -1, col: 0 },
+      { seq: 6, issuedTick: 10, tick: 10, kind: 'plant', plantId: 'peashooter', slot: 0, lane: 0, col: 6 },
+      { seq: 7, issuedTick: 10, tick: 10, kind: 'plant', plantId: 'peashooter', slot: 0, lane: 0, col: -1 },
+    ]
+
+    for (const c of casosInvalidos) {
+      const val = validarAccionP1RankedEstricta(c)
+      expect(val.ok).toBe(false)
+      if (!val.ok) {
+        expect(val.reason).toBe('INVALID_PLANT_DATA')
+      }
+    }
+  })
+
+  // 74. DIG incompleto o inválido se rechaza estructuralmente
+  it('74. DIG con lane o col fuera de rango falla con INVALID_DIG_DATA', () => {
+    const casosInvalidos = [
+      { seq: 1, issuedTick: 10, tick: 10, kind: 'dig', lane: 3, col: 0 },
+      { seq: 2, issuedTick: 10, tick: 10, kind: 'dig', lane: -1, col: 0 },
+      { seq: 3, issuedTick: 10, tick: 10, kind: 'dig', lane: 0, col: 6 },
+      { seq: 4, issuedTick: 10, tick: 10, kind: 'dig', lane: 0, col: -1 },
+      { seq: 5, issuedTick: 10, tick: 10, kind: 'dig', lane: undefined, col: 0 },
+    ]
+
+    for (const c of casosInvalidos) {
+      const val = validarAccionP1RankedEstricta(c)
+      expect(val.ok).toBe(false)
+      if (!val.ok) {
+        expect(val.reason).toBe('INVALID_DIG_DATA')
+      }
+    }
+  })
+
+  // 75. Duplicado idempotente con misma acción y mismo seq
+  it('75. Duplicado idempotente con mismo seq y mismo contenido se acepta sin duplicar', () => {
+    const historial: AccionP1Simulacion[] = []
+    const accion = {
+      seq: 50,
+      issuedTick: 200,
+      tick: 200,
+      kind: 'collect' as const,
+      targetId: 'sun_x',
+    }
+
+    const reg1 = registrarAccionP1AsyncDetallado(historial, accion)
+    expect(reg1.ok).toBe(true)
+    expect(historial.length).toBe(1)
+
+    const reg2 = registrarAccionP1AsyncDetallado(historial, accion)
+    expect(reg2.ok).toBe(true)
+    if (reg2.ok) {
+      expect(reg2.duplicated).toBe(true)
+    }
+    expect(historial.length).toBe(1)
+  })
+
+  // 76. Conflicto de seq (mismo seq con contenido distinto)
+  it('76. Conflicto de seq con contenido distinto falla con SEQ_CONFLICT', () => {
+    const historial: AccionP1Simulacion[] = []
+    const accion1 = {
+      seq: 50,
+      issuedTick: 200,
+      tick: 200,
+      kind: 'collect' as const,
+      targetId: 'sun_x',
+    }
+    const accion2 = {
+      seq: 50,
+      issuedTick: 200,
+      tick: 206,
+      kind: 'plant' as const,
+      plantId: 'sunflower' as const,
+      slot: 0,
+      lane: 0,
+      col: 0,
+    }
+
+    expect(registrarAccionP1AsyncDetallado(historial, accion1).ok).toBe(true)
+    expect(historial.length).toBe(1)
+
+    const regConflicto = registrarAccionP1AsyncDetallado(historial, accion2)
+    expect(regConflicto.ok).toBe(false)
+    if (!regConflicto.ok) {
+      expect(regConflicto.reason).toBe('SEQ_CONFLICT')
+      expect(regConflicto.seq).toBe(50)
+    }
+    expect(historial.length).toBe(1)
+    expect(historial[0].kind).toBe('collect')
+  })
+
+  // 77. Rollback sin seq en Ranked Async no elimina por coordenadas
+  it('77. Rollback sin seq no adivina por coordenadas y deja el historial intacto', () => {
+    let historial: AccionP1Simulacion[] = [
+      { seq: 10, issuedTick: 50, tick: 56, kind: 'plant', plantId: 'peashooter', slot: 0, lane: 0, col: 0 },
+      { seq: 20, issuedTick: 60, tick: 66, kind: 'plant', plantId: 'sunflower', slot: 1, lane: 0, col: 0 },
+    ]
+
+    // Intentar descartar pasando undefined o seq inválido
+    historial = descartarAccionP1Async(historial, undefined)
+    expect(historial.length).toBe(2)
+
+    historial = descartarAccionP1Async(historial, -1)
+    expect(historial.length).toBe(2)
+
+    historial = descartarAccionP1Async(historial, NaN)
+    expect(historial.length).toBe(2)
+  })
+
+  // 78. COLLECT autoritativo imposible durante reconstrucción detecta TIMELINE_INCONSISTENT
+  it('78. COLLECT autoritativo imposible durante rebuild detecta TIMELINE_INCONSISTENT', () => {
+    const seed = 7878
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // Historial con una acción que solicita un sol que nunca existirá
+    const historialImposible: AccionP1Simulacion[] = [
+      { seq: 80, issuedTick: 100, tick: 100, kind: 'collect', targetId: 'sun_fantasma_inexistente' },
+    ]
+
+    const rebuildRes = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      [],
+      historialImposible,
+      200
+    )
+
+    expect(rebuildRes.ok).toBe(false)
+    expect(rebuildRes.reason).toBe('TIMELINE_INCONSISTENT')
+    expect(rebuildRes.seq).toBe(80)
+    expect(rebuildRes.issuedTick).toBe(100)
+
+    // Runner directo también falla cerrado
+    const timelineRes = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions: historialImposible,
+      asyncActions: [],
+      untilTick: 200,
+      strictAuthoritativeHistory: true,
+    })
+    expect(timelineRes.ok).toBe(false)
+    expect(timelineRes.reason).toBe('TIMELINE_INCONSISTENT')
+  })
+
+  // 79. No mutación parcial tras error de reconstrucción (Fail Closed)
+  it('79. Reconstrucción con error propaga ok: false y evita instalar estado corrupto', () => {
+    const seed = 7979
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // Lote con acción corrupta
+    const p1AccionesCorruptas = [
+      { seq: 1, issuedTick: 10, tick: 16, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
+      { seq: 2, issuedTick: 50, tick: 50, kind: 'collect' }, // Falta targetId
+    ]
+
+    const rebuildRes = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      [],
+      p1AccionesCorruptas,
+      100
+    )
+
+    expect(rebuildRes.ok).toBe(false)
+    expect(rebuildRes.reason).toBe('MISSING_TARGET_ID')
+    expect(rebuildRes.seq).toBe(2)
+  })
+
+  // 80. Flujo válido conserva exactamente el determinismo integral
+  it('80. Partida válida conserva determinismo campo por campo entre rebuild y verify-match', () => {
+    const seed = 808080
+    const p1Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+    const p2Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+
+    const asyncIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 2 },
+      { seq: 2, tick: 600, issuedTick: 600, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 1, col: 3 },
+    ]
+
+    // Descubrir los IDs reales de los soles con la plantación de P1 en tic 270
+    const discovery = createBattleState(seed, false, true)
+    const discoveryController = createAsyncOpponentController(p2Deck, asyncIntents)
+    const suns: { id: string; tick: number }[] = []
+    while (discovery.tick < 700) {
+      for (const s of discovery.suns) {
+        if (!suns.some((x) => x.id === s.id)) suns.push({ id: s.id, tick: discovery.tick })
+      }
+      if (discovery.tick === 270) {
+        discovery.pending.push({ atTick: 276, kind: 'own_plant', plantId: 'sunflower', lane: 0, col: 0, statRolls: [], level: 0 })
+      }
+      stepAsyncOpponent(discoveryController, discovery)
+      stepTick(discovery, () => {})
+    }
+
+    const p1Historial: AccionP1Simulacion[] = []
+    expect(registrarAccionP1Async(p1Historial, { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: suns[0].id })).toBe(true)
+    expect(registrarAccionP1Async(p1Historial, { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: suns[1].id })).toBe(true)
+    expect(registrarAccionP1Async(p1Historial, { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 })).toBe(true)
+    expect(registrarAccionP1Async(p1Historial, { seq: 4, tick: 450, issuedTick: 450, kind: 'collect', targetId: suns[2].id })).toBe(true)
+    expect(registrarAccionP1Async(p1Historial, { seq: 5, tick: 630, issuedTick: 630, kind: 'collect', targetId: suns[3].id })).toBe(true)
+
+    const rebuildRes = reconstruirPartidaAsync(seed, p1Deck, p2Deck, asyncIntents, p1Historial, 700)
+    expect(rebuildRes.ok).toBe(true)
+
+    const simRes = simulateAsyncMatch(seed, p1Deck, p2Deck, p1Historial, asyncIntents, 700)
+    expect(simRes.ok).toBe(true)
+
+    const timelineRes = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions: p1Historial,
+      asyncActions: asyncIntents,
+      untilTick: 700,
+      validateP1: true,
+      strictAuthoritativeHistory: true,
+    })
+    expect(timelineRes.ok).toBe(true)
+
+    expect(rebuildRes.estado.tick).toBe(timelineRes.state.tick)
+    expect(rebuildRes.estado.sunBank).toBe(timelineRes.state.sunBank)
+    expect(rebuildRes.estado.p2SunBank).toBe(timelineRes.state.p2SunBank)
+    expect(rebuildRes.estado.plants.length).toBe(timelineRes.state.plants.length)
+    expect(rebuildRes.estado.enemyPlants.length).toBe(timelineRes.state.enemyPlants.length)
+    expect(rebuildRes.estado.rng).toEqual(timelineRes.state.rng)
+    expect(rebuildRes.estado.slotCooldowns).toEqual(timelineRes.state.slotCooldowns)
+    expect(rebuildRes.controller.stats).toEqual(timelineRes.controller.stats)
+  })
+
+  // 81. Paridad cliente / verificador estricta en timeline completa
+  it('81. Paridad estricta al 100% entre reconstrucción de cliente y verificador verify-match', () => {
+    const seed = 818181
+    const p1Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+    const p2Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+
+    const asyncIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 2, col: 2 },
+    ]
+
+    const discovery = createBattleState(seed, false, true)
+    const suns: string[] = []
+    while (discovery.tick < 500) {
+      for (const s of discovery.suns) {
+        if (!suns.includes(s.id)) suns.push(s.id)
+      }
+      stepTick(discovery, () => {})
+    }
+
+    const p1Actions: AccionP1Simulacion[] = []
+    registrarAccionP1Async(p1Actions, { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: suns[0] })
+    registrarAccionP1Async(p1Actions, { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: suns[1] })
+    registrarAccionP1Async(p1Actions, { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 })
+
+    const rebuildRes = reconstruirPartidaAsync(seed, p1Deck, p2Deck, asyncIntents, p1Actions, 500)
+    const timelineRes = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions,
+      asyncActions: asyncIntents,
+      untilTick: 500,
+      validateP1: true,
+      strictAuthoritativeHistory: true,
+    })
+
+    expect(rebuildRes.ok).toBe(true)
+    expect(timelineRes.ok).toBe(true)
+    expect(rebuildRes.estado.tick).toBe(timelineRes.state.tick)
+    expect(rebuildRes.estado.sunBank).toBe(timelineRes.state.sunBank)
+    expect(rebuildRes.estado.plants.map((p) => p.id)).toEqual(timelineRes.state.plants.map((p) => p.id))
+    expect(rebuildRes.estado.enemyPlants.map((p) => p.id)).toEqual(timelineRes.state.enemyPlants.map((p) => p.id))
   })
 })
 

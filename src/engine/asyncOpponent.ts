@@ -419,28 +419,31 @@ function intentarEjecutarPlant(
   return true
 }
 
-export interface AccionP1Simulacion {
-  id?: number
-  seq?: number
-  tick: number
-  issuedTick?: number | null
-  kind: string
-  plantId?: string | null
-  lane?: number | null
-  col?: number | null
-  slot?: number | null
-  targetId?: string | null
-  statRolls?: PlantStatKey[]
-  level?: number
+import {
+  validarYNormalizarAccionesP1Ranked,
+  type InconsistenciaHistorialP1,
+  type AccionP1RankedEstricta,
+  type AccionP1Simulacion,
+} from './asyncP1History.ts'
+
+export type {
+  InconsistenciaHistorialP1,
+  AccionP1RankedEstricta,
+  AccionP1Simulacion,
 }
 
 export interface ResultadoSimulacionAsync {
+  ok: boolean
   ganador: 1 | 2 | null
   tics: number
   baseP1: number
   baseP2: number
   p1Ilegal: boolean
   motivo: 'simulation' | 'forfeit_p1' | 'no_result'
+  reason?: InconsistenciaHistorialP1
+  inconsistencySeq?: number
+  inconsistencyTick?: number
+  details?: string
   telemetria: {
     intentionsTotal: number
     intentionsExecuted: number
@@ -457,9 +460,21 @@ export function issuedTickP1(a: AccionP1Simulacion): number {
 }
 
 /**
- * Parsea y normaliza acciones de P1 asegurando orden por issuedTick y seq.
+ * Normaliza acciones de P1 para Ranked Asíncrono de forma estricta.
+ * Si alguna acción incumple el esquema estricto o hay conflicto de seq, devuelve [].
  */
-export function normalizarAccionesP1(rawActions: unknown): AccionP1Simulacion[] {
+export function normalizarAccionesP1(rawActions: unknown): AccionP1RankedEstricta[] {
+  const res = validarYNormalizarAccionesP1Ranked(rawActions)
+  if (!res.ok) {
+    return []
+  }
+  return res.acciones
+}
+
+/**
+ * Normalizador permisivo legacy para formatos antiguos fuera de Ranked Async.
+ */
+export function normalizarAccionesP1Legacy(rawActions: unknown): AccionP1Simulacion[] {
   if (!Array.isArray(rawActions)) return []
   const res: AccionP1Simulacion[] = []
 
@@ -473,21 +488,20 @@ export function normalizarAccionesP1(rawActions: unknown): AccionP1Simulacion[] 
       issuedTick = kind === 'collect' ? Math.max(0, tick) : Math.max(0, tick - MARGEN_DE_RED_TICS)
     }
     const plantId = (typeof a.plantId === 'string' ? a.plantId : (typeof a.plant_id === 'string' ? a.plant_id : (typeof a.plant === 'string' ? a.plant : null))) as PlantId | null
-    const lane = typeof a.lane === 'number' ? a.lane : null
-    const col = typeof a.col === 'number' ? a.col : null
-    const slot = typeof a.slot === 'number' ? a.slot : null
-    const targetId = typeof a.targetId === 'string' ? a.targetId : (typeof a.target_id === 'string' ? a.target_id : null)
-    const seq = typeof a.seq === 'number' ? a.seq : (typeof a.id === 'number' ? a.id : undefined)
+    const lane = typeof a.lane === 'number' ? a.lane : undefined
+    const col = typeof a.col === 'number' ? a.col : undefined
+    const slot = typeof a.slot === 'number' ? a.slot : undefined
+    const targetId = typeof a.targetId === 'string' ? a.targetId : (typeof a.target_id === 'string' ? a.target_id : undefined)
+    const seq = typeof a.seq === 'number' ? a.seq : (typeof a.id === 'number' ? a.id : 0)
     const statRolls = Array.isArray(a.statRolls) ? rollsValidos(a.statRolls) : undefined
     const level = typeof a.level === 'number' ? a.level : undefined
 
     res.push({
-      id: typeof a.id === 'number' ? a.id : undefined,
       seq,
       tick,
       issuedTick,
       kind,
-      plantId,
+      plantId: plantId ?? undefined,
       lane,
       col,
       slot,
@@ -498,12 +512,8 @@ export function normalizarAccionesP1(rawActions: unknown): AccionP1Simulacion[] 
   }
 
   return res.sort((a, b) => {
-    const ia = issuedTickP1(a)
-    const ib = issuedTickP1(b)
-    if (ia !== ib) return ia - ib
-    const sa = a.seq ?? Number.MAX_SAFE_INTEGER
-    const sb = b.seq ?? Number.MAX_SAFE_INTEGER
-    return sa - sb
+    if (a.issuedTick !== b.issuedTick) return a.issuedTick - b.issuedTick
+    return a.seq - b.seq
   })
 }
 
@@ -516,10 +526,16 @@ export interface RunAsyncTimelineOptions {
   untilTick?: number
   maxTicks?: number
   validateP1?: boolean
+  strictAuthoritativeHistory?: boolean
   stopOnGameOver?: boolean
 }
 
 export interface RunAsyncTimelineResult {
+  ok: boolean
+  reason?: InconsistenciaHistorialP1
+  inconsistencySeq?: number
+  inconsistencyTick?: number
+  details?: string
   state: GameState
   controller: AsyncOpponentController
   p1Ilegal: boolean
@@ -541,6 +557,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     untilTick,
     maxTicks = TOPE_DE_SEGURIDAD_ASYNC,
     validateP1 = false,
+    strictAuthoritativeHistory = true,
     stopOnGameOver = true,
   } = options
 
@@ -548,20 +565,51 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
   const mazoP1 = leerMazo(p1Deck) ?? []
   const controller = createAsyncOpponentController(asyncDeck, asyncActions)
 
-  const ordenadasP1 = normalizarAccionesP1(p1Actions)
+  let ordenadasP1: AccionP1RankedEstricta[] = []
+  if (strictAuthoritativeHistory) {
+    const validacion = validarYNormalizarAccionesP1Ranked(p1Actions)
+    if (!validacion.ok) {
+      return {
+        ok: false,
+        reason: validacion.reason,
+        inconsistencySeq: validacion.seq,
+        inconsistencyTick: validacion.issuedTick,
+        details: validacion.details,
+        state,
+        controller,
+        p1Ilegal: true,
+        motivo: 'no_result',
+        winner: null,
+      }
+    }
+    ordenadasP1 = validacion.acciones
+  } else {
+    ordenadasP1 = normalizarAccionesP1Legacy(p1Actions) as AccionP1RankedEstricta[]
+  }
 
   let p1Index = 0
   let p1Ilegal = false
+  let inconsistencyReason: InconsistenciaHistorialP1 | undefined
+  let inconsistencySeq: number | undefined
+  let inconsistencyTick: number | undefined
+  let inconsistencyDetails: string | undefined
+
   const limitTick = untilTick !== undefined ? untilTick : maxTicks
 
   while (state.tick < limitTick && (!stopOnGameOver || state.status === 'playing')) {
     // 1. Validar y aplicar acciones de P1 en state.tick
-    while (p1Index < ordenadasP1.length && issuedTickP1(ordenadasP1[p1Index]) === state.tick) {
+    while (p1Index < ordenadasP1.length && ordenadasP1[p1Index].issuedTick === state.tick) {
       const j = ordenadasP1[p1Index]
       p1Index += 1
 
       if (j.kind === 'collect') {
         if (!j.targetId) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'MISSING_TARGET_ID'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -570,6 +618,13 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         }
         const sol = state.suns.find((s) => s.id === j.targetId)
         if (!sol) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'TIMELINE_INCONSISTENT'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            inconsistencyDetails = `Sol con id ${j.targetId} no existe en tick ${state.tick}`
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -586,12 +641,20 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
       if (j.kind === 'dig') {
         if (
           !Number.isInteger(j.lane) ||
-          j.lane! < 0 ||
-          j.lane! > 2 ||
+          j.lane === undefined ||
+          j.lane < 0 ||
+          j.lane > 2 ||
           !Number.isInteger(j.col) ||
-          j.col! < 0 ||
-          j.col! >= P1_COLUMNS
+          j.col === undefined ||
+          j.col < 0 ||
+          j.col >= P1_COLUMNS
         ) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'INVALID_DIG_DATA'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -611,23 +674,31 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         state.pending.push({
           atTick: Math.max(1, j.tick ?? (state.tick + MARGEN_DE_RED_TICS)),
           kind: 'own_dig',
-          lane: j.lane!,
-          col: j.col!,
+          lane: j.lane,
+          col: j.col,
         })
         continue
       }
 
       if (j.kind === 'plant') {
-        const plantId = (j.plantId ?? (j as any).plant_id ?? (j as any).plant) as PlantId | null
+        const plantId = j.plantId as PlantId | undefined
         if (
           !esPlantId(plantId) ||
+          j.lane === undefined ||
           !Number.isInteger(j.lane) ||
-          j.lane! < 0 ||
-          j.lane! > 2 ||
+          j.lane < 0 ||
+          j.lane > 2 ||
+          j.col === undefined ||
           !Number.isInteger(j.col) ||
-          j.col! < 0 ||
-          j.col! >= P1_COLUMNS
+          j.col < 0 ||
+          j.col >= P1_COLUMNS
         ) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'INVALID_PLANT_DATA'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -685,21 +756,27 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
           atTick: Math.max(1, j.tick ?? (state.tick + MARGEN_DE_RED_TICS)),
           kind: 'own_plant',
           plantId: plantIdValido,
-          lane: j.lane!,
-          col: camina ? undefined : (j.col ?? undefined),
+          lane: j.lane,
+          col: camina ? undefined : j.col,
           statRolls,
           level: statRolls.length > 0 ? statRolls.length : (cartaP1.level ?? j.level ?? 0),
         })
         continue
       }
 
+      if (strictAuthoritativeHistory) {
+        inconsistencyReason = 'INVALID_KIND'
+        inconsistencySeq = j.seq
+        inconsistencyTick = j.issuedTick
+        break
+      }
       if (validateP1) {
         p1Ilegal = true
         break
       }
     }
 
-    if (p1Ilegal) {
+    if (inconsistencyReason || p1Ilegal) {
       break
     }
 
@@ -708,6 +785,21 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
 
     // 3. Avanzar simulación un tic
     stepTick(state, () => {})
+  }
+
+  if (inconsistencyReason) {
+    return {
+      ok: false,
+      reason: inconsistencyReason,
+      inconsistencySeq,
+      inconsistencyTick,
+      details: inconsistencyDetails,
+      state,
+      controller,
+      p1Ilegal: true,
+      motivo: 'no_result',
+      winner: null,
+    }
   }
 
   let winner: 1 | 2 | null = null
@@ -727,6 +819,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
   }
 
   return {
+    ok: true,
     state,
     controller,
     p1Ilegal,
@@ -743,7 +836,7 @@ export function simulateAsyncMatch(
   seed: number,
   p1DeckRaw: unknown,
   asyncDeckRaw: unknown,
-  p1Actions: AccionP1Simulacion[],
+  p1Actions: AccionP1Simulacion[] | any[],
   asyncActionsRaw: unknown,
   maxTicks = TOPE_DE_SEGURIDAD_ASYNC
 ): ResultadoSimulacionAsync {
@@ -755,18 +848,34 @@ export function simulateAsyncMatch(
     asyncActions: asyncActionsRaw,
     maxTicks,
     validateP1: true,
+    strictAuthoritativeHistory: true,
     stopOnGameOver: true,
   })
 
   return {
+    ok: res.ok,
     ganador: res.winner,
     tics: res.state.tick,
     baseP1: res.state.p1BaseHp,
     baseP2: res.state.p2BaseHp,
     p1Ilegal: res.p1Ilegal,
     motivo: res.motivo,
+    reason: res.reason,
+    inconsistencySeq: res.inconsistencySeq,
+    inconsistencyTick: res.inconsistencyTick,
+    details: res.details,
     telemetria: res.controller.stats,
   }
+}
+
+export type ReconstruirPartidaAsyncResult = {
+  ok: boolean
+  reason?: InconsistenciaHistorialP1
+  seq?: number
+  issuedTick?: number
+  details?: string
+  estado: GameState
+  controller: AsyncOpponentController
 }
 
 /**
@@ -782,7 +891,7 @@ export function reconstruirPartidaAsync(
   asyncIntents: AsyncOpponentIntent[] | any[],
   p1Acciones: AccionP1Simulacion[] | any[],
   hastaTick: number
-): { estado: GameState; controller: AsyncOpponentController } {
+): ReconstruirPartidaAsyncResult {
   const res = runAsyncTimeline({
     seed,
     p1Deck,
@@ -791,10 +900,30 @@ export function reconstruirPartidaAsync(
     asyncActions: asyncIntents,
     untilTick: hastaTick,
     validateP1: false,
+    strictAuthoritativeHistory: true,
     stopOnGameOver: true,
   })
 
-  return { estado: res.state, controller: res.controller }
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: res.reason,
+      seq: res.inconsistencySeq,
+      issuedTick: res.inconsistencyTick,
+      details: res.details,
+      estado: res.state,
+      controller: res.controller,
+    }
+  }
+
+  return { ok: true, estado: res.state, controller: res.controller }
 }
 
-export { registrarAccionP1Async, descartarAccionP1Async } from './asyncP1History.ts'
+export {
+  validarAccionP1RankedEstricta,
+  validarYNormalizarAccionesP1Ranked,
+  registrarAccionP1Async,
+  registrarAccionP1AsyncDetallado,
+  descartarAccionP1Async,
+  sonAccionesIdenticas,
+} from './asyncP1History.ts'
