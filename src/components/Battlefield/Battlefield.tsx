@@ -217,10 +217,16 @@ export default function Battlefield({
     tomarHuellasPendientes,
     reconstrucciones,
     rankedAsyncInconsistency,
+    sessionGeneration,
   } = useGameEngine()
 
   const { user } = useAuth()
   const currentUserId = user?.id ?? null
+
+  const sessionGenerationRef = useRef<number>(sessionGeneration ?? 0)
+  sessionGenerationRef.current = sessionGeneration ?? 0
+  const roomIdRef = useRef<string | null>(roomId ?? null)
+  roomIdRef.current = roomId ?? null
 
   /**
    * Lo que dijo el servidor al liquidar la partida real.
@@ -302,15 +308,6 @@ export default function Battlefield({
   // que hace que las dos partidas sean la misma en lugar de dos partidas
   // paralelas contra la máquina.
 
-  // El margen de red ya no se aplica aquí, y no es un detalle de limpieza: el tic
-  // de una jugada lo calcula y lo devuelve el motor (placePlant / digPlant), y esto
-  // sólo lo reenvía. Calcularlo dos veces era el fallo — el motor va por su tic y
-  // el componente por el del último fotograma pintado, y de vez en cuando no son el
-  // mismo. Ver engine/pvp.ts para el valor del margen.
-  //
-  // Y si una jugada llega tarde de todos modos, el receptor rehace la partida con
-  // ella en su tic en lugar de aplicarla fuera de sitio: engine/reconstruir.ts.
-
   /** Número de orden de mis acciones en esta partida. Empieza en 1. */
   const ordenRef = useRef<number>(0)
   /** El id de la última acción vista, para no volver a aplicarla. */
@@ -345,6 +342,9 @@ export default function Battlefield({
       return
     }
 
+    const capturedGeneration = sessionGenerationRef.current
+    const capturedRoomId = roomId
+
     redBloqueadaRef.current = true
     setRedBloqueada(true)
 
@@ -353,6 +353,10 @@ export default function Battlefield({
       action,
       outboxAbortRef.current?.signal
     )
+
+    if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) {
+      return
+    }
 
     if (result.status === 'ack') {
       callbacks.onAck?.()
@@ -369,41 +373,17 @@ export default function Battlefield({
 
   /**
    * DIAGNÓSTICO DEL PVP
-   *
-   * Se enseña en pantalla, y no en la consola, por un motivo práctico: llevamos
-   * varias rondas diagnosticando a ciegas y pidiendo consultas SQL después de
-   * cada prueba. Con esto, una captura de las dos ventanas dice qué está pasando.
-   *
-   * Sólo aparece en partidas con sala. Cuando el PvP esté estable se puede quitar
-   * o dejar detrás de un interruptor.
    */
   const [diag, setDiag] = useState<{
     enviadas: number
     recibidas: number
     ultimoEnvio: string
     canal: string
-    /** Acciones que el SERVIDOR dice que hay en esta sala, y cuántas son mías. */
     enSala: number
     misEnSala: number
-    /**
-     * Huellas del tablero mandadas.
-     *
-     * Es el número que hay que mirar cuando el servidor diga «controles = 0»: si
-     * aquí sale 0 a mitad de partida, este cliente no está mandando ninguna.
-     */
     huellas: number
   }>({ enviadas: 0, recibidas: 0, ultimoEnvio: '—', canal: 'conectando…', enSala: 0, misEnSala: 0, huellas: 0 })
 
-  /**
-   * @param enTic el tic que DEVOLVIÓ placePlant, no uno recalculado aquí.
-   *
-   * Antes se calculaba en esta función como `tick + MARGEN_DE_RED_TICS`, con el
-   * `tick` del último fotograma pintado. Entre ese fotograma y el clic el motor
-   * puede haber avanzado un tic, así que la planta entraba en mi pantalla en el
-   * tic T y en la del rival en el T-1. Un tic de diferencia, y desde ahí las dos
-   * partidas ya no son la misma — es la misma clase de desfase que dejaba la
-   * partida «en revisión» al final.
-   */
   const registrarPlantacion = (
     carta: PlantId,
     lane: number,
@@ -413,6 +393,8 @@ export default function Battlefield({
     seq?: number
   ) => {
     if (!roomId) return
+    const capturedGeneration = sessionGenerationRef.current
+    const capturedRoomId = roomId
     const seqAccion = typeof seq === 'number' && Number.isFinite(seq) ? seq : ++ordenRef.current
     void enviarAccionAutoritativa(
       {
@@ -427,14 +409,16 @@ export default function Battlefield({
       },
       {
         onRejected: (error) => {
-          descartarAccionPropia(enTic, lane, col, seqAccion)
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+          descartarAccionPropia(enTic, lane, col, seqAccion, capturedGeneration)
           setDiag((d) => ({
             ...d,
             ultimoEnvio: `✗ ${error}`,
           }))
         },
         onAck: () => {
-          confirmarAccionP1(seqAccion)
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+          confirmarAccionP1(seqAccion, capturedGeneration)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
@@ -445,20 +429,10 @@ export default function Battlefield({
     )
   }
 
-  /**
-   * Registra una excavación.
-   *
-   * Antes no se registraba: el pico quitaba la planta en tu pantalla y no salía
-   * del navegador, así que en la del rival seguía en pie y disparando. Con eso,
-   * las dos simulaciones dejaban de ser la misma partida en cuanto alguien usaba
-   * el pico — y al final cada uno reportaba un ganador distinto.
-   *
-   * Mismo contador de orden que las plantaciones: el servidor exige que la pareja
-   * (jugador, número de orden) no se repita en la sala.
-   */
-  /** @param enTic el tic que devolvió digPlant. Igual que al plantar. */
   const registrarExcavacion = (lane: number, col: number, enTic: number, seq?: number) => {
     if (!roomId) return
+    const capturedGeneration = sessionGenerationRef.current
+    const capturedRoomId = roomId
     const seqAccion = typeof seq === 'number' && Number.isFinite(seq) ? seq : ++ordenRef.current
     void enviarAccionAutoritativa(
       {
@@ -471,14 +445,16 @@ export default function Battlefield({
       },
       {
         onRejected: (error) => {
-          descartarAccionPropia(enTic, lane, col, seqAccion)
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+          descartarAccionPropia(enTic, lane, col, seqAccion, capturedGeneration)
           setDiag((d) => ({
             ...d,
             ultimoEnvio: `✗ ${error}`,
           }))
         },
         onAck: () => {
-          confirmarAccionP1(seqAccion)
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+          confirmarAccionP1(seqAccion, capturedGeneration)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
@@ -503,6 +479,8 @@ export default function Battlefield({
     const issuedTick = prepararRecogidaSol(sunId)
     if (issuedTick === null) return
 
+    const capturedGeneration = sessionGenerationRef.current
+    const capturedRoomId = roomId
     const seqAccion = ++ordenRef.current
 
     void enviarAccionAutoritativa(
@@ -518,8 +496,9 @@ export default function Battlefield({
       },
       {
         onAck: () => {
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
           // Registra la acción autoritativa con el seq inmutable capturado al enviarla
-          confirmarRecogidaSol(sunId, issuedTick, seqAccion)
+          confirmarRecogidaSol(sunId, issuedTick, seqAccion, capturedGeneration)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
@@ -527,6 +506,7 @@ export default function Battlefield({
           }))
         },
         onRejected: (error) => {
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
           // No hay rollback: todavía NO habíamos sumado este sol.
           setDiag((d) => ({
             ...d,
@@ -600,14 +580,16 @@ export default function Battlefield({
       setDiag((d) => ({ ...d, canal: estado }))
     })
 
+    const capturedGeneration = sessionGenerationRef.current
+    const capturedRoomId = roomId
+
     // Red de seguridad: al entrar se recoge lo que ya hubiera, y cada 3 s se
     // comprueba si se perdió algún mensaje. Sin esto, una sola acción perdida
     // dejaría las dos partidas divergentes hasta el final.
     const recuperar = async () => {
-      // Desde 0 a propósito, no desde la última vista: así se sabe cuántas hay en
-      // total en la sala, que es el dato que dice si los dos jugadores están
-      // realmente en la MISMA partida.
-      const todas = await SupabaseService.matchActionsSince(roomId, 0)
+      if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+      const todas = await SupabaseService.matchActionsSince(capturedRoomId, 0)
+      if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
       setDiag((d) => ({
         ...d,
         enSala: todas.length,
@@ -646,20 +628,25 @@ export default function Battlefield({
     if (!roomId || !isAsyncMatch) return
     ultimaSeqAsyncRef.current = 0
     let cancelado = false
+    const capturedGeneration = sessionGenerationRef.current
+    const capturedRoomId = roomId
 
     const refrescarIntencionesAsync = async () => {
-      if (cancelado) return
+      if (cancelado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
       const res = await SupabaseService.pollRankedAsyncIntents(
-        roomId,
+        capturedRoomId,
         ultimaSeqAsyncRef.current
       )
-      if (cancelado || !res?.ok || !Array.isArray(res.intents)) return
+      if (cancelado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+      if (!res?.ok || !Array.isArray(res.intents)) return
       if (res.intents.length > 0) {
-        incorporarIntencionesAsync(res.intents)
-        ultimaSeqAsyncRef.current = Math.max(
-          ultimaSeqAsyncRef.current,
-          ...res.intents.map((i: any) => Number(i.seq) || 0)
-        )
+        const ok = incorporarIntencionesAsync(res.intents, capturedGeneration)
+        if (ok) {
+          ultimaSeqAsyncRef.current = Math.max(
+            ultimaSeqAsyncRef.current,
+            ...res.intents.map((i: any) => Number(i.seq) || 0)
+          )
+        }
       }
     }
 
@@ -682,11 +669,13 @@ export default function Battlefield({
   useEffect(() => {
     if (!roomId || !currentUserId) return
     let cerrado = false
+    const capturedGeneration = sessionGenerationRef.current
+    const capturedRoomId = roomId
 
     const comprobar = async () => {
-      if (cerrado) return
-      const r = await SupabaseService.roomResult(roomId)
-      if (cerrado || !r || !r.ended) return
+      if (cerrado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+      const r = await SupabaseService.roomResult(capturedRoomId)
+      if (cerrado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current || !r || !r.ended) return
       cerrado = true
 
       setResultadoServidor({
@@ -699,7 +688,7 @@ export default function Battlefield({
       terminarPorOrdenDelServidor(r.iWon ? 'victory' : 'defeat')
     }
 
-    const dejarDeEscuchar = SupabaseService.subscribeToRoomEnd(roomId, () => { void comprobar() })
+    const dejarDeEscuchar = SupabaseService.subscribeToRoomEnd(capturedRoomId, () => { void comprobar() })
     // Y se pregunta cada 4 s por si el mensaje de Realtime se perdió. Sin esta red
     // un mensaje perdido dejaría a alguien peleando contra un campo vacío.
     const reloj = setInterval(() => { void comprobar() }, 4000)
@@ -753,6 +742,8 @@ export default function Battlefield({
       // dos para que se liquide, así que callarse al perder dejaría al rival sin
       // su premio.
       if (roomId && (opponentId || isAsyncMatch) && currentUserId) {
+        const capturedGeneration = sessionGenerationRef.current
+        const capturedRoomId = roomId
         const ganadorQueVioMiCliente = gameStatus === 'victory' ? currentUserId : (opponentId ?? '00000000-0000-0000-0000-000000000000')
 
         setResultadoServidor({ success: true, status: 'verificando' })
@@ -761,10 +752,14 @@ export default function Battlefield({
           // En partidas humanas envía telemetría de reporte.
           // En partidas contra Rival Semilla NO se reporta (no hay 2º cliente).
           if (!isAsyncMatch) {
-            await SupabaseService.reportMatchResult(roomId, ganadorQueVioMiCliente)
+            await SupabaseService.reportMatchResult(capturedRoomId, ganadorQueVioMiCliente)
           }
 
-          const verificacion = await SupabaseService.verifyMatch(roomId)
+          const verificacion = await SupabaseService.verifyMatch(capturedRoomId)
+
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) {
+            return
+          }
 
           if (
             verificacion.status === 'verified' ||

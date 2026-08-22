@@ -20,6 +20,7 @@
 import type { PlantId, PlantStatKey } from '../types/game.ts'
 import { PLANT_CONFIGS, P1_COLUMNS, P2_COLUMNS, DECK_SIZE } from '../utils/gameConstants.ts'
 import { MARGEN_DE_RED_TICS } from './pvp.ts'
+import type { CartaDeMazo } from './mazoDeLaSala.ts'
 
 export type InconsistenciaHistorialP1 =
   | 'MISSING_SEQ'
@@ -37,6 +38,8 @@ export type InconsistenciaHistorialP1 =
   | 'UNKNOWN_PENDING_ACTION'
   | 'INVALID_P1_ACTIONS_CONTAINER'
   | 'INVALID_P1_DECK'
+  | 'INVALID_ASYNC_DECK'
+  | 'INVALID_ASYNC_PLAN'
   | 'INVALID_ASYNC_INTENTS_CONTAINER'
   | 'INVALID_ASYNC_INTENT_DATA'
   | 'TIMELINE_INCONSISTENT'
@@ -650,6 +653,113 @@ export function validarIntencionAsyncRankedEstricta(
   }
 }
 
+/**
+ * Comprueba si dos intenciones P2 con la misma secuencia son idénticas campo por campo.
+ */
+export function sonIntencionesP2Identicas(
+  a: AsyncOpponentIntentRankedEstricta,
+  b: AsyncOpponentIntentRankedEstricta
+): boolean {
+  return (
+    a.seq === b.seq &&
+    a.kind === b.kind &&
+    a.issuedTick === b.issuedTick &&
+    a.tick === b.tick &&
+    a.lane === b.lane &&
+    a.col === b.col &&
+    a.plantId === b.plantId &&
+    a.slot === b.slot
+  )
+}
+
+export type ResultadoValidacionMazoAsync =
+  | { ok: true; deck: CartaDeMazo[] }
+  | { ok: false; reason: InconsistenciaHistorialP1; details: string }
+
+/**
+ * Valida estrictamente el mazo snapshot de P2 para Ranked Asíncrono.
+ * Fail-closed con INVALID_ASYNC_DECK si el contenedor o las cartas son inválidas.
+ */
+export function validarMazoAsyncRanked(rawDeck: unknown): ResultadoValidacionMazoAsync {
+  if (!Array.isArray(rawDeck) || rawDeck.length === 0) {
+    return {
+      ok: false,
+      reason: 'INVALID_ASYNC_DECK',
+      details: 'El mazo de P2 es obligatorio y debe ser un array no vacío en Ranked Async',
+    }
+  }
+
+  const deck: CartaDeMazo[] = []
+  for (let i = 0; i < rawDeck.length; i++) {
+    const c = rawDeck[i]
+    if (!c || typeof c !== 'object') {
+      return {
+        ok: false,
+        reason: 'INVALID_ASYNC_DECK',
+        details: `Carta en índice ${i} del mazo de P2 no es un objeto válido`,
+      }
+    }
+    const plantId = (c as Record<string, unknown>).plantId
+    if (typeof plantId !== 'string' || !esPlantId(plantId)) {
+      return {
+        ok: false,
+        reason: 'INVALID_ASYNC_DECK',
+        details: `plantId inválido o desconocido en mazo de P2: ${String(plantId)}`,
+      }
+    }
+    const slot = (c as Record<string, unknown>).slot
+    if (slot !== undefined && slot !== null) {
+      if (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 0 || slot >= DECK_SIZE) {
+        return {
+          ok: false,
+          reason: 'INVALID_ASYNC_DECK',
+          details: `slot inválido en mazo de P2: ${String(slot)}`,
+        }
+      }
+    }
+    const level = (c as Record<string, unknown>).level
+    if (level !== undefined && level !== null) {
+      if (typeof level !== 'number' || !Number.isInteger(level) || level < 0) {
+        return {
+          ok: false,
+          reason: 'INVALID_ASYNC_DECK',
+          details: `level inválido en mazo de P2: ${String(level)}`,
+        }
+      }
+    }
+    const statRollsRaw = (c as Record<string, unknown>).statRolls
+    let statRolls: string[] | null = null
+    if (statRollsRaw !== undefined && statRollsRaw !== null) {
+      if (!Array.isArray(statRollsRaw)) {
+        return {
+          ok: false,
+          reason: 'INVALID_ASYNC_DECK',
+          details: `statRolls debe ser un array en mazo de P2`,
+        }
+      }
+      for (const r of statRollsRaw) {
+        if (typeof r !== 'string' || !ESTADISTICAS_VALIDAS.has(r as PlantStatKey)) {
+          return {
+            ok: false,
+            reason: 'INVALID_ASYNC_DECK',
+            details: `statRolls contiene valor inválido en mazo de P2: ${String(r)}`,
+          }
+        }
+      }
+      statRolls = statRollsRaw.length > 0 ? (statRollsRaw as string[]) : null
+    }
+
+    deck.push({
+      plantId,
+      slot: typeof slot === 'number' ? slot : null,
+      level: typeof level === 'number' ? level : null,
+      statRolls,
+    })
+  }
+
+  return { ok: true, deck }
+}
+
 export type ResultadoValidacionIntencionesP2 =
   | { ok: true; intenciones: AsyncOpponentIntentRankedEstricta[] }
   | { ok: false; reason: InconsistenciaHistorialP1; seq?: number; issuedTick?: number; details?: string }
@@ -660,7 +770,7 @@ export function validarYNormalizarIntencionesAsyncRanked(
   if (!Array.isArray(rawIntents)) {
     return {
       ok: false,
-      reason: 'INVALID_ASYNC_INTENTS_CONTAINER',
+      reason: 'INVALID_ASYNC_PLAN',
       details: `rawIntents debe ser un array, recibido: ${typeof rawIntents}`,
     }
   }
@@ -677,16 +787,7 @@ export function validarYNormalizarIntencionesAsyncRanked(
     const intent = val.intencion
     const existente = seqMap.get(intent.seq)
     if (existente) {
-      if (
-        existente.seq === intent.seq &&
-        existente.kind === intent.kind &&
-        existente.issuedTick === intent.issuedTick &&
-        existente.tick === intent.tick &&
-        existente.lane === intent.lane &&
-        existente.col === intent.col &&
-        existente.plantId === intent.plantId &&
-        existente.slot === intent.slot
-      ) {
+      if (sonIntencionesP2Identicas(existente, intent)) {
         continue // duplicado idempotente
       }
       return {

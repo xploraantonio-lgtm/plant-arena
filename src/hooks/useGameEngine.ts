@@ -38,15 +38,19 @@ import {
   type CartaDeMazo,
 } from '../engine/mazoDeLaSala'
 import {
-  createAsyncOpponentController,
+  createAsyncOpponentControllerFromValidated,
   stepAsyncOpponent,
   reconstruirPartidaAsync,
-  normalizarIntenciones,
   type AsyncOpponentController,
 } from '../engine/asyncOpponent'
 import {
+  validarMazoAsyncRanked,
+  validarYNormalizarIntencionesAsyncRanked,
+  validarIntencionAsyncRankedEstricta,
+  sonIntencionesP2Identicas,
   type InconsistenciaHistorialP1,
   type AccionP1RankedEstricta,
+  type AsyncOpponentIntentRankedEstricta,
 } from '../engine/asyncP1History'
 import {
   ejecutarCapturaCollectP1,
@@ -227,7 +231,8 @@ export function useGameEngine() {
   const mazoDelRivalRef = useRef<CartaDeMazo[] | null>(null)
   const isAsyncMatchRef = useRef<boolean>(false)
   const asyncOpponentDeckRef = useRef<CartaDeMazo[] | null>(null)
-  const asyncOpponentActionsBufferRef = useRef<any[]>([])
+  const asyncOpponentActionsBufferRef = useRef<AsyncOpponentIntentRankedEstricta[]>([])
+  const sessionGenerationRef = useRef<number>(0)
   const accionesP1PendingRef = useRef<AccionP1RankedEstricta[]>([])
   const accionesP1AceptadasRef = useRef<AccionP1RankedEstricta[]>([])
   const accionesP1AsyncRef = accionesP1AceptadasRef
@@ -264,57 +269,99 @@ export function useGameEngine() {
 
   /**
    * Incorpora intenciones del Rival Semilla recibidas progresivamente desde el servidor.
-   * Si una intención llega tarde (su issuedTick <= stateRef.current.tick), marca rehacerDesdeRef
-   * para que el bucle de juego ejecute una reconstrucción determinista exacta desde ese tic.
+   * Validación estricta fail-closed: sin deduplicación por coordenadas, sin inferencia de campos.
+   * Deduplica exclusivamente por `seq`. Mismo seq con contenido distinto -> SEQ_CONFLICT.
    */
-  const incorporarIntencionesAsync = useCallback((nuevasIntenciones: any[]) => {
-    if (!nuevasIntenciones || nuevasIntenciones.length === 0) return
-    const buffer = asyncOpponentActionsBufferRef.current
-    const clavesExistentes = new Set(
-      buffer.map((i) => `${i.seq ?? ''}_${i.issuedTick ?? i.tick}_${i.kind}_${i.lane}_${i.col ?? ''}`)
-    )
-
-    let huboNuevas = false
-    let tickMasAntiguoNuevo: number | null = null
-
-    for (const n of nuevasIntenciones) {
-      const clave = `${n.seq ?? ''}_${n.issuedTick ?? n.tick}_${n.kind}_${n.lane}_${n.col ?? ''}`
-      if (clavesExistentes.has(clave)) continue
-
-      clavesExistentes.add(clave)
-      buffer.push(n)
-      huboNuevas = true
-
-      const issuedTick = Number(n.issuedTick ?? n.tick)
-      if (Number.isInteger(issuedTick) && issuedTick >= 0) {
-        tickMasAntiguoNuevo =
-          tickMasAntiguoNuevo === null
-            ? issuedTick
-            : Math.min(tickMasAntiguoNuevo, issuedTick)
+  const incorporarIntencionesAsync = useCallback(
+    (nuevasIntenciones: unknown, generation?: number): boolean => {
+      if (generation !== undefined && generation !== sessionGenerationRef.current) {
+        return false
       }
-    }
-
-    if (!huboNuevas) return
-
-    if (asyncOpponentRef.current) {
-      asyncOpponentRef.current.intents = normalizarIntenciones(buffer)
-    }
-
-    const currentTick = stateRef.current.tick
-    if (
-      tickMasAntiguoNuevo !== null &&
-      tickMasAntiguoNuevo <= currentTick
-    ) {
-      if (accionesP1PendingRef.current.length > 0) {
-        reconciliationStateRef.current = 'reconciling_pending'
-        setReconciliationState('reconciling_pending')
+      if (rankedAsyncInconsistencyRef.current !== null) {
+        return false
       }
-      rehacerDesdeRef.current =
-        rehacerDesdeRef.current === null
-          ? tickMasAntiguoNuevo
-          : Math.min(rehacerDesdeRef.current, tickMasAntiguoNuevo)
-    }
-  }, [])
+      if (!Array.isArray(nuevasIntenciones)) {
+        marcarInconsistenciaRanked({
+          reason: 'INVALID_ASYNC_PLAN',
+          details: `Lote de intenciones P2 debe ser un array, recibido: ${typeof nuevasIntenciones}`,
+        })
+        return false
+      }
+      if (nuevasIntenciones.length === 0) return true
+
+      const buffer = asyncOpponentActionsBufferRef.current
+      const nuevasAceptadas: AsyncOpponentIntentRankedEstricta[] = []
+      let tickMasAntiguoNuevo: number | null = null
+
+      for (const n of nuevasIntenciones) {
+        const val = validarIntencionAsyncRankedEstricta(n)
+        if (!val.ok) {
+          marcarInconsistenciaRanked({
+            reason: val.reason,
+            seq: val.seq,
+            issuedTick: val.issuedTick,
+            details: val.details,
+          })
+          return false
+        }
+
+        const intent = val.intencion
+        const existente = buffer.find((i) => i.seq === intent.seq)
+        if (existente) {
+          if (sonIntencionesP2Identicas(existente, intent)) {
+            // Idempotente: misma secuencia y contenido idéntico
+            continue
+          }
+          // Conflicto de secuencia: misma secuencia con contenido distinto
+          marcarInconsistenciaRanked({
+            reason: 'SEQ_CONFLICT',
+            seq: intent.seq,
+            issuedTick: intent.issuedTick,
+            details: `Conflicto en lote incremental P2: seq ${intent.seq} recibido con contenido distinto`,
+          })
+          return false
+        }
+
+        nuevasAceptadas.push(intent)
+        if (Number.isInteger(intent.issuedTick) && intent.issuedTick >= 0) {
+          tickMasAntiguoNuevo =
+            tickMasAntiguoNuevo === null
+              ? intent.issuedTick
+              : Math.min(tickMasAntiguoNuevo, intent.issuedTick)
+        }
+      }
+
+      if (nuevasAceptadas.length === 0) return true
+
+      buffer.push(...nuevasAceptadas)
+      buffer.sort((a, b) => {
+        if (a.issuedTick !== b.issuedTick) return a.issuedTick - b.issuedTick
+        return a.seq - b.seq
+      })
+
+      if (asyncOpponentRef.current) {
+        asyncOpponentRef.current.intents = [...buffer]
+      }
+
+      const currentTick = stateRef.current.tick
+      if (
+        tickMasAntiguoNuevo !== null &&
+        tickMasAntiguoNuevo <= currentTick
+      ) {
+        if (accionesP1PendingRef.current.length > 0) {
+          reconciliationStateRef.current = 'reconciling_pending'
+          setReconciliationState('reconciling_pending')
+        }
+        rehacerDesdeRef.current =
+          rehacerDesdeRef.current === null
+            ? tickMasAntiguoNuevo
+            : Math.min(rehacerDesdeRef.current, tickMasAntiguoNuevo)
+      }
+
+      return true
+    },
+    [marcarInconsistenciaRanked]
+  )
 
   /**
    * Lo que costó cada jugada mía, por si el servidor la rechaza.
@@ -411,6 +458,7 @@ export function useGameEngine() {
     isAsyncMatch?: boolean,
     initialAsyncIntents?: unknown
   ) => {
+    sessionGenerationRef.current += 1
     stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500))
 
     ancoraMsRef.current = ancoraMs ?? null
@@ -419,12 +467,36 @@ export function useGameEngine() {
     mazoDelRivalRef.current = leerMazo(mazos?.rival)
     isAsyncMatchRef.current = Boolean(isAsyncMatch)
 
-    if (isAsyncMatch && mazos?.rival) {
-      const deck = leerMazo(mazos.rival)
-      asyncOpponentDeckRef.current = deck
-      const initialIntents = Array.isArray(initialAsyncIntents) ? [...initialAsyncIntents] : []
-      asyncOpponentActionsBufferRef.current = initialIntents
-      asyncOpponentRef.current = createAsyncOpponentController(deck, normalizarIntenciones(initialIntents))
+    if (isAsyncMatch) {
+      const valDeck = validarMazoAsyncRanked(mazos?.rival)
+      if (!valDeck.ok) {
+        asyncOpponentDeckRef.current = null
+        asyncOpponentActionsBufferRef.current = []
+        asyncOpponentRef.current = null
+        marcarInconsistenciaRanked({
+          reason: valDeck.reason,
+          details: valDeck.details,
+        })
+      } else {
+        asyncOpponentDeckRef.current = valDeck.deck
+        const valIntents = validarYNormalizarIntencionesAsyncRanked(initialAsyncIntents ?? [])
+        if (!valIntents.ok) {
+          asyncOpponentActionsBufferRef.current = []
+          asyncOpponentRef.current = createAsyncOpponentControllerFromValidated(valDeck.deck, [])
+          marcarInconsistenciaRanked({
+            reason: valIntents.reason,
+            seq: valIntents.seq,
+            issuedTick: valIntents.issuedTick,
+            details: valIntents.details,
+          })
+        } else {
+          asyncOpponentActionsBufferRef.current = valIntents.intenciones
+          asyncOpponentRef.current = createAsyncOpponentControllerFromValidated(
+            valDeck.deck,
+            valIntents.intenciones
+          )
+        }
+      }
     } else {
       asyncOpponentDeckRef.current = null
       asyncOpponentActionsBufferRef.current = []
@@ -451,10 +523,11 @@ export function useGameEngine() {
 
     soundManager.playBgm('battle')
     forceRender()
-  }, [forceRender])
+  }, [forceRender, marcarInconsistenciaRanked])
 
   // Start practice / sandbox mode
   const startPracticeGame = useCallback((plantId?: string) => {
+    sessionGenerationRef.current += 1
     asyncOpponentRef.current = null
     // En prácticas no hay rival, así que no hay reloj que compartir.
     ancoraMsRef.current = null
@@ -565,7 +638,10 @@ export function useGameEngine() {
   }, [])
 
   const confirmarRecogidaSol = useCallback(
-    (sunId: string, issuedTick?: number, seq?: number): boolean => {
+    (sunId: string, issuedTick?: number, seq?: number, generation?: number): boolean => {
+      if (generation !== undefined && generation !== sessionGenerationRef.current) {
+        return false
+      }
       const res = ejecutarCapturaCollectP1({
         isAsyncMatch: isAsyncMatchRef.current,
         sunId,
@@ -1128,7 +1204,10 @@ export function useGameEngine() {
    * Traslada la acción de pending a accepted de forma atómica.
    */
   const confirmarAccionP1 = useCallback(
-    (seq?: number): boolean => {
+    (seq?: number, generation?: number): boolean => {
+      if (generation !== undefined && generation !== sessionGenerationRef.current) {
+        return false
+      }
       if (!isAsyncMatchRef.current || seq === undefined || seq === null) return true
 
       const res = confirmarAccionP1Async({
@@ -1178,7 +1257,10 @@ export function useGameEngine() {
    * una jugada tardía, porque es el mismo problema visto del revés.
    */
   const descartarAccionPropia = useCallback(
-    (tick: number, lane: number, col: number | null, seq?: number) => {
+    (tick: number, lane: number, col: number | null, seq?: number, generation?: number) => {
+      if (generation !== undefined && generation !== sessionGenerationRef.current) {
+        return
+      }
       if (isAsyncMatchRef.current) {
         const resRechazo = rechazarAccionP1Async({
           pending: accionesP1PendingRef.current,
@@ -1293,6 +1375,23 @@ export function useGameEngine() {
 
       const state = stateRef.current
       if (state.status !== 'playing') return
+
+      if (isAsyncMatchRef.current) {
+        if (
+          rankedAsyncInconsistencyRef.current !== null ||
+          reconciliationStateRef.current === 'inconsistent' ||
+          reconciliationStateRef.current === 'reconciling_pending'
+        ) {
+          // FAIL-CLOSED: En estado de inconsistencia o reconciliación de acciones pendientes,
+          // el bucle competitivo de Ranked Async queda 100% congelado.
+          // No avanzar tick, no mover proyectiles, no dañar bases, no generar soles,
+          // no ejecutar P2, no alcanzar victoria/derrota, no generar nuevas huellas.
+          lastFrameMsRef.current = nowMs
+          accumulatorMsRef.current = 0
+          forceRender()
+          return
+        }
+      }
 
       // Tope de 5 s como antes: si la pestaña estuvo en segundo plano, se
       // descartan los tics de más para no congelar la interfaz.
@@ -1545,5 +1644,7 @@ export function useGameEngine() {
     getRankedAsyncInconsistency: () => rankedAsyncInconsistencyRef.current,
     getAccionesP1Aceptadas: () => accionesP1AceptadasRef.current,
     getAccionesP1Pending: () => accionesP1PendingRef.current,
+    sessionGeneration: sessionGenerationRef.current,
+    getSessionGeneration: () => sessionGenerationRef.current,
   }
 }

@@ -93,9 +93,9 @@ export interface AsyncOpponentController {
 }
 
 /**
- * Parsea y normaliza intenciones históricas asegurando orden estricto por issuedTick.
+ * Parsea y normaliza intenciones históricas asegurando orden estricto por issuedTick (LEGACY / NO RANKED).
  */
-export function normalizarIntenciones(rawActions: unknown): AsyncOpponentIntent[] {
+export function normalizarIntencionesLegacy(rawActions: unknown): AsyncOpponentIntent[] {
   if (!Array.isArray(rawActions)) return []
 
   const resultado: AsyncOpponentIntent[] = []
@@ -137,15 +137,43 @@ export function normalizarIntenciones(rawActions: unknown): AsyncOpponentIntent[
   })
 }
 
+// Alias de compatibilidad hacia el legacy
+export const normalizarIntenciones = normalizarIntencionesLegacy
+
 /**
- * Crea un nuevo controlador para el Rival Semilla a partir de snapshots inmutables.
+ * Crea un nuevo controlador para el Rival Semilla a partir de datos ya validados estrictamente.
+ * RUTA PRODUCTIVA ESTRICTA PARA RANKED ASÍNCRONO.
+ */
+export function createAsyncOpponentControllerFromValidated(
+  deck: CartaDeMazo[],
+  intents: AsyncOpponentIntentRankedEstricta[]
+): AsyncOpponentController {
+  return {
+    deck,
+    intents,
+    nextIntentIndex: 0,
+    slotCooldowns: {},
+    pendingRetry: null,
+    sunBank: INITIAL_SUN,
+    // El primer sol cae a ~2.5s igual que el jugador
+    lastSkySunTick: -msToTicks(3500),
+    stats: {
+      intentionsTotal: intents.length,
+      intentionsExecuted: 0,
+      intentionsDropped: 0,
+    },
+  }
+}
+
+/**
+ * Crea un nuevo controlador para el Rival Semilla a partir de snapshots inmutables (LEGACY).
  */
 export function createAsyncOpponentController(
   deckSnapshot: unknown,
   actionsSnapshot: unknown
 ): AsyncOpponentController {
   const deck = leerMazo(deckSnapshot) ?? []
-  const intents = normalizarIntenciones(actionsSnapshot)
+  const intents = normalizarIntencionesLegacy(actionsSnapshot)
 
   return {
     deck,
@@ -422,6 +450,7 @@ function intentarEjecutarPlant(
 import {
   validarYNormalizarAccionesP1Ranked,
   validarYNormalizarIntencionesAsyncRanked,
+  validarMazoAsyncRanked,
   type InconsistenciaHistorialP1,
   type AccionP1RankedEstricta,
   type AccionP1Simulacion,
@@ -454,13 +483,19 @@ export interface ResultadoSimulacionAsync {
   }
 }
 
-export function issuedTickP1(a: AccionP1Simulacion): number {
+/**
+ * Infiere issuedTick para formatos legacy / tests antiguos sin issuedTick explícito.
+ * PROHIBIDO EN RANKED ASÍNCRONO ESTRICTO (los validadores estrictos fallan ante campos ausentes).
+ */
+export function issuedTickP1Legacy(a: AccionP1Simulacion): number {
   if (typeof a.issuedTick === 'number' && Number.isFinite(a.issuedTick) && a.issuedTick >= 0) {
     return a.issuedTick
   }
   if (a.kind === 'collect') return Math.max(0, a.tick)
   return Math.max(0, a.tick - MARGEN_DE_RED_TICS)
 }
+
+export const issuedTickP1 = issuedTickP1Legacy
 
 import type {
   ResultadoValidacionHistorialP1,
@@ -570,42 +605,59 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     stopOnGameOver = true,
   } = options
 
-  const state = createBattleState(seed, false, true)
-  const controller = createAsyncOpponentController(asyncDeck, asyncActions)
-
   let mazoP1: CartaDeMazo[] = []
+  let mazoP2: CartaDeMazo[] = []
+  let intencionesP2: AsyncOpponentIntentRankedEstricta[] = []
+  let ordenadasP1: AccionP1RankedEstricta[] = []
+  let state: GameState
+  let controller: AsyncOpponentController
+
   if (strictAuthoritativeHistory) {
+    // 1. Validar mazo P1 (obligatorio, no vacío, cartas válidas)
     if (!Array.isArray(p1Deck) || p1Deck.length === 0) {
       return {
         ok: false,
         reason: 'INVALID_P1_DECK',
         details: 'El mazo de P1 es obligatorio y no puede estar vacío en Ranked Async',
-        state,
-        controller,
+        state: createBattleState(seed, false, true),
+        controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: true,
         motivo: 'no_result',
         winner: null,
       }
     }
-    const leido = leerMazo(p1Deck)
-    if (!leido || leido.length === 0) {
+    const leidoP1 = leerMazo(p1Deck)
+    if (!leidoP1 || leidoP1.length === 0) {
       return {
         ok: false,
         reason: 'INVALID_P1_DECK',
         details: 'El mazo de P1 no contiene cartas válidas',
-        state,
-        controller,
+        state: createBattleState(seed, false, true),
+        controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: true,
         motivo: 'no_result',
         winner: null,
       }
     }
-    mazoP1 = leido
-  } else {
-    mazoP1 = leerMazo(p1Deck) ?? []
-  }
+    mazoP1 = leidoP1
 
-  if (strictAuthoritativeHistory && asyncActions !== undefined && asyncActions !== null) {
+    // 2. Validar mazo P2 (asyncDeck: obligatorio, array no vacío, cartas válidas)
+    const valDeckP2 = validarMazoAsyncRanked(asyncDeck)
+    if (!valDeckP2.ok) {
+      return {
+        ok: false,
+        reason: valDeckP2.reason,
+        details: valDeckP2.details,
+        state: createBattleState(seed, false, true),
+        controller: createAsyncOpponentControllerFromValidated([], []),
+        p1Ilegal: false,
+        motivo: 'no_result',
+        winner: null,
+      }
+    }
+    mazoP2 = valDeckP2.deck
+
+    // 3. Validar plan P2 (asyncActions: obligatorio array, sin campos faltantes, sin fallbacks)
     const valIntents = validarYNormalizarIntencionesAsyncRanked(asyncActions)
     if (!valIntents.ok) {
       return {
@@ -614,35 +666,44 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         inconsistencySeq: valIntents.seq,
         inconsistencyTick: valIntents.issuedTick,
         details: valIntents.details,
-        state,
-        controller,
+        state: createBattleState(seed, false, true),
+        controller: createAsyncOpponentControllerFromValidated(mazoP2, []),
         p1Ilegal: false,
         motivo: 'no_result',
         winner: null,
       }
     }
-  }
+    intencionesP2 = valIntents.intenciones
 
-  let ordenadasP1: AccionP1RankedEstricta[] = []
-  if (strictAuthoritativeHistory) {
-    const validacion = validarYNormalizarAccionesP1Ranked(p1Actions)
-    if (!validacion.ok) {
+    // 4. Validar acciones P1 (p1Actions: obligatorio array, sin campos faltantes, sin fallbacks)
+    const validacionP1 = validarYNormalizarAccionesP1Ranked(p1Actions)
+    if (!validacionP1.ok) {
       return {
         ok: false,
-        reason: validacion.reason,
-        inconsistencySeq: validacion.seq,
-        inconsistencyTick: validacion.issuedTick,
-        details: validacion.details,
-        state,
-        controller,
+        reason: validacionP1.reason,
+        inconsistencySeq: validacionP1.seq,
+        inconsistencyTick: validacionP1.issuedTick,
+        details: validacionP1.details,
+        state: createBattleState(seed, false, true),
+        controller: createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2),
         p1Ilegal: true,
         motivo: 'no_result',
         winner: null,
       }
     }
-    ordenadasP1 = validacion.acciones
+    ordenadasP1 = validacionP1.acciones
+
+    // 5. Inicialización estricta de State y Controller únicamente tras validar todo
+    state = createBattleState(seed, false, true)
+    controller = createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2)
   } else {
+    // RUTA PERMISIVA LEGACY (solo para compatibilidad fuera de Ranked)
+    state = createBattleState(seed, false, true)
+    mazoP1 = leerMazo(p1Deck) ?? []
+    mazoP2 = leerMazo(asyncDeck) ?? []
+    intencionesP2 = normalizarIntencionesLegacy(asyncActions) as AsyncOpponentIntentRankedEstricta[]
     ordenadasP1 = normalizarAccionesP1Legacy(p1Actions) as AccionP1RankedEstricta[]
+    controller = createAsyncOpponentController(mazoP2, intencionesP2)
   }
 
   let p1Index = 0
@@ -1020,4 +1081,7 @@ export {
   descartarAccionP1Async,
   descartarAccionP1AsyncDetallado,
   sonAccionesIdenticas,
+  validarMazoAsyncRanked,
+  validarIntencionAsyncRankedEstricta,
+  sonIntencionesP2Identicas,
 } from './asyncP1History.ts'
