@@ -13,6 +13,7 @@ import {
   registrarAccionP1Async,
   registrarAccionP1AsyncDetallado,
   descartarAccionP1Async,
+  descartarAccionP1AsyncDetallado,
   validarAccionP1RankedEstricta,
   type AsyncOpponentIntent,
   type AccionP1Simulacion,
@@ -1520,7 +1521,10 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(registrarAccionP1Async(historial, accCollect)).toBe(true)
 
     // Al normalizar y ordenar para el timeline:
-    const ordenadas = normalizarAccionesP1(historial)
+    const normRes = normalizarAccionesP1(historial)
+    expect(normRes.ok).toBe(true)
+    if (!normRes.ok) throw new Error('normalizarAccionesP1 falló inesperadamente')
+    const ordenadas = normRes.acciones
 
     // El seq de COLLECT debe seguir siendo 10 (nunca 12)
     expect(ordenadas[0].kind).toBe('collect')
@@ -2273,6 +2277,155 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(rebuildRes.estado.sunBank).toBe(timelineRes.state.sunBank)
     expect(rebuildRes.estado.plants.map((p) => p.id)).toEqual(timelineRes.state.plants.map((p) => p.id))
     expect(rebuildRes.estado.enemyPlants.map((p) => p.id)).toEqual(timelineRes.state.enemyPlants.map((p) => p.id))
+  })
+
+  // 82. confirmarRecogidaSol sin issuedTick falla cerrado con MISSING_ISSUED_TICK
+  it('82. confirmarRecogidaSol sin issuedTick falla cerrado con MISSING_ISSUED_TICK y no modifica sunBank', () => {
+    const historial: AccionP1Simulacion[] = []
+    const intentoSinIssuedTick = {
+      seq: 10,
+      kind: 'collect',
+      targetId: 'sun_100',
+    }
+
+    const reg = registrarAccionP1AsyncDetallado(historial, intentoSinIssuedTick)
+    expect(reg.ok).toBe(false)
+    if (!reg.ok) {
+      expect(reg.reason).toBe('MISSING_ISSUED_TICK')
+      expect(reg.seq).toBe(10)
+    }
+    expect(historial.length).toBe(0)
+  })
+
+  // 83. confirmarRecogidaSol sin seq falla cerrado con MISSING_SEQ
+  it('83. confirmarRecogidaSol sin seq falla cerrado con MISSING_SEQ y no inserta en el historial', () => {
+    const historial: AccionP1Simulacion[] = []
+    const intentoSinSeq = {
+      issuedTick: 80,
+      tick: 80,
+      kind: 'collect',
+      targetId: 'sun_100',
+    }
+
+    const reg = registrarAccionP1AsyncDetallado(historial, intentoSinSeq)
+    expect(reg.ok).toBe(false)
+    if (!reg.ok) {
+      expect(reg.reason).toBe('MISSING_SEQ')
+      expect(reg.issuedTick).toBe(80)
+    }
+    expect(historial.length).toBe(0)
+  })
+
+  // 84. Conflicto de seq en captura productiva rechaza la acción con SEQ_CONFLICT
+  it('84. Conflicto de seq en producción rechaza acción con SEQ_CONFLICT', () => {
+    const historial: AccionP1Simulacion[] = []
+    // Acción previa aceptada
+    expect(
+      registrarAccionP1AsyncDetallado(historial, {
+        seq: 50,
+        issuedTick: 120,
+        tick: 120,
+        kind: 'collect',
+        targetId: 'sun_50',
+      }).ok
+    ).toBe(true)
+
+    // Intento con misma seq pero acción plant
+    const regConflicto = registrarAccionP1AsyncDetallado(historial, {
+      seq: 50,
+      issuedTick: 120,
+      tick: 126,
+      kind: 'plant',
+      plantId: 'peashooter',
+      slot: 0,
+      lane: 0,
+      col: 0,
+    })
+
+    expect(regConflicto.ok).toBe(false)
+    if (!regConflicto.ok) {
+      expect(regConflicto.reason).toBe('SEQ_CONFLICT')
+      expect(regConflicto.seq).toBe(50)
+    }
+    expect(historial.length).toBe(1)
+    expect(historial[0].kind).toBe('collect')
+  })
+
+  // 85. PLANT sin seq es rechazada con MISSING_SEQ antes de aplicar efectos
+  it('85. PLANT sin seq es rechazada con MISSING_SEQ en Ranked Async', () => {
+    const historial: AccionP1Simulacion[] = []
+    const plantSinSeq = {
+      issuedTick: 100,
+      tick: 106,
+      kind: 'plant',
+      plantId: 'peashooter',
+      slot: 0,
+      lane: 0,
+      col: 0,
+    }
+
+    const reg = registrarAccionP1AsyncDetallado(historial, plantSinSeq)
+    expect(reg.ok).toBe(false)
+    if (!reg.ok) {
+      expect(reg.reason).toBe('MISSING_SEQ')
+    }
+    expect(historial.length).toBe(0)
+  })
+
+  // 86. DIG sin seq es rechazada con MISSING_SEQ antes de encolar pending
+  it('86. DIG sin seq es rechazada con MISSING_SEQ en Ranked Async', () => {
+    const historial: AccionP1Simulacion[] = []
+    const digSinSeq = {
+      issuedTick: 100,
+      tick: 106,
+      kind: 'dig',
+      lane: 0,
+      col: 0,
+    }
+
+    const reg = registrarAccionP1AsyncDetallado(historial, digSinSeq)
+    expect(reg.ok).toBe(false)
+    if (!reg.ok) {
+      expect(reg.reason).toBe('MISSING_SEQ')
+    }
+    expect(historial.length).toBe(0)
+  })
+
+  // 87. Rollback sin seq deja el historial intacto y reporta MISSING_SEQ
+  it('87. Rollback sin seq en descartarAccionP1AsyncDetallado reporta MISSING_SEQ y preserva historial', () => {
+    const historial: AccionP1Simulacion[] = [
+      { seq: 1, issuedTick: 50, tick: 56, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
+      { seq: 2, issuedTick: 60, tick: 66, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 },
+    ]
+
+    const resSinSeq = descartarAccionP1AsyncDetallado(historial, undefined)
+    expect(resSinSeq.ok).toBe(false)
+    if (!resSinSeq.ok) {
+      expect(resSinSeq.reason).toBe('MISSING_SEQ')
+    }
+    expect(resSinSeq.historial.length).toBe(2)
+
+    const resSeqInvalido = descartarAccionP1AsyncDetallado(historial, -5)
+    expect(resSeqInvalido.ok).toBe(false)
+    if (!resSeqInvalido.ok) {
+      expect(resSeqInvalido.reason).toBe('INVALID_SEQ')
+    }
+    expect(resSeqInvalido.historial.length).toBe(2)
+  })
+
+  // 88. normalizarAccionesP1 devuelve resultado discriminado y detecta errores en lugar de []
+  it('88. normalizarAccionesP1 devuelve ok: false con razón estructurada ante inconsistencias', () => {
+    const loteInconsistente = [
+      { seq: 1, issuedTick: 10, tick: 10, kind: 'collect', targetId: 'sun_1' },
+      { seq: 2, tick: 20, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 }, // Falta issuedTick
+    ]
+
+    const res = normalizarAccionesP1(loteInconsistente)
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.reason).toBe('MISSING_ISSUED_TICK')
+      expect(res.seq).toBe(2)
+    }
   })
 })
 

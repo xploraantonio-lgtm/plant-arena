@@ -86,12 +86,27 @@ export function validarAccionP1RankedEstricta(
 
   const a = raw as Record<string, unknown>
 
+  const rawIssuedTick =
+    typeof a.issuedTick === 'number' && Number.isInteger(a.issuedTick) && a.issuedTick >= 0
+      ? a.issuedTick
+      : undefined
+
   // 1. Validación de seq (obligatorio, entero >= 0)
   if (a.seq === undefined || a.seq === null) {
-    return { ok: false, reason: 'MISSING_SEQ', details: 'seq es obligatorio en Ranked Async' }
+    return {
+      ok: false,
+      reason: 'MISSING_SEQ',
+      issuedTick: rawIssuedTick,
+      details: 'seq es obligatorio en Ranked Async',
+    }
   }
   if (typeof a.seq !== 'number' || !Number.isInteger(a.seq) || a.seq < 0) {
-    return { ok: false, reason: 'INVALID_SEQ', details: `seq debe ser un entero no negativo, recibido: ${String(a.seq)}` }
+    return {
+      ok: false,
+      reason: 'INVALID_SEQ',
+      issuedTick: rawIssuedTick,
+      details: `seq debe ser un entero no negativo, recibido: ${String(a.seq)}`,
+    }
   }
   const seq = a.seq
 
@@ -316,6 +331,44 @@ export function registrarAccionP1Async(
   return true
 }
 
+export type ResultadoDescarteAccionP1 =
+  | { ok: true; eliminado: boolean; historial: AccionP1RankedEstricta[] }
+  | { ok: false; reason: InconsistenciaHistorialP1; details?: string; historial: AccionP1RankedEstricta[] }
+
+/**
+ * Descarta una acción del historial autoritativo de P1 con resultado detallado.
+ * En Ranked Async nuevo no se adivina por coordenadas ni por tick.
+ */
+export function descartarAccionP1AsyncDetallado(
+  historial: AccionP1RankedEstricta[],
+  seq?: number
+): ResultadoDescarteAccionP1 {
+  if (seq === undefined || seq === null) {
+    return {
+      ok: false,
+      reason: 'MISSING_SEQ',
+      details: 'seq es obligatorio para descartar acción en Ranked Async',
+      historial,
+    }
+  }
+  if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) {
+    return {
+      ok: false,
+      reason: 'INVALID_SEQ',
+      details: `seq inválido para descarte: ${String(seq)}`,
+      historial,
+    }
+  }
+
+  const antes = historial.length
+  const filtrado = historial.filter((a) => a.seq !== seq)
+  return {
+    ok: true,
+    eliminado: filtrado.length < antes,
+    historial: filtrado,
+  }
+}
+
 /**
  * Descarta una acción del historial autoritativo de P1 exclusivamente por `seq`.
  * En Ranked Async nuevo no se adivina por coordenadas ni por tick.
@@ -324,12 +377,8 @@ export function descartarAccionP1Async(
   historial: AccionP1RankedEstricta[],
   seq?: number
 ): AccionP1RankedEstricta[] {
-  if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) {
-    // Si no hay seq válido, fail closed: no se descarta nada por adivinación
-    return historial
-  }
-
-  return historial.filter((a) => a.seq !== seq)
+  const res = descartarAccionP1AsyncDetallado(historial, seq)
+  return res.historial
 }
 
 export type ResultadoValidacionHistorialP1 =

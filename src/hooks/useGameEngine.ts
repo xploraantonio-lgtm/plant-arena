@@ -46,8 +46,9 @@ import {
   type AccionP1Simulacion,
 } from '../engine/asyncOpponent'
 import {
-  registrarAccionP1Async,
-  descartarAccionP1Async,
+  registrarAccionP1AsyncDetallado,
+  descartarAccionP1AsyncDetallado,
+  type InconsistenciaHistorialP1,
 } from '../engine/asyncP1History'
 import { nivelPorElo } from '../engine/bot'
 import type {
@@ -222,6 +223,25 @@ export function useGameEngine() {
   const asyncOpponentDeckRef = useRef<CartaDeMazo[] | null>(null)
   const asyncOpponentActionsBufferRef = useRef<any[]>([])
   const accionesP1AsyncRef = useRef<AccionP1Simulacion[]>([])
+  const rankedAsyncInconsistencyRef = useRef<{
+    reason: InconsistenciaHistorialP1
+    seq?: number
+    issuedTick?: number
+    details?: string
+  } | null>(null)
+
+  const marcarInconsistenciaRanked = useCallback(
+    (inconsistencia: {
+      reason: InconsistenciaHistorialP1
+      seq?: number
+      issuedTick?: number
+      details?: string
+    }) => {
+      rankedAsyncInconsistencyRef.current = inconsistencia
+      console.warn('[RankedAsync] Inconsistencia autoritativa detectada:', inconsistencia)
+    },
+    []
+  )
 
   /**
    * Incorpora intenciones del Rival Semilla recibidas progresivamente desde el servidor.
@@ -513,18 +533,65 @@ export function useGameEngine() {
       const state = stateRef.current
 
       // 1. REGISTRO AUTORITATIVO EN HISTORIAL ASYNC (SIEMPRE QUE SEA ASYNC)
-      // Debe registrarse en el historial aunque el sol ya no esté visualmente o se
-      // haya auto-recogido, delegando la deduplicación estricta al helper unificado.
+      // Debe validarse estrictamente: seq e issuedTick son obligatorios en Ranked Async.
       if (isAsyncMatchRef.current) {
-        const ticRecogida =
-          typeof issuedTick === 'number' && Number.isFinite(issuedTick) ? issuedTick : state.tick
-        registrarAccionP1Async(accionesP1AsyncRef.current, {
+        if (issuedTick === undefined || issuedTick === null) {
+          marcarInconsistenciaRanked({
+            reason: 'MISSING_ISSUED_TICK',
+            seq,
+            details: 'issuedTick es obligatorio para COLLECT en Ranked Async',
+          })
+          return false
+        }
+        if (typeof issuedTick !== 'number' || !Number.isInteger(issuedTick) || issuedTick < 0) {
+          marcarInconsistenciaRanked({
+            reason: 'INVALID_ISSUED_TICK',
+            seq,
+            issuedTick,
+            details: `issuedTick inválido para COLLECT: ${String(issuedTick)}`,
+          })
+          return false
+        }
+        if (seq === undefined || seq === null) {
+          marcarInconsistenciaRanked({
+            reason: 'MISSING_SEQ',
+            issuedTick,
+            details: 'seq es obligatorio para COLLECT en Ranked Async',
+          })
+          return false
+        }
+        if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) {
+          marcarInconsistenciaRanked({
+            reason: 'INVALID_SEQ',
+            seq,
+            issuedTick,
+            details: `seq inválido para COLLECT: ${String(seq)}`,
+          })
+          return false
+        }
+
+        const reg = registrarAccionP1AsyncDetallado(accionesP1AsyncRef.current, {
           seq,
-          tick: ticRecogida,
-          issuedTick: ticRecogida,
+          tick: issuedTick,
+          issuedTick,
           kind: 'collect',
           targetId: sunId,
         })
+
+        if (!reg.ok) {
+          marcarInconsistenciaRanked({
+            reason: reg.reason,
+            seq: reg.seq,
+            issuedTick: reg.issuedTick,
+            details: reg.details,
+          })
+          return false
+        }
+
+        if (reg.duplicated) {
+          // Duplicado idempotente de ACK ya procesado: no sumar soles dos veces en local
+          return true
+        }
       }
 
       // 2. EFECTO VISUAL / LOCAL INMEDIATO
@@ -541,7 +608,7 @@ export function useGameEngine() {
       forceRender()
       return true
     },
-    [forceRender]
+    [forceRender, marcarInconsistenciaRanked]
   )
 
   const collectSun = useCallback(
@@ -615,10 +682,11 @@ export function useGameEngine() {
       )
 
       if (!rebuildRes.ok) {
-        console.warn('[RankedAsync] Rebuild falló cerrado por inconsistencia autoritativa:', {
-          reason: rebuildRes.reason,
+        marcarInconsistenciaRanked({
+          reason: rebuildRes.reason ?? 'TIMELINE_INCONSISTENT',
           seq: rebuildRes.seq,
           issuedTick: rebuildRes.issuedTick,
+          details: rebuildRes.details,
         })
         // FAIL CLOSED: No instalar una timeline corrupta o aproximada en stateRef.current
         return
@@ -667,7 +735,7 @@ export function useGameEngine() {
     }
 
     forceRender()
-  }, [forceRender])
+  }, [forceRender, marcarInconsistenciaRanked])
 
   /** Apunta una jugada mía en el registro, para poder rehacer la partida. */
   const apuntarJugadaPropia = useCallback((jugada: Omit<AccionRegistrada, 'id' | 'mia'>) => {
@@ -802,6 +870,40 @@ export function useGameEngine() {
       // que usar este mismo número, no volver a calcularlo.
       const enTic = state.tick + retardo
 
+      // En Ranked Async: registrar en historial estricto ANTES de aplicar efectos locales/optimistas
+      if (isAsyncMatchRef.current) {
+        const reg = registrarAccionP1AsyncDetallado(accionesP1AsyncRef.current, {
+          seq,
+          tick: enTic,
+          issuedTick: state.tick,
+          kind: 'plant',
+          plantId: card,
+          lane,
+          col,
+          slot: slotIdx,
+          statRolls: rolls,
+          level: cardLevel,
+        })
+
+        if (!reg.ok) {
+          marcarInconsistenciaRanked({
+            reason: reg.reason,
+            seq: reg.seq,
+            issuedTick: reg.issuedTick,
+            details: reg.details,
+          })
+          // FAIL CLOSED: No aplicar efectos optimistas locales si la acción falló en entrar al historial autoritativo
+          forceRender()
+          return null
+        }
+
+        if (reg.duplicated) {
+          // Acción duplicada ya aplicada: no volver a encolar ni cobrar
+          forceRender()
+          return null
+        }
+      }
+
       state.pending.push({
         atTick: enTic,
         kind: 'own_plant',
@@ -822,21 +924,6 @@ export function useGameEngine() {
           plantId: card,
           lane,
           col,
-          statRolls: rolls,
-          level: cardLevel,
-        })
-      }
-
-      if (isAsyncMatchRef.current) {
-        registrarAccionP1Async(accionesP1AsyncRef.current, {
-          seq,
-          tick: enTic,
-          issuedTick: state.tick,
-          kind: 'plant',
-          plantId: card,
-          lane,
-          col,
-          slot: slotIdx,
           statRolls: rolls,
           level: cardLevel,
         })
@@ -868,7 +955,7 @@ export function useGameEngine() {
       forceRender()
       return enTic
     },
-    [forceRender, haEmpezado, apuntarJugadaPropia]
+    [forceRender, haEmpezado, apuntarJugadaPropia, marcarInconsistenciaRanked]
   )
 
   // Dig plant handler (removes plant by ID or by cell lane & column)
@@ -1025,6 +1112,33 @@ export function useGameEngine() {
 
       const enTic = state.tick + (state.isPvpMode ? MARGEN_DE_RED_TICS : 0)
 
+      if (isAsyncMatchRef.current) {
+        const reg = registrarAccionP1AsyncDetallado(accionesP1AsyncRef.current, {
+          seq,
+          tick: enTic,
+          issuedTick: state.tick,
+          kind: 'dig',
+          lane: casilla.lane,
+          col: casilla.col,
+        })
+
+        if (!reg.ok) {
+          marcarInconsistenciaRanked({
+            reason: reg.reason,
+            seq: reg.seq,
+            issuedTick: reg.issuedTick,
+            details: reg.details,
+          })
+          forceRender()
+          return null
+        }
+
+        if (reg.duplicated) {
+          forceRender()
+          return null
+        }
+      }
+
       state.pending.push({
         atTick: enTic,
         kind: 'own_dig',
@@ -1036,17 +1150,6 @@ export function useGameEngine() {
         apuntarJugadaPropia({ tick: enTic, kind: 'dig', lane: casilla.lane, col: casilla.col })
       }
 
-      if (isAsyncMatchRef.current) {
-        registrarAccionP1Async(accionesP1AsyncRef.current, {
-          seq,
-          tick: enTic,
-          issuedTick: state.tick,
-          kind: 'dig',
-          lane: casilla.lane,
-          col: casilla.col,
-        })
-      }
-
       soundManager.playSound('plantation', 0.5)
       forceRender()
       // El tic va de vuelta por lo mismo que al plantar: el que se manda al
@@ -1054,7 +1157,7 @@ export function useGameEngine() {
       // fotograma pintado.
       return { ...casilla, tick: enTic, seq }
     },
-    [forceRender, apuntarJugadaPropia]
+    [forceRender, apuntarJugadaPropia, marcarInconsistenciaRanked]
   )
 
   /**
@@ -1074,13 +1177,25 @@ export function useGameEngine() {
         (a) => !(a.mia && a.tick === tick && a.lane === lane && (a.col ?? null) === col)
       )
 
-      const antesAsync = accionesP1AsyncRef.current.length
-      accionesP1AsyncRef.current = descartarAccionP1Async(
-        accionesP1AsyncRef.current,
-        seq
-      )
+      let eliminadoAsync = false
+      if (isAsyncMatchRef.current) {
+        const resDescarte = descartarAccionP1AsyncDetallado(
+          accionesP1AsyncRef.current,
+          seq
+        )
+        if (!resDescarte.ok) {
+          marcarInconsistenciaRanked({
+            reason: resDescarte.reason,
+            seq,
+            details: resDescarte.details,
+          })
+          return
+        }
+        accionesP1AsyncRef.current = resDescarte.historial
+        eliminadoAsync = resDescarte.eliminado
+      }
 
-      if (registroRef.current.length === antes && accionesP1AsyncRef.current.length === antesAsync) return
+      if (registroRef.current.length === antes && !eliminadoAsync) return
 
       // Y se devuelve lo que costó. La jugada no ocurrió, así que cobrarla sería
       // quedarse con los soles del jugador por un fallo de red.
@@ -1104,7 +1219,7 @@ export function useGameEngine() {
         rehacerDesdeRef.current === null ? tick : Math.min(rehacerDesdeRef.current, tick)
       forceRender()
     },
-    [forceRender]
+    [forceRender, marcarInconsistenciaRanked]
   )
 
   // High performance game loop (60 FPS + Real-time background tab execution)
@@ -1393,5 +1508,6 @@ export function useGameEngine() {
     reconstrucciones: reconstruccionesRef.current,
     descartarAccionPropia,
     incorporarIntencionesAsync,
+    getRankedAsyncInconsistency: () => rankedAsyncInconsistencyRef.current,
   }
 }

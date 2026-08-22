@@ -459,16 +459,22 @@ export function issuedTickP1(a: AccionP1Simulacion): number {
   return Math.max(0, a.tick - MARGEN_DE_RED_TICS)
 }
 
+import type {
+  ResultadoValidacionHistorialP1,
+  ResultadoDescarteAccionP1,
+} from './asyncP1History.ts'
+
+export type {
+  ResultadoValidacionHistorialP1,
+  ResultadoDescarteAccionP1,
+}
+
 /**
- * Normaliza acciones de P1 para Ranked Asíncrono de forma estricta.
- * Si alguna acción incumple el esquema estricto o hay conflicto de seq, devuelve [].
+ * Normaliza y valida acciones de P1 para Ranked Asíncrono de forma estricta.
+ * Devuelve el resultado discriminado { ok: true, acciones } o { ok: false, reason, ... }.
  */
-export function normalizarAccionesP1(rawActions: unknown): AccionP1RankedEstricta[] {
-  const res = validarYNormalizarAccionesP1Ranked(rawActions)
-  if (!res.ok) {
-    return []
-  }
-  return res.acciones
+export function normalizarAccionesP1(rawActions: unknown): ResultadoValidacionHistorialP1 {
+  return validarYNormalizarAccionesP1Ranked(rawActions)
 }
 
 /**
@@ -925,5 +931,6 @@ export {
   registrarAccionP1Async,
   registrarAccionP1AsyncDetallado,
   descartarAccionP1Async,
+  descartarAccionP1AsyncDetallado,
   sonAccionesIdenticas,
 } from './asyncP1History.ts'
