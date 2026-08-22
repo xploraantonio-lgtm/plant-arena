@@ -45,6 +45,10 @@ import {
   type AsyncOpponentController,
   type AccionP1Simulacion,
 } from '../engine/asyncOpponent'
+import {
+  registrarAccionP1Async,
+  descartarAccionP1Async,
+} from '../engine/asyncP1History'
 import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
@@ -509,27 +513,18 @@ export function useGameEngine() {
       const state = stateRef.current
 
       // 1. REGISTRO AUTORITATIVO EN HISTORIAL ASYNC (SIEMPRE QUE SEA ASYNC)
-      // Debe registrarse aunque el sol ya no esté visualmente o se haya auto-recogido,
-      // deduplicando por seq o (kind + targetId + issuedTick) para evitar duplicados.
+      // Debe registrarse en el historial aunque el sol ya no esté visualmente o se
+      // haya auto-recogido, delegando la deduplicación estricta al helper unificado.
       if (isAsyncMatchRef.current) {
-        const yaRegistrada =
-          typeof seq === 'number' && Number.isFinite(seq)
-            ? accionesP1AsyncRef.current.some((a) => a.seq === seq)
-            : accionesP1AsyncRef.current.some(
-                (a) => a.kind === 'collect' && a.targetId === sunId && a.issuedTick === (issuedTick ?? state.tick)
-              )
-
-        if (!yaRegistrada) {
-          const ticRecogida =
-            typeof issuedTick === 'number' && Number.isFinite(issuedTick) ? issuedTick : state.tick
-          accionesP1AsyncRef.current.push({
-            seq,
-            tick: ticRecogida,
-            issuedTick: ticRecogida,
-            kind: 'collect',
-            targetId: sunId,
-          })
-        }
+        const ticRecogida =
+          typeof issuedTick === 'number' && Number.isFinite(issuedTick) ? issuedTick : state.tick
+        registrarAccionP1Async(accionesP1AsyncRef.current, {
+          seq,
+          tick: ticRecogida,
+          issuedTick: ticRecogida,
+          kind: 'collect',
+          targetId: sunId,
+        })
       }
 
       // 2. EFECTO VISUAL / LOCAL INMEDIATO
@@ -822,25 +817,18 @@ export function useGameEngine() {
       }
 
       if (isAsyncMatchRef.current) {
-        const yaExiste =
-          typeof seq === 'number' && Number.isFinite(seq)
-            ? accionesP1AsyncRef.current.some((a) => a.seq === seq)
-            : false
-
-        if (!yaExiste) {
-          accionesP1AsyncRef.current.push({
-            seq,
-            tick: enTic,
-            issuedTick: state.tick,
-            kind: 'plant',
-            plantId: card,
-            lane,
-            col,
-            slot: slotIdx,
-            statRolls: rolls,
-            level: cardLevel,
-          })
-        }
+        registrarAccionP1Async(accionesP1AsyncRef.current, {
+          seq,
+          tick: enTic,
+          issuedTick: state.tick,
+          kind: 'plant',
+          plantId: card,
+          lane,
+          col,
+          slot: slotIdx,
+          statRolls: rolls,
+          level: cardLevel,
+        })
       }
 
       // El cobro, el enfriamiento y el contador SÍ son inmediatos: son estado
@@ -1038,21 +1026,14 @@ export function useGameEngine() {
       }
 
       if (isAsyncMatchRef.current) {
-        const yaExiste =
-          typeof seq === 'number' && Number.isFinite(seq)
-            ? accionesP1AsyncRef.current.some((a) => a.seq === seq)
-            : false
-
-        if (!yaExiste) {
-          accionesP1AsyncRef.current.push({
-            seq,
-            tick: enTic,
-            issuedTick: state.tick,
-            kind: 'dig',
-            lane: casilla.lane,
-            col: casilla.col,
-          })
-        }
+        registrarAccionP1Async(accionesP1AsyncRef.current, {
+          seq,
+          tick: enTic,
+          issuedTick: state.tick,
+          kind: 'dig',
+          lane: casilla.lane,
+          col: casilla.col,
+        })
       }
 
       soundManager.playSound('plantation', 0.5)
@@ -1083,13 +1064,11 @@ export function useGameEngine() {
       )
 
       const antesAsync = accionesP1AsyncRef.current.length
-      if (typeof seq === 'number' && Number.isFinite(seq)) {
-        accionesP1AsyncRef.current = accionesP1AsyncRef.current.filter((a) => a.seq !== seq)
-      } else {
-        accionesP1AsyncRef.current = accionesP1AsyncRef.current.filter(
-          (a) => !(a.tick === tick && a.lane === lane && (a.col ?? null) === col)
-        )
-      }
+      accionesP1AsyncRef.current = descartarAccionP1Async(
+        accionesP1AsyncRef.current,
+        seq,
+        { tick, lane, col }
+      )
 
       if (registroRef.current.length === antes && accionesP1AsyncRef.current.length === antesAsync) return
 

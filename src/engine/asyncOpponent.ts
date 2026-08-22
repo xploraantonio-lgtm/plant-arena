@@ -796,3 +796,5 @@ export function reconstruirPartidaAsync(
 
   return { estado: res.state, controller: res.controller }
 }
+
+export { registrarAccionP1Async, descartarAccionP1Async } from './asyncP1History.ts'

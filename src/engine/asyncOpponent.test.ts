@@ -10,6 +10,8 @@ import {
   reconstruirPartidaAsync,
   runAsyncTimeline,
   normalizarAccionesP1,
+  registrarAccionP1Async,
+  descartarAccionP1Async,
   type AsyncOpponentIntent,
   type AccionP1Simulacion,
 } from './asyncOpponent.ts'
@@ -1425,7 +1427,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(rebuildRes.controller.nextIntentIndex).toBe(timelineRes.controller.nextIntentIndex)
   })
 
-  // 62. COLLECT ACK después de desaparecer el sol localmente
+  // 62. COLLECT ACK después de desaparecer el sol localmente usando helper real registrarAccionP1Async
   it('62. COLLECT con ACK tardío tras desaparición local del sol se registra en historial autoritativo sin doble acreditación y reconstruye idéntico', () => {
     const seed = 6262
     const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
@@ -1440,59 +1442,11 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const targetSun = probe.suns[0]
     const targetSunId = targetSun.id
 
-    // 2. Simular historial de acciones de P1
-    const accionesP1Async: AccionP1Simulacion[] = []
+    // 2. Historial de acciones de P1 administrado por la función real de producción
+    const historial: AccionP1Simulacion[] = []
 
-    // Función equivalente a confirmarRecogidaSol con la nueva lógica autoritativa
-    const simularConfirmarRecogida = (
-      state: any,
-      sunId: string,
-      issuedTick: number,
-      seq: number
-    ): boolean => {
-      // 1. Registro autoritativo
-      const yaRegistrada = accionesP1Async.some((a) => a.seq === seq)
-      if (!yaRegistrada) {
-        accionesP1Async.push({
-          seq,
-          tick: issuedTick,
-          issuedTick,
-          kind: 'collect',
-          targetId: sunId,
-        })
-      }
-      // 2. Efecto visual / local inmediato
-      const sol = state.suns.find((s: any) => s.id === sunId)
-      if (!sol) return false
-      state.suns = state.suns.filter((s: any) => s.id !== sunId)
-      state.sunBank += sol.value
-      return true
-    }
-
-    const liveState = createBattleState(seed, false, true)
-    // Avanzar hasta que el sol aparezca
-    while (liveState.tick < 80) {
-      stepTick(liveState, () => {})
-    }
-
-    // P1 envía COLLECT en tic 80 con seq 10
-    const seqCollect = 10
-    const issuedTickCollect = 80
-
-    // Simular que antes de que llegue el ACK, el sol desaparece localmente (por ejemplo auto-recolectado o transición)
-    liveState.suns = liveState.suns.filter((s) => s.id !== targetSunId)
-    const sunBankAntesDeAck = liveState.sunBank
-
-    // Llega ACK positivo del servidor
-    const acreditadoLocal = simularConfirmarRecogida(liveState, targetSunId, issuedTickCollect, seqCollect)
-
-    // A) No se acreditó doblemente en el estado local inmediato
-    expect(acreditadoLocal).toBe(false)
-    expect(liveState.sunBank).toBe(sunBankAntesDeAck)
-
-    // B) El historial autoritativo SÍ conserva la acción con seq y targetId exactos
-    expect(accionesP1Async.length).toBe(1)
-    expect(accionesP1Async[0]).toEqual({
+    // Registrar mediante la función REAL de producción
+    const agregado = registrarAccionP1Async(historial, {
       seq: 10,
       tick: 80,
       issuedTick: 80,
@@ -1500,13 +1454,32 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
       targetId: targetSunId,
     })
 
-    // C) Rebuild reconstruye desde timeline autoritativo y coincide con verify-match
+    expect(agregado).toBe(true)
+    expect(historial.length).toBe(1)
+    expect(historial[0].seq).toBe(10)
+    expect(historial[0].issuedTick).toBe(80)
+    expect(historial[0].targetId).toBe(targetSunId)
+    expect(historial[0].kind).toBe('collect')
+
+    // Registrar exactamente el mismo ACK por segunda vez (deduplicación real por seq)
+    const agregadoRepetido = registrarAccionP1Async(historial, {
+      seq: 10,
+      tick: 80,
+      issuedTick: 80,
+      kind: 'collect',
+      targetId: targetSunId,
+    })
+
+    expect(agregadoRepetido).toBe(false)
+    expect(historial.length).toBe(1)
+
+    // Rebuild reconstruye desde timeline autoritativo y coincide con verify-match
     const { estado: estadoReconstruido } = reconstruirPartidaAsync(
       seed,
       p1Deck,
       p2Deck,
       [],
-      accionesP1Async,
+      historial,
       120
     )
 
@@ -1514,7 +1487,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
       seed,
       p1Deck,
       p2Deck,
-      accionesP1Async,
+      historial,
       [],
       120
     )
@@ -1524,43 +1497,43 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(estadoReconstruido.suns.some((s) => s.id === targetSunId)).toBe(false)
   })
 
-  // 63. ACK fuera de orden no cambia seq
+  // 63. ACKs recibidos fuera de orden conservan inmutablemente el seq original usando registrarAccionP1Async
   it('63. ACKs recibidos fuera de orden conservan inmutablemente el seq original asignado al enviar cada acción', () => {
-    const accionesP1Async: AccionP1Simulacion[] = []
-    let globalOrderCounter = 0
+    const historial: AccionP1Simulacion[] = []
 
-    // Simular envío de 3 acciones capturando su seq inmutable
-    const seq1 = ++globalOrderCounter // 10
-    const acc1 = { seq: seq1, issuedTick: 80, tick: 80, kind: 'collect' as const, targetId: 'sun_1' }
+    // Acciones emitidas originalmente:
+    // seq 10 COLLECT (issuedTick 80)
+    // seq 11 PLANT (issuedTick 270)
+    // seq 12 DIG (issuedTick 280)
+    const accCollect: AccionP1Simulacion = { seq: 10, issuedTick: 80, tick: 80, kind: 'collect', targetId: 'sun_1' }
+    const accPlant: AccionP1Simulacion = { seq: 11, issuedTick: 270, tick: 276, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 }
+    const accDig: AccionP1Simulacion = { seq: 12, issuedTick: 280, tick: 286, kind: 'dig', lane: 0, col: 0 }
 
-    const seq2 = ++globalOrderCounter // 11
-    const acc2 = { seq: seq2, issuedTick: 270, tick: 276, kind: 'plant' as const, plantId: 'sunflower' as const, slot: 0, lane: 0, col: 0 }
-
-    const seq3 = ++globalOrderCounter // 12
-    const acc3 = { seq: seq3, issuedTick: 280, tick: 286, kind: 'dig' as const, lane: 0, col: 0 }
-
-    // Simular registro de acciones al recibir ACKs deliberadamente desordenados: DIG (seq 12), PLANT (seq 11), COLLECT (seq 10)
-    accionesP1Async.push(acc3)
-    accionesP1Async.push(acc2)
-    accionesP1Async.push(acc1)
-
-    // globalOrderCounter siguió aumentando por otras interacciones
-    globalOrderCounter += 5
+    // Registrar confirmaciones deliberadamente en orden desordenado usando la función real:
+    // 1. DIG (seq 12)
+    // 2. PLANT (seq 11)
+    // 3. COLLECT (seq 10)
+    expect(registrarAccionP1Async(historial, accDig)).toBe(true)
+    expect(registrarAccionP1Async(historial, accPlant)).toBe(true)
+    expect(registrarAccionP1Async(historial, accCollect)).toBe(true)
 
     // Al normalizar y ordenar para el timeline:
-    const ordenadas = normalizarAccionesP1(accionesP1Async)
+    const ordenadas = normalizarAccionesP1(historial)
 
-    // El seq de COLLECT debe seguir siendo 10 (nunca 12 ni 17)
+    // El seq de COLLECT debe seguir siendo 10 (nunca 12)
     expect(ordenadas[0].kind).toBe('collect')
-    expect(ordenadas[0].seq).toBe(seq1)
+    expect(ordenadas[0].seq).toBe(10)
+    expect(ordenadas[0].issuedTick).toBe(80)
 
     // El seq de PLANT debe seguir siendo 11
     expect(ordenadas[1].kind).toBe('plant')
-    expect(ordenadas[1].seq).toBe(seq2)
+    expect(ordenadas[1].seq).toBe(11)
+    expect(ordenadas[1].issuedTick).toBe(270)
 
     // El seq de DIG debe seguir siendo 12
     expect(ordenadas[2].kind).toBe('dig')
-    expect(ordenadas[2].seq).toBe(seq3)
+    expect(ordenadas[2].seq).toBe(12)
+    expect(ordenadas[2].issuedTick).toBe(280)
   })
 
   // 64. Mismo issuedTick, orden económico por seq
@@ -1592,11 +1565,10 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
 
     // ── VARIANTE A: En issuedTick 630, seq 20 = PLANT peashooter (coste 100), seq 21 = COLLECT (+25)
     // sunBank es 75 -> PLANT (100) falla por falta de soles, luego COLLECT suma a 100
-    const accionesVarianteA: AccionP1Simulacion[] = [
-      ...baseCollects,
-      { seq: 20, tick: 636, issuedTick: 630, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 },
-      { seq: 21, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3] },
-    ]
+    const accionesVarianteA: AccionP1Simulacion[] = []
+    for (const b of baseCollects) registrarAccionP1Async(accionesVarianteA, b)
+    registrarAccionP1Async(accionesVarianteA, { seq: 20, tick: 636, issuedTick: 630, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 })
+    registrarAccionP1Async(accionesVarianteA, { seq: 21, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3] })
 
     const resA = runAsyncTimeline({
       seed,
@@ -1614,11 +1586,10 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
 
     // ── VARIANTE B: En issuedTick 630, seq 20 = COLLECT (+25 -> 100 soles), seq 21 = PLANT peashooter (coste 100)
     // sunBank sube a 100 -> PLANT (100) se ejecuta con éxito, sunBank queda en 0
-    const accionesVarianteB: AccionP1Simulacion[] = [
-      ...baseCollects,
-      { seq: 20, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3] },
-      { seq: 21, tick: 636, issuedTick: 630, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 },
-    ]
+    const accionesVarianteB: AccionP1Simulacion[] = []
+    for (const b of baseCollects) registrarAccionP1Async(accionesVarianteB, b)
+    registrarAccionP1Async(accionesVarianteB, { seq: 20, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3] })
+    registrarAccionP1Async(accionesVarianteB, { seq: 21, tick: 636, issuedTick: 630, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 })
 
     const resB = runAsyncTimeline({
       seed,
@@ -1635,7 +1606,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(resB.state.sunBank).toBe(0)
   })
 
-  // 65. Paridad integral absoluta con ACKs desordenados
+  // 65. Paridad integral absoluta con ACKs desordenados construidos con helper productivo
   it('65. Paridad integral absoluta con ACKs desordenados, soles desaparecidos, cooldowns y reconstrucción tardía', () => {
     const seed = 656565
     const p1Deck: CartaDeMazo[] = [
@@ -1676,23 +1647,15 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
 
     expect(spawnedSuns.length).toBeGreaterThanOrEqual(4)
 
-    // Acciones de P1 creadas y enviadas en orden de captura (simulando llegada desordenada al buffer):
-    // 1. COLLECT sun 1 en tic 80 (seq 1)
-    // 2. COLLECT sun 2 en tic 265 (seq 2) -> 50 soles
-    // 3. PLANT sunflower en lane 0, col 0 en issuedTick 270 (seq 3) -> 0 soles
-    // 4. DIG sunflower en lane 0, col 0 en issuedTick 350 (seq 4)
-    // 5. COLLECT sun 3 en tic 450 (seq 5) -> 25 soles
-    // 6. COLLECT sun 4 en tic 630 (seq 6) -> 50 soles
-    // 7. PLANT sunflower en lane 1, col 1 en issuedTick 640 (seq 7) -> 0 soles
-    const p1AccionesHistorial: AccionP1Simulacion[] = [
-      { seq: 4, tick: 356, issuedTick: 350, kind: 'dig', lane: 0, col: 0 },
-      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: spawnedSuns[0].id },
-      { seq: 7, tick: 646, issuedTick: 640, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
-      { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
-      { seq: 6, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3].id },
-      { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: spawnedSuns[1].id },
-      { seq: 5, tick: 450, issuedTick: 450, kind: 'collect', targetId: spawnedSuns[2].id },
-    ]
+    // Acciones de P1 creadas y registradas usando el helper real en orden desordenado de llegada:
+    const p1AccionesHistorial: AccionP1Simulacion[] = []
+    registrarAccionP1Async(p1AccionesHistorial, { seq: 4, tick: 356, issuedTick: 350, kind: 'dig', lane: 0, col: 0 })
+    registrarAccionP1Async(p1AccionesHistorial, { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: spawnedSuns[0].id })
+    registrarAccionP1Async(p1AccionesHistorial, { seq: 7, tick: 646, issuedTick: 640, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 })
+    registrarAccionP1Async(p1AccionesHistorial, { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 })
+    registrarAccionP1Async(p1AccionesHistorial, { seq: 6, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3].id })
+    registrarAccionP1Async(p1AccionesHistorial, { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: spawnedSuns[1].id })
+    registrarAccionP1Async(p1AccionesHistorial, { seq: 5, tick: 450, issuedTick: 450, kind: 'collect', targetId: spawnedSuns[2].id })
 
     // Ejecución 1: Reconstrucción autoritativa del cliente hasta tic 680
     const rebuildRes = reconstruirPartidaAsync(
@@ -1717,6 +1680,167 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     })
 
     // Paridad campo por campo
+    expect(rebuildRes.estado.tick).toBe(timelineRes.state.tick)
+    expect(rebuildRes.estado.rng).toEqual(timelineRes.state.rng)
+    expect(rebuildRes.estado.entityCounter).toBe(timelineRes.state.entityCounter)
+    expect(rebuildRes.estado.sunBank).toBe(timelineRes.state.sunBank)
+    expect(rebuildRes.estado.p2SunBank).toBe(timelineRes.state.p2SunBank)
+    expect(rebuildRes.estado.suns.length).toBe(timelineRes.state.suns.length)
+    expect(rebuildRes.estado.suns.map((s) => s.id)).toEqual(timelineRes.state.suns.map((s) => s.id))
+    expect(rebuildRes.estado.slotCooldowns).toEqual(timelineRes.state.slotCooldowns)
+    expect(rebuildRes.estado.cooldowns).toEqual(timelineRes.state.cooldowns)
+    expect(rebuildRes.estado.plants.length).toBe(timelineRes.state.plants.length)
+    expect(rebuildRes.estado.plants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))).toEqual(
+      timelineRes.state.plants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))
+    )
+    expect(rebuildRes.estado.enemyPlants.length).toBe(timelineRes.state.enemyPlants.length)
+    expect(rebuildRes.estado.enemyPlants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))).toEqual(
+      timelineRes.state.enemyPlants.map((p) => ({ id: p.id, lane: p.lane, col: p.col, plantId: p.plantId }))
+    )
+    expect(rebuildRes.estado.projectiles).toEqual(timelineRes.state.projectiles)
+    expect(rebuildRes.estado.pending).toEqual(timelineRes.state.pending)
+    expect(rebuildRes.estado.p1BaseHp).toBe(timelineRes.state.p1BaseHp)
+    expect(rebuildRes.estado.p2BaseHp).toBe(timelineRes.state.p2BaseHp)
+    expect(rebuildRes.estado.stats).toEqual(timelineRes.state.stats)
+
+    // Controlador
+    expect(rebuildRes.controller.sunBank).toBe(timelineRes.controller.sunBank)
+    expect(rebuildRes.controller.nextIntentIndex).toBe(timelineRes.controller.nextIntentIndex)
+    expect(rebuildRes.controller.pendingRetry).toEqual(timelineRes.controller.pendingRetry)
+    expect(rebuildRes.controller.slotCooldowns).toEqual(timelineRes.controller.slotCooldowns)
+    expect(rebuildRes.controller.stats).toEqual(timelineRes.controller.stats)
+  })
+
+  // 66. Deduplicación real por seq en registrarAccionP1Async
+  it('66. Deduplicación real por seq rechaza registros duplicados y preserva unicidad de identidad', () => {
+    const historial: AccionP1Simulacion[] = []
+
+    // 1. Registrar seq 50 COLLECT dos veces
+    const acc1: AccionP1Simulacion = { seq: 50, tick: 80, issuedTick: 80, kind: 'collect', targetId: 'sun_50' }
+    expect(registrarAccionP1Async(historial, acc1)).toBe(true)
+    expect(registrarAccionP1Async(historial, acc1)).toBe(false)
+    expect(historial.length).toBe(1)
+
+    // 2. Intentar registrar otra acción distinta con el mismo seq 50
+    const accConflict: AccionP1Simulacion = { seq: 50, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 }
+    expect(registrarAccionP1Async(historial, accConflict)).toBe(false)
+    expect(historial.length).toBe(1)
+    expect(historial[0].kind).toBe('collect')
+  })
+
+  // 67. Rollback exacto por seq usando descartarAccionP1Async
+  it('67. Rollback exacto por seq elimina únicamente la acción rechazada sin afectar acciones adyacentes o del mismo carril', () => {
+    const historial: AccionP1Simulacion[] = []
+
+    registrarAccionP1Async(historial, { seq: 20, tick: 80, issuedTick: 80, kind: 'collect', targetId: 'sun_1' })
+    registrarAccionP1Async(historial, { seq: 21, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 })
+    registrarAccionP1Async(historial, { seq: 22, tick: 286, issuedTick: 280, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 1 })
+    registrarAccionP1Async(historial, { seq: 23, tick: 356, issuedTick: 350, kind: 'dig', lane: 0, col: 0 })
+
+    expect(historial.length).toBe(4)
+
+    // Rechazar seq 22 (PLANT peashooter en lane 0, col 1)
+    const filtrado = descartarAccionP1Async(historial, 22)
+
+    expect(filtrado.length).toBe(3)
+    expect(filtrado.map((a) => a.seq)).toEqual([20, 21, 23])
+    // seq 21 permanece a pesar de compartir lane 0
+    expect(filtrado.some((a) => a.seq === 21 && a.lane === 0 && a.col === 0)).toBe(true)
+    // seq 22 ya no existe
+    expect(filtrado.some((a) => a.seq === 22)).toBe(false)
+  })
+
+  // 68. Historial completo construido exclusivamente con helpers productivos hacia runner y reconstrucción
+  it('68. Historial completo construido exclusivamente con helpers productivos hacia runner y reconstrucción', () => {
+    const seed = 686868
+    const p1Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+    const p2Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+
+    const asyncIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 2, col: 2 },
+      { seq: 2, tick: 520, issuedTick: 520, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 2 },
+    ]
+
+    // 1. Descubrir soles
+    const discovery = createBattleState(seed, false, true)
+    const discoveryController = createAsyncOpponentController(p2Deck, asyncIntents)
+    const spawnedSuns: { id: string; tick: number }[] = []
+
+    while (discovery.tick < 680) {
+      for (const s of discovery.suns) {
+        if (!spawnedSuns.some((x) => x.id === s.id)) {
+          spawnedSuns.push({ id: s.id, tick: discovery.tick })
+        }
+      }
+      if (discovery.tick === 270) {
+        discovery.pending.push({ atTick: 276, kind: 'own_plant', plantId: 'sunflower', lane: 0, col: 0, statRolls: [], level: 0 })
+      }
+      if (discovery.tick === 350) {
+        discovery.pending.push({ atTick: 356, kind: 'own_dig', lane: 0, col: 0 })
+      }
+      stepAsyncOpponent(discoveryController, discovery)
+      stepTick(discovery, () => {})
+    }
+
+    // 2. Construir historial usando EXCLUSIVAMENTE registrarAccionP1Async y descartarAccionP1Async
+    let historial: AccionP1Simulacion[] = []
+
+    // Acciones registradas con seq
+    expect(registrarAccionP1Async(historial, { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: spawnedSuns[0].id })).toBe(true)
+    // Registro duplicado de seq 1
+    expect(registrarAccionP1Async(historial, { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: spawnedSuns[0].id })).toBe(false)
+
+    expect(registrarAccionP1Async(historial, { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: spawnedSuns[1].id })).toBe(true)
+    expect(registrarAccionP1Async(historial, { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 })).toBe(true)
+
+    // Acción que luego será rechazada por el servidor: seq 99 PLANT peashooter en 280
+    expect(registrarAccionP1Async(historial, { seq: 99, tick: 286, issuedTick: 280, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 2, col: 0 })).toBe(true)
+
+    expect(registrarAccionP1Async(historial, { seq: 4, tick: 356, issuedTick: 350, kind: 'dig', lane: 0, col: 0 })).toBe(true)
+    expect(registrarAccionP1Async(historial, { seq: 5, tick: 450, issuedTick: 450, kind: 'collect', targetId: spawnedSuns[2].id })).toBe(true)
+
+    // Servidor rechaza seq 99
+    historial = descartarAccionP1Async(historial, 99)
+
+    // Mismo issuedTick: seq 6 COLLECT y seq 7 PLANT
+    expect(registrarAccionP1Async(historial, { seq: 6, tick: 630, issuedTick: 630, kind: 'collect', targetId: spawnedSuns[3].id })).toBe(true)
+    expect(registrarAccionP1Async(historial, { seq: 7, tick: 646, issuedTick: 640, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 })).toBe(true)
+
+    // Verificar que todas las acciones del flujo Ranked async tienen seq numérico válido
+    for (const a of historial) {
+      expect(typeof a.seq).toBe('number')
+      expect(Number.isFinite(a.seq)).toBe(true)
+    }
+
+    // 3. Reconstrucción con el historial
+    const rebuildRes = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      asyncIntents,
+      historial,
+      680
+    )
+
+    // 4. Runner autoritativo de verify-match
+    const timelineRes = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions: historial,
+      asyncActions: asyncIntents,
+      untilTick: 680,
+      validateP1: true,
+      stopOnGameOver: true,
+    })
+
+    // Paridad 100% campo por campo
     expect(rebuildRes.estado.tick).toBe(timelineRes.state.tick)
     expect(rebuildRes.estado.rng).toEqual(timelineRes.state.rng)
     expect(rebuildRes.estado.entityCounter).toBe(timelineRes.state.entityCounter)
