@@ -5,18 +5,12 @@ import './MatchmakingScreen.css'
 /**
  * LA PANTALLA DE BUSCAR RIVAL
  *
- * Sólo pinta. Quien habla con el servidor es useMatchmaking; aquí se recibe el
- * estado y se muestra.
+ * Muestra el estado de la búsqueda en curso gestionada por useMatchmaking.
  *
- * Dos cosas que no son decorativas:
+ * En Ranked: busca rival humano y, tras 60 s sin encontrarlo, el servidor
+ * genera automáticamente una sala contra un Rival Semilla.
  *
- *  · En COLISEO se enseña la cuenta atrás real hasta la devolución. El jugador ha
- *    pagado con gemas o con un ticket, y tiene derecho a ver cuánto falta para
- *    recuperarlo si no aparece nadie. Ocultarlo sería lo mismo que ocultar que se
- *    le ha cobrado.
- *
- *  · El botón de cancelar dice qué va a pasar con el dinero, no un "Cancelar"
- *    seco: en coliseo, que se devuelve.
+ * En Coliseo: enseña la cuenta atrás real hasta la devolución automática.
  */
 
 interface Props {
@@ -25,11 +19,6 @@ interface Props {
   /** En coliseo, lo que se cobró, para poder decirlo por su nombre. */
   apuesta?: { gemas: number; conTicket: boolean } | null
   onCancelar: () => void
-  /**
-   * Sólo en ranked: jugar contra el relleno cuando ya se ha esperado bastante.
-   * Si no se pasa, no se ofrece.
-   */
-  onJugarRelleno?: () => void
 }
 
 const TITULOS: Record<ModoPartida, string> = {
@@ -42,7 +31,7 @@ const TITULOS: Record<ModoPartida, string> = {
 const SUBTITULOS: Record<ModoPartida, string> = {
   ranked:     'En juego: puntos de arena y un cofre si ganas.',
   friendly:   'Sin puntos ni recompensas. Sólo por jugar.',
-  colosseum:  'Sólo contra jugadores reales. Nunca contra la máquina.',
+  colosseum:  'Sólo contra jugadores reales.',
   tournament: 'Emparejando dentro de tu torneo.',
 }
 
@@ -57,9 +46,7 @@ export default function MatchmakingScreen({
   estado,
   apuesta,
   onCancelar,
-  onJugarRelleno,
 }: Props) {
-  // Al pulsar Escape se cancela, que es lo que espera cualquiera.
   const cancelarRef = useRef(onCancelar)
   cancelarRef.current = onCancelar
   useEffect(() => {
@@ -76,7 +63,6 @@ export default function MatchmakingScreen({
       ? Math.max(0, estado.plazoSegundos - estado.segundos)
       : null
 
-  // Fracción de la cuenta atrás ya consumida, para la barra.
   const consumido =
     esColiseo && estado.plazoSegundos
       ? Math.min(100, (estado.segundos / estado.plazoSegundos) * 100)
@@ -121,27 +107,6 @@ export default function MatchmakingScreen({
           <p className="mm__error" role="alert">
             {estado.error}
           </p>
-        )}
-
-        {/* En ranked, pasado el tiempo, se ofrece jugar contra el relleno en lugar
-            de seguir esperando. En coliseo esto no aparece nunca: no hay bots. */}
-        {estado.toca_relleno && onJugarRelleno && (
-          <div className="mm__relleno">
-            <p className="mm__relleno-texto">
-              No hay nadie buscando ahora mismo.
-            </p>
-            {/* Se dice lo que es y lo que no da. La partida contra la máquina no
-                pasa por el servidor, así que no hay ELO ni cofre — y alguien que
-                juegue diez de estas creyendo que sube de rango se va a enfadar
-                con razón. Cuando el relleno sea la repetición de una partida
-                real habrá sala, habrá registro y sí podrá pagarse. */}
-            <button type="button" className="mm__boton mm__boton--principal" onClick={onJugarRelleno}>
-              Entrenar contra la máquina
-            </button>
-            <p className="mm__aviso">
-              Sin puntos de arena ni cofre: es para practicar mientras aparece rival.
-            </p>
-          </div>
         )}
 
         <button type="button" className="mm__boton" onClick={onCancelar}>

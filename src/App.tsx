@@ -296,6 +296,8 @@ function App() {
    * El dato ya llegaba en game_room_info; sólo se estaba tirando.
    */
   const [mazosDeLaSala, setMazosDeLaSala] = useState<{ mio: unknown; rival: unknown } | null>(null)
+  const [partidaAsincrona, setPartidaAsincrona] = useState<boolean>(false)
+  const [accionesSnapshotAsincronas, setAccionesSnapshotAsincronas] = useState<unknown>(null)
 
   /**
    * Cuando el servidor empareja, se leen la semilla y los jugadores de la sala y
@@ -305,14 +307,6 @@ function App() {
     if (!encontrada) return
     let cancelado = false
     ;(async () => {
-      // gameRoomInfo trae además los nicks de los dos, para poder poner
-      // "Xplora" y "Leonel" en la batalla en lugar de "ÁRBOL MADRE".
-      //
-      // Si esa función no existe todavía en la base (código desplegado antes que
-      // la migración, que ya pasó una vez), se cae a getGameRoom: la partida
-      // arranca igual, sólo sin nombres. Antes esto devolvía al menú, así que un
-      // desfase de despliegue impedía jugar en absoluto — y eso es peor que
-      // jugar sin nicks.
       const info = await SupabaseService.gameRoomInfo(encontrada.roomId)
       if (cancelado) return
 
@@ -325,17 +319,15 @@ function App() {
           seed: basica.seed,
           iAm: (basica.player1_id === user?.id ? 'p1' : 'p2') as 'p1' | 'p2',
           player1: { id: basica.player1_id, username: null },
-          player2: { id: basica.player2_id, username: null },
-          // Los mazos también por este camino: sin ellos las mejoras de las cartas
-          // no se pueden deducir y las dos pantallas simularían plantas distintas.
+          player2: { id: basica.player2_id ?? '00000000-0000-0000-0000-000000000000', username: basica.async_display_name ?? null },
           p1Deck: basica.p1_deck,
-          p2Deck: basica.p2_deck,
+          p2Deck: basica.is_async_match ? basica.async_deck_snapshot : basica.p2_deck,
+          isAsyncMatch: basica.is_async_match,
+          asyncActionsSnapshot: basica.async_actions_snapshot,
         }
       })())
       if (cancelado) return
       if (!sala) {
-        // Sin sala no se puede jugar la partida real: se vuelve al menú en lugar
-        // de arrancar una partida con semilla inventada, que sería otra partida.
         setScreen('menu')
         return
       }
@@ -346,17 +338,15 @@ function App() {
       setRivalId(soyP1 ? sala.player2.id : sala.player1.id)
       const miNick = soyP1 ? sala.player1.username : sala.player2.username
       const suNick = soyP1 ? sala.player2.username : sala.player1.username
-      // Sin nombres (el respaldo de arriba) se dejan las etiquetas de siempre en
-      // lugar de inventarse un "Tú" y un "Rival" que no dicen nada.
       setNombresEnPartida(
         miNick && suNick ? { mio: miNick, rival: suNick } : null
       )
-      // Cada uno se ve a sí mismo como jugador 1, así que el mazo «mío» es el p1 o
-      // el p2 según de qué lado esté.
       setMazosDeLaSala({
         mio: soyP1 ? sala.p1Deck : sala.p2Deck,
         rival: soyP1 ? sala.p2Deck : sala.p1Deck,
       })
+      setPartidaAsincrona(Boolean((sala as any).isAsyncMatch))
+      setAccionesSnapshotAsincronas((sala as any).asyncActionsSnapshot ?? null)
       setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
       setPracticePlantId(null)
       setScreen('battle')
@@ -368,24 +358,6 @@ function App() {
   const salirDeLaCola = async () => {
     await cancelar()
     setScreen('menu')
-  }
-
-  /**
-   * Ranked sin nadie al otro lado: se juega contra el bot local, que es lo que el
-   * ranked hace hoy. Sin sala, así que el servidor no interviene — ni ELO real ni
-   * reporte. Cuando existan las repeticiones, esto se sustituye por un fantasma.
-   */
-  const jugarContraRelleno = async () => {
-    await cancelar()
-    setSalaId(null)
-    setSemillaPartida(undefined)
-    setRivalId(null)
-    setBattleMatchMode('ranked')
-    setColosseumConfig(null)
-    setTournamentOpponent(null)
-    setPracticePlantId(null)
-    setCustomArenaBg(undefined)
-    setScreen('battle')
   }
 
   const handleGoToGame = () => {
@@ -817,10 +789,6 @@ function App() {
                 : null
             }
             onCancelar={() => { void salirDeLaCola() }}
-            /* El relleno sólo en ranked: en coliseo no hay bots, es la regla. */
-            onJugarRelleno={
-              modoBuscando === 'ranked' ? () => { void jugarContraRelleno() } : undefined
-            }
           />
         )}
         {screen === 'battle' && (
@@ -847,6 +815,8 @@ function App() {
                carta. Es lo que hace que las dos pantallas simulen la MISMA planta:
                ver engine/mazoDeLaSala.ts. */
             mazosDeLaSala={mazosDeLaSala}
+            isAsyncMatch={partidaAsincrona}
+            asyncActionsSnapshot={accionesSnapshotAsincronas}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)

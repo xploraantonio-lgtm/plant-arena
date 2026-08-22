@@ -501,7 +501,6 @@ export const SupabaseService = {
     waitedSeconds?: number
     mode?: string
     timeoutSeconds?: number | null
-    ghostAvailable?: boolean
     timedOut?: boolean
     refund?: unknown
     message?: string
@@ -517,6 +516,30 @@ export const SupabaseService = {
       return data
     } catch (e: any) {
       logError('pollMatchmaking', e)
+      return { matched: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Reclama un Rival Semilla (Async Opponent) cuando se han esperado >= 60 s en Ranked.
+   * El servidor garantiza prioridad humana antes de seleccionar una Semilla.
+   */
+  async claimRankedAsyncOpponent(): Promise<{
+    matched: boolean
+    roomId?: string
+    isAsyncMatch?: boolean
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { matched: false, error: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('claim_ranked_async_opponent')
+      if (error) {
+        logError('claimRankedAsyncOpponent', error)
+        return { matched: false, error: error.message }
+      }
+      return data ?? { matched: false }
+    } catch (e: any) {
+      logError('claimRankedAsyncOpponent', e)
       return { matched: false, error: e?.message }
     }
   },
@@ -725,6 +748,9 @@ export const SupabaseService = {
     player1: { id: string; username: string | null; avatarId: string | null; elo: number | null }
     player2: { id: string; username: string | null; avatarId: string | null; elo: number | null }
     iAm: 'p1' | 'p2'
+    isAsyncMatch?: boolean
+    asyncActionsSnapshot?: unknown
+    asyncDeckSnapshot?: unknown
   } | null> {
     if (!isSupabaseConfigured()) return null
     try {
@@ -1067,18 +1093,25 @@ export const SupabaseService = {
     id: string
     mode: string
     player1_id: string
-    player2_id: string
+    player2_id: string | null
     seed: number
     p1_deck: unknown
     p2_deck: unknown
     colosseum_bet: number
     status: string
+    is_async_match?: boolean
+    async_opponent_id?: string | null
+    async_display_name?: string | null
+    async_avatar_id?: string | null
+    async_rating_snapshot?: number | null
+    async_deck_snapshot?: unknown
+    async_actions_snapshot?: unknown
   } | null> {
     if (!isSupabaseConfigured()) return null
     try {
       const { data, error } = await supabase
         .from('game_rooms')
-        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status')
+        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status, is_async_match, async_opponent_id, async_display_name, async_avatar_id, async_rating_snapshot, async_deck_snapshot, async_actions_snapshot')
         .eq('id', roomId)
         .single()
       if (error) {

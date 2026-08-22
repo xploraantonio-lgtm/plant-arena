@@ -4,6 +4,9 @@ import {
   type DatosDeRepeticion,
   type JugadaGrabada,
 } from '../../../src/engine/replay.ts'
+import {
+  simulateAsyncMatch,
+} from '../../../src/engine/asyncOpponent.ts'
 import { TICK_MS } from '../../../src/engine/time.ts'
 
 const CORS = {
@@ -48,17 +51,23 @@ type RoomRow = {
   verification_note: string | null
 
   player1_id: string
-  player2_id: string
+  player2_id: string | null
 
   p1_deck: unknown
   p2_deck: unknown
 
   server_winner_id: string | null
 
-  // Reportes de los dos navegadores.
-  // En Ranked/Friendly sólo sirven como fallback de consenso.
   p1_reported_winner: string | null
   p2_reported_winner: string | null
+
+  is_async_match?: boolean
+  async_opponent_id?: string | null
+  async_display_name?: string | null
+  async_avatar_id?: string | null
+  async_rating_snapshot?: number | null
+  async_deck_snapshot?: unknown
+  async_actions_snapshot?: unknown
 }
 
 type ActionRow = {
@@ -178,8 +187,6 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'server_misconfigured' }, 500)
     }
 
-    // Este cliente jamás sale al navegador. service_role puede leer el registro y
-    // llamar las RPC de liquidación que están revocadas para authenticated.
     const admin = createClient(url, serviceRole, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
@@ -189,11 +196,6 @@ Deno.serve(async (req) => {
     const token = authHeader.replace(/^Bearer\s+/i, '').trim()
     if (!token) return json({ ok: false, error: 'unauthorized' }, 401)
 
-    // Dos callers válidos:
-    //   1) un jugador autenticado que participe en la sala;
-    //   2) el worker verify-pending usando service_role.
-    //
-    // Nunca se expone service_role al navegador. El worker vive en Edge.
     const internalWorker = token === serviceRole
     let uid: string | null = null
 
@@ -236,6 +238,13 @@ Deno.serve(async (req) => {
             'server_winner_id',
             'p1_reported_winner',
             'p2_reported_winner',
+            'is_async_match',
+            'async_opponent_id',
+            'async_display_name',
+            'async_avatar_id',
+            'async_rating_snapshot',
+            'async_deck_snapshot',
+            'async_actions_snapshot',
           ].join(','),
         )
         .eq('id', roomId)
@@ -256,8 +265,16 @@ Deno.serve(async (req) => {
     }
 
     let room = await cargarSala()
-    if (!internalWorker && uid !== room.player1_id && uid !== room.player2_id) {
-      return json({ ok: false, error: 'forbidden' }, 403)
+    const esAsync = Boolean(room.is_async_match)
+
+    if (!internalWorker) {
+      if (esAsync) {
+        if (uid !== room.player1_id) return json({ ok: false, error: 'forbidden' }, 403)
+      } else {
+        if (uid !== room.player1_id && uid !== room.player2_id) {
+          return json({ ok: false, error: 'forbidden' }, 403)
+        }
+      }
     }
 
     if (room.engine_version !== 'auth-v1') {
@@ -283,15 +300,147 @@ Deno.serve(async (req) => {
       })
     }
 
+    // =========================================================================
+    // CASO 1: PARTIDA ASÍNCRONA (RIVAL SEMILLA RANKED)
+    // =========================================================================
+    if (esAsync) {
+      let acciones = await cargarAcciones()
+      const inicio = room.started_at ?? room.created_at
+      let serverTick = ticServidor(inicio)
+
+      let resAsync = simulateAsyncMatch(
+        room.seed,
+        room.p1_deck,
+        room.async_deck_snapshot,
+        acciones,
+        room.async_actions_snapshot
+      )
+
+      const ticDecisionAsync = resAsync.p1Ilegal ? 0 : resAsync.tics
+      const faltaMsAsync = Math.max(0, (ticDecisionAsync + GRACE_TICKS - serverTick) * TICK_MS)
+
+      if (faltaMsAsync > MAX_INLINE_WAIT_MS && !resAsync.p1Ilegal) {
+        return json({
+          ok: true,
+          status: 'pending',
+          retryAfterMs: Math.min(faltaMsAsync, 5000),
+          serverTick,
+          decisionTick: ticDecisionAsync,
+        })
+      }
+
+      if (faltaMsAsync > 0 && !resAsync.p1Ilegal) {
+        await dormir(faltaMsAsync)
+      }
+
+      // Congelar sala
+      const { data: inicioVerificacion, error: beginError } = await admin.rpc(
+        'begin_match_verification',
+        { p_room_id: roomId },
+      )
+      if (beginError) throw new Error(`begin_verification_failed:${beginError.message}`)
+
+      if (inicioVerificacion?.alreadySettled) {
+        room = await cargarSala()
+        return json({
+          ok: true,
+          status: 'settled',
+          winnerId: room.server_winner_id,
+          roomStatus: room.status,
+          verificationStatus: room.verification_status,
+        })
+      }
+      if (inicioVerificacion?.locked) {
+        return json({ ok: false, status: 'failed', reviewRequired: true })
+      }
+      if (inicioVerificacion?.busy) {
+        return json({
+          ok: true,
+          status: 'pending',
+          busy: true,
+          retryAfterMs: 1000,
+        })
+      }
+      lockedRoomId = roomId
+
+      room = await cargarSala()
+      acciones = await cargarAcciones()
+      resAsync = simulateAsyncMatch(
+        room.seed,
+        room.p1_deck,
+        room.async_deck_snapshot,
+        acciones,
+        room.async_actions_snapshot
+      )
+      serverTick = ticServidor(room.started_at ?? room.created_at)
+
+      const segundoTicDecisionAsync = resAsync.p1Ilegal ? 0 : resAsync.tics
+      if (!resAsync.p1Ilegal && serverTick < segundoTicDecisionAsync) {
+        await admin.rpc('release_match_verification', {
+          p_room_id: roomId,
+          p_note: 'late_action_extended_match',
+        })
+        lockedRoomId = null
+        return json({
+          ok: true,
+          status: 'pending',
+          retryAfterMs: Math.min((segundoTicDecisionAsync - serverTick) * TICK_MS, 5000),
+          serverTick,
+          decisionTick: segundoTicDecisionAsync,
+        })
+      }
+
+      const winnerSide: 1 | 2 = resAsync.ganador === 1 ? 1 : 2
+      const auditAsync = {
+        engineVersion: 'auth-v1',
+        isAsyncMatch: true,
+        winnerSide,
+        ticks: resAsync.tics,
+        reason: resAsync.motivo,
+        p1Illegal: resAsync.p1Ilegal,
+        bases: {
+          p1: resAsync.baseP1,
+          p2: resAsync.baseP2,
+        },
+        telemetry: {
+          intentionsTotal: resAsync.telemetria.intentionsTotal,
+          intentionsExecuted: resAsync.telemetria.intentionsExecuted,
+          intentionsDropped: resAsync.telemetria.intentionsDropped,
+        },
+      }
+
+      const { data: settleData, error: settleError } = await admin.rpc(
+        'settle_verified_async_ranked_match',
+        {
+          p_room_id: roomId,
+          p_winner_side: winnerSide,
+          p_payload: auditAsync,
+        }
+      )
+      if (settleError) throw new Error(`settle_async_failed:${settleError.message}`)
+
+      lockedRoomId = null
+      return json({
+        ok: true,
+        status: 'verified',
+        winnerSide,
+        winnerId: winnerSide === 1 ? room.player1_id : null,
+        reason: resAsync.motivo,
+        settlement: settleData,
+        isAsyncMatch: true,
+      })
+    }
+
+    // =========================================================================
+    // CASO 2: PARTIDA HUMANO VS HUMANO
+    // =========================================================================
+
     // ── PASADA 1: NO BLOQUEA ────────────────────────────────────────────────
-    // Evita que alguien invoque esta función al segundo 5 y congele la partida.
     let acciones = await cargarAcciones()
     let resultado = recalcularGanadorAutoritativo(aDatos(room, acciones))
     const inicio = room.started_at ?? room.created_at
     let serverTick = ticServidor(inicio)
 
-    // Para una acción ilegal unilateral el resultado es un forfeit. Puede cerrarse
-    // en cuanto el servidor ya alcanzó esa intención, sin simular 5:30 completos.
     const primerIlegal = resultado.ilegales.length
       ? Math.min(...resultado.ilegales.map((x) => x.issuedTick))
       : null
@@ -312,15 +461,6 @@ Deno.serve(async (req) => {
     }
     if (faltaMs > 0) await dormir(faltaMs)
 
-    // ============================================================
-    // RANKED/FRIENDLY: si el replay no pudo decidir y vamos a
-    // depender del consenso, esperamos los DOS reportes ANTES de
-    // congelar la sala.
-    //
-    // Así nunca necesitamos liberar una sala ya congelada sólo
-    // porque falta un reporte.
-    // ============================================================
-
     const candidatoAConsensoAntesDelLock =
       (room.mode === 'ranked' || room.mode === 'friendly') &&
       resultado.ganador === null &&
@@ -329,9 +469,7 @@ Deno.serve(async (req) => {
 
     if (candidatoAConsensoAntesDelLock) {
       room = await cargarSala()
-
       const consensoPrevio = consensoReportado(room)
-
       if (!consensoPrevio.completo) {
         return json({
           ok: true,
@@ -372,8 +510,6 @@ Deno.serve(async (req) => {
     }
     lockedRoomId = roomId
 
-    // Desde begin_match_verification, submit_match_action rechaza nuevas jugadas.
-    // Volvemos a leer para incluir cualquier INSERT que terminara justo antes del lock.
     room = await cargarSala()
     acciones = await cargarAcciones()
     resultado = recalcularGanadorAutoritativo(aDatos(room, acciones))
@@ -387,9 +523,6 @@ Deno.serve(async (req) => {
         ? (segundoPrimerIlegal ?? resultado.tics)
         : resultado.tics
 
-    // Una acción llegada durante la gracia pudo salvar una base y extender la
-    // batalla. En ese caso abrimos la sala otra vez, nunca decidimos por un futuro
-    // que todavía no ocurrió.
     if (serverTick < segundoTicDecision) {
       await admin.rpc('release_match_verification', {
         p_room_id: roomId,
@@ -415,6 +548,16 @@ Deno.serve(async (req) => {
         p_payload: audit,
       })
       if (error) throw new Error(`settle_failed:${error.message}`)
+
+      // Captura automática de Rival Semilla si es una partida Ranked humana verificada
+      if (room.mode === 'ranked') {
+        try {
+          await admin.rpc('capture_ranked_async_opponents_from_room', { p_room_id: roomId })
+        } catch (captureErr) {
+          console.warn('capture_ranked_async_opponents_from_room fallo:', captureErr)
+        }
+      }
+
       lockedRoomId = null
       return json({
         ok: true,
@@ -436,24 +579,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, status: 'verified_draw', settlement: data })
     }
 
-    // ============================================================
-    // FALLBACK SEGURO PARA RANKED / FRIENDLY
-    //
-    // El replay sigue siendo la primera autoridad.
-    //
-    // Pero si el motor tuvo engine_divergence/no_result y:
-    //
-    //  1. NO encontró acciones ilegales;
-    //  2. P1 reportó un ganador;
-    //  3. P2 reportó exactamente EL MISMO ganador;
-    //
-    // entonces en Ranked/Friendly aceptamos el consenso.
-    //
-    // IMPORTANTE:
-    // COLOSSEUM NO entra aquí.
-    // Una partida con valor/gemas continúa siendo fail-closed.
-    // ============================================================
-
+    // Fallback de consenso para Ranked / Friendly humanos
     const permiteConsenso =
       room.mode === 'ranked' ||
       room.mode === 'friendly'
@@ -468,17 +594,14 @@ Deno.serve(async (req) => {
         throw new Error('client_reports_missing_after_verification_lock')
       }
 
-      // Los dos clientes vieron EXACTAMENTE el mismo ganador.
       if (
         consenso.coinciden &&
         consenso.winnerId
       ) {
         const payloadConsenso = {
           ...audit,
-
           resolutionSource: 'ranked_client_consensus',
           authoritativeReplayReason: resultado.motivo,
-
           clientReports: {
             p1: room.p1_reported_winner,
             p2: room.p2_reported_winner,
@@ -496,9 +619,15 @@ Deno.serve(async (req) => {
         )
 
         if (error) {
-          throw new Error(
-            `consensus_settle_failed:${error.message}`
-          )
+          throw new Error(`consensus_settle_failed:${error.message}`)
+        }
+
+        if (room.mode === 'ranked') {
+          try {
+            await admin.rpc('capture_ranked_async_opponents_from_room', { p_room_id: roomId })
+          } catch (captureErr) {
+            console.warn('capture_ranked_async_opponents_from_room fallo:', captureErr)
+          }
         }
 
         lockedRoomId = null
@@ -511,12 +640,9 @@ Deno.serve(async (req) => {
           settlement: data,
         })
       }
-
-      // Ambos reportaron, pero NO coinciden.
-      // Ahí sí no inventamos ganador.
     }
 
-    // Fail closed. Aquí NO hay refund, NO hay ELO y NO hay payout.
+    // Fail closed
     const { error: failError } = await admin.rpc('mark_match_verification_failed', {
       p_room_id: roomId,
       p_note: resultado.motivo,
@@ -534,9 +660,6 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error(error)
 
-    // Si ocurrió un fallo DESPUÉS de congelar la sala, no la dejamos atrapada en
-    // `verifying` ni reabrimos acciones. Marcamos revisión manual y conservamos
-    // cualquier escrow retenido: fail closed.
     if (adminForCatch && lockedRoomId) {
       try {
         await adminForCatch.rpc('mark_match_verification_failed', {

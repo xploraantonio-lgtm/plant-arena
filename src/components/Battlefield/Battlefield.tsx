@@ -154,6 +154,8 @@ interface BattlefieldProps {
    * engine/mazoDeLaSala.ts.
    */
   mazosDeLaSala?: { mio: unknown; rival: unknown } | null
+  isAsyncMatch?: boolean
+  asyncActionsSnapshot?: unknown
 }
 
 export default function Battlefield({
@@ -172,6 +174,8 @@ export default function Battlefield({
   nombres = null,
   soyP1 = true,
   mazosDeLaSala = null,
+  isAsyncMatch = false,
+  asyncActionsSnapshot = null,
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -853,7 +857,7 @@ export default function Battlefield({
           // Y los mazos de la sala: de ahí salen las mejoras de las cartas de los
           // dos lados, que es lo que hace que las dos pantallas simulen la misma
           // planta en lugar de una mejorada contra una básica.
-          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1, mazosDeLaSala)
+          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, asyncActionsSnapshot)
         })
       } else {
         // Entrenamiento contra el bot: no hay reloj que alinear, y el nivel del
@@ -861,7 +865,7 @@ export default function Battlefield({
         startGame(seed, false, undefined, userElo)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1, mazosDeLaSala])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1, mazosDeLaSala, isAsyncMatch, asyncActionsSnapshot])
 
   /**
    * LA HUELLA DEL TABLERO

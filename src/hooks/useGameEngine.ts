@@ -37,6 +37,11 @@ import {
   mejorasDeLaCartaEnSlot,
   type CartaDeMazo,
 } from '../engine/mazoDeLaSala'
+import {
+  createAsyncOpponentController,
+  stepAsyncOpponent,
+  type AsyncOpponentController,
+} from '../engine/asyncOpponent'
 import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
@@ -150,6 +155,7 @@ export function useGameEngine() {
    * ninguna huella.
    */
   const soyP1Ref = useRef<boolean | null>(null)
+  const asyncOpponentRef = useRef<AsyncOpponentController | null>(null)
 
   /**
    * Huellas tomadas y aún sin mandar.
@@ -297,7 +303,9 @@ export function useGameEngine() {
      * las mejoras del navegador, que es lo correcto en solitario y lo que había
      * antes en 1c1 — donde daba dos plantas distintas en cada pantalla.
      */
-    mazos?: { mio: unknown; rival: unknown } | null
+    mazos?: { mio: unknown; rival: unknown } | null,
+    isAsyncMatch?: boolean,
+    asyncActionsSnapshot?: unknown
   ) => {
     stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500))
 
@@ -305,6 +313,13 @@ export function useGameEngine() {
     soyP1Ref.current = soyP1 === undefined ? null : soyP1
     mazoMioRef.current = leerMazo(mazos?.mio)
     mazoDelRivalRef.current = leerMazo(mazos?.rival)
+
+    if (isAsyncMatch && mazos?.rival && asyncActionsSnapshot) {
+      asyncOpponentRef.current = createAsyncOpponentController(mazos.rival, asyncActionsSnapshot)
+    } else {
+      asyncOpponentRef.current = null
+    }
+
     huellasPendientesRef.current = []
     // El registro empieza vacío y con la semilla de ESTA partida: rehacer una
     // partida con la semilla de la anterior daría otra partida distinta.
@@ -323,6 +338,7 @@ export function useGameEngine() {
 
   // Start practice / sandbox mode
   const startPracticeGame = useCallback((plantId?: string) => {
+    asyncOpponentRef.current = null
     // En prácticas no hay rival, así que no hay reloj que compartir.
     ancoraMsRef.current = null
     const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
@@ -1016,6 +1032,9 @@ export function useGameEngine() {
 
       while (ticksToRun > 0) {
         ticksToRun -= 1
+        if (asyncOpponentRef.current) {
+          stepAsyncOpponent(asyncOpponentRef.current, state)
+        }
         // Un tic entero de partida. Todo lo que era este bucle vive ahora en
         // engine/simulate.ts, sin React y sin navegador, para que el servidor y los
         // tests puedan ejecutarlo igual.
@@ -1051,10 +1070,10 @@ export function useGameEngine() {
 
       const handleVisibilityChange = () => {
         if (document.hidden) {
-          if (animationFrameId) cancelAnimationFrame(animationFrameId)
-          if (bgIntervalId) {
-            clearInterval(bgIntervalId)
-            bgIntervalId = null
+          if (!bgIntervalId) {
+            bgIntervalId = setInterval(() => {
+              tickEngine(performance.now())
+            }, TICK_MS)
           }
         } else {
           if (bgIntervalId) {
