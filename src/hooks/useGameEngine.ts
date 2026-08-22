@@ -46,10 +46,14 @@ import {
   type AccionP1Simulacion,
 } from '../engine/asyncOpponent'
 import {
-  registrarAccionP1AsyncDetallado,
-  descartarAccionP1AsyncDetallado,
   type InconsistenciaHistorialP1,
 } from '../engine/asyncP1History'
+import {
+  ejecutarCapturaCollectP1,
+  ejecutarCapturaPlantP1,
+  ejecutarCapturaDigP1,
+  ejecutarDescarteAccionP1,
+} from '../engine/asyncP1Capture'
 import { nivelPorElo } from '../engine/bot'
 import type {
   PlantEntity,
@@ -223,6 +227,12 @@ export function useGameEngine() {
   const asyncOpponentDeckRef = useRef<CartaDeMazo[] | null>(null)
   const asyncOpponentActionsBufferRef = useRef<any[]>([])
   const accionesP1AsyncRef = useRef<AccionP1Simulacion[]>([])
+  const [rankedAsyncInconsistency, setRankedAsyncInconsistency] = useState<{
+    reason: InconsistenciaHistorialP1
+    seq?: number
+    issuedTick?: number
+    details?: string
+  } | null>(null)
   const rankedAsyncInconsistencyRef = useRef<{
     reason: InconsistenciaHistorialP1
     seq?: number
@@ -238,6 +248,7 @@ export function useGameEngine() {
       details?: string
     }) => {
       rankedAsyncInconsistencyRef.current = inconsistencia
+      setRankedAsyncInconsistency(inconsistencia)
       console.warn('[RankedAsync] Inconsistencia autoritativa detectada:', inconsistencia)
     },
     []
@@ -414,6 +425,8 @@ export function useGameEngine() {
     semillaRef.current = seed
     registroRef.current = []
     accionesP1AsyncRef.current = []
+    rankedAsyncInconsistencyRef.current = null
+    setRankedAsyncInconsistency(null)
     numeroDeJugadaRef.current = 0
     reconstruccionesRef.current = 0
     rehacerDesdeRef.current = null
@@ -430,6 +443,11 @@ export function useGameEngine() {
     asyncOpponentRef.current = null
     // En prácticas no hay rival, así que no hay reloj que compartir.
     ancoraMsRef.current = null
+    rankedAsyncInconsistencyRef.current = null
+    setRankedAsyncInconsistency(null)
+    accionesP1AsyncRef.current = []
+    registroRef.current = []
+    rehacerDesdeRef.current = null
     const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
 
     // Create 3 static target dummies in cols 7, 8, 9 across the 3 lanes
@@ -530,82 +548,36 @@ export function useGameEngine() {
 
   const confirmarRecogidaSol = useCallback(
     (sunId: string, issuedTick?: number, seq?: number): boolean => {
-      const state = stateRef.current
+      const res = ejecutarCapturaCollectP1({
+        isAsyncMatch: isAsyncMatchRef.current,
+        sunId,
+        issuedTick,
+        seq,
+        state: stateRef.current,
+        historial: accionesP1AsyncRef.current,
+        inconsistenciaActual: rankedAsyncInconsistencyRef.current?.reason ?? null,
+      })
 
-      // 1. REGISTRO AUTORITATIVO EN HISTORIAL ASYNC (SIEMPRE QUE SEA ASYNC)
-      // Debe validarse estrictamente: seq e issuedTick son obligatorios en Ranked Async.
-      if (isAsyncMatchRef.current) {
-        if (issuedTick === undefined || issuedTick === null) {
-          marcarInconsistenciaRanked({
-            reason: 'MISSING_ISSUED_TICK',
-            seq,
-            details: 'issuedTick es obligatorio para COLLECT en Ranked Async',
-          })
-          return false
-        }
-        if (typeof issuedTick !== 'number' || !Number.isInteger(issuedTick) || issuedTick < 0) {
-          marcarInconsistenciaRanked({
-            reason: 'INVALID_ISSUED_TICK',
-            seq,
-            issuedTick,
-            details: `issuedTick inválido para COLLECT: ${String(issuedTick)}`,
-          })
-          return false
-        }
-        if (seq === undefined || seq === null) {
-          marcarInconsistenciaRanked({
-            reason: 'MISSING_SEQ',
-            issuedTick,
-            details: 'seq es obligatorio para COLLECT en Ranked Async',
-          })
-          return false
-        }
-        if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) {
-          marcarInconsistenciaRanked({
-            reason: 'INVALID_SEQ',
-            seq,
-            issuedTick,
-            details: `seq inválido para COLLECT: ${String(seq)}`,
-          })
-          return false
-        }
-
-        const reg = registrarAccionP1AsyncDetallado(accionesP1AsyncRef.current, {
-          seq,
-          tick: issuedTick,
-          issuedTick,
-          kind: 'collect',
-          targetId: sunId,
+      if (!res.ok) {
+        marcarInconsistenciaRanked({
+          reason: res.reason,
+          seq: res.seq,
+          issuedTick: res.issuedTick,
+          details: res.details,
         })
-
-        if (!reg.ok) {
-          marcarInconsistenciaRanked({
-            reason: reg.reason,
-            seq: reg.seq,
-            issuedTick: reg.issuedTick,
-            details: reg.details,
-          })
-          return false
-        }
-
-        if (reg.duplicated) {
-          // Duplicado idempotente de ACK ya procesado: no sumar soles dos veces en local
-          return true
-        }
+        return false
       }
 
-      // 2. EFECTO VISUAL / LOCAL INMEDIATO
-      // Si mientras esperaba se auto-recogió (o ya no existe), NO se suma dos veces en local.
-      const sol = state.suns.find((s) => s.id === sunId)
-      if (!sol) return false
+      if (res.duplicated) {
+        return true
+      }
 
-      state.suns = state.suns.filter((s) => s.id !== sunId)
-      state.sunBank += sol.value
-      state.stats.sunsCollected += 1
-      state.stats.score += 50
+      if (res.sunValue !== undefined) {
+        soundManager.playSound('points', 0.6)
+        forceRender()
+        return true
+      }
 
-      soundManager.playSound('points', 0.6)
-      forceRender()
       return true
     },
     [forceRender, marcarInconsistenciaRanked]
@@ -866,53 +838,38 @@ export function useGameEngine() {
       //
       // Fuera del 1c1 el retardo es cero y todo sigue igual que antes.
       const retardo = state.isPvpMode ? MARGEN_DE_RED_TICS : 0
-      // El tic se calcula UNA vez y se devuelve. Quien lo mande al servidor tiene
-      // que usar este mismo número, no volver a calcularlo.
       const enTic = state.tick + retardo
 
-      // En Ranked Async: registrar en historial estricto ANTES de aplicar efectos locales/optimistas
-      if (isAsyncMatchRef.current) {
-        const reg = registrarAccionP1AsyncDetallado(accionesP1AsyncRef.current, {
-          seq,
-          tick: enTic,
-          issuedTick: state.tick,
-          kind: 'plant',
-          plantId: card,
-          lane,
-          col,
-          slot: slotIdx,
-          statRolls: rolls,
-          level: cardLevel,
-        })
-
-        if (!reg.ok) {
-          marcarInconsistenciaRanked({
-            reason: reg.reason,
-            seq: reg.seq,
-            issuedTick: reg.issuedTick,
-            details: reg.details,
-          })
-          // FAIL CLOSED: No aplicar efectos optimistas locales si la acción falló en entrar al historial autoritativo
-          forceRender()
-          return null
-        }
-
-        if (reg.duplicated) {
-          // Acción duplicada ya aplicada: no volver a encolar ni cobrar
-          forceRender()
-          return null
-        }
-      }
-
-      state.pending.push({
-        atTick: enTic,
-        kind: 'own_plant',
-        plantId: card,
+      const res = ejecutarCapturaPlantP1({
+        isAsyncMatch: isAsyncMatchRef.current,
+        card,
+        slotIdx,
         lane,
         col,
-        statRolls: rolls,
-        level: cardLevel,
+        rolls,
+        cardLevel,
+        state,
+        seq,
+        enTic,
+        historial: accionesP1AsyncRef.current,
+        inconsistenciaActual: rankedAsyncInconsistencyRef.current?.reason ?? null,
       })
+
+      if (!res.ok) {
+        marcarInconsistenciaRanked({
+          reason: res.reason,
+          seq: res.seq,
+          issuedTick: res.issuedTick,
+          details: res.details,
+        })
+        forceRender()
+        return null
+      }
+
+      if (res.duplicated) {
+        forceRender()
+        return null
+      }
 
       // Al registro también, con las mejoras de la carta: si más tarde hay que
       // rehacer la partida porque una jugada del rival llegó tarde, ésta tiene que
@@ -927,29 +884,12 @@ export function useGameEngine() {
           statRolls: rolls,
           level: cardLevel,
         })
-      }
-
-      // El cobro, el enfriamiento y el contador SÍ son inmediatos: son estado
-      // local —el rival no simula tus soles— y así el clic responde al instante.
-      //
-      // Y se apunta lo que costó, porque si el servidor rechaza la jugada hay que
-      // devolverlo: la planta se quita y estos soles se habrían ido por nada.
-      if (state.isPvpMode) {
         costeDeMisJugadasRef.current.set(claveDeJugada(enTic, lane, col), {
           coste: config.cost,
           carta: card,
           slot: slotIdx,
         })
       }
-      state.sunBank -= config.cost
-      if (slotIdx !== null) {
-        state.slotCooldowns[slotIdx] = state.tick + msToTicks(config.cooldownMs)
-      } else {
-        state.cooldowns[card] = state.tick + msToTicks(config.cooldownMs)
-      }
-      state.stats.plantsPlaced += 1
-      state.selectedCard = null
-      state.selectedSlotIndex = null
 
       soundManager.playSound('plantation', 0.6)
       forceRender()
@@ -1112,39 +1052,31 @@ export function useGameEngine() {
 
       const enTic = state.tick + (state.isPvpMode ? MARGEN_DE_RED_TICS : 0)
 
-      if (isAsyncMatchRef.current) {
-        const reg = registrarAccionP1AsyncDetallado(accionesP1AsyncRef.current, {
-          seq,
-          tick: enTic,
-          issuedTick: state.tick,
-          kind: 'dig',
-          lane: casilla.lane,
-          col: casilla.col,
+      const res = ejecutarCapturaDigP1({
+        isAsyncMatch: isAsyncMatchRef.current,
+        casilla,
+        state,
+        seq,
+        enTic,
+        historial: accionesP1AsyncRef.current,
+        inconsistenciaActual: rankedAsyncInconsistencyRef.current?.reason ?? null,
+      })
+
+      if (!res.ok) {
+        marcarInconsistenciaRanked({
+          reason: res.reason,
+          seq: res.seq,
+          issuedTick: res.issuedTick,
+          details: res.details,
         })
-
-        if (!reg.ok) {
-          marcarInconsistenciaRanked({
-            reason: reg.reason,
-            seq: reg.seq,
-            issuedTick: reg.issuedTick,
-            details: reg.details,
-          })
-          forceRender()
-          return null
-        }
-
-        if (reg.duplicated) {
-          forceRender()
-          return null
-        }
+        forceRender()
+        return null
       }
 
-      state.pending.push({
-        atTick: enTic,
-        kind: 'own_dig',
-        lane: casilla.lane,
-        col: casilla.col,
-      })
+      if (res.duplicated) {
+        forceRender()
+        return null
+      }
 
       if (state.isPvpMode) {
         apuntarJugadaPropia({ tick: enTic, kind: 'dig', lane: casilla.lane, col: casilla.col })
@@ -1152,9 +1084,6 @@ export function useGameEngine() {
 
       soundManager.playSound('plantation', 0.5)
       forceRender()
-      // El tic va de vuelta por lo mismo que al plantar: el que se manda al
-      // servidor tiene que ser este, no uno recalculado con el tic del último
-      // fotograma pintado.
       return { ...casilla, tick: enTic, seq }
     },
     [forceRender, apuntarJugadaPropia, marcarInconsistenciaRanked]
@@ -1172,47 +1101,31 @@ export function useGameEngine() {
    */
   const descartarAccionPropia = useCallback(
     (tick: number, lane: number, col: number | null, seq?: number) => {
-      const antes = registroRef.current.length
-      registroRef.current = registroRef.current.filter(
-        (a) => !(a.mia && a.tick === tick && a.lane === lane && (a.col ?? null) === col)
-      )
+      const resDescarte = ejecutarDescarteAccionP1({
+        isAsyncMatch: isAsyncMatchRef.current,
+        tick,
+        lane,
+        col,
+        seq,
+        historial: accionesP1AsyncRef.current,
+        registro: registroRef.current,
+        costeDeMisJugadas: costeDeMisJugadasRef.current,
+        state: stateRef.current,
+      })
 
-      let eliminadoAsync = false
-      if (isAsyncMatchRef.current) {
-        const resDescarte = descartarAccionP1AsyncDetallado(
-          accionesP1AsyncRef.current,
-          seq
-        )
-        if (!resDescarte.ok) {
-          marcarInconsistenciaRanked({
-            reason: resDescarte.reason,
-            seq,
-            details: resDescarte.details,
-          })
-          return
-        }
-        accionesP1AsyncRef.current = resDescarte.historial
-        eliminadoAsync = resDescarte.eliminado
+      if (!resDescarte.ok) {
+        marcarInconsistenciaRanked({
+          reason: resDescarte.reason,
+          seq,
+          details: resDescarte.details,
+        })
+        return
       }
 
-      if (registroRef.current.length === antes && !eliminadoAsync) return
+      accionesP1AsyncRef.current = resDescarte.nuevoHistorial
+      registroRef.current = resDescarte.nuevoRegistro
 
-      // Y se devuelve lo que costó. La jugada no ocurrió, así que cobrarla sería
-      // quedarse con los soles del jugador por un fallo de red.
-      //
-      // El enfriamiento vuelve a cero en lugar de a lo que estaba antes: no se
-      // guarda el valor anterior, y de las dos aproximaciones posibles ésta es la
-      // que no castiga a quien no hizo nada mal.
-      const clave = claveDeJugada(tick, lane, col)
-      const cobrado = costeDeMisJugadasRef.current.get(clave)
-      if (cobrado) {
-        const state = stateRef.current
-        state.sunBank += cobrado.coste
-        if (cobrado.slot !== null) state.slotCooldowns[cobrado.slot] = 0
-        else state.cooldowns[cobrado.carta] = 0
-        if (state.stats.plantsPlaced > 0) state.stats.plantsPlaced -= 1
-        costeDeMisJugadasRef.current.delete(clave)
-      }
+      if (!resDescarte.eliminado) return
 
       // Por el mismo camino agrupado que una jugada tardía.
       rehacerDesdeRef.current =
@@ -1508,6 +1421,7 @@ export function useGameEngine() {
     reconstrucciones: reconstruccionesRef.current,
     descartarAccionPropia,
     incorporarIntencionesAsync,
+    rankedAsyncInconsistency,
     getRankedAsyncInconsistency: () => rankedAsyncInconsistencyRef.current,
   }
 }

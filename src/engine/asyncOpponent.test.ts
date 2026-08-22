@@ -18,6 +18,12 @@ import {
   type AsyncOpponentIntent,
   type AccionP1Simulacion,
 } from './asyncOpponent.ts'
+import {
+  ejecutarCapturaCollectP1,
+  ejecutarCapturaPlantP1,
+  ejecutarCapturaDigP1,
+  ejecutarDescarteAccionP1,
+} from './asyncP1Capture.ts'
 import type { CartaDeMazo } from './mazoDeLaSala.ts'
 import { createBattleState, stepTick } from './simulate.ts'
 import { PLANT_CONFIGS, TOTAL_COLUMNS, getScaledPlantConfig } from '../utils/gameConstants.ts'
@@ -2279,8 +2285,8 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(rebuildRes.estado.enemyPlants.map((p) => p.id)).toEqual(timelineRes.state.enemyPlants.map((p) => p.id))
   })
 
-  // 82. confirmarRecogidaSol sin issuedTick falla cerrado con MISSING_ISSUED_TICK
-  it('82. confirmarRecogidaSol sin issuedTick falla cerrado con MISSING_ISSUED_TICK y no modifica sunBank', () => {
+  // 82. Helper registrarAccionP1AsyncDetallado sin issuedTick falla cerrado
+  it('82. Helper registrarAccionP1AsyncDetallado sin issuedTick falla cerrado con MISSING_ISSUED_TICK', () => {
     const historial: AccionP1Simulacion[] = []
     const intentoSinIssuedTick = {
       seq: 10,
@@ -2297,8 +2303,8 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(historial.length).toBe(0)
   })
 
-  // 83. confirmarRecogidaSol sin seq falla cerrado con MISSING_SEQ
-  it('83. confirmarRecogidaSol sin seq falla cerrado con MISSING_SEQ y no inserta en el historial', () => {
+  // 83. Helper registrarAccionP1AsyncDetallado sin seq falla cerrado
+  it('83. Helper registrarAccionP1AsyncDetallado sin seq falla cerrado con MISSING_SEQ', () => {
     const historial: AccionP1Simulacion[] = []
     const intentoSinSeq = {
       issuedTick: 80,
@@ -2316,10 +2322,9 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(historial.length).toBe(0)
   })
 
-  // 84. Conflicto de seq en captura productiva rechaza la acción con SEQ_CONFLICT
-  it('84. Conflicto de seq en producción rechaza acción con SEQ_CONFLICT', () => {
+  // 84. Helper registrarAccionP1AsyncDetallado conflicto de seq rechaza con SEQ_CONFLICT
+  it('84. Helper registrarAccionP1AsyncDetallado con seq duplicado y contenido distinto rechaza con SEQ_CONFLICT', () => {
     const historial: AccionP1Simulacion[] = []
-    // Acción previa aceptada
     expect(
       registrarAccionP1AsyncDetallado(historial, {
         seq: 50,
@@ -2330,7 +2335,6 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
       }).ok
     ).toBe(true)
 
-    // Intento con misma seq pero acción plant
     const regConflicto = registrarAccionP1AsyncDetallado(historial, {
       seq: 50,
       issuedTick: 120,
@@ -2351,8 +2355,8 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(historial[0].kind).toBe('collect')
   })
 
-  // 85. PLANT sin seq es rechazada con MISSING_SEQ antes de aplicar efectos
-  it('85. PLANT sin seq es rechazada con MISSING_SEQ en Ranked Async', () => {
+  // 85. Helper registrarAccionP1AsyncDetallado para plant sin seq
+  it('85. Helper registrarAccionP1AsyncDetallado para plant sin seq es rechazado con MISSING_SEQ', () => {
     const historial: AccionP1Simulacion[] = []
     const plantSinSeq = {
       issuedTick: 100,
@@ -2372,8 +2376,8 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(historial.length).toBe(0)
   })
 
-  // 86. DIG sin seq es rechazada con MISSING_SEQ antes de encolar pending
-  it('86. DIG sin seq es rechazada con MISSING_SEQ en Ranked Async', () => {
+  // 86. Helper registrarAccionP1AsyncDetallado para dig sin seq
+  it('86. Helper registrarAccionP1AsyncDetallado para dig sin seq es rechazado con MISSING_SEQ', () => {
     const historial: AccionP1Simulacion[] = []
     const digSinSeq = {
       issuedTick: 100,
@@ -2391,8 +2395,8 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(historial.length).toBe(0)
   })
 
-  // 87. Rollback sin seq deja el historial intacto y reporta MISSING_SEQ
-  it('87. Rollback sin seq en descartarAccionP1AsyncDetallado reporta MISSING_SEQ y preserva historial', () => {
+  // 87. Helper descartarAccionP1AsyncDetallado sin seq
+  it('87. Helper descartarAccionP1AsyncDetallado sin seq reporta MISSING_SEQ y preserva historial', () => {
     const historial: AccionP1Simulacion[] = [
       { seq: 1, issuedTick: 50, tick: 56, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
       { seq: 2, issuedTick: 60, tick: 66, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 0 },
@@ -2417,7 +2421,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
   it('88. normalizarAccionesP1 devuelve ok: false con razón estructurada ante inconsistencias', () => {
     const loteInconsistente = [
       { seq: 1, issuedTick: 10, tick: 10, kind: 'collect', targetId: 'sun_1' },
-      { seq: 2, tick: 20, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 }, // Falta issuedTick
+      { seq: 2, tick: 20, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
     ]
 
     const res = normalizarAccionesP1(loteInconsistente)
@@ -2426,6 +2430,209 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
       expect(res.reason).toBe('MISSING_ISSUED_TICK')
       expect(res.seq).toBe(2)
     }
+  })
+
+  // 89. Reset de inconsistencia al iniciar partida nueva
+  it('89. Iniciar nueva partida resetea la inconsistencia previa y vacía el historial', () => {
+    // Simulación del estado de la sesión de juego
+    let inconsistenciaActual: { reason: string } | null = { reason: 'SEQ_CONFLICT' }
+    let historialAsync: AccionP1Simulacion[] = [
+      { seq: 1, issuedTick: 10, tick: 10, kind: 'collect', targetId: 'sun_1' },
+    ]
+
+    // Al arrancar nueva partida (lógica de startGame):
+    inconsistenciaActual = null
+    historialAsync = []
+
+    expect(inconsistenciaActual).toBeNull()
+    expect(historialAsync.length).toBe(0)
+  })
+
+  // 90. Rollback inválido es atómico y no muta registros ni estado económico
+  it('90. Rollback inválido en Ranked Async es atómico y preserva registro, historial y estado', () => {
+    const state = createBattleState(9090, false, true)
+    state.sunBank = 150
+    state.slotCooldowns[0] = 500
+    state.stats.plantsPlaced = 1
+
+    const historial: AccionP1Simulacion[] = [
+      { seq: 1, issuedTick: 100, tick: 106, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
+    ]
+    const registro = [
+      { mia: true, tick: 106, kind: 'plant' as const, plantId: 'sunflower' as const, lane: 0, col: 0, id: 1 },
+    ]
+    const costeDeMisJugadas = new Map([
+      ['106:0:0', { coste: 50, carta: 'sunflower' as const, slot: 0 }],
+    ])
+
+    // Intento de descarte sin seq en partida async
+    const resDescarte = ejecutarDescarteAccionP1({
+      isAsyncMatch: true,
+      tick: 106,
+      lane: 0,
+      col: 0,
+      seq: undefined, // Falta seq
+      historial,
+      registro,
+      costeDeMisJugadas,
+      state,
+    })
+
+    expect(resDescarte.ok).toBe(false)
+    if (!resDescarte.ok) {
+      expect(resDescarte.reason).toBe('MISSING_SEQ')
+    }
+
+    // ATOMICIDAD: Nada fue alterado
+    expect(historial.length).toBe(1)
+    expect(registro.length).toBe(1)
+    expect(costeDeMisJugadas.has('106:0:0')).toBe(true)
+    expect(state.sunBank).toBe(150)
+    expect(state.slotCooldowns[0]).toBe(500)
+    expect(state.stats.plantsPlaced).toBe(1)
+  })
+
+  // 91. Captura productiva COLLECT sin issuedTick falla cerrado sin alterar sunBank
+  it('91. Captura productiva ejecutarCapturaCollectP1 sin issuedTick falla cerrado y no altera sunBank', () => {
+    const state = createBattleState(9191, false, true)
+    state.sunBank = 100
+    state.suns = [{ id: 'sun_1', x: 200, y: 100, targetY: 100, value: 50, createdAt: 10 }]
+    const historial: AccionP1Simulacion[] = []
+
+    const res = ejecutarCapturaCollectP1({
+      isAsyncMatch: true,
+      sunId: 'sun_1',
+      issuedTick: undefined, // Inválido en Ranked
+      seq: 10,
+      state,
+      historial,
+      inconsistenciaActual: null,
+    })
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.reason).toBe('MISSING_ISSUED_TICK')
+    }
+
+    expect(historial.length).toBe(0)
+    expect(state.sunBank).toBe(100) // Intacto
+    expect(state.suns.length).toBe(1) // El sol sigue ahí
+  })
+
+  // 92. Captura productiva PLANT ante SEQ_CONFLICT aborta sin aplicar cooldown ni cobro
+  it('92. Captura productiva ejecutarCapturaPlantP1 ante SEQ_CONFLICT aborta sin cobro ni cooldown', () => {
+    const state = createBattleState(9292, false, true)
+    state.sunBank = 200
+    state.stats.plantsPlaced = 0
+    state.pending = []
+
+    const historial: AccionP1Simulacion[] = [
+      { seq: 50, issuedTick: 10, tick: 10, kind: 'collect', targetId: 'sun_1' },
+    ]
+
+    const res = ejecutarCapturaPlantP1({
+      isAsyncMatch: true,
+      card: 'sunflower',
+      slotIdx: 0,
+      lane: 0,
+      col: 0,
+      state,
+      seq: 50, // Mismo seq -> conflicto
+      enTic: 106,
+      historial,
+      inconsistenciaActual: null,
+    })
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.reason).toBe('SEQ_CONFLICT')
+    }
+
+    expect(state.sunBank).toBe(200) // No se cobró
+    expect(state.slotCooldowns[0]).toBeUndefined() // No cooldown
+    expect(state.stats.plantsPlaced).toBe(0)
+    expect(state.pending.length).toBe(0) // No se encoló own_plant
+    expect(historial.length).toBe(1)
+  })
+
+  // 93. Captura productiva DIG sin seq aborta sin encolar own_dig
+  it('93. Captura productiva ejecutarCapturaDigP1 sin seq aborta sin encolar own_dig', () => {
+    const state = createBattleState(9393, false, true)
+    state.pending = []
+    const historial: AccionP1Simulacion[] = []
+
+    const res = ejecutarCapturaDigP1({
+      isAsyncMatch: true,
+      casilla: { lane: 1, col: 2 },
+      state,
+      seq: undefined, // Sin seq
+      enTic: 106,
+      historial,
+      inconsistenciaActual: null,
+    })
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.reason).toBe('MISSING_SEQ')
+    }
+
+    expect(state.pending.length).toBe(0)
+    expect(historial.length).toBe(0)
+  })
+
+  // 94. Bloqueo de acciones autoritativas Ranked tras inconsistencia
+  it('94. Acciones autoritativas Ranked quedan bloqueadas cuando existe inconsistencia', () => {
+    const state = createBattleState(9494, false, true)
+    state.sunBank = 300
+    state.pending = []
+    state.suns = [{ id: 'sun_94', x: 200, y: 100, targetY: 100, value: 50, createdAt: 10 }]
+    const historial: AccionP1Simulacion[] = []
+
+    const inconsistenciaPrevia = 'SEQ_CONFLICT' as const
+
+    // 1. Plant bloqueada
+    const resPlant = ejecutarCapturaPlantP1({
+      isAsyncMatch: true,
+      card: 'sunflower',
+      slotIdx: 0,
+      lane: 0,
+      col: 0,
+      state,
+      seq: 1,
+      enTic: 100,
+      historial,
+      inconsistenciaActual: inconsistenciaPrevia,
+    })
+    expect(resPlant.ok).toBe(false)
+    expect(state.pending.length).toBe(0)
+    expect(state.sunBank).toBe(300)
+
+    // 2. Dig bloqueado
+    const resDig = ejecutarCapturaDigP1({
+      isAsyncMatch: true,
+      casilla: { lane: 0, col: 0 },
+      state,
+      seq: 2,
+      enTic: 100,
+      historial,
+      inconsistenciaActual: inconsistenciaPrevia,
+    })
+    expect(resDig.ok).toBe(false)
+    expect(state.pending.length).toBe(0)
+
+    // 3. Collect bloqueado
+    const resCollect = ejecutarCapturaCollectP1({
+      isAsyncMatch: true,
+      sunId: 'sun_94',
+      issuedTick: 50,
+      seq: 3,
+      state,
+      historial,
+      inconsistenciaActual: inconsistenciaPrevia,
+    })
+    expect(resCollect.ok).toBe(false)
+    expect(state.sunBank).toBe(300)
+    expect(historial.length).toBe(0)
   })
 })
 

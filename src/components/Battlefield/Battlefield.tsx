@@ -214,6 +214,7 @@ export default function Battlefield({
     terminarPorOrdenDelServidor,
     tomarHuellasPendientes,
     reconstrucciones,
+    rankedAsyncInconsistency,
   } = useGameEngine()
 
   const { user } = useAuth()
@@ -337,6 +338,10 @@ export default function Battlefield({
     } = {}
   ) => {
     if (!roomId) return
+    if (isAsyncMatch && rankedAsyncInconsistency) {
+      // Partida en estado inconsistente: no seguir enviando acciones autoritativas
+      return
+    }
 
     redBloqueadaRef.current = true
     setRedBloqueada(true)
@@ -487,6 +492,7 @@ export default function Battlefield({
       return
     }
 
+    if (isAsyncMatch && rankedAsyncInconsistency) return
     if (redBloqueadaRef.current) return
 
     // Sólo observa el tic y confirma que el sol existe. NO suma economía todavía.
