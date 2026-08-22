@@ -478,15 +478,41 @@ const LADO_P2: Lado = { equipo: 'p2', sentido: -1, objetivo: 'p1' }
  * paso funciona en las repeticiones, donde antes tampoco hacía nada.
  */
 const DAÑO_DEL_JALAPENO = 1000
-const FUEGO_DEL_JALAPENO = '/game-assets/plants/jalapeno_flame_fx.png'
+const FUEGO_DEL_JALAPENO =
+  '/game-assets/plants/jalapeno_flame_fx.png'
 
-function aplicarJalapeno(state: GameState, lado: Lado, lane: number, sonar: SonarFn): void {
+function aplicarJalapeno(
+  state: GameState,
+  lado: Lado,
+  lane: number,
+  sonar: SonarFn,
+  statRolls: PlantStatKey[] = []
+): void {
   sonar('pea_hit', 1.0)
 
-  // Al carril entero del contrario.
-  for (const victima of propias(state, lado.equipo === 'p1' ? LADO_P2 : LADO_P1)) {
-    if (victima.lane !== lane || victima.hp <= 0) continue
-    victima.hp -= DAÑO_DEL_JALAPENO
+  // Usa exactamente las mejoras guardadas en el mazo servidor.
+  const config =
+    getScaledPlantConfig('jalapeno', statRolls)
+
+  const dano =
+    config.damage ?? DAÑO_DEL_JALAPENO
+
+  for (
+    const victima of propias(
+      state,
+      lado.equipo === 'p1'
+        ? LADO_P2
+        : LADO_P1
+    )
+  ) {
+    if (
+      victima.lane !== lane ||
+      victima.hp <= 0
+    ) {
+      continue
+    }
+
+    victima.hp -= dano
     if (victima.hp <= 0) {
       // Las bajas sólo cuentan para las estadísticas del jugador de esta pantalla.
       if (lado.equipo === 'p1') {
@@ -518,6 +544,7 @@ function aplicarJalapeno(state: GameState, lado: Lado, lane: number, sonar: Sona
     plantId: llama.id,
   })
 }
+
 
 /** Las plantas de un lado. */
 function propias(state: GameState, lado: Lado): PlantEntity[] {
@@ -1006,7 +1033,13 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
 
         case 'rival_plant':
           if (accion.plantId === 'jalapeno') {
-            aplicarJalapeno(state, LADO_P2, accion.lane, sonar)
+            aplicarJalapeno(
+              state,
+              LADO_P2,
+              accion.lane,
+              sonar,
+              accion.statRolls ?? []
+            )
           } else {
             state.enemyPlants.push(
               crearPlantaDelRival(
@@ -1043,7 +1076,13 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
           // El jalapeño no deja planta: explota. Y explota AQUÍ, en el motor, para
           // que las dos pantallas lo apliquen en el mismo tic y al lado correcto.
           if (accion.plantId === 'jalapeno') {
-            aplicarJalapeno(state, LADO_P1, accion.lane, sonar)
+            aplicarJalapeno(
+              state,
+              LADO_P1,
+              accion.lane,
+              sonar,
+              accion.statRolls ?? []
+            )
           } else {
             state.plants.push(
               crearPlantaPropia(
@@ -1057,6 +1096,7 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
             )
           }
           break
+
       }
     }
     state.pending = aunNoVencen
