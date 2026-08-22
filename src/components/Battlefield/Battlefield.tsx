@@ -312,6 +312,7 @@ export default function Battlefield({
   const ordenRef = useRef<number>(0)
   /** El id de la última acción vista, para no volver a aplicarla. */
   const ultimaAccionRef = useRef<number>(0)
+  const ultimaSeqAsyncRef = useRef<number>(0)
   const aplicadasRef = useRef<Set<number>>(new Set())
 
   const redBloqueadaRef = useRef(false)
@@ -629,28 +630,38 @@ export default function Battlefield({
 
   // ── FEED DE INTENCIONES ASÍNCRONAS (RIVAL SEMILLA RANKED) ──────────────────
   // En lugar de descargar todo el plan futuro al inicio, se consulta periódicamente
-  // una ventana acotada (~5 s) autorizada por el servidor.
+  // una ventana acotada (~600 ms) autorizada por el servidor con seq incremental.
   useEffect(() => {
     if (!roomId || !isAsyncMatch) return
+    ultimaSeqAsyncRef.current = 0
     let cancelado = false
 
     const refrescarIntencionesAsync = async () => {
       if (cancelado) return
-      const res = await SupabaseService.pollRankedAsyncIntents(roomId, tick)
-      if (cancelado || !res || !res.ok || !Array.isArray(res.intents)) return
+      const res = await SupabaseService.pollRankedAsyncIntents(
+        roomId,
+        ultimaSeqAsyncRef.current
+      )
+      if (cancelado || !res?.ok || !Array.isArray(res.intents)) return
       if (res.intents.length > 0) {
         incorporarIntencionesAsync(res.intents)
+        ultimaSeqAsyncRef.current = Math.max(
+          ultimaSeqAsyncRef.current,
+          ...res.intents.map((i: any) => Number(i.seq) || 0)
+        )
       }
     }
 
     void refrescarIntencionesAsync()
-    const reloj = setInterval(() => { void refrescarIntencionesAsync() }, 2500)
+    const reloj = setInterval(() => {
+      void refrescarIntencionesAsync()
+    }, 350)
 
     return () => {
       cancelado = true
       clearInterval(reloj)
     }
-  }, [roomId, isAsyncMatch, tick, incorporarIntencionesAsync])
+  }, [roomId, isAsyncMatch, incorporarIntencionesAsync])
 
   // ── EL FINAL LLEGA A LOS DOS LADOS ─────────────────────────────────────────
   //

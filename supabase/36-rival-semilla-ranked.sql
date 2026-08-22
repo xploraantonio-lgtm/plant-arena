@@ -41,7 +41,7 @@ GRANT ALL ON public.ranked_async_opponents TO service_role;
 
 
 -- -----------------------------------------------------------------------------
--- 2. EXTENDER game_rooms PARA PARTIDAS ASÍNCRONAS
+-- 2. EXTENDER game_rooms Y CREAR ranked_async_room_plans (SERVER-ONLY)
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.game_rooms
   ALTER COLUMN player2_id DROP NOT NULL;
@@ -52,8 +52,24 @@ ALTER TABLE public.game_rooms
   ADD COLUMN IF NOT EXISTS async_display_name TEXT,
   ADD COLUMN IF NOT EXISTS async_avatar_id TEXT,
   ADD COLUMN IF NOT EXISTS async_rating_snapshot INTEGER,
-  ADD COLUMN IF NOT EXISTS async_deck_snapshot JSONB,
-  ADD COLUMN IF NOT EXISTS async_actions_snapshot JSONB;
+  ADD COLUMN IF NOT EXISTS async_deck_snapshot JSONB;
+
+-- Tabla privada para los planes completos de acciones del Rival Semilla.
+-- Almacena el snapshot completo sin exponerlo en game_rooms (protege contra rooms_select_own).
+CREATE TABLE IF NOT EXISTS public.ranked_async_room_plans (
+  room_id UUID PRIMARY KEY REFERENCES public.game_rooms(id) ON DELETE CASCADE,
+  async_opponent_id UUID NOT NULL REFERENCES public.ranked_async_opponents(id),
+  actions_snapshot JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ranked_async_room_plans_opp
+  ON public.ranked_async_room_plans (async_opponent_id);
+
+-- Server-only: NUNCA accesible por clientes (anon o authenticated).
+ALTER TABLE public.ranked_async_room_plans ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.ranked_async_room_plans FROM anon, authenticated, PUBLIC;
+GRANT ALL ON public.ranked_async_room_plans TO service_role;
 
 -- Actualizar política de lectura de salas para permitir player2_id nulo
 DROP POLICY IF EXISTS "rooms_select_own" ON public.game_rooms;
@@ -471,7 +487,7 @@ BEGIN
     END LOOP;
   END;
 
-  -- ── CREAR LA SALA ASÍNCRONA ───────────────────────────────────────────────
+  -- ── CREAR LA SALA ASÍNCRONA (SIN PLAN COMPLETO EN GAME_ROOMS) ────────────
   INSERT INTO public.game_rooms (
     mode,
     player1_id,
@@ -486,7 +502,6 @@ BEGIN
     async_avatar_id,
     async_rating_snapshot,
     async_deck_snapshot,
-    async_actions_snapshot,
     engine_version,
     created_at
   ) VALUES (
@@ -503,10 +518,22 @@ BEGIN
     v_random_avatar,
     v_candidate.rating_snapshot,
     v_candidate.deck_snapshot,
-    v_candidate.actions_snapshot,
     'auth-v1',
     NOW()
   ) RETURNING id INTO v_new_room_id;
+
+  -- Guardar plan completo en tabla privada server-only (nunca accesible por cliente)
+  INSERT INTO public.ranked_async_room_plans (
+    room_id,
+    async_opponent_id,
+    actions_snapshot,
+    created_at
+  ) VALUES (
+    v_new_room_id,
+    v_candidate.id,
+    v_candidate.actions_snapshot,
+    NOW()
+  );
 
   -- Actualizar cola
   UPDATE public.matchmaking_queue
@@ -750,12 +777,14 @@ GRANT  EXECUTE ON FUNCTION public.game_room_info(UUID) TO authenticated;
 -- -----------------------------------------------------------------------------
 /**
  * Entrega las intenciones del Rival Semilla únicamente hasta la ventana de tiempo
- * autorizada (~5 s por delante del servidor o cliente).
- * Protege contra ingeniería inversa y lectura del plan completo de la partida.
+ * autorizada (serverTick + 18 tics ≈ 600 ms).
+ * El límite temporal depende EXCLUSIVAMENTE del reloj del servidor.
+ * Lee las acciones desde ranked_async_room_plans.
+ * Filtra seq > p_after_seq para evitar reenviar todo continuamente.
  */
 CREATE OR REPLACE FUNCTION public.poll_ranked_async_intents(
   p_room_id UUID,
-  p_client_tick INTEGER
+  p_after_seq INTEGER DEFAULT 0
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -765,7 +794,7 @@ AS $$
 DECLARE
   v_uid UUID := auth.uid();
   v_room RECORD;
-  v_opp RECORD;
+  v_plan RECORD;
   v_inicio TIMESTAMPTZ;
   v_server_tick INTEGER;
   v_max_reveal_tick INTEGER;
@@ -779,21 +808,34 @@ BEGIN
     RAISE EXCEPTION 'Esta sala no es asíncrona';
   END IF;
 
+  IF v_room.mode <> 'ranked' THEN
+    RAISE EXCEPTION 'Esta sala no es ranked';
+  END IF;
+
+  IF v_room.status <> 'playing' THEN
+    RAISE EXCEPTION 'La partida no está en curso';
+  END IF;
+
   IF v_room.player1_id <> v_uid THEN
     RAISE EXCEPTION 'No participas en esta partida';
   END IF;
 
-  SELECT * INTO v_opp FROM public.ranked_async_opponents WHERE id = v_room.async_opponent_id;
+  SELECT * INTO v_plan FROM public.ranked_async_room_plans WHERE room_id = p_room_id;
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('ok', TRUE, 'intents', '[]'::JSONB);
+    RETURN jsonb_build_object(
+      'ok', TRUE,
+      'serverTick', 0,
+      'maxRevealedTick', 0,
+      'intents', '[]'::JSONB
+    );
   END IF;
 
-  -- Calcular tic del servidor para controlar solicitudes maliciosas
+  -- Calcular tic del servidor (33ms por tic)
   v_inicio := COALESCE(v_room.started_at, v_room.created_at);
   v_server_tick := GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (clock_timestamp() - v_inicio)) * 1000.0 / 33.0)::INTEGER);
 
-  -- Ventana de anticipación permitida: máx 150 tics (~5 s) por delante del servidor o cliente
-  v_max_reveal_tick := GREATEST(COALESCE(p_client_tick, 0), v_server_tick) + 150;
+  -- Ventana autorizada estricta del servidor: serverTick + 18 tics (aprox 600 ms)
+  v_max_reveal_tick := v_server_tick + 18;
 
   SELECT COALESCE(jsonb_agg(
     jsonb_build_object(
@@ -805,11 +847,12 @@ BEGIN
       'slot', (elem->>'slot')::INTEGER,
       'lane', (elem->>'lane')::INTEGER,
       'col', (elem->>'col')::INTEGER
-    ) ORDER BY COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) ASC
+    ) ORDER BY COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) ASC, (elem->>'seq')::INTEGER ASC
   ), '[]'::JSONB)
   INTO v_intents
-  FROM jsonb_array_elements(v_opp.actions_snapshot) AS elem
-  WHERE COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) <= v_max_reveal_tick;
+  FROM jsonb_array_elements(v_plan.actions_snapshot) AS elem
+  WHERE (elem->>'seq')::INTEGER > COALESCE(p_after_seq, 0)
+    AND COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) <= v_max_reveal_tick;
 
   RETURN jsonb_build_object(
     'ok', TRUE,

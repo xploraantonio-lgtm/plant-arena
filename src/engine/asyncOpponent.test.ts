@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   createAsyncOpponentController,
   stepAsyncOpponent,
@@ -700,27 +702,29 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
   })
 
   // 42. Feed de intenciones asíncronas no filtra el plan futuro completo
-  it('42. poll_ranked_async_intents restringe las acciones a la ventana autorizada (~5 s)', () => {
+  it('42. poll_ranked_async_intents restringe las acciones a la ventana autorizada serverTick + 18 (~600 ms)', () => {
     const allSnapshotIntents: AsyncOpponentIntent[] = [
-      { seq: 1, tick: 10, issuedTick: 10, kind: 'plant', plantId: 'sunflower', lane: 1, col: 8 },
-      { seq: 2, tick: 50, issuedTick: 50, kind: 'plant', plantId: 'peashooter', lane: 1, col: 7 },
-      { seq: 3, tick: 300, issuedTick: 300, kind: 'plant', plantId: 'wallnut', lane: 1, col: 6 },
-      { seq: 4, tick: 1500, issuedTick: 1500, kind: 'plant', plantId: 'jalapeno', lane: 1, col: 5 },
+      { seq: 1, tick: 10, issuedTick: 10, kind: 'plant', plantId: 'sunflower', lane: 1, col: 1 },
+      { seq: 2, tick: 50, issuedTick: 50, kind: 'plant', plantId: 'peashooter', lane: 1, col: 2 },
+      { seq: 3, tick: 1018, issuedTick: 1018, kind: 'plant', plantId: 'wallnut', lane: 1, col: 3 },
+      { seq: 4, tick: 1019, issuedTick: 1019, kind: 'plant', plantId: 'repeater', lane: 1, col: 4 },
+      { seq: 5, tick: 2000, issuedTick: 2000, kind: 'plant', plantId: 'jalapeno', lane: 1, col: 5 },
     ]
 
-    // Simular consulta de cliente en tic 0 (reloj de servidor = tic 0)
-    const serverTick = 0
-    const clientTick = 0
-    const maxRevealTick = Math.max(clientTick, serverTick) + 150 // ventana de 150 tics (~5s)
+    // Simular consulta con serverTick = 1000. Límite estricto del servidor = 1000 + 18 = 1018 tics
+    const serverTick = 1000
+    const maxRevealTick = serverTick + 18
 
+    // Filtrar con afterSeq = 0
     const intentsEntregadas = allSnapshotIntents.filter(
       (i) => (i.issuedTick ?? i.tick) <= maxRevealTick
     )
 
-    // Entrega las de tic 10 y 50, pero NUNCA las de tic 300 o 1500
-    expect(intentsEntregadas).toHaveLength(2)
-    expect(intentsEntregadas.map((i) => i.seq)).toEqual([1, 2])
+    // Entrega tics 10, 50 y 1018, pero NUNCA 1019 ni 2000
+    expect(intentsEntregadas).toHaveLength(3)
+    expect(intentsEntregadas.map((i) => i.seq)).toEqual([1, 2, 3])
     expect(intentsEntregadas.find((i) => i.plantId === 'jalapeno')).toBeUndefined()
+    expect(intentsEntregadas.find((i) => i.plantId === 'repeater')).toBeUndefined()
   })
 
   // 43. Garantía por código de semilla RNG nueva y distinta a la sala origen
@@ -793,6 +797,171 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
 
     enviarCheckpoint(false)
     expect(checkpointsEnviados).toBe(1)
+  })
+
+  // 47. Anti-Cheat A & B: game_rooms no contiene async_actions_snapshot y ranked_async_room_plans es server-only
+  it('47. Migración 36 no añade async_actions_snapshot a game_rooms y crea ranked_async_room_plans server-only', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    // A) game_rooms NO contiene async_actions_snapshot
+    expect(sqlContent).not.toMatch(/ADD COLUMN IF NOT EXISTS async_actions_snapshot/i)
+    expect(sqlContent).not.toMatch(/async_actions_snapshot JSONB/i)
+
+    // B) ranked_async_room_plans existe y tiene RLS + REVOKE server-only
+    expect(sqlContent).toMatch(/CREATE TABLE IF NOT EXISTS public\.ranked_async_room_plans/i)
+    expect(sqlContent).toMatch(/ALTER TABLE public\.ranked_async_room_plans ENABLE ROW LEVEL SECURITY/i)
+    expect(sqlContent).toMatch(/REVOKE ALL ON public\.ranked_async_room_plans FROM anon, authenticated, PUBLIC/i)
+    expect(sqlContent).toMatch(/GRANT ALL ON public\.ranked_async_room_plans TO service_role/i)
+  })
+
+  // 48. Anti-Cheat C & D: poll_ranked_async_intents no acepta p_client_tick y usa serverTick + 18
+  it('48. poll_ranked_async_intents no expone parámetros de tick del cliente y aplica serverTick + 18', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    // C) Sin p_client_tick
+    expect(sqlContent).not.toMatch(/p_client_tick/i)
+    expect(sqlContent).toMatch(/p_after_seq INTEGER DEFAULT 0/i)
+
+    // D) max reveal = serverTick + 18 (no + 150)
+    expect(sqlContent).toMatch(/v_max_reveal_tick := v_server_tick \+ 18;/i)
+    expect(sqlContent).not.toMatch(/v_server_tick \+ 150/i)
+
+    // Lee de ranked_async_room_plans
+    expect(sqlContent).toMatch(/FROM public\.ranked_async_room_plans WHERE room_id = p_room_id/i)
+  })
+
+  // 49. Anti-Cheat E: after_seq filtra intenciones ya entregadas y evita tráfico redundante
+  it('49. after_seq entrega únicamente intenciones nuevas con seq > after_seq dentro de la ventana', () => {
+    const planIntents = [
+      { seq: 1, tick: 100, issuedTick: 100, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
+      { seq: 2, tick: 150, issuedTick: 150, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 2, col: 1 },
+      { seq: 3, tick: 200, issuedTick: 200, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 1, col: 2 },
+      { seq: 4, tick: 300, issuedTick: 300, kind: 'plant', plantId: 'wallnut', slot: 2, lane: 1, col: 3 },
+    ]
+
+    const serverTick = 250
+    const maxRevealTick = serverTick + 18 // 268
+
+    // Primer poll: afterSeq = 0 -> devuelve seq 1, 2, 3
+    const poll1 = planIntents.filter(
+      (i) => i.seq > 0 && (i.issuedTick ?? i.tick) <= maxRevealTick
+    )
+    expect(poll1.map((i) => i.seq)).toEqual([1, 2, 3])
+
+    // Segundo poll: cliente ya tiene seq 3 -> afterSeq = 3
+    const poll2 = planIntents.filter(
+      (i) => i.seq > 3 && (i.issuedTick ?? i.tick) <= maxRevealTick
+    )
+    // seq 4 tiene tick 300 > 268, por lo que NO se entrega aún
+    expect(poll2).toHaveLength(0)
+
+    // Tercer poll: serverTick avanza a 300 (maxReveal = 318)
+    const serverTickAvanzado = 300
+    const maxRevealTickAvanzado = serverTickAvanzado + 18
+    const poll3 = planIntents.filter(
+      (i) => i.seq > 3 && (i.issuedTick ?? i.tick) <= maxRevealTickAvanzado
+    )
+    // Ahora sólo entrega seq 4, sin reenviar 1, 2 y 3
+    expect(poll3.map((i) => i.seq)).toEqual([4])
+  })
+
+  // 50. Anti-Cheat F: verify-match carga el plan privado y falla cerrado si falta
+  it('50. verify-match consulta ranked_async_room_plans con service_role y falla cerrado si no existe', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    // Consulta tabla privada ranked_async_room_plans
+    expect(verifyContent).toMatch(/from\(['"]ranked_async_room_plans['"]\)/i)
+    expect(verifyContent).toMatch(/select\(['"]actions_snapshot['"]\)/i)
+
+    // Falla cerrado con async_plan_missing si no existe
+    expect(verifyContent).toMatch(/async_plan_missing/i)
+    expect(verifyContent).toMatch(/mark_match_verification_failed/i)
+    expect(verifyContent).not.toMatch(/room\.async_actions_snapshot/i)
+  })
+
+  // 51. Anti-Cheat G: cliente no puede obtener source_room_id ni el plan completo
+  it('51. game_room_info y select no exponen source_room_id ni acciones completas', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    // Extraer función game_room_info
+    const gameRoomInfoSql = sqlContent.substring(
+      sqlContent.indexOf('CREATE OR REPLACE FUNCTION public.game_room_info'),
+      sqlContent.indexOf('REVOKE EXECUTE ON FUNCTION public.game_room_info')
+    )
+
+    // game_room_info no expone source_room_id ni asyncActionsSnapshot
+    expect(gameRoomInfoSql).not.toMatch(/'sourceRoomId'/i)
+    expect(gameRoomInfoSql).not.toMatch(/source_room_id/i)
+    expect(gameRoomInfoSql).not.toMatch(/'asyncActionsSnapshot'/i)
+    expect(gameRoomInfoSql).not.toMatch(/async_actions_snapshot/i)
+
+    // game_rooms no contiene columna async_actions_snapshot
+    expect(sqlContent).not.toMatch(/ADD COLUMN IF NOT EXISTS async_actions_snapshot/i)
+  })
+
+  // 52. Anti-Cheat H: el useEffect de polling en Battlefield no depende de tick
+  it('52. El useEffect de Battlefield para feed asíncrono no depende de tick y usa ref incremental', () => {
+    const bfPath = join(process.cwd(), 'src', 'components', 'Battlefield', 'Battlefield.tsx')
+    const bfContent = readFileSync(bfPath, 'utf8')
+
+    expect(bfContent).toMatch(/ultimaSeqAsyncRef/i)
+    expect(bfContent).toMatch(/\[roomId, isAsyncMatch, incorporarIntencionesAsync\]/i)
+    expect(bfContent).not.toMatch(/\[roomId, isAsyncMatch, tick, incorporarIntencionesAsync\]/i)
+  })
+
+  // 53. Reconstrucción con buffer progresivo sincroniza exactamente estado, controller y descarta jugada de P1
+  it('53. Reconstrucción asíncrona sincroniza nextIntentIndex, pendingRetry, p2SunBank, plantas y rollback de P1', () => {
+    const seed = 777
+    const deckP1: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const deckP2: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // Buffer acumulativo de intenciones recibidas progresivamente hasta tic 330
+    const bufferedIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
+    ]
+
+    // Acciones registradas de P1: una válida en tic 5 y una rechazada en tic 15
+    const p1Acciones = [
+      { tick: 5, kind: 'plant', plantId: 'sunflower', lane: 1, col: 1 },
+      { tick: 15, kind: 'plant', plantId: 'sunflower', lane: 0, col: 1 }, // Esta se rechazará
+    ]
+
+    // Estado antes del rechazo
+    const { estado: estadoInicial } = reconstruirPartidaAsync(seed, deckP1, deckP2, bufferedIntents, p1Acciones, 330)
+    expect(estadoInicial.plants.length).toBe(2) // Ambas plantas de P1 presentes
+    expect(estadoInicial.enemyPlants.length).toBe(1) // Planta de P2 presente
+
+    // Se rechaza la acción de tic 15 -> descartarAccionPropia y reconstruir:
+    const p1AccionesCorregidas = p1Acciones.filter((a) => a.tick !== 15)
+    const { estado: estadoReconstruido, controller: controllerReconstruido } = reconstruirPartidaAsync(
+      seed,
+      deckP1,
+      deckP2,
+      bufferedIntents,
+      p1AccionesCorregidas,
+      330
+    )
+
+    // 1. La planta rechazada de P1 desapareció
+    expect(estadoReconstruido.plants.length).toBe(1)
+    expect(estadoReconstruido.plants[0].lane).toBe(1)
+
+    // 2. La planta de P2 permanece intacta y sincronizada
+    expect(estadoReconstruido.enemyPlants.length).toBe(1)
+    expect(estadoReconstruido.enemyPlants[0].lane).toBe(1)
+
+    // 3. El controller avanzó su índice y ejecutó la intención
+    expect(controllerReconstruido.nextIntentIndex).toBe(1)
+    expect(controllerReconstruido.stats.intentionsExecuted).toBe(1)
+    expect(controllerReconstruido.pendingRetry).toBeNull()
+
+    // 4. El banco de soles de P2 gastó los 50 soles del girasol
+    expect(controllerReconstruido.sunBank).toBe(0)
+    expect(estadoReconstruido.p2SunBank).toBe(0)
   })
 })
 

@@ -67,7 +67,6 @@ type RoomRow = {
   async_avatar_id?: string | null
   async_rating_snapshot?: number | null
   async_deck_snapshot?: unknown
-  async_actions_snapshot?: unknown
 }
 
 type ActionRow = {
@@ -244,7 +243,6 @@ Deno.serve(async (req) => {
             'async_avatar_id',
             'async_rating_snapshot',
             'async_deck_snapshot',
-            'async_actions_snapshot',
           ].join(','),
         )
         .eq('id', roomId)
@@ -311,6 +309,38 @@ Deno.serve(async (req) => {
     // CASO 1: PARTIDA ASÍNCRONA (RIVAL SEMILLA RANKED)
     // =========================================================================
     if (esAsync) {
+      // Cargar plan privado de acciones del Rival Semilla desde tabla server-only
+      const { data: planData, error: planError } = await admin
+        .from('ranked_async_room_plans')
+        .select('actions_snapshot')
+        .eq('room_id', roomId)
+        .single()
+
+      if (planError || !planData || !planData.actions_snapshot) {
+        const auditPlanMissing = {
+          engineVersion: 'auth-v1',
+          isAsyncMatch: true,
+          winnerSide: null,
+          reason: 'async_plan_missing',
+          error: planError?.message ?? 'plan_not_found',
+        }
+        await admin.rpc('mark_match_verification_failed', {
+          p_room_id: roomId,
+          p_note: 'async_plan_missing',
+          p_details: auditPlanMissing,
+        })
+        lockedRoomId = null
+        return json({
+          ok: false,
+          status: 'failed',
+          reviewRequired: true,
+          reason: 'async_plan_missing',
+          isAsyncMatch: true,
+        })
+      }
+
+      const asyncActionsSnapshot = planData.actions_snapshot
+
       let acciones = await cargarAcciones()
       const inicio = room.started_at ?? room.created_at
       let serverTick = ticServidor(inicio)
@@ -320,7 +350,7 @@ Deno.serve(async (req) => {
         room.p1_deck,
         room.async_deck_snapshot,
         acciones,
-        room.async_actions_snapshot
+        asyncActionsSnapshot
       )
 
       const ticDecisionAsync = resAsync.p1Ilegal ? 0 : resAsync.tics
@@ -381,7 +411,7 @@ Deno.serve(async (req) => {
         room.p1_deck,
         room.async_deck_snapshot,
         acciones,
-        room.async_actions_snapshot
+        asyncActionsSnapshot
       )
       serverTick = ticServidor(room.started_at ?? room.created_at)
 

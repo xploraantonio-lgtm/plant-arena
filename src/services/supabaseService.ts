@@ -1130,7 +1130,7 @@ export const SupabaseService = {
    */
   async pollRankedAsyncIntents(
     roomId: string,
-    clientTick: number
+    afterSeq = 0
   ): Promise<{
     ok: boolean
     serverTick?: number
@@ -1142,7 +1142,7 @@ export const SupabaseService = {
     try {
       const { data, error } = await (supabase.rpc as any)('poll_ranked_async_intents', {
         p_room_id: roomId,
-        p_client_tick: clientTick,
+        p_after_seq: afterSeq,
       })
       if (error) {
         logError('pollRankedAsyncIntents', error)
