@@ -221,13 +221,13 @@ describe('lo que es sólo tuyo no se reconstruye', () => {
   it('pero el tablero compartido sí, que es de lo que se trata', () => {
     const viejo = reconstruirHasta(SEMILLA, JUGADAS, 1200)
     viejo.sunBank = 999
-    // Se le mete una planta fantasma que no está en el registro: al reconstruir
-    // tiene que desaparecer, porque no ocurrió.
-    viejo.plants.push({ ...viejo.plants[0], id: 'fantasma' })
+    // Se le mete una planta huérfana que no está en el registro: al reconstruir
+    // debe desaparecer.
+    viejo.plants.push({ ...viejo.plants[0], id: 'huerfana' })
 
     const nuevo = conservarLoLocal(reconstruirHasta(SEMILLA, JUGADAS, 1200), viejo)
 
-    expect(nuevo.plants.some((p) => p.id === 'fantasma')).toBe(false)
+    expect(nuevo.plants.some((p) => p.id === 'huerfana')).toBe(false)
     expect(nuevo.sunBank).toBe(999)
   })
 })

@@ -491,8 +491,7 @@ export const SupabaseService = {
    * comprueba el plazo. Si el plazo vence devuelve `timedOut` y ya ha devuelto la
    * entrada — el cliente no tiene que pedir la devolución por su cuenta.
    *
-   * `ghostAvailable` sólo se pone en ranked, y hoy no hace nada: marca el momento
-   * en que tocaría ofrecer un fantasma, que llegará con las repeticiones.
+   * En Ranked, tras 60 s el cliente reclama un Rival Semilla (rival asíncrono).
    */
   async pollMatchmaking(): Promise<{
     matched: boolean
@@ -832,11 +831,13 @@ export const SupabaseService = {
     ended: boolean
     status?: string
     winner?: string | null
+    winnerSide?: 1 | 2 | null
     iWon?: boolean
     noWinner?: boolean
     verificationStatus?: string
     verificationNote?: string | null
     authoritative?: boolean
+    isAsyncMatch?: boolean
   } | null> {
     if (!isSupabaseConfigured()) return null
     try {
@@ -1163,7 +1164,8 @@ export const SupabaseService = {
     ok: boolean
     status?: 'pending' | 'verified' | 'verified_draw' | 'settled' | 'failed'
     winnerId?: string | null
-    winnerSide?: 1 | 2
+    winnerSide?: 1 | 2 | null
+    isAsyncMatch?: boolean
     reason?: string
     retryAfterMs?: number
     reviewRequired?: boolean

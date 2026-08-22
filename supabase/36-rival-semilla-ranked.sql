@@ -172,12 +172,7 @@ BEGIN
       v_duration,
       TRUE,
       NOW()
-    ) ON CONFLICT (source_room_id, source_side) DO UPDATE
-      SET rating_snapshot = EXCLUDED.rating_snapshot,
-          deck_snapshot = EXCLUDED.deck_snapshot,
-          actions_snapshot = EXCLUDED.actions_snapshot,
-          source_duration_ticks = EXCLUDED.source_duration_ticks,
-          active = TRUE;
+    ) ON CONFLICT (source_room_id, source_side) DO NOTHING;
 
     v_captured_sides := v_captured_sides + 1;
   END IF;
@@ -227,12 +222,7 @@ BEGIN
       v_duration,
       TRUE,
       NOW()
-    ) ON CONFLICT (source_room_id, source_side) DO UPDATE
-      SET rating_snapshot = EXCLUDED.rating_snapshot,
-          deck_snapshot = EXCLUDED.deck_snapshot,
-          actions_snapshot = EXCLUDED.actions_snapshot,
-          source_duration_ticks = EXCLUDED.source_duration_ticks,
-          active = TRUE;
+    ) ON CONFLICT (source_room_id, source_side) DO NOTHING;
 
     v_captured_sides := v_captured_sides + 1;
   END IF;
@@ -241,8 +231,41 @@ BEGIN
 END;
 $$;
 
+-- Permisos de captura
 REVOKE EXECUTE ON FUNCTION public.capture_ranked_async_opponents_from_room(UUID) FROM anon, authenticated, PUBLIC;
-GRANT EXECUTE ON FUNCTION public.capture_ranked_async_opponents_from_room(UUID) TO service_role;
+GRANT  EXECUTE ON FUNCTION public.capture_ranked_async_opponents_from_room(UUID) TO service_role;
+
+
+-- -----------------------------------------------------------------------------
+-- 3.1 BACKFILL IDEMPOTENTE DEL POOL INICIAL
+-- -----------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_rec RECORD;
+  v_res JSONB;
+BEGIN
+  FOR v_rec IN (
+    SELECT id
+      FROM public.game_rooms
+     WHERE mode = 'ranked'
+       AND COALESCE(is_async_match, FALSE) = FALSE
+       AND settled_at IS NOT NULL
+       AND verification_status = 'verified'
+       AND player1_id IS NOT NULL
+       AND player2_id IS NOT NULL
+       AND COALESCE(engine_version, '') = 'auth-v1'
+     ORDER BY created_at DESC
+     LIMIT 500
+  ) LOOP
+    BEGIN
+      v_res := public.capture_ranked_async_opponents_from_room(v_rec.id);
+    EXCEPTION WHEN OTHERS THEN
+      -- No detener la migración si una partida aislada falla al capturarse
+      RAISE NOTICE 'No se pudo capturar semilla de sala %: %', v_rec.id, SQLERRM;
+    END;
+  END LOOP;
+END;
+$$;
 
 
 -- -----------------------------------------------------------------------------
@@ -1016,3 +1039,95 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.surrender_match(UUID) FROM anon, PUBLIC;
 GRANT EXECUTE ON FUNCTION public.surrender_match(UUID) TO authenticated;
+
+
+-- -----------------------------------------------------------------------------
+-- 8. ROOM_RESULT SOPORTA PARTIDAS ASÍNCRONAS SIN PLAYER2_ID
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.room_result(p_room_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_room RECORD;
+  v_ganador UUID;
+  v_i_won BOOLEAN := FALSE;
+  v_no_winner BOOLEAN := FALSE;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
+  SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada'; END IF;
+
+  IF v_room.is_async_match THEN
+    IF v_uid <> v_room.player1_id THEN
+      RAISE EXCEPTION 'No participas en esta partida';
+    END IF;
+  ELSE
+    IF v_uid NOT IN (v_room.player1_id, v_room.player2_id) THEN
+      RAISE EXCEPTION 'No participas en esta partida';
+    END IF;
+  END IF;
+
+  IF v_room.settled_at IS NULL THEN
+    RETURN jsonb_build_object(
+      'ended', FALSE,
+      'status', v_room.status,
+      'verificationStatus', v_room.verification_status,
+      'verificationNote', v_room.verification_note,
+      'isAsyncMatch', COALESCE(v_room.is_async_match, FALSE)
+    );
+  END IF;
+
+  IF v_room.is_async_match THEN
+    v_i_won := (v_room.status = 'p1_won');
+    v_no_winner := (v_room.status NOT IN ('p1_won', 'p2_won'));
+    v_ganador := CASE WHEN v_room.status = 'p1_won' THEN v_room.player1_id ELSE NULL END;
+
+    RETURN jsonb_build_object(
+      'ended', TRUE,
+      'status', v_room.status,
+      'winner', v_ganador,
+      'winnerSide', CASE WHEN v_room.status = 'p1_won' THEN 1 WHEN v_room.status = 'p2_won' THEN 2 ELSE NULL END,
+      'iWon', v_i_won,
+      'noWinner', v_no_winner,
+      'verificationStatus', v_room.verification_status,
+      'authoritative', TRUE,
+      'isAsyncMatch', TRUE
+    );
+  END IF;
+
+  v_ganador := COALESCE(
+    v_room.server_winner_id,
+    CASE v_room.status
+      WHEN 'p1_won' THEN v_room.player1_id
+      WHEN 'p2_won' THEN v_room.player2_id
+      ELSE NULL
+    END
+  );
+
+  RETURN jsonb_build_object(
+    'ended', TRUE,
+    'status', v_room.status,
+    'winner', v_ganador,
+    'winnerSide', CASE WHEN v_room.status = 'p1_won' THEN 1 WHEN v_room.status = 'p2_won' THEN 2 ELSE NULL END,
+    'iWon', v_ganador IS NOT NULL AND v_ganador = v_uid,
+    'noWinner', v_ganador IS NULL,
+    'verificationStatus', v_room.verification_status,
+    'authoritative', v_room.engine_version = 'auth-v1',
+    'isAsyncMatch', FALSE
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.room_result(UUID) FROM anon, PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.room_result(UUID) TO authenticated;
+
+INSERT INTO public._migration_audit(fase, detalle)
+VALUES ('36_rival_semilla_ranked_v1', jsonb_build_object(
+  'descripcion', 'Implementacion autoritativa de Rival Semilla Ranked V1 y liquidacion asincrona',
+  'aplicada_en', NOW()
+)) ON CONFLICT DO NOTHING;
+

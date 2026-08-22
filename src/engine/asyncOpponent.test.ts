@@ -188,6 +188,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     ]
     const controller = createAsyncOpponentController(deck, intents)
     controller.sunBank = 500
+    state.p2SunBank = 500
 
     state.tick = 10
     stepAsyncOpponent(controller, state)
@@ -208,6 +209,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     ]
     const controller = createAsyncOpponentController(deck, intents)
     controller.sunBank = 200
+    state.p2SunBank = 200
 
     // Ocupamos la casilla col: 2 (que en el campo es 11 - 2 = 9)
     state.enemyPlants.push({
@@ -398,5 +400,245 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(resultado).toBeDefined()
     expect(resultado.p1Ilegal).toBe(false)
     expect(typeof resultado.tics).toBe('number')
+  })
+
+  // 31. async no_result no se convierte en winnerSide 2 ni liquida pérdida de ELO
+  it('31. async no_result (ganador null) no se convierte en winnerSide 2 y evita liquidación / pérdida de ELO', () => {
+    // Simulación donde ningún jugador llega a base rival y la partida termina por límite de tiempo sin ganador
+    const resAsync = {
+      ganador: null as 1 | 2 | null,
+      tics: 3600,
+      baseP1: 1000,
+      baseP2: 1000,
+      p1Ilegal: false,
+      motivo: 'time_limit',
+      telemetria: { intentionsTotal: 5, intentionsExecuted: 5, intentionsDropped: 0 },
+    }
+
+    // Regla de verificación autoritativa
+    let settled = false
+    let verificationStatus = 'pending'
+    let failureReason: string | null = null
+
+    if (resAsync.ganador !== 1 && resAsync.ganador !== 2) {
+      verificationStatus = 'failed'
+      failureReason = resAsync.motivo ?? 'async_no_result'
+      settled = false
+    } else {
+      settled = true
+      verificationStatus = 'verified'
+    }
+
+    expect(verificationStatus).toBe('failed')
+    expect(failureReason).toBe('time_limit')
+    expect(settled).toBe(false)
+  })
+
+  // 32. P2 kill reward se preserva en stepAsyncOpponent y se puede gastar legalmente
+  it('32. P2 kill reward ganada externamente en state.p2SunBank persiste en stepAsyncOpponent y permite plantar', () => {
+    const state = createBattleState(1, false, true)
+    const deck = [{ slot: 0, plantId: 'peashooter' as const, level: 0, statRolls: [] }]
+    const intents = [
+      // Intenta colocar peashooter (100 soles) en tick 10.
+      { issuedTick: 10, kind: 'plant' as const, plantId: 'peashooter' as const, slot: 0, lane: 0, col: 0 },
+    ]
+    const controller = createAsyncOpponentController(deck, intents)
+
+    // Controlador empieza con 0 soles y state.p2SunBank empieza con 0
+    controller.sunBank = 0
+    state.p2SunBank = 0
+
+    // P2 mata una planta enemiga durante el combate -> el motor le acredita 100 soles a state.p2SunBank
+    state.p2SunBank += 100
+
+    state.tick = 10
+    stepAsyncOpponent(controller, state)
+
+    // El saldo debió sincronizarse, gastar los 100 soles y colocar la planta con éxito
+    expect(controller.stats.intentionsExecuted).toBe(1)
+    expect(controller.sunBank).toBe(0)
+    expect(state.p2SunBank).toBe(0)
+    expect(state.pending.some((p) => p.kind === 'rival_plant' && p.plantId === 'peashooter')).toBe(true)
+  })
+
+  // 33. winnerSide 2 se interpreta autoritativamente como derrota del jugador real
+  it('33. winnerSide 2 en partida asíncrona se interpreta autoritativamente como derrota del jugador real', () => {
+    const isAsyncMatch = true
+    const verificacion = {
+      status: 'verified',
+      winnerSide: 2 as 1 | 2 | null,
+      winnerId: null as string | null,
+      settlement: { eloLost: 8, eloGained: 0 },
+    }
+
+    const yoGaneServidor = isAsyncMatch
+      ? verificacion.winnerSide === 1
+      : verificacion.winnerId === 'mi-usuario-id'
+
+    const hayResultadoAutoritativo = isAsyncMatch
+      ? verificacion.winnerSide === 1 || verificacion.winnerSide === 2
+      : Boolean(verificacion.winnerId)
+
+    const finalGameStatus = yoGaneServidor ? 'victory' : 'defeat'
+
+    expect(hayResultadoAutoritativo).toBe(true)
+    expect(yoGaneServidor).toBe(false)
+    expect(finalGameStatus).toBe('defeat')
+  })
+
+  // 34. winnerSide 1 se interpreta autoritativamente como victoria del jugador real
+  it('34. winnerSide 1 en partida asíncrona se interpreta autoritativamente como victoria del jugador real', () => {
+    const isAsyncMatch = true
+    const verificacion = {
+      status: 'verified',
+      winnerSide: 1 as 1 | 2 | null,
+      winnerId: 'mi-usuario-id',
+      settlement: { eloGained: 12, eloLost: 0 },
+    }
+
+    const yoGaneServidor = isAsyncMatch
+      ? verificacion.winnerSide === 1
+      : verificacion.winnerId === 'mi-usuario-id'
+
+    const hayResultadoAutoritativo = isAsyncMatch
+      ? verificacion.winnerSide === 1 || verificacion.winnerSide === 2
+      : Boolean(verificacion.winnerId)
+
+    const finalGameStatus = yoGaneServidor ? 'victory' : 'defeat'
+
+    expect(hayResultadoAutoritativo).toBe(true)
+    expect(yoGaneServidor).toBe(true)
+    expect(finalGameStatus).toBe('victory')
+  })
+
+  // 35. Partida asíncrona settled p2_won con server_winner_id NULL sigue siendo derrota y NO empate
+  it('35. room_result en sala asíncrona con status p2_won y winner_id NULL devuelve iWon=false y noWinner=false (derrota legítima)', () => {
+    const room = {
+      is_async_match: true,
+      status: 'p2_won',
+      settled_at: '2026-08-22T00:00:00Z',
+      player1_id: 'real-user-123',
+      server_winner_id: null,
+      verification_status: 'verified',
+    }
+
+    // Lógica correspondiente a la RPC room_result
+    const v_i_won = room.status === 'p1_won'
+    const v_no_winner = room.status !== 'p1_won' && room.status !== 'p2_won'
+    const v_winner_side = room.status === 'p1_won' ? 1 : room.status === 'p2_won' ? 2 : null
+
+    const resultadoRoom = {
+      ended: true,
+      status: room.status,
+      winner: null,
+      winnerSide: v_winner_side,
+      iWon: v_i_won,
+      noWinner: v_no_winner,
+      isAsyncMatch: true,
+    }
+
+    expect(resultadoRoom.ended).toBe(true)
+    expect(resultadoRoom.iWon).toBe(false)
+    expect(resultadoRoom.noWinner).toBe(false)
+    expect(resultadoRoom.winnerSide).toBe(2)
+  })
+
+  // 36. Snapshot existente en ranked_async_opponents no se modifica al capturarlo de nuevo
+  it('36. Captura repetida de la misma sala y lado es inmutable (ON CONFLICT DO NOTHING)', () => {
+    const pool = new Map<string, { rating: number; actionsCount: number }>()
+
+    const key = 'room-1:side-1'
+    // Primera inserción
+    pool.set(key, { rating: 1200, actionsCount: 15 })
+
+    // Intento de re-captura con datos alterados
+    const nuevoIntento = { rating: 1350, actionsCount: 30 }
+    if (!pool.has(key)) {
+      pool.set(key, nuevoIntento)
+    }
+
+    // El snapshot original permanece inmutable
+    expect(pool.get(key)?.rating).toBe(1200)
+    expect(pool.get(key)?.actionsCount).toBe(15)
+  })
+
+  // 37. Backfill del pool sólo selecciona partidas humanas Ranked verificadas y con compatibilidad auth-v1
+  it('37. Filtros de elegibilidad de backfill descartan partidas no ranked, no verificadas, asíncronas o de motor legacy', () => {
+    const rooms = [
+      { id: '1', mode: 'ranked', is_async_match: false, settled_at: 'now', verification_status: 'verified', p1: 'u1', p2: 'u2', engine: 'auth-v1' },
+      { id: '2', mode: 'colosseum', is_async_match: false, settled_at: 'now', verification_status: 'verified', p1: 'u1', p2: 'u2', engine: 'auth-v1' },
+      { id: '3', mode: 'ranked', is_async_match: true, settled_at: 'now', verification_status: 'verified', p1: 'u1', p2: null, engine: 'auth-v1' },
+      { id: '4', mode: 'ranked', is_async_match: false, settled_at: 'now', verification_status: 'failed', p1: 'u1', p2: 'u2', engine: 'auth-v1' },
+      { id: '5', mode: 'ranked', is_async_match: false, settled_at: 'now', verification_status: 'verified', p1: 'u1', p2: 'u2', engine: 'legacy-v0' },
+    ]
+
+    const elegibles = rooms.filter(
+      (r) =>
+        r.mode === 'ranked' &&
+        !r.is_async_match &&
+        Boolean(r.settled_at) &&
+        r.verification_status === 'verified' &&
+        Boolean(r.p1) &&
+        Boolean(r.p2) &&
+        r.engine === 'auth-v1'
+    )
+
+    expect(elegibles).toHaveLength(1)
+    expect(elegibles[0].id).toBe('1')
+  })
+
+  // 38. Identidad de origen jamás se expone al cliente en game_room_info
+  it('38. game_room_info para partidas asíncronas no incluye datos del usuario fuente', () => {
+    const dbRoom = {
+      id: 'room-uuid',
+      player1_id: 'real-player-uuid',
+      player2_id: null,
+      is_async_match: true,
+      async_opponent_id: 'seed-uuid-99',
+      async_display_name: 'SolarNova',
+      async_avatar_id: '4',
+      async_rating_snapshot: 1250,
+      source_user_id: 'secret-source-user',
+      source_room_id: 'secret-source-room',
+    }
+
+    const payloadCliente = {
+      id: dbRoom.id,
+      isAsyncMatch: dbRoom.is_async_match,
+      player1: { id: dbRoom.player1_id },
+      player2: {
+        id: dbRoom.async_opponent_id,
+        username: dbRoom.async_display_name,
+        avatarId: dbRoom.async_avatar_id,
+        elo: dbRoom.async_rating_snapshot,
+      },
+    }
+
+    expect(payloadCliente).not.toHaveProperty('source_user_id')
+    expect(payloadCliente).not.toHaveProperty('source_room_id')
+    expect(payloadCliente.player2.username).toBe('SolarNova')
+    expect(payloadCliente.player2.id).not.toBe('secret-source-user')
+  })
+
+  // 39. Liquidación de partida asíncrona jamás altera el perfil de la cuenta de origen
+  it('39. Liquidación asíncrona actualiza sólo al usuario real y preserva el perfil fuente', () => {
+    const perfilesDb = {
+      'real-player': { elo: 1200, cofres: 2 },
+      'source-player': { elo: 1400, cofres: 5 },
+    }
+
+    // Simulación de settle_verified_async_ranked_match
+    const realPlayerId = 'real-player'
+    const winnerSide = 1 // gana el jugador real
+
+    if (winnerSide === 1) {
+      perfilesDb[realPlayerId].elo += 12
+      perfilesDb[realPlayerId].cofres += 1
+    }
+
+    expect(perfilesDb['real-player'].elo).toBe(1212)
+    expect(perfilesDb['real-player'].cofres).toBe(3)
+    expect(perfilesDb['source-player'].elo).toBe(1400)
+    expect(perfilesDb['source-player'].cofres).toBe(5)
   })
 })

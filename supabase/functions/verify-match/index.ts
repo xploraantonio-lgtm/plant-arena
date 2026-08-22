@@ -282,12 +282,18 @@ Deno.serve(async (req) => {
     }
 
     if (room.settled_at) {
+      const winnerSide = esAsync
+        ? (room.status === 'p1_won' ? 1 : room.status === 'p2_won' ? 2 : null)
+        : (room.server_winner_id === room.player1_id ? 1 : (room.player2_id && room.server_winner_id === room.player2_id ? 2 : null))
+
       return json({
         ok: true,
         status: 'settled',
         winnerId: room.server_winner_id,
+        winnerSide,
         roomStatus: room.status,
         verificationStatus: room.verification_status,
+        isAsyncMatch: esAsync,
       })
     }
 
@@ -297,6 +303,7 @@ Deno.serve(async (req) => {
         status: 'failed',
         reviewRequired: true,
         note: room.verification_note,
+        isAsyncMatch: esAsync,
       })
     }
 
@@ -342,16 +349,19 @@ Deno.serve(async (req) => {
 
       if (inicioVerificacion?.alreadySettled) {
         room = await cargarSala()
+        const settledWinnerSide = room.status === 'p1_won' ? 1 : (room.status === 'p2_won' ? 2 : null)
         return json({
           ok: true,
           status: 'settled',
           winnerId: room.server_winner_id,
+          winnerSide: settledWinnerSide,
           roomStatus: room.status,
           verificationStatus: room.verification_status,
+          isAsyncMatch: true,
         })
       }
       if (inicioVerificacion?.locked) {
-        return json({ ok: false, status: 'failed', reviewRequired: true })
+        return json({ ok: false, status: 'failed', reviewRequired: true, isAsyncMatch: true })
       }
       if (inicioVerificacion?.busy) {
         return json({
@@ -359,6 +369,7 @@ Deno.serve(async (req) => {
           status: 'pending',
           busy: true,
           retryAfterMs: 1000,
+          isAsyncMatch: true,
         })
       }
       lockedRoomId = roomId
@@ -387,10 +398,49 @@ Deno.serve(async (req) => {
           retryAfterMs: Math.min((segundoTicDecisionAsync - serverTick) * TICK_MS, 5000),
           serverTick,
           decisionTick: segundoTicDecisionAsync,
+          isAsyncMatch: true,
         })
       }
 
-      const winnerSide: 1 | 2 = resAsync.ganador === 1 ? 1 : 2
+      // Si el motor determinista no produjo ganador (ej. engine_divergence o no_result sin forfeit),
+      // NUNCA liquidar ni quitar ELO: marcar como failed para revisión manual.
+      if (resAsync.ganador !== 1 && resAsync.ganador !== 2) {
+        const auditAsyncFailed = {
+          engineVersion: 'auth-v1',
+          isAsyncMatch: true,
+          winnerSide: null,
+          ticks: resAsync.tics,
+          reason: resAsync.motivo ?? 'async_no_result',
+          p1Illegal: resAsync.p1Ilegal,
+          bases: {
+            p1: resAsync.baseP1,
+            p2: resAsync.baseP2,
+          },
+          telemetry: {
+            intentionsTotal: resAsync.telemetria.intentionsTotal,
+            intentionsExecuted: resAsync.telemetria.intentionsExecuted,
+            intentionsDropped: resAsync.telemetria.intentionsDropped,
+          },
+        }
+
+        const { error: failError } = await admin.rpc('mark_match_verification_failed', {
+          p_room_id: roomId,
+          p_note: resAsync.motivo ?? 'async_no_result',
+          p_payload: auditAsyncFailed,
+        })
+        if (failError) throw new Error(`mark_failed_failed:${failError.message}`)
+        lockedRoomId = null
+
+        return json({
+          ok: false,
+          status: 'failed',
+          reviewRequired: true,
+          reason: resAsync.motivo ?? 'async_no_result',
+          isAsyncMatch: true,
+        })
+      }
+
+      const winnerSide: 1 | 2 = resAsync.ganador
       const auditAsync = {
         engineVersion: 'auth-v1',
         isAsyncMatch: true,

@@ -236,7 +236,11 @@ export function stepAsyncOpponent(
   controller: AsyncOpponentController,
   state: GameState
 ): void {
-  // ── 1. ECONOMÍA DETERMINISTA DE P2 ─────────────────────────────────────────
+  // ── 1. SINCRONIZAR RECOMPENSAS EXTERNAS ─────────────────────────────────────
+  // Preserva recompensas ganadas por P2 durante el motor común (ej. matar plantas de P1).
+  controller.sunBank = state.p2SunBank
+
+  // ── 2. ECONOMÍA DETERMINISTA DE P2 ─────────────────────────────────────────
   // A) Soles del cielo: misma cadencia periódica que el jugador con delay fijo documentado.
   if (state.tick - controller.lastSkySunTick >= msToTicks(SOL_DEL_CIELO_MS)) {
     controller.lastSkySunTick = state.tick
@@ -266,7 +270,7 @@ export function stepAsyncOpponent(
   // Mantener state.p2SunBank sincronizado
   state.p2SunBank = controller.sunBank
 
-  // ── 2. INTENTO DE REINTENTO PENDIENTE ──────────────────────────────────────
+  // ── 3. INTENTO DE REINTENTO PENDIENTE ──────────────────────────────────────
   if (controller.pendingRetry) {
     const { intent, carta, expireTick, nextRetryTick } = controller.pendingRetry
 

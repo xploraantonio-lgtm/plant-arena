@@ -706,14 +706,17 @@ export default function Battlefield({
       // Se reporta tanto al ganar como al perder — hace falta el reporte de los
       // dos para que se liquide, así que callarse al perder dejaría al rival sin
       // su premio.
-      if (roomId && opponentId && currentUserId) {
-        const ganadorQueVioMiCliente = gameStatus === 'victory' ? currentUserId : opponentId
+      if (roomId && (opponentId || isAsyncMatch) && currentUserId) {
+        const ganadorQueVioMiCliente = gameStatus === 'victory' ? currentUserId : (opponentId ?? '00000000-0000-0000-0000-000000000000')
 
         setResultadoServidor({ success: true, status: 'verificando' })
 
         void (async () => {
-          // Sólo telemetría en auth-v1. Si falla, el árbitro igualmente puede decidir.
-          await SupabaseService.reportMatchResult(roomId, ganadorQueVioMiCliente)
+          // En partidas humanas envía telemetría de reporte.
+          // En partidas contra Rival Semilla NO se reporta (no hay 2º cliente).
+          if (!isAsyncMatch) {
+            await SupabaseService.reportMatchResult(roomId, ganadorQueVioMiCliente)
+          }
 
           const verificacion = await SupabaseService.verifyMatch(roomId)
 
@@ -723,10 +726,13 @@ export default function Battlefield({
           ) {
             const s = verificacion.settlement ?? {}
 
-            const ganadorServidor = verificacion.winnerId ?? null
-            const yoGaneServidor =
-              ganadorServidor !== null &&
-              ganadorServidor === currentUserId
+            const yoGaneServidor = isAsyncMatch
+              ? verificacion.winnerSide === 1
+              : (verificacion.winnerId === currentUserId || (verificacion.winnerSide === (soyP1 ? 1 : 2)))
+
+            const hayResultadoAutoritativo = isAsyncMatch
+              ? (verificacion.winnerSide === 1 || verificacion.winnerSide === 2)
+              : Boolean(verificacion.winnerId || verificacion.winnerSide)
 
             setResultadoServidor({
               success: true,
@@ -754,7 +760,7 @@ export default function Battlefield({
 
             // El resultado FINAL mostrado también lo manda el servidor.
             // No confiar en lo que creyó ver este navegador.
-            if (ganadorServidor) {
+            if (hayResultadoAutoritativo) {
               terminarPorOrdenDelServidor(
                 yoGaneServidor ? 'victory' : 'defeat'
               )
@@ -832,7 +838,7 @@ export default function Battlefield({
         }
       }
     }
-  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete, roomId, opponentId, currentUserId, tournamentOpponent?.tournamentId, terminarPorOrdenDelServidor])
+  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete, roomId, opponentId, currentUserId, tournamentOpponent?.tournamentId, terminarPorOrdenDelServidor, isAsyncMatch, soyP1])
 
   useEffect(() => {
     if (practicePlantId) {

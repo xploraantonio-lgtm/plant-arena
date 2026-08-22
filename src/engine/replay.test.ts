@@ -2,7 +2,7 @@
 // UNA REPETICIÓN REPRODUCE LA PARTIDA, NO UNA PARECIDA
 //
 // Es la prueba de la que depende todo lo que viene: los enlaces para compartir,
-// los fantasmas del ranked, y sobre todo la VERIFICACIÓN EN SERVIDOR — que el
+// los rivales semilla del ranked, y sobre todo la VERIFICACIÓN EN SERVIDOR — que el
 // servidor recalcule quién ganó en lugar de creerse el "he ganado" de un
 // navegador.
 //

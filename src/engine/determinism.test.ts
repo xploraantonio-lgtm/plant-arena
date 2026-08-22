@@ -7,7 +7,7 @@
  *
  *   · el servidor no puede recalcular una partida para saber quién ganó,
  *   · una repetición no reproduce lo que pasó,
- *   · y un rival fantasma haría otra cosa cada vez.
+ *   · y un rival asíncrono haría otra cosa cada vez.
  *
  * Conviene ejecutarlas en cada cambio del motor:  npm test
  */
