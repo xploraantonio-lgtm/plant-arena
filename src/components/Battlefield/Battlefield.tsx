@@ -210,7 +210,9 @@ export default function Battlefield({
     digPlant,
     encolarAccionDelRival,
     descartarAccionPropia,
+    confirmarAccionP1,
     incorporarIntencionesAsync,
+    reconciliationState,
     terminarPorOrdenDelServidor,
     tomarHuellasPendientes,
     reconstrucciones,
@@ -338,8 +340,8 @@ export default function Battlefield({
     } = {}
   ) => {
     if (!roomId) return
-    if (isAsyncMatch && rankedAsyncInconsistency) {
-      // Partida en estado inconsistente: no seguir enviando acciones autoritativas
+    if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) {
+      // Partida en estado inconsistente o esperando resolución: no seguir enviando acciones
       return
     }
 
@@ -432,6 +434,7 @@ export default function Battlefield({
           }))
         },
         onAck: () => {
+          confirmarAccionP1(seqAccion)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
@@ -475,6 +478,7 @@ export default function Battlefield({
           }))
         },
         onAck: () => {
+          confirmarAccionP1(seqAccion)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
@@ -1201,6 +1205,7 @@ export default function Battlefield({
                   }}
                   onClick={() => {
                     if (roomId && redBloqueadaRef.current) return
+                    if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) return
                     if (selectedCard && isP1Side) {
                       if (selectedCard === 'shovel') {
                         // Igual que al plantar: sólo se registra si aquí de verdad

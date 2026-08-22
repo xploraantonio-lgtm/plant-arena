@@ -43,16 +43,18 @@ import {
   reconstruirPartidaAsync,
   normalizarIntenciones,
   type AsyncOpponentController,
-  type AccionP1Simulacion,
 } from '../engine/asyncOpponent'
 import {
   type InconsistenciaHistorialP1,
+  type AccionP1RankedEstricta,
 } from '../engine/asyncP1History'
 import {
   ejecutarCapturaCollectP1,
   ejecutarCapturaPlantP1,
   ejecutarCapturaDigP1,
   ejecutarDescarteAccionP1,
+  confirmarAccionP1Async,
+  rechazarAccionP1Async,
 } from '../engine/asyncP1Capture'
 import { nivelPorElo } from '../engine/bot'
 import type {
@@ -226,7 +228,11 @@ export function useGameEngine() {
   const isAsyncMatchRef = useRef<boolean>(false)
   const asyncOpponentDeckRef = useRef<CartaDeMazo[] | null>(null)
   const asyncOpponentActionsBufferRef = useRef<any[]>([])
-  const accionesP1AsyncRef = useRef<AccionP1Simulacion[]>([])
+  const accionesP1PendingRef = useRef<AccionP1RankedEstricta[]>([])
+  const accionesP1AceptadasRef = useRef<AccionP1RankedEstricta[]>([])
+  const accionesP1AsyncRef = accionesP1AceptadasRef
+  const [reconciliationState, setReconciliationState] = useState<'healthy' | 'reconciling_pending' | 'inconsistent'>('healthy')
+  const reconciliationStateRef = useRef<'healthy' | 'reconciling_pending' | 'inconsistent'>('healthy')
   const [rankedAsyncInconsistency, setRankedAsyncInconsistency] = useState<{
     reason: InconsistenciaHistorialP1
     seq?: number
@@ -249,6 +255,8 @@ export function useGameEngine() {
     }) => {
       rankedAsyncInconsistencyRef.current = inconsistencia
       setRankedAsyncInconsistency(inconsistencia)
+      reconciliationStateRef.current = 'inconsistent'
+      setReconciliationState('inconsistent')
       console.warn('[RankedAsync] Inconsistencia autoritativa detectada:', inconsistencia)
     },
     []
@@ -297,6 +305,10 @@ export function useGameEngine() {
       tickMasAntiguoNuevo !== null &&
       tickMasAntiguoNuevo <= currentTick
     ) {
+      if (accionesP1PendingRef.current.length > 0) {
+        reconciliationStateRef.current = 'reconciling_pending'
+        setReconciliationState('reconciling_pending')
+      }
       rehacerDesdeRef.current =
         rehacerDesdeRef.current === null
           ? tickMasAntiguoNuevo
@@ -424,7 +436,10 @@ export function useGameEngine() {
     // partida con la semilla de la anterior daría otra partida distinta.
     semillaRef.current = seed
     registroRef.current = []
-    accionesP1AsyncRef.current = []
+    accionesP1PendingRef.current = []
+    accionesP1AceptadasRef.current = []
+    reconciliationStateRef.current = 'healthy'
+    setReconciliationState('healthy')
     rankedAsyncInconsistencyRef.current = null
     setRankedAsyncInconsistency(null)
     numeroDeJugadaRef.current = 0
@@ -445,7 +460,10 @@ export function useGameEngine() {
     ancoraMsRef.current = null
     rankedAsyncInconsistencyRef.current = null
     setRankedAsyncInconsistency(null)
-    accionesP1AsyncRef.current = []
+    accionesP1PendingRef.current = []
+    accionesP1AceptadasRef.current = []
+    reconciliationStateRef.current = 'healthy'
+    setReconciliationState('healthy')
     registroRef.current = []
     rehacerDesdeRef.current = null
     const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
@@ -554,7 +572,7 @@ export function useGameEngine() {
         issuedTick,
         seq,
         state: stateRef.current,
-        historial: accionesP1AsyncRef.current,
+        accepted: accionesP1AceptadasRef.current,
         inconsistenciaActual: rankedAsyncInconsistencyRef.current?.reason ?? null,
       })
 
@@ -642,6 +660,13 @@ export function useGameEngine() {
 
     // ── RAMA ASÍNCRONA (RIVAL SEMILLA RANKED) ─────────────────────────────────
     if (isAsyncMatchRef.current && asyncOpponentDeckRef.current) {
+      if (accionesP1PendingRef.current.length > 0) {
+        reconciliationStateRef.current = 'reconciling_pending'
+        setReconciliationState('reconciling_pending')
+        rehacerDesdeRef.current = desdeTick
+        return
+      }
+
       const selectedCard = viejo.selectedCard
       const selectedSlotIndex = viejo.selectedSlotIndex
       const rebuildRes = reconstruirPartidaAsync(
@@ -649,7 +674,7 @@ export function useGameEngine() {
         mazoMioRef.current,
         asyncOpponentDeckRef.current,
         asyncOpponentActionsBufferRef.current,
-        accionesP1AsyncRef.current,
+        accionesP1AceptadasRef.current,
         viejo.tick
       )
 
@@ -837,6 +862,10 @@ export function useGameEngine() {
       // sean la misma.
       //
       // Fuera del 1c1 el retardo es cero y todo sigue igual que antes.
+      if (isAsyncMatchRef.current && (rankedAsyncInconsistencyRef.current || reconciliationStateRef.current !== 'healthy')) {
+        return null
+      }
+
       const retardo = state.isPvpMode ? MARGEN_DE_RED_TICS : 0
       const enTic = state.tick + retardo
 
@@ -851,7 +880,7 @@ export function useGameEngine() {
         state,
         seq,
         enTic,
-        historial: accionesP1AsyncRef.current,
+        pending: accionesP1PendingRef.current,
         inconsistenciaActual: rankedAsyncInconsistencyRef.current?.reason ?? null,
       })
 
@@ -1050,6 +1079,11 @@ export function useGameEngine() {
         return null
       }
 
+      if (isAsyncMatchRef.current && (rankedAsyncInconsistencyRef.current || reconciliationStateRef.current !== 'healthy')) {
+        forceRender()
+        return null
+      }
+
       const enTic = state.tick + (state.isPvpMode ? MARGEN_DE_RED_TICS : 0)
 
       const res = ejecutarCapturaDigP1({
@@ -1058,7 +1092,7 @@ export function useGameEngine() {
         state,
         seq,
         enTic,
-        historial: accionesP1AsyncRef.current,
+        pending: accionesP1PendingRef.current,
         inconsistenciaActual: rankedAsyncInconsistencyRef.current?.reason ?? null,
       })
 
@@ -1090,6 +1124,50 @@ export function useGameEngine() {
   )
 
   /**
+   * Confirma una acción de P1 tras recibir ACK del servidor.
+   * Traslada la acción de pending a accepted de forma atómica.
+   */
+  const confirmarAccionP1 = useCallback(
+    (seq?: number): boolean => {
+      if (!isAsyncMatchRef.current || seq === undefined || seq === null) return true
+
+      const res = confirmarAccionP1Async({
+        pending: accionesP1PendingRef.current,
+        accepted: accionesP1AceptadasRef.current,
+        seq,
+      })
+
+      if (!res.ok) {
+        marcarInconsistenciaRanked({
+          reason: res.reason,
+          seq: res.seq,
+          details: res.details,
+        })
+        return false
+      }
+
+      accionesP1PendingRef.current = res.pending
+      accionesP1AceptadasRef.current = res.accepted
+
+      if (
+        reconciliationStateRef.current === 'reconciling_pending' &&
+        accionesP1PendingRef.current.length === 0
+      ) {
+        if (rehacerDesdeRef.current !== null) {
+          rehacerLaPartida(rehacerDesdeRef.current)
+          rehacerDesdeRef.current = null
+        }
+        reconciliationStateRef.current = 'healthy'
+        setReconciliationState('healthy')
+      }
+
+      forceRender()
+      return true
+    },
+    [forceRender, marcarInconsistenciaRanked, rehacerLaPartida]
+  )
+
+  /**
    * Deshace una jugada mía que el SERVIDOR rechazó.
    *
    * Puede pasar: llegó con un tic que su reloj ya había pasado, o venía repetida.
@@ -1101,8 +1179,48 @@ export function useGameEngine() {
    */
   const descartarAccionPropia = useCallback(
     (tick: number, lane: number, col: number | null, seq?: number) => {
+      if (isAsyncMatchRef.current) {
+        const resRechazo = rechazarAccionP1Async({
+          pending: accionesP1PendingRef.current,
+          accepted: accionesP1AceptadasRef.current,
+          seq,
+          state: stateRef.current,
+          costeDeMisJugadas: costeDeMisJugadasRef.current,
+          registro: registroRef.current,
+        })
+
+        if (!resRechazo.ok) {
+          marcarInconsistenciaRanked({
+            reason: resRechazo.reason,
+            seq: resRechazo.seq,
+            details: resRechazo.details,
+          })
+          return
+        }
+
+        accionesP1PendingRef.current = resRechazo.pending
+        registroRef.current = resRechazo.nuevoRegistro
+
+        if (
+          reconciliationStateRef.current === 'reconciling_pending' &&
+          accionesP1PendingRef.current.length === 0
+        ) {
+          if (rehacerDesdeRef.current !== null) {
+            rehacerLaPartida(rehacerDesdeRef.current)
+            rehacerDesdeRef.current = null
+          }
+          reconciliationStateRef.current = 'healthy'
+          setReconciliationState('healthy')
+        } else {
+          rehacerDesdeRef.current =
+            rehacerDesdeRef.current === null ? tick : Math.min(rehacerDesdeRef.current, tick)
+        }
+        forceRender()
+        return
+      }
+
       const resDescarte = ejecutarDescarteAccionP1({
-        isAsyncMatch: isAsyncMatchRef.current,
+        isAsyncMatch: false,
         tick,
         lane,
         col,
@@ -1122,7 +1240,6 @@ export function useGameEngine() {
         return
       }
 
-      accionesP1AsyncRef.current = resDescarte.nuevoHistorial
       registroRef.current = resDescarte.nuevoRegistro
 
       if (!resDescarte.eliminado) return
@@ -1132,7 +1249,7 @@ export function useGameEngine() {
         rehacerDesdeRef.current === null ? tick : Math.min(rehacerDesdeRef.current, tick)
       forceRender()
     },
-    [forceRender, marcarInconsistenciaRanked]
+    [forceRender, marcarInconsistenciaRanked, rehacerLaPartida]
   )
 
   // High performance game loop (60 FPS + Real-time background tab execution)
@@ -1420,8 +1537,13 @@ export function useGameEngine() {
      */
     reconstrucciones: reconstruccionesRef.current,
     descartarAccionPropia,
+    confirmarAccionP1,
     incorporarIntencionesAsync,
+    reconciliationState,
+    getReconciliationState: () => reconciliationStateRef.current,
     rankedAsyncInconsistency,
     getRankedAsyncInconsistency: () => rankedAsyncInconsistencyRef.current,
+    getAccionesP1Aceptadas: () => accionesP1AceptadasRef.current,
+    getAccionesP1Pending: () => accionesP1PendingRef.current,
   }
 }

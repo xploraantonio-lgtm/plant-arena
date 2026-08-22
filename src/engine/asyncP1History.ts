@@ -18,18 +18,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { PlantId, PlantStatKey } from '../types/game.ts'
-import { PLANT_CONFIGS, P1_COLUMNS } from '../utils/gameConstants.ts'
+import { PLANT_CONFIGS, P1_COLUMNS, P2_COLUMNS, DECK_SIZE } from '../utils/gameConstants.ts'
+import { MARGEN_DE_RED_TICS } from './pvp.ts'
 
 export type InconsistenciaHistorialP1 =
   | 'MISSING_SEQ'
   | 'INVALID_SEQ'
   | 'MISSING_ISSUED_TICK'
   | 'INVALID_ISSUED_TICK'
+  | 'MISSING_TICK'
+  | 'INVALID_TICK'
+  | 'INVALID_TICK_RELATION'
   | 'INVALID_KIND'
   | 'MISSING_TARGET_ID'
   | 'INVALID_PLANT_DATA'
   | 'INVALID_DIG_DATA'
   | 'SEQ_CONFLICT'
+  | 'UNKNOWN_PENDING_ACTION'
+  | 'INVALID_P1_ACTIONS_CONTAINER'
+  | 'INVALID_P1_DECK'
+  | 'INVALID_ASYNC_INTENTS_CONTAINER'
+  | 'INVALID_ASYNC_INTENT_DATA'
   | 'TIMELINE_INCONSISTENT'
 
 export interface AccionP1RankedEstricta {
@@ -49,7 +58,7 @@ export interface AccionP1RankedEstricta {
 // Tipo de compatibilidad para código existente
 export type AccionP1Simulacion = AccionP1RankedEstricta
 
-const ESTADISTICAS_VALIDAS = new Set<PlantStatKey>([
+export const ESTADISTICAS_VALIDAS = new Set<PlantStatKey>([
   'hp',
   'damage',
   'attackSpeed',
@@ -57,23 +66,17 @@ const ESTADISTICAS_VALIDAS = new Set<PlantStatKey>([
   'cooldown',
 ])
 
-function esPlantId(x: string | null | undefined): x is PlantId {
+export function esPlantId(x: string | null | undefined): x is PlantId {
   return !!x && Object.prototype.hasOwnProperty.call(PLANT_CONFIGS, x)
-}
-
-function rollsValidos(brutos: unknown): PlantStatKey[] {
-  if (!Array.isArray(brutos)) return []
-  return brutos.filter((r): r is PlantStatKey =>
-    typeof r === 'string' && ESTADISTICAS_VALIDAS.has(r as PlantStatKey)
-  )
 }
 
 /**
  * Valida estrictamente una acción individual de P1 para Ranked Asíncrono.
  *
  * NO infiere seq desde id.
- * NO infiere issuedTick desde tick.
+ * NO infiere issuedTick desde tick ni viceversa.
  * NO realiza clamps silenciosos de coordenadas.
+ * NO filtra silenciosamente estadísticas inválidas ni coacciona levels.
  */
 export function validarAccionP1RankedEstricta(
   raw: unknown
@@ -123,9 +126,23 @@ export function validarAccionP1RankedEstricta(
     }
   }
   const issuedTick = a.issuedTick
-  const tick = typeof a.tick === 'number' && Number.isInteger(a.tick) && a.tick >= 0 ? a.tick : issuedTick
 
-  // 3. Validación de kind (estrictamente 'plant' | 'dig' | 'collect')
+  // 3. Validación de tick (obligatorio, entero >= 0, sin fallback)
+  if (a.tick === undefined || a.tick === null) {
+    return { ok: false, reason: 'MISSING_TICK', seq, issuedTick, details: 'tick es obligatorio en Ranked Async' }
+  }
+  if (typeof a.tick !== 'number' || !Number.isInteger(a.tick) || a.tick < 0) {
+    return {
+      ok: false,
+      reason: 'INVALID_TICK',
+      seq,
+      issuedTick,
+      details: `tick debe ser un entero no negativo, recibido: ${String(a.tick)}`,
+    }
+  }
+  const tick = a.tick
+
+  // 4. Validación de kind (estrictamente 'plant' | 'dig' | 'collect')
   if (a.kind !== 'plant' && a.kind !== 'dig' && a.kind !== 'collect') {
     return {
       ok: false,
@@ -137,7 +154,31 @@ export function validarAccionP1RankedEstricta(
   }
   const kind = a.kind
 
-  // 4. Validación por kind
+  // 5. Validación de relación temporal fija del protocolo
+  if (kind === 'collect') {
+    if (tick !== issuedTick) {
+      return {
+        ok: false,
+        reason: 'INVALID_TICK_RELATION',
+        seq,
+        issuedTick,
+        details: `Para collect tick (${tick}) debe ser igual a issuedTick (${issuedTick})`,
+      }
+    }
+  } else {
+    // plant y dig
+    if (tick !== issuedTick + MARGEN_DE_RED_TICS) {
+      return {
+        ok: false,
+        reason: 'INVALID_TICK_RELATION',
+        seq,
+        issuedTick,
+        details: `Para ${kind} tick (${tick}) debe ser issuedTick (${issuedTick}) + ${MARGEN_DE_RED_TICS}`,
+      }
+    }
+  }
+
+  // 6. Validación por kind
   if (kind === 'collect') {
     if (typeof a.targetId !== 'string' || a.targetId.trim().length === 0) {
       return {
@@ -203,13 +244,13 @@ export function validarAccionP1RankedEstricta(
         details: `plantId desconocido o ausente: ${String(plantId)}`,
       }
     }
-    if (typeof a.slot !== 'number' || !Number.isInteger(a.slot) || a.slot < 0 || a.slot > 5) {
+    if (typeof a.slot !== 'number' || !Number.isInteger(a.slot) || a.slot < 0 || a.slot >= DECK_SIZE) {
       return {
         ok: false,
         reason: 'INVALID_PLANT_DATA',
         seq,
         issuedTick,
-        details: `slot debe ser un entero 0..5, recibido: ${String(a.slot)}`,
+        details: `slot debe ser un entero 0..${DECK_SIZE - 1}, recibido: ${String(a.slot)}`,
       }
     }
     if (typeof a.lane !== 'number' || !Number.isInteger(a.lane) || a.lane < 0 || a.lane > 2) {
@@ -231,8 +272,50 @@ export function validarAccionP1RankedEstricta(
       }
     }
 
-    const statRolls = rollsValidos(a.statRolls)
-    const level = typeof a.level === 'number' && Number.isInteger(a.level) && a.level >= 0 ? a.level : 0
+    // Validación estricta de statRolls (sin filtrado silencioso de datos corruptos)
+    let statRolls: PlantStatKey[] | undefined = undefined
+    if (a.statRolls !== undefined && a.statRolls !== null) {
+      if (!Array.isArray(a.statRolls)) {
+        return {
+          ok: false,
+          reason: 'INVALID_PLANT_DATA',
+          seq,
+          issuedTick,
+          details: 'statRolls debe ser un array',
+        }
+      }
+      for (const r of a.statRolls) {
+        if (typeof r !== 'string' || !ESTADISTICAS_VALIDAS.has(r as PlantStatKey)) {
+          return {
+            ok: false,
+            reason: 'INVALID_PLANT_DATA',
+            seq,
+            issuedTick,
+            details: `statRolls contiene valor inválido: ${String(r)}`,
+          }
+        }
+      }
+      if (a.statRolls.length > 0) {
+        statRolls = a.statRolls as PlantStatKey[]
+      }
+    }
+
+    // Validación estricta de level (sin coerción silenciosa)
+    let level: number | undefined = undefined
+    if (a.level !== undefined && a.level !== null) {
+      if (typeof a.level !== 'number' || !Number.isInteger(a.level) || a.level < 0) {
+        return {
+          ok: false,
+          reason: 'INVALID_PLANT_DATA',
+          seq,
+          issuedTick,
+          details: `level debe ser un entero no negativo, recibido: ${String(a.level)}`,
+        }
+      }
+      if (a.level > 0) {
+        level = a.level
+      }
+    }
 
     return {
       ok: true,
@@ -245,8 +328,8 @@ export function validarAccionP1RankedEstricta(
         slot: a.slot,
         lane: a.lane,
         col: a.col,
-        statRolls: statRolls.length > 0 ? statRolls : undefined,
-        level: level > 0 ? level : undefined,
+        statRolls,
+        level,
       },
     }
   }
@@ -258,7 +341,7 @@ export function validarAccionP1RankedEstricta(
  * Comprueba si dos acciones con la misma secuencia son idénticas campo por campo.
  */
 export function sonAccionesIdenticas(a: AccionP1RankedEstricta, b: AccionP1RankedEstricta): boolean {
-  if (a.seq !== b.seq || a.kind !== b.kind || a.issuedTick !== b.issuedTick) return false
+  if (a.seq !== b.seq || a.kind !== b.kind || a.issuedTick !== b.issuedTick || a.tick !== b.tick) return false
   if (a.kind === 'collect') {
     return a.targetId === b.targetId
   }
@@ -392,7 +475,13 @@ export type ResultadoValidacionHistorialP1 =
 export function validarYNormalizarAccionesP1Ranked(
   rawActions: unknown
 ): ResultadoValidacionHistorialP1 {
-  if (!Array.isArray(rawActions)) return { ok: true, acciones: [] }
+  if (!Array.isArray(rawActions)) {
+    return {
+      ok: false,
+      reason: 'INVALID_P1_ACTIONS_CONTAINER',
+      details: `rawActions debe ser un array, recibido: ${typeof rawActions}`,
+    }
+  }
 
   const validadas: AccionP1RankedEstricta[] = []
   const seqMap = new Map<number, AccionP1RankedEstricta>()
@@ -428,4 +517,195 @@ export function validarYNormalizarAccionesP1Ranked(
   })
 
   return { ok: true, acciones: validadas }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VALIDACIÓN ESTRICTA DE INTENCIONES DE P2 / RIVAL SEMILLA
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AsyncOpponentIntentRankedEstricta {
+  seq: number
+  tick: number
+  issuedTick: number
+  kind: 'plant' | 'dig'
+  plantId?: PlantId
+  slot?: number
+  lane: number
+  col?: number
+}
+
+export function validarIntencionAsyncRankedEstricta(
+  raw: unknown
+):
+  | { ok: true; intencion: AsyncOpponentIntentRankedEstricta }
+  | { ok: false; reason: InconsistenciaHistorialP1; seq?: number; issuedTick?: number; details?: string } {
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, reason: 'INVALID_ASYNC_INTENT_DATA', details: 'Intención P2 no es un objeto' }
+  }
+
+  const a = raw as Record<string, unknown>
+
+  const rawIssuedTick =
+    typeof a.issuedTick === 'number' && Number.isInteger(a.issuedTick) && a.issuedTick >= 0
+      ? a.issuedTick
+      : (typeof a.issued_tick === 'number' && Number.isInteger(a.issued_tick) && a.issued_tick >= 0 ? a.issued_tick : undefined)
+
+  // 1. seq
+  if (a.seq === undefined || a.seq === null) {
+    return { ok: false, reason: 'MISSING_SEQ', issuedTick: rawIssuedTick, details: 'seq es obligatorio en intención P2' }
+  }
+  if (typeof a.seq !== 'number' || !Number.isInteger(a.seq) || a.seq < 0) {
+    return { ok: false, reason: 'INVALID_SEQ', issuedTick: rawIssuedTick, details: `seq P2 inválido: ${String(a.seq)}` }
+  }
+  const seq = a.seq
+
+  // 2. issuedTick
+  if (rawIssuedTick === undefined) {
+    return { ok: false, reason: 'MISSING_ISSUED_TICK', seq, details: 'issuedTick es obligatorio en intención P2' }
+  }
+  const issuedTick = rawIssuedTick
+
+  // 3. tick
+  if (a.tick === undefined || a.tick === null) {
+    return { ok: false, reason: 'MISSING_TICK', seq, issuedTick, details: 'tick es obligatorio en intención P2' }
+  }
+  if (typeof a.tick !== 'number' || !Number.isInteger(a.tick) || a.tick < 0) {
+    return { ok: false, reason: 'INVALID_TICK', seq, issuedTick, details: `tick P2 inválido: ${String(a.tick)}` }
+  }
+  const tick = a.tick
+
+  // 4. kind
+  if (a.kind !== 'plant' && a.kind !== 'dig') {
+    return { ok: false, reason: 'INVALID_KIND', seq, issuedTick, details: `kind P2 debe ser plant o dig, recibido: ${String(a.kind)}` }
+  }
+  const kind = a.kind
+
+  // 5. Relación temporal
+  if (tick !== issuedTick + MARGEN_DE_RED_TICS && tick !== issuedTick) {
+    return {
+      ok: false,
+      reason: 'INVALID_TICK_RELATION',
+      seq,
+      issuedTick,
+      details: `tick P2 (${tick}) debe ser issuedTick (${issuedTick}) + ${MARGEN_DE_RED_TICS} o ${issuedTick}`,
+    }
+  }
+
+  // 6. Coordenadas y datos específicos
+  if (typeof a.lane !== 'number' || !Number.isInteger(a.lane) || a.lane < 0 || a.lane > 2) {
+    return { ok: false, reason: 'INVALID_ASYNC_INTENT_DATA', seq, issuedTick, details: `lane P2 inválido: ${String(a.lane)}` }
+  }
+
+  if (kind === 'dig') {
+    if (typeof a.col !== 'number' || !Number.isInteger(a.col) || a.col < 0 || a.col >= P2_COLUMNS) {
+      return { ok: false, reason: 'INVALID_DIG_DATA', seq, issuedTick, details: `col de dig P2 inválida: ${String(a.col)}` }
+    }
+    return {
+      ok: true,
+      intencion: {
+        seq,
+        tick,
+        issuedTick,
+        kind: 'dig',
+        lane: a.lane,
+        col: a.col,
+      },
+    }
+  }
+
+  // plant
+  const plantId = (typeof a.plantId === 'string' ? a.plantId : (typeof a.plant_id === 'string' ? a.plant_id : null)) as PlantId | null
+  if (!esPlantId(plantId)) {
+    return { ok: false, reason: 'INVALID_PLANT_DATA', seq, issuedTick, details: `plantId P2 inválido: ${String(plantId)}` }
+  }
+
+  let slot: number | undefined = undefined
+  if (a.slot !== undefined && a.slot !== null) {
+    if (typeof a.slot !== 'number' || !Number.isInteger(a.slot) || a.slot < 0 || a.slot >= DECK_SIZE) {
+      return { ok: false, reason: 'INVALID_PLANT_DATA', seq, issuedTick, details: `slot P2 inválido: ${String(a.slot)}` }
+    }
+    slot = a.slot
+  }
+
+  let col: number | undefined = undefined
+  if (a.col !== undefined && a.col !== null) {
+    if (typeof a.col !== 'number' || !Number.isInteger(a.col) || a.col < 0 || a.col >= P2_COLUMNS) {
+      return { ok: false, reason: 'INVALID_PLANT_DATA', seq, issuedTick, details: `col P2 inválida: ${String(a.col)}` }
+    }
+    col = a.col
+  }
+
+  return {
+    ok: true,
+    intencion: {
+      seq,
+      tick,
+      issuedTick,
+      kind: 'plant',
+      plantId,
+      slot,
+      lane: a.lane,
+      col,
+    },
+  }
+}
+
+export type ResultadoValidacionIntencionesP2 =
+  | { ok: true; intenciones: AsyncOpponentIntentRankedEstricta[] }
+  | { ok: false; reason: InconsistenciaHistorialP1; seq?: number; issuedTick?: number; details?: string }
+
+export function validarYNormalizarIntencionesAsyncRanked(
+  rawIntents: unknown
+): ResultadoValidacionIntencionesP2 {
+  if (!Array.isArray(rawIntents)) {
+    return {
+      ok: false,
+      reason: 'INVALID_ASYNC_INTENTS_CONTAINER',
+      details: `rawIntents debe ser un array, recibido: ${typeof rawIntents}`,
+    }
+  }
+
+  const validadas: AsyncOpponentIntentRankedEstricta[] = []
+  const seqMap = new Map<number, AsyncOpponentIntentRankedEstricta>()
+
+  for (const raw of rawIntents) {
+    const val = validarIntencionAsyncRankedEstricta(raw)
+    if (!val.ok) {
+      return val
+    }
+
+    const intent = val.intencion
+    const existente = seqMap.get(intent.seq)
+    if (existente) {
+      if (
+        existente.seq === intent.seq &&
+        existente.kind === intent.kind &&
+        existente.issuedTick === intent.issuedTick &&
+        existente.tick === intent.tick &&
+        existente.lane === intent.lane &&
+        existente.col === intent.col &&
+        existente.plantId === intent.plantId &&
+        existente.slot === intent.slot
+      ) {
+        continue // duplicado idempotente
+      }
+      return {
+        ok: false,
+        reason: 'SEQ_CONFLICT',
+        seq: intent.seq,
+        issuedTick: intent.issuedTick,
+        details: `Conflicto en intenciones P2: seq ${intent.seq} duplicado con contenido distinto`,
+      }
+    }
+
+    seqMap.set(intent.seq, intent)
+    validadas.push(intent)
+  }
+
+  validadas.sort((a, b) => {
+    if (a.issuedTick !== b.issuedTick) return a.issuedTick - b.issuedTick
+    return a.seq - b.seq
+  })
+
+  return { ok: true, intenciones: validadas }
 }

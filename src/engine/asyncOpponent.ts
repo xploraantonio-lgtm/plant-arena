@@ -421,15 +421,18 @@ function intentarEjecutarPlant(
 
 import {
   validarYNormalizarAccionesP1Ranked,
+  validarYNormalizarIntencionesAsyncRanked,
   type InconsistenciaHistorialP1,
   type AccionP1RankedEstricta,
   type AccionP1Simulacion,
+  type AsyncOpponentIntentRankedEstricta,
 } from './asyncP1History.ts'
 
 export type {
   InconsistenciaHistorialP1,
   AccionP1RankedEstricta,
   AccionP1Simulacion,
+  AsyncOpponentIntentRankedEstricta,
 }
 
 export interface ResultadoSimulacionAsync {
@@ -568,8 +571,57 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
   } = options
 
   const state = createBattleState(seed, false, true)
-  const mazoP1 = leerMazo(p1Deck) ?? []
   const controller = createAsyncOpponentController(asyncDeck, asyncActions)
+
+  let mazoP1: CartaDeMazo[] = []
+  if (strictAuthoritativeHistory) {
+    if (!Array.isArray(p1Deck) || p1Deck.length === 0) {
+      return {
+        ok: false,
+        reason: 'INVALID_P1_DECK',
+        details: 'El mazo de P1 es obligatorio y no puede estar vacío en Ranked Async',
+        state,
+        controller,
+        p1Ilegal: true,
+        motivo: 'no_result',
+        winner: null,
+      }
+    }
+    const leido = leerMazo(p1Deck)
+    if (!leido || leido.length === 0) {
+      return {
+        ok: false,
+        reason: 'INVALID_P1_DECK',
+        details: 'El mazo de P1 no contiene cartas válidas',
+        state,
+        controller,
+        p1Ilegal: true,
+        motivo: 'no_result',
+        winner: null,
+      }
+    }
+    mazoP1 = leido
+  } else {
+    mazoP1 = leerMazo(p1Deck) ?? []
+  }
+
+  if (strictAuthoritativeHistory && asyncActions !== undefined && asyncActions !== null) {
+    const valIntents = validarYNormalizarIntencionesAsyncRanked(asyncActions)
+    if (!valIntents.ok) {
+      return {
+        ok: false,
+        reason: valIntents.reason,
+        inconsistencySeq: valIntents.seq,
+        inconsistencyTick: valIntents.issuedTick,
+        details: valIntents.details,
+        state,
+        controller,
+        p1Ilegal: false,
+        motivo: 'no_result',
+        winner: null,
+      }
+    }
+  }
 
   let ordenadasP1: AccionP1RankedEstricta[] = []
   if (strictAuthoritativeHistory) {
@@ -671,6 +723,13 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
           (p) => p.lane === j.lane && p.col === j.col && !p.isWalking
         )
         if (!victima) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'TIMELINE_INCONSISTENT'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            inconsistencyDetails = `No hay planta para excavar en lane=${j.lane}, col=${j.col}`
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -714,6 +773,13 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
 
         const cartaP1 = resolverCartaRival(mazoP1, plantId, j.slot)
         if (!cartaP1) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'TIMELINE_INCONSISTENT'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            inconsistencyDetails = `Carta ${j.plantId} no encontrada en el mazo de P1 (slot ${j.slot})`
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -726,6 +792,13 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         const statRolls = rollsValidos(cartaP1.statRolls ?? j.statRolls)
         const config = getScaledPlantConfig(plantIdValido, statRolls)
         if (!config || state.sunBank < config.cost) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'TIMELINE_INCONSISTENT'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            inconsistencyDetails = `Soles insuficientes para plantar ${j.plantId} (coste ${config?.cost}, banco ${state.sunBank})`
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -733,6 +806,13 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
           continue
         }
         if ((state.slotCooldowns[slot] || 0) > state.tick) {
+          if (strictAuthoritativeHistory) {
+            inconsistencyReason = 'TIMELINE_INCONSISTENT'
+            inconsistencySeq = j.seq
+            inconsistencyTick = j.issuedTick
+            inconsistencyDetails = `Slot ${slot} en enfriamiento hasta ${state.slotCooldowns[slot]} (tick ${state.tick})`
+            break
+          }
           if (validateP1) {
             p1Ilegal = true
             break
@@ -746,6 +826,13 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
             (p) => p.lane === j.lane && p.col === j.col && !p.isWalking
           )
           if (ocupada) {
+            if (strictAuthoritativeHistory) {
+              inconsistencyReason = 'TIMELINE_INCONSISTENT'
+              inconsistencySeq = j.seq
+              inconsistencyTick = j.issuedTick
+              inconsistencyDetails = `Casilla lane=${j.lane}, col=${j.col} ocupada por otra planta`
+              break
+            }
             if (validateP1) {
               p1Ilegal = true
               break
