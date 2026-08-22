@@ -43,6 +43,7 @@ import {
   reconstruirPartidaAsync,
   normalizarIntenciones,
   type AsyncOpponentController,
+  type AccionP1Simulacion,
 } from '../engine/asyncOpponent'
 import { nivelPorElo } from '../engine/bot'
 import type {
@@ -216,6 +217,7 @@ export function useGameEngine() {
   const isAsyncMatchRef = useRef<boolean>(false)
   const asyncOpponentDeckRef = useRef<CartaDeMazo[] | null>(null)
   const asyncOpponentActionsBufferRef = useRef<any[]>([])
+  const accionesP1AsyncRef = useRef<AccionP1Simulacion[]>([])
 
   /**
    * Incorpora intenciones del Rival Semilla recibidas progresivamente desde el servidor.
@@ -387,6 +389,7 @@ export function useGameEngine() {
     // partida con la semilla de la anterior daría otra partida distinta.
     semillaRef.current = seed
     registroRef.current = []
+    accionesP1AsyncRef.current = []
     numeroDeJugadaRef.current = 0
     reconstruccionesRef.current = 0
     rehacerDesdeRef.current = null
@@ -502,7 +505,7 @@ export function useGameEngine() {
   }, [])
 
   const confirmarRecogidaSol = useCallback(
-    (sunId: string): boolean => {
+    (sunId: string, issuedTick?: number, seq?: number): boolean => {
       const state = stateRef.current
       const sol = state.suns.find((s) => s.id === sunId)
 
@@ -514,6 +517,18 @@ export function useGameEngine() {
       state.sunBank += sol.value
       state.stats.sunsCollected += 1
       state.stats.score += 50
+
+      if (isAsyncMatchRef.current) {
+        const ticRecogida = typeof issuedTick === 'number' && Number.isFinite(issuedTick) ? issuedTick : state.tick
+        accionesP1AsyncRef.current.push({
+          seq,
+          tick: ticRecogida,
+          issuedTick: ticRecogida,
+          kind: 'collect',
+          targetId: sunId,
+        })
+      }
+
       soundManager.playSound('points', 0.6)
       forceRender()
       return true
@@ -525,7 +540,7 @@ export function useGameEngine() {
     (sunId: string): number | null => {
       const issuedTick = prepararRecogidaSol(sunId)
       if (issuedTick === null) return null
-      confirmarRecogidaSol(sunId)
+      confirmarRecogidaSol(sunId, issuedTick)
       return issuedTick
     },
     [prepararRecogidaSol, confirmarRecogidaSol]
@@ -580,16 +595,20 @@ export function useGameEngine() {
 
     // ── RAMA ASÍNCRONA (RIVAL SEMILLA RANKED) ─────────────────────────────────
     if (isAsyncMatchRef.current && asyncOpponentDeckRef.current) {
+      const selectedCard = viejo.selectedCard
+      const selectedSlotIndex = viejo.selectedSlotIndex
       const { estado, controller } = reconstruirPartidaAsync(
         semillaRef.current,
         mazoMioRef.current,
         asyncOpponentDeckRef.current,
         asyncOpponentActionsBufferRef.current,
-        registroRef.current.filter((r) => r.mia),
+        accionesP1AsyncRef.current,
         viejo.tick
       )
       asyncOpponentRef.current = controller
-      stateRef.current = conservarLoLocal(estado, viejo)
+      stateRef.current = estado
+      stateRef.current.selectedCard = selectedCard
+      stateRef.current.selectedSlotIndex = selectedSlotIndex
       forceRender()
       return
     }
@@ -778,6 +797,20 @@ export function useGameEngine() {
           plantId: card,
           lane,
           col,
+          statRolls: rolls,
+          level: cardLevel,
+        })
+      }
+
+      if (isAsyncMatchRef.current) {
+        accionesP1AsyncRef.current.push({
+          tick: enTic,
+          issuedTick: state.tick,
+          kind: 'plant',
+          plantId: card,
+          lane,
+          col,
+          slot: slotIdx,
           statRolls: rolls,
           level: cardLevel,
         })
@@ -976,6 +1009,16 @@ export function useGameEngine() {
         apuntarJugadaPropia({ tick: enTic, kind: 'dig', lane: casilla.lane, col: casilla.col })
       }
 
+      if (isAsyncMatchRef.current) {
+        accionesP1AsyncRef.current.push({
+          tick: enTic,
+          issuedTick: state.tick,
+          kind: 'dig',
+          lane: casilla.lane,
+          col: casilla.col,
+        })
+      }
+
       soundManager.playSound('plantation', 0.5)
       forceRender()
       // El tic va de vuelta por lo mismo que al plantar: el que se manda al
@@ -1002,7 +1045,13 @@ export function useGameEngine() {
       registroRef.current = registroRef.current.filter(
         (a) => !(a.mia && a.tick === tick && a.lane === lane && (a.col ?? null) === col)
       )
-      if (registroRef.current.length === antes) return
+
+      const antesAsync = accionesP1AsyncRef.current.length
+      accionesP1AsyncRef.current = accionesP1AsyncRef.current.filter(
+        (a) => !(a.tick === tick && a.lane === lane && (a.col ?? null) === col)
+      )
+
+      if (registroRef.current.length === antes && accionesP1AsyncRef.current.length === antesAsync) return
 
       // Y se devuelve lo que costó. La jugada no ocurrió, así que cobrarla sería
       // quedarse con los soles del jugador por un fallo de red.

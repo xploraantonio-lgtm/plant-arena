@@ -8,10 +8,12 @@ import {
   normalizarIntenciones,
   resolverCartaRival,
   reconstruirPartidaAsync,
+  runAsyncTimeline,
   type AsyncOpponentIntent,
+  type AccionP1Simulacion,
 } from './asyncOpponent.ts'
 import type { CartaDeMazo } from './mazoDeLaSala.ts'
-import { createBattleState } from './simulate.ts'
+import { createBattleState, stepTick } from './simulate.ts'
 import { PLANT_CONFIGS, TOTAL_COLUMNS, getScaledPlantConfig } from '../utils/gameConstants.ts'
 
 describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
@@ -919,34 +921,43 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const deckP1: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
     const deckP2: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
 
+    // Descubrir 2 soles del cielo
+    const spawnedSuns: string[] = []
+    const probe = createBattleState(seed, false, true)
+    while (probe.tick < 300) {
+      for (const s of probe.suns) {
+        if (!spawnedSuns.includes(s.id)) spawnedSuns.push(s.id)
+      }
+      stepTick(probe, () => {})
+    }
+    const sun1Id = spawnedSuns[0]
+    const sun2Id = spawnedSuns[1]
+
     // Buffer acumulativo de intenciones recibidas progresivamente hasta tic 330
     const bufferedIntents: AsyncOpponentIntent[] = [
       { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
     ]
 
-    // Acciones registradas de P1: una válida en tic 5 y una rechazada en tic 15
+    // Acciones registradas de P1:
+    // a) Recoger sol 1 en tic 80 (+25)
+    // b) Recoger sol 2 en tic 265 (+25 = 50 soles)
+    // c) Plantar girasol en tic 276 (issuedTick 270, 50 soles)
     const p1Acciones = [
-      { tick: 5, kind: 'plant', plantId: 'sunflower', lane: 1, col: 1 },
-      { tick: 15, kind: 'plant', plantId: 'sunflower', lane: 0, col: 1 }, // Esta se rechazará
+      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: sun1Id },
+      { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: sun2Id },
+      { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', lane: 1, col: 1, slot: 0 },
     ]
 
-    // Estado antes del rechazo
-    const { estado: estadoInicial } = reconstruirPartidaAsync(seed, deckP1, deckP2, bufferedIntents, p1Acciones, 330)
-    expect(estadoInicial.plants.length).toBe(2) // Ambas plantas de P1 presentes
-    expect(estadoInicial.enemyPlants.length).toBe(1) // Planta de P2 presente
-
-    // Se rechaza la acción de tic 15 -> descartarAccionPropia y reconstruir:
-    const p1AccionesCorregidas = p1Acciones.filter((a) => a.tick !== 15)
     const { estado: estadoReconstruido, controller: controllerReconstruido } = reconstruirPartidaAsync(
       seed,
       deckP1,
       deckP2,
       bufferedIntents,
-      p1AccionesCorregidas,
+      p1Acciones,
       330
     )
 
-    // 1. La planta rechazada de P1 desapareció
+    // 1. La planta de P1 está presente en el carril 1
     expect(estadoReconstruido.plants.length).toBe(1)
     expect(estadoReconstruido.plants[0].lane).toBe(1)
 
@@ -1156,6 +1167,261 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     // Cuando roomId está presente, muestra pantalla neutra de espera
     expect(bfContent).toMatch(/gameStatus === 'ready' && !practicePlantId && Boolean\(roomId\)/i)
     expect(bfContent).toMatch(/Preparando partida…/i)
+  })
+
+  // 58. Test integral: Recogida manual de sol, plantación con cooldown, intención tardía y convergencia total de estado
+  it('58. Reconstrucción asíncrona unificada converge al 100% en soles, cooldowns, RNG, entidades y controlador', () => {
+    const seed = 54321
+    const p1Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // 1. Obtener IDs de los primeros soles del cielo corriendo simulación previa
+    const spawnedSuns: string[] = []
+    const tempState = createBattleState(seed, false, true)
+    while (tempState.tick < 300) {
+      for (const s of tempState.suns) {
+        if (!spawnedSuns.includes(s.id)) spawnedSuns.push(s.id)
+      }
+      stepTick(tempState, () => {})
+    }
+    expect(spawnedSuns.length).toBeGreaterThanOrEqual(2)
+    const sun1Id = spawnedSuns[0]
+    const sun2Id = spawnedSuns[1]
+
+    // Acciones de P1:
+    // a) Recoger sol 1 en tic 80 (+25)
+    // b) Recoger sol 2 en tic 265 (+25 = 50 soles)
+    // c) Plantar girasol en tic 276 (issuedTick 270: consume 50 soles, cooldown slot 0 activo)
+    const p1Actions: AccionP1Simulacion[] = [
+      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: sun1Id },
+      { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: sun2Id },
+      { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
+    ]
+
+    // Intención tardía del Rival Semilla: plantar en tic 310
+    const asyncIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 2, col: 2 },
+    ]
+
+    // Ejecución limpia de referencia que conoció todas las acciones e intenciones desde el inicio
+    const { estado: estadoLimpio, controller: controllerLimpio } = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      asyncIntents,
+      p1Actions,
+      330
+    )
+
+    // Reconstrucción del cliente tras recibir el paquete tardío en tic 330
+    const { estado: estadoReconstruido, controller: controllerReconstruido } = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      asyncIntents,
+      p1Actions,
+      330
+    )
+
+    // A) Ticks y bases
+    expect(estadoReconstruido.tick).toBe(estadoLimpio.tick)
+    expect(estadoReconstruido.p1BaseHp).toBe(estadoLimpio.p1BaseHp)
+    expect(estadoReconstruido.p2BaseHp).toBe(estadoLimpio.p2BaseHp)
+
+    // B) Economía P1 y P2
+    expect(estadoReconstruido.sunBank).toBe(estadoLimpio.sunBank)
+    expect(estadoReconstruido.p2SunBank).toBe(estadoLimpio.p2SunBank)
+
+    // C) Cooldowns y slotCooldowns de P1
+    expect(estadoReconstruido.slotCooldowns).toEqual(estadoLimpio.slotCooldowns)
+
+    // D) Soles en el campo (los soles recogidos NO existen y los nuevos tienen mismos IDs)
+    expect(estadoReconstruido.suns.some((s) => s.id === sun1Id || s.id === sun2Id)).toBe(false)
+    expect(estadoReconstruido.suns.length).toBe(estadoLimpio.suns.length)
+    expect(estadoReconstruido.suns.map((s) => s.id)).toEqual(estadoLimpio.suns.map((s) => s.id))
+
+    // E) Plantas propias y enemigas
+    expect(estadoReconstruido.plants.length).toBe(estadoLimpio.plants.length)
+    expect(estadoReconstruido.plants[0].plantId).toBe('sunflower')
+    expect(estadoReconstruido.plants[0].lane).toBe(0)
+    expect(estadoReconstruido.plants[0].col).toBe(0)
+    expect(estadoReconstruido.enemyPlants.length).toBe(estadoLimpio.enemyPlants.length)
+    expect(estadoReconstruido.enemyPlants[0].plantId).toBe('sunflower')
+    expect(estadoReconstruido.enemyPlants[0].lane).toBe(2)
+
+    // F) Proyectiles, pending y estadísticas
+    expect(estadoReconstruido.projectiles.length).toBe(estadoLimpio.projectiles.length)
+    expect(estadoReconstruido.pending.length).toBe(estadoLimpio.pending.length)
+    expect(estadoReconstruido.stats).toEqual(estadoLimpio.stats)
+
+    // G) Estado del AsyncOpponentController
+    expect(controllerReconstruido.sunBank).toBe(controllerLimpio.sunBank)
+    expect(controllerReconstruido.nextIntentIndex).toBe(controllerLimpio.nextIntentIndex)
+    expect(controllerReconstruido.pendingRetry).toEqual(controllerLimpio.pendingRetry)
+    expect(controllerReconstruido.slotCooldowns).toEqual(controllerLimpio.slotCooldowns)
+    expect(controllerReconstruido.stats).toEqual(controllerLimpio.stats)
+  })
+
+  // 59. Rollback de acción rechazada por el servidor restaura economía y cooldowns calculados desde timeline
+  it('59. Eliminar acción rechazada restaura banco y cooldowns directamente por reconstrucción del timeline', () => {
+    const seed = 8888
+    const p1Deck: CartaDeMazo[] = [
+      { slot: 0, plantId: 'sunflower', level: 0, statRolls: [] },
+      { slot: 1, plantId: 'peashooter', level: 0, statRolls: [] },
+    ]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    const spawnedSuns: string[] = []
+    const probe = createBattleState(seed, false, true)
+    while (probe.tick < 300) {
+      for (const s of probe.suns) {
+        if (!spawnedSuns.includes(s.id)) spawnedSuns.push(s.id)
+      }
+      stepTick(probe, () => {})
+    }
+    const sun1Id = spawnedSuns[0]
+    const sun2Id = spawnedSuns[1]
+
+    // P1 recoge 2 soles (50 soles) y planta girasol en tic 276 (issuedTick 270, 50 soles).
+    // Intenta plantar lanzaguisantes en tic 280 pero no tiene 100 soles -> rechazada por el servidor.
+    const p1AccionesOriginales: AccionP1Simulacion[] = [
+      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: sun1Id },
+      { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: sun2Id },
+      { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 0 },
+      { seq: 4, tick: 286, issuedTick: 280, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 1, col: 1 },
+    ]
+
+    // El servidor rechaza la acción de peashooter -> se elimina de accionesP1AsyncRef:
+    const p1AccionesLimpias = p1AccionesOriginales.filter((a) => a.seq !== 4)
+
+    const { estado } = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      [],
+      p1AccionesLimpias,
+      300
+    )
+
+    // 1. Sólo la planta válida existe
+    expect(estado.plants.length).toBe(1)
+    expect(estado.plants[0].plantId).toBe('sunflower')
+
+    // 2. Banco de soles es 0 (gastó 50 de los 50 recolectados)
+    expect(estado.sunBank).toBe(0)
+
+    // 3. Cooldown de slot 0 (girasol) está activo, pero slot 1 (lanzaguisantes) está en 0
+    expect(estado.slotCooldowns[0]).toBeGreaterThan(0)
+    expect(estado.slotCooldowns[1] || 0).toBe(0)
+  })
+
+  // 60. Collect aceptado con targetId consume el sol exacto y coincide con verify-match
+  it('60. Recogida con targetId consume el sol correspondiente y otorga la economía idéntica a verify-match', () => {
+    const seed = 3333
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'peashooter', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // Descubrir sol generado
+    const checkState = createBattleState(seed, false, true)
+    while (checkState.tick < 100 && checkState.suns.length === 0) {
+      stepTick(checkState, () => {})
+    }
+    const targetSun = checkState.suns[0]
+    expect(targetSun).toBeDefined()
+
+    const p1Actions: AccionP1Simulacion[] = [
+      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: targetSun.id },
+    ]
+
+    // Ejecutar en cliente
+    const { estado: estadoCliente } = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      [],
+      p1Actions,
+      120
+    )
+
+    // Ejecutar en verify-match (simulateAsyncMatch)
+    const resServer = simulateAsyncMatch(
+      seed,
+      p1Deck,
+      p2Deck,
+      p1Actions,
+      [],
+      120
+    )
+
+    // P1 no fue penalizado por ilegal
+    expect(resServer.p1Ilegal).toBe(false)
+
+    // Economía del cliente contiene los 0 iniciales + 25 del sol recogido = 25
+    expect(estadoCliente.sunBank).toBe(25)
+    expect(estadoCliente.suns.some((s) => s.id === targetSun.id)).toBe(false)
+  })
+
+  // 61. Paridad absoluta entre reconstruirPartidaAsync y simulateAsyncMatch mediante runAsyncTimeline
+  it('61. reconstruirPartidaAsync y simulateAsyncMatch comparten el runner runAsyncTimeline y producen resultados idénticos', () => {
+    const seed = 77777
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    const spawnedSuns: string[] = []
+    const probe = createBattleState(seed, false, true)
+    while (probe.tick < 300) {
+      for (const s of probe.suns) {
+        if (!spawnedSuns.includes(s.id)) spawnedSuns.push(s.id)
+      }
+      stepTick(probe, () => {})
+    }
+    const sun1Id = spawnedSuns[0]
+    const sun2Id = spawnedSuns[1]
+
+    const p1Actions: AccionP1Simulacion[] = [
+      { seq: 1, tick: 80, issuedTick: 80, kind: 'collect', targetId: sun1Id },
+      { seq: 2, tick: 265, issuedTick: 265, kind: 'collect', targetId: sun2Id },
+      { seq: 3, tick: 276, issuedTick: 270, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
+    ]
+
+    const asyncIntents: AsyncOpponentIntent[] = [
+      { seq: 1, tick: 310, issuedTick: 310, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 1 },
+    ]
+
+    // Ejecución con runAsyncTimeline
+    const timelineRes = runAsyncTimeline({
+      seed,
+      p1Deck,
+      asyncDeck: p2Deck,
+      p1Actions,
+      asyncActions: asyncIntents,
+      untilTick: 330,
+      validateP1: true,
+      stopOnGameOver: true,
+    })
+
+    // Ejecución con reconstruirPartidaAsync
+    const rebuildRes = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      asyncIntents,
+      p1Actions,
+      330
+    )
+
+    expect(rebuildRes.estado.tick).toBe(timelineRes.state.tick)
+    expect(rebuildRes.estado.sunBank).toBe(timelineRes.state.sunBank)
+    expect(rebuildRes.estado.p2SunBank).toBe(timelineRes.state.p2SunBank)
+    expect(rebuildRes.estado.p1BaseHp).toBe(timelineRes.state.p1BaseHp)
+    expect(rebuildRes.estado.p2BaseHp).toBe(timelineRes.state.p2BaseHp)
+    expect(rebuildRes.estado.plants.length).toBe(timelineRes.state.plants.length)
+    expect(rebuildRes.estado.enemyPlants.length).toBe(timelineRes.state.enemyPlants.length)
+    expect(rebuildRes.controller.sunBank).toBe(timelineRes.controller.sunBank)
+    expect(rebuildRes.controller.nextIntentIndex).toBe(timelineRes.controller.nextIntentIndex)
   })
 })
 

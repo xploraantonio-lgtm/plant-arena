@@ -430,6 +430,8 @@ export interface AccionP1Simulacion {
   col?: number | null
   slot?: number | null
   targetId?: string | null
+  statRolls?: PlantStatKey[]
+  level?: number
 }
 
 export interface ResultadoSimulacionAsync {
@@ -446,10 +448,291 @@ export interface ResultadoSimulacionAsync {
   }
 }
 
-function issuedTickP1(a: AccionP1Simulacion): number {
-  if (Number.isInteger(a.issuedTick) && (a.issuedTick as number) >= 0) return a.issuedTick as number
+export function issuedTickP1(a: AccionP1Simulacion): number {
+  if (typeof a.issuedTick === 'number' && Number.isFinite(a.issuedTick) && a.issuedTick >= 0) {
+    return a.issuedTick
+  }
   if (a.kind === 'collect') return Math.max(0, a.tick)
   return Math.max(0, a.tick - MARGEN_DE_RED_TICS)
+}
+
+/**
+ * Parsea y normaliza acciones de P1 asegurando orden por issuedTick y seq.
+ */
+export function normalizarAccionesP1(rawActions: unknown): AccionP1Simulacion[] {
+  if (!Array.isArray(rawActions)) return []
+  const res: AccionP1Simulacion[] = []
+
+  for (const a of rawActions) {
+    if (!a || typeof a !== 'object') continue
+    const kind = a.kind
+    if (kind !== 'plant' && kind !== 'dig' && kind !== 'collect') continue
+    const tick = typeof a.tick === 'number' ? a.tick : 0
+    let issuedTick = typeof a.issuedTick === 'number' ? a.issuedTick : (typeof a.issued_tick === 'number' ? a.issued_tick : null)
+    if (issuedTick === null || !Number.isFinite(issuedTick)) {
+      issuedTick = kind === 'collect' ? Math.max(0, tick) : Math.max(0, tick - MARGEN_DE_RED_TICS)
+    }
+    const plantId = (typeof a.plantId === 'string' ? a.plantId : (typeof a.plant_id === 'string' ? a.plant_id : (typeof a.plant === 'string' ? a.plant : null))) as PlantId | null
+    const lane = typeof a.lane === 'number' ? a.lane : null
+    const col = typeof a.col === 'number' ? a.col : null
+    const slot = typeof a.slot === 'number' ? a.slot : null
+    const targetId = typeof a.targetId === 'string' ? a.targetId : (typeof a.target_id === 'string' ? a.target_id : null)
+    const seq = typeof a.seq === 'number' ? a.seq : (typeof a.id === 'number' ? a.id : undefined)
+    const statRolls = Array.isArray(a.statRolls) ? rollsValidos(a.statRolls) : undefined
+    const level = typeof a.level === 'number' ? a.level : undefined
+
+    res.push({
+      id: typeof a.id === 'number' ? a.id : undefined,
+      seq,
+      tick,
+      issuedTick,
+      kind,
+      plantId,
+      lane,
+      col,
+      slot,
+      targetId,
+      statRolls,
+      level,
+    })
+  }
+
+  return res.sort((a, b) => {
+    const ia = issuedTickP1(a)
+    const ib = issuedTickP1(b)
+    if (ia !== ib) return ia - ib
+    const sa = a.seq ?? Number.MAX_SAFE_INTEGER
+    const sb = b.seq ?? Number.MAX_SAFE_INTEGER
+    return sa - sb
+  })
+}
+
+export interface RunAsyncTimelineOptions {
+  seed: number
+  p1Deck: unknown
+  asyncDeck: unknown
+  p1Actions: AccionP1Simulacion[] | any[]
+  asyncActions: unknown
+  untilTick?: number
+  maxTicks?: number
+  validateP1?: boolean
+  stopOnGameOver?: boolean
+}
+
+export interface RunAsyncTimelineResult {
+  state: GameState
+  controller: AsyncOpponentController
+  p1Ilegal: boolean
+  motivo: 'simulation' | 'forfeit_p1' | 'no_result'
+  winner: 1 | 2 | null
+}
+
+/**
+ * Runner ÚNICO, PURO y DETERMINISTA para partidas asíncronas de Ranked.
+ * Compartido al 100% entre simulateAsyncMatch() (Edge Function) y reconstruirPartidaAsync() (Cliente).
+ */
+export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTimelineResult {
+  const {
+    seed,
+    p1Deck,
+    asyncDeck,
+    p1Actions,
+    asyncActions,
+    untilTick,
+    maxTicks = TOPE_DE_SEGURIDAD_ASYNC,
+    validateP1 = false,
+    stopOnGameOver = true,
+  } = options
+
+  const state = createBattleState(seed, false, true)
+  const mazoP1 = leerMazo(p1Deck) ?? []
+  const controller = createAsyncOpponentController(asyncDeck, asyncActions)
+
+  const ordenadasP1 = normalizarAccionesP1(p1Actions)
+
+  let p1Index = 0
+  let p1Ilegal = false
+  const limitTick = untilTick !== undefined ? untilTick : maxTicks
+
+  while (state.tick < limitTick && (!stopOnGameOver || state.status === 'playing')) {
+    // 1. Validar y aplicar acciones de P1 en state.tick
+    while (p1Index < ordenadasP1.length && issuedTickP1(ordenadasP1[p1Index]) === state.tick) {
+      const j = ordenadasP1[p1Index]
+      p1Index += 1
+
+      if (j.kind === 'collect') {
+        if (!j.targetId) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+        const sol = state.suns.find((s) => s.id === j.targetId)
+        if (!sol) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+        state.suns = state.suns.filter((s) => s.id !== sol.id)
+        state.sunBank += sol.value
+        state.stats.sunsCollected += 1
+        state.stats.score += 50
+        continue
+      }
+
+      if (j.kind === 'dig') {
+        if (
+          !Number.isInteger(j.lane) ||
+          j.lane! < 0 ||
+          j.lane! > 2 ||
+          !Number.isInteger(j.col) ||
+          j.col! < 0 ||
+          j.col! >= P1_COLUMNS
+        ) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+        const victima = state.plants.find(
+          (p) => p.lane === j.lane && p.col === j.col && !p.isWalking
+        )
+        if (!victima) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+        state.pending.push({
+          atTick: Math.max(1, j.tick ?? (state.tick + MARGEN_DE_RED_TICS)),
+          kind: 'own_dig',
+          lane: j.lane!,
+          col: j.col!,
+        })
+        continue
+      }
+
+      if (j.kind === 'plant') {
+        const plantId = (j.plantId ?? (j as any).plant_id ?? (j as any).plant) as PlantId | null
+        if (
+          !esPlantId(plantId) ||
+          !Number.isInteger(j.lane) ||
+          j.lane! < 0 ||
+          j.lane! > 2 ||
+          !Number.isInteger(j.col) ||
+          j.col! < 0 ||
+          j.col! >= P1_COLUMNS
+        ) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+
+        const cartaP1 = resolverCartaRival(mazoP1, plantId, j.slot)
+        if (!cartaP1) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+
+        const slot = cartaP1.slot ?? (j.slot ?? 0)
+        const plantIdValido = cartaP1.plantId as PlantId
+        const statRolls = rollsValidos(cartaP1.statRolls ?? j.statRolls)
+        const config = getScaledPlantConfig(plantIdValido, statRolls)
+        if (!config || state.sunBank < config.cost) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+        if ((state.slotCooldowns[slot] || 0) > state.tick) {
+          if (validateP1) {
+            p1Ilegal = true
+            break
+          }
+          continue
+        }
+
+        const camina = config.category === 'melee' || !!config.moveSpeed || plantIdValido === 'chomper'
+        if (!camina) {
+          const ocupada = state.plants.some(
+            (p) => p.lane === j.lane && p.col === j.col && !p.isWalking
+          )
+          if (ocupada) {
+            if (validateP1) {
+              p1Ilegal = true
+              break
+            }
+            continue
+          }
+        }
+
+        state.sunBank -= config.cost
+        state.slotCooldowns[slot] = state.tick + msToTicks(config.cooldownMs)
+        state.stats.plantsPlaced += 1
+
+        state.pending.push({
+          atTick: Math.max(1, j.tick ?? (state.tick + MARGEN_DE_RED_TICS)),
+          kind: 'own_plant',
+          plantId: plantIdValido,
+          lane: j.lane!,
+          col: camina ? undefined : (j.col ?? undefined),
+          statRolls,
+          level: statRolls.length > 0 ? statRolls.length : (cartaP1.level ?? j.level ?? 0),
+        })
+        continue
+      }
+
+      if (validateP1) {
+        p1Ilegal = true
+        break
+      }
+    }
+
+    if (p1Ilegal) {
+      break
+    }
+
+    // 2. Procesar intenciones del Rival Semilla (P2)
+    stepAsyncOpponent(controller, state)
+
+    // 3. Avanzar simulación un tic
+    stepTick(state, () => {})
+  }
+
+  let winner: 1 | 2 | null = null
+  let motivo: 'simulation' | 'forfeit_p1' | 'no_result' = 'no_result'
+
+  if (p1Ilegal) {
+    winner = 2
+    motivo = 'forfeit_p1'
+  } else if (state.status === 'victory') {
+    winner = 1
+    motivo = 'simulation'
+  } else if (state.status === 'defeat') {
+    winner = 2
+    motivo = 'simulation'
+  } else {
+    motivo = 'no_result'
+  }
+
+  return {
+    state,
+    controller,
+    p1Ilegal,
+    motivo,
+    winner,
+  }
 }
 
 /**
@@ -464,151 +747,25 @@ export function simulateAsyncMatch(
   asyncActionsRaw: unknown,
   maxTicks = TOPE_DE_SEGURIDAD_ASYNC
 ): ResultadoSimulacionAsync {
-  const state = createBattleState(seed, false, true)
-  const p1Deck = leerMazo(p1DeckRaw) ?? []
-  const controller = createAsyncOpponentController(asyncDeckRaw, asyncActionsRaw)
-
-  const ordenadasP1 = [...p1Actions].sort((a, b) => {
-    const ia = issuedTickP1(a)
-    const ib = issuedTickP1(b)
-    if (ia !== ib) return ia - ib
-    const sa = a.seq ?? Number.MAX_SAFE_INTEGER
-    const sb = b.seq ?? Number.MAX_SAFE_INTEGER
-    return sa - sb
+  const res = runAsyncTimeline({
+    seed,
+    p1Deck: p1DeckRaw,
+    asyncDeck: asyncDeckRaw,
+    p1Actions,
+    asyncActions: asyncActionsRaw,
+    maxTicks,
+    validateP1: true,
+    stopOnGameOver: true,
   })
 
-  let p1Index = 0
-  let p1Ilegal = false
-  let pasos = 0
-
-  while (state.status === 'playing' && pasos < maxTicks) {
-    // 1. Validar y aplicar intenciones de P1 en state.tick
-    while (p1Index < ordenadasP1.length && issuedTickP1(ordenadasP1[p1Index]) === state.tick) {
-      const j = ordenadasP1[p1Index]
-      p1Index += 1
-
-      if (j.kind === 'collect') {
-        if (!j.targetId) {
-          p1Ilegal = true
-          break
-        }
-        const sol = state.suns.find((s) => s.id === j.targetId)
-        if (!sol) {
-          p1Ilegal = true
-          break
-        }
-        state.suns = state.suns.filter((s) => s.id !== sol.id)
-        state.sunBank += sol.value
-        state.stats.sunsCollected += 1
-        state.stats.score += 50
-        continue
-      }
-
-      if (j.kind === 'dig') {
-        if (!Number.isInteger(j.lane) || j.lane! < 0 || j.lane! > 2 || !Number.isInteger(j.col) || j.col! < 0 || j.col! >= P1_COLUMNS) {
-          p1Ilegal = true
-          break
-        }
-        const victima = state.plants.find((p) => p.lane === j.lane && p.col === j.col && !p.isWalking)
-        if (!victima) {
-          p1Ilegal = true
-          break
-        }
-        state.pending.push({
-          atTick: Math.max(1, j.tick),
-          kind: 'own_dig',
-          lane: j.lane!,
-          col: j.col!,
-        })
-        continue
-      }
-
-      if (j.kind === 'plant') {
-        if (!esPlantId(j.plantId) || !Number.isInteger(j.lane) || j.lane! < 0 || j.lane! > 2 || !Number.isInteger(j.col) || j.col! < 0 || j.col! >= P1_COLUMNS) {
-          p1Ilegal = true
-          break
-        }
-        const cartaP1 = resolverCartaRival(p1Deck, j.plantId, j.slot)
-        if (!cartaP1) {
-          p1Ilegal = true
-          break
-        }
-        const slot = cartaP1.slot ?? (j.slot ?? 0)
-        const plantId = cartaP1.plantId as PlantId
-        const statRolls = rollsValidos(cartaP1.statRolls)
-        const config = getScaledPlantConfig(plantId, statRolls)
-        if (!config || state.sunBank < config.cost) {
-          p1Ilegal = true
-          break
-        }
-        if ((state.slotCooldowns[slot] || 0) > state.tick) {
-          p1Ilegal = true
-          break
-        }
-        const camina = config.category === 'melee' || !!config.moveSpeed || plantId === 'chomper'
-        if (!camina) {
-          const ocupada = state.plants.some((p) => p.lane === j.lane && p.col === j.col && !p.isWalking)
-          if (ocupada) {
-            p1Ilegal = true
-            break
-          }
-        }
-
-        state.sunBank -= config.cost
-        state.slotCooldowns[slot] = state.tick + msToTicks(config.cooldownMs)
-        state.stats.plantsPlaced += 1
-
-        state.pending.push({
-          atTick: Math.max(1, j.tick),
-          kind: 'own_plant',
-          plantId,
-          lane: j.lane!,
-          col: j.col ?? undefined,
-          statRolls,
-          level: statRolls.length > 0 ? statRolls.length : (cartaP1.level ?? 0),
-        })
-        continue
-      }
-
-      p1Ilegal = true
-      break
-    }
-
-    if (p1Ilegal) {
-      break
-    }
-
-    // 2. Procesar intenciones del Rival Semilla (P2)
-    stepAsyncOpponent(controller, state)
-
-    // 3. Avanzar simulación un tic
-    stepTick(state, () => {})
-    pasos += 1
-  }
-
-  if (p1Ilegal) {
-    return {
-      ganador: 2,
-      tics: state.tick,
-      baseP1: state.p1BaseHp,
-      baseP2: state.p2BaseHp,
-      p1Ilegal: true,
-      motivo: 'forfeit_p1',
-      telemetria: controller.stats,
-    }
-  }
-
-  const ganador: 1 | 2 | null =
-    state.status === 'victory' ? 1 : state.status === 'defeat' ? 2 : null
-
   return {
-    ganador,
-    tics: state.tick,
-    baseP1: state.p1BaseHp,
-    baseP2: state.p2BaseHp,
-    p1Ilegal: false,
-    motivo: ganador !== null ? 'simulation' : 'no_result',
-    telemetria: controller.stats,
+    ganador: res.winner,
+    tics: res.state.tick,
+    baseP1: res.state.p1BaseHp,
+    baseP2: res.state.p2BaseHp,
+    p1Ilegal: res.p1Ilegal,
+    motivo: res.motivo,
+    telemetria: res.controller.stats,
   }
 }
 
@@ -623,47 +780,19 @@ export function reconstruirPartidaAsync(
   p1Deck: CartaDeMazo[] | null | undefined,
   asyncDeckSnapshot: CartaDeMazo[],
   asyncIntents: AsyncOpponentIntent[] | any[],
-  p1Acciones: any[],
+  p1Acciones: AccionP1Simulacion[] | any[],
   hastaTick: number
 ): { estado: GameState; controller: AsyncOpponentController } {
-  const mazoP1Limpio = p1Deck ?? []
-  const estado = createBattleState(seed, false, true)
-  const normalizedIntents = normalizarIntenciones(asyncIntents)
-  const controller = createAsyncOpponentController(asyncDeckSnapshot, normalizedIntents)
+  const res = runAsyncTimeline({
+    seed,
+    p1Deck,
+    asyncDeck: asyncDeckSnapshot,
+    p1Actions: p1Acciones,
+    asyncActions: asyncIntents,
+    untilTick: hastaTick,
+    validateP1: false,
+    stopOnGameOver: true,
+  })
 
-  // Encolar acciones de P1 en estado.pending con su tic correspondiente
-  for (const a of p1Acciones) {
-    const atTick = Math.max(1, a.tick)
-    if (a.kind === 'dig') {
-      estado.pending.push({
-        atTick,
-        kind: 'own_dig',
-        lane: a.lane,
-        col: a.col ?? 0,
-      })
-      continue
-    }
-
-    const plantId = a.plantId ?? a.plant_id ?? a.plant
-    if (esPlantId(plantId)) {
-      const cartaP1 = resolverCartaRival(mazoP1Limpio, plantId, a.slot)
-      const statRolls = rollsValidos(cartaP1?.statRolls ?? a.statRolls)
-      estado.pending.push({
-        atTick,
-        kind: 'own_plant',
-        plantId,
-        lane: a.lane,
-        col: a.col ?? undefined,
-        statRolls,
-        level: statRolls.length > 0 ? statRolls.length : (cartaP1?.level ?? a.level ?? 0),
-      })
-    }
-  }
-
-  while (estado.tick < hastaTick && estado.status === 'playing') {
-    stepAsyncOpponent(controller, estado)
-    stepTick(estado, () => {})
-  }
-
-  return { estado, controller }
+  return { estado: res.state, controller: res.controller }
 }

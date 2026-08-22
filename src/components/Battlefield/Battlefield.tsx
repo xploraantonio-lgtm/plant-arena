@@ -508,7 +508,7 @@ export default function Battlefield({
       {
         onAck: () => {
           // Si mientras esperaba se auto-recogió, devuelve false y no suma dos veces.
-          confirmarRecogidaSol(sunId)
+          confirmarRecogidaSol(sunId, issuedTick, ordenRef.current)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
