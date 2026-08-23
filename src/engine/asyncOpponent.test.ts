@@ -3657,7 +3657,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const sqlContent = readFileSync(sqlPath, 'utf8')
 
     expect(sqlContent).toMatch(/alreadyExistingSides/i)
-    expect(sqlContent).toMatch(/v_existing_opp\.deck_snapshot = v_room\.p1_deck/i)
+    expect(sqlContent).toMatch(/v_existing_opp1\.deck_snapshot = v_room\.p1_deck/i)
     expect(sqlContent).toMatch(/v_already_existing_sides := v_already_existing_sides \+ 1;/i)
   })
 
@@ -4260,7 +4260,8 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const sqlContent = readFileSync(sqlPath, 'utf8')
 
     expect(sqlContent).toMatch(/SOURCE_SNAPSHOT_CONFLICT/i)
-    expect(sqlContent).toMatch(/'conflictedSides',\s*v_conflicted_sides/i)
+    expect(sqlContent).toMatch(/'conflictedSides',/i)
+    expect(sqlContent).toMatch(/v_p1_status = 'CONFLICT'/i)
   })
 
   // 200. Preflight audit script exige resolutionSource = 'authoritative_replay'
@@ -4308,7 +4309,82 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(sqlContent).toMatch(/\(v_room\.verification_payload->>'illegalCount'\) !~ '\^\\d\+\$'/i)
     expect(sqlContent).toMatch(/\(v_room\.verification_payload->>'ticks'\) !~ '\^\\d\+\$'/i)
   })
+
+  // 204. Test crítico de contaminación entre intents (Test 8 del prompt)
+  it('204. Validación P2: no existe contaminación residual de variables entre intents de distinto tipo', () => {
+    const planConInterleaving = [
+      { seq: 10, kind: 'plant', plantId: 'peashooter', slot: 2, lane: 0, col: 0, issuedTick: 10, tick: 16 },
+      { seq: 20, kind: 'dig', lane: 0, col: 1, issuedTick: 20, tick: 26 },
+      { seq: 30, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 0, issuedTick: 30, tick: 36 },
+      { seq: 20, kind: 'dig', lane: 0, col: 1, issuedTick: 20, tick: 26 },
+    ]
+    const val = validarYNormalizarIntencionesAsyncRanked(planConInterleaving)
+    expect(val.ok).toBe(true)
+    if (val.ok) {
+      expect(val.intenciones.length).toBe(3)
+      const digIntent = val.intenciones.find((i) => i.seq === 20)
+      expect(digIntent).toBeDefined()
+      expect(digIntent?.kind).toBe('dig')
+      expect(digIntent?.plantId).toBeUndefined()
+      expect(digIntent?.slot).toBeUndefined()
+    }
+  })
+
+  // 205. Test inverso de conflicto real en dig (Test 9 del prompt)
+  it('205. Validación P2: conflicto real en dig (col distinta) reporta SEQ_CONFLICT correctamente', () => {
+    const planConConflictoDig = [
+      { seq: 10, kind: 'plant', plantId: 'peashooter', slot: 2, lane: 0, col: 0, issuedTick: 10, tick: 16 },
+      { seq: 20, kind: 'dig', lane: 0, col: 1, issuedTick: 20, tick: 26 },
+      { seq: 30, kind: 'plant', plantId: 'sunflower', slot: 4, lane: 1, col: 0, issuedTick: 30, tick: 36 },
+      { seq: 20, kind: 'dig', lane: 0, col: 2, issuedTick: 20, tick: 26 },
+    ]
+    const val = validarYNormalizarIntencionesAsyncRanked(planConConflictoDig)
+    expect(val.ok).toBe(false)
+    if (!val.ok) {
+      expect(val.reason).toBe('SEQ_CONFLICT')
+    }
+  })
+
+  // 206. Auditoría estática: _validate_ranked_async_plan resetea variables y canonicaliza explícitamente
+  it('206. Auditoría estática: _validate_ranked_async_plan resetea variables por iteración y canonicaliza dig sin residuos de plant', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_plant_id := NULL;/i)
+    expect(sqlContent).toMatch(/v_slot := NULL;/i)
+    expect(sqlContent).toMatch(/'plantId',\s*NULL,\s*'slot',\s*NULL/i)
+  })
+
+  // 207. Auditoría estática: capture_ranked_async_opponents_from_room ejecuta row lock de concurrencia
+  it('207. Auditoría estática: capture_ranked_async_opponents_from_room serializa la captura mediante row lock FOR UPDATE', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/SELECT \* INTO v_room FROM public\.game_rooms WHERE id = p_room_id FOR UPDATE;/i)
+  })
+
+  // 208. Auditoría estática: capture_ranked_async_opponents_from_room es atómica (Fase 1 Validate -> Conflict Check -> Fase 2 Write)
+  it('208. Auditoría estática: captura es atómica all-or-nothing (0 cambios si cualquier lado tiene conflicto)', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/FASE 1: READ \/ VALIDATE ONLY \(CERO ESCRITURAS\)/i)
+    expect(sqlContent).toMatch(/IF v_p1_status = 'CONFLICT' OR v_p2_status = 'CONFLICT' THEN/i)
+    expect(sqlContent).toMatch(/'capturedSides',\s*0,\s*'alreadyExistingSides',\s*0/i)
+    expect(sqlContent).toMatch(/FASE 2: WRITE ONLY \(SÓLO SI NO HUBO NINGÚN CONFLICTO\)/i)
+  })
+
+  // 209. Auditoría estática: Backfill registra y maneja conflictos sin dejar escrituras parciales
+  it('209. Auditoría estática: Backfill DO contabiliza conflictos y no usa WHEN OTHERS', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_conflicted INTEGER := 0;/i)
+    expect(sqlContent).toMatch(/v_res->>'reason'\) = 'SOURCE_SNAPSHOT_CONFLICT'/i)
+    expect(sqlContent).not.toMatch(/WHEN OTHERS/i)
+  })
 })
+
 
 
 

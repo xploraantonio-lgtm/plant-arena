@@ -174,6 +174,18 @@ BEGIN
   END IF;
 
   FOR v_elem IN SELECT * FROM jsonb_array_elements(p_actions) LOOP
+    -- Limpieza total de variables por cada elemento para evitar contaminación inter-iteración
+    v_seq := NULL;
+    v_tick := NULL;
+    v_issued_tick := NULL;
+    v_kind := NULL;
+    v_plant_id := NULL;
+    v_slot := NULL;
+    v_lane := NULL;
+    v_col := NULL;
+    v_existing_intent := NULL;
+    v_canonical_intent := NULL;
+
     IF jsonb_typeof(v_elem) <> 'object' THEN
       RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_PLAN', 'details', 'Cada intención debe ser un objeto JSON');
     END IF;
@@ -228,10 +240,20 @@ BEGIN
       IF v_col < 0 OR v_col > 5 THEN
         RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_DIG_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'col fuera de rango en dig (0..5)');
       END IF;
-    END IF;
 
-    -- plant específico
-    IF v_kind = 'plant' THEN
+      -- Canonicalización explícita para dig: plantId y slot estrictamente NULL
+      v_canonical_intent := jsonb_build_object(
+        'seq', v_seq,
+        'kind', 'dig',
+        'issuedTick', v_issued_tick,
+        'tick', v_tick,
+        'lane', v_lane,
+        'col', v_col,
+        'plantId', NULL,
+        'slot', NULL
+      );
+    ELSE
+      -- plant específico
       v_plant_id := v_elem->>'plantId';
       IF v_plant_id IS NULL OR NOT (v_plant_id = ANY(v_valid_plants)) THEN
         RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_PLANT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'plantId inválido en intención P2: ' || COALESCE(v_plant_id, 'NULL'));
@@ -256,19 +278,19 @@ BEGIN
           RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_PLANT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'slot fuera de rango en plant (0..5)');
         END IF;
       END IF;
-    END IF;
 
-    -- Representación canónica exacta idéntica a TypeScript (seq, kind, issuedTick, tick, lane, col, plantId, slot)
-    v_canonical_intent := jsonb_build_object(
-      'seq', v_seq,
-      'kind', v_kind,
-      'issuedTick', v_issued_tick,
-      'tick', v_tick,
-      'lane', v_lane,
-      'col', CASE WHEN v_elem ? 'col' AND v_elem->>'col' IS NOT NULL THEN (v_elem->>'col')::INTEGER ELSE NULL END,
-      'plantId', v_plant_id,
-      'slot', v_slot
-    );
+      -- Canonicalización explícita para plant
+      v_canonical_intent := jsonb_build_object(
+        'seq', v_seq,
+        'kind', 'plant',
+        'issuedTick', v_issued_tick,
+        'tick', v_tick,
+        'lane', v_lane,
+        'col', v_col,
+        'plantId', v_plant_id,
+        'slot', v_slot
+      );
+    END IF;
 
     -- Comprobar colisiones de seq dentro del plan
     v_existing_intent := v_seen_seqs->(v_seq::TEXT);
@@ -398,26 +420,36 @@ DECLARE
   v_duration INTEGER;
   v_resolution_source TEXT;
   v_reason TEXT;
+  
+  -- Lado 1 (Side 1)
+  v_p1_status TEXT := 'NOT_ELIGIBLE'; -- 'NOT_ELIGIBLE' | 'NEW' | 'IDENTICAL_EXISTING' | 'CONFLICT'
   v_p1_rating INTEGER;
-  v_p2_rating INTEGER;
   v_p1_deck_val JSONB;
-  v_p2_deck_val JSONB;
   v_p1_actions JSONB;
-  v_p2_actions JSONB;
   v_p1_plan_val JSONB;
-  v_p2_plan_val JSONB;
   v_p1_plant_count INTEGER;
-  v_p2_plant_count INTEGER;
   v_p1_missing_issued INTEGER;
-  v_p2_missing_issued INTEGER;
   v_p1_invalid_seq INTEGER;
+  v_existing_opp1 RECORD;
+  
+  -- Lado 2 (Side 2)
+  v_p2_status TEXT := 'NOT_ELIGIBLE'; -- 'NOT_ELIGIBLE' | 'NEW' | 'IDENTICAL_EXISTING' | 'CONFLICT'
+  v_p2_rating INTEGER;
+  v_p2_deck_val JSONB;
+  v_p2_actions JSONB;
+  v_p2_plan_val JSONB;
+  v_p2_plant_count INTEGER;
+  v_p2_missing_issued INTEGER;
   v_p2_invalid_seq INTEGER;
-  v_existing_opp RECORD;
+  v_existing_opp2 RECORD;
+  
+  -- Contadores finales
   v_captured_sides INTEGER := 0;
   v_already_existing_sides INTEGER := 0;
-  v_conflicted_sides INTEGER := 0;
+  v_not_eligible_sides INTEGER := 0;
 BEGIN
-  SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id;
+  -- ── LOCK DE CONCURRENCIA: Serializa la captura para la misma source room ───
+  SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id FOR UPDATE;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', FALSE, 'reason', 'room_not_found');
   END IF;
@@ -484,7 +516,11 @@ BEGIN
   END IF;
   v_duration := (v_room.verification_payload->>'ticks')::INTEGER;
 
-  -- ── LADO 1 (player1_id) ───────────────────────────────────────────────────
+  -- ═══════════════════════════════════════════════════════════════════════════
+  -- FASE 1: READ / VALIDATE ONLY (CERO ESCRITURAS)
+  -- ═══════════════════════════════════════════════════════════════════════════
+
+  -- ── Evaluación Lado 1 (player1_id) ─────────────────────────────────────────
   SELECT COUNT(*) INTO v_p1_plant_count
     FROM public.match_actions
    WHERE room_id = p_room_id AND user_id = v_room.player1_id AND kind = 'plant';
@@ -521,55 +557,30 @@ BEGIN
         SELECT COALESCE(elo_rating, 1000) INTO v_p1_rating
           FROM public.profiles WHERE id = v_room.player1_id;
 
-        -- Comprobación explícita de fila existente para idempotencia vs conflicto
-        SELECT * INTO v_existing_opp
+        SELECT * INTO v_existing_opp1
           FROM public.ranked_async_opponents
          WHERE source_room_id = p_room_id AND source_side = 1;
 
         IF FOUND THEN
-          IF v_existing_opp.deck_snapshot = v_room.p1_deck
-             AND v_existing_opp.actions_snapshot = v_p1_actions
-             AND v_existing_opp.source_engine_version = 'auth-v1'
-             AND v_existing_opp.protocol_version = 'ranked-async-v1'
-             AND v_existing_opp.source_duration_ticks = v_duration
-             AND v_existing_opp.rating_snapshot = v_p1_rating
+          IF v_existing_opp1.deck_snapshot = v_room.p1_deck
+             AND v_existing_opp1.actions_snapshot = v_p1_actions
+             AND v_existing_opp1.source_engine_version = 'auth-v1'
+             AND v_existing_opp1.protocol_version = 'ranked-async-v1'
+             AND v_existing_opp1.source_duration_ticks = v_duration
+             AND v_existing_opp1.rating_snapshot = v_p1_rating
           THEN
-            v_already_existing_sides := v_already_existing_sides + 1;
+            v_p1_status := 'IDENTICAL_EXISTING';
           ELSE
-            v_conflicted_sides := v_conflicted_sides + 1;
+            v_p1_status := 'CONFLICT';
           END IF;
         ELSE
-          INSERT INTO public.ranked_async_opponents (
-            source_room_id,
-            source_side,
-            rating_snapshot,
-            deck_snapshot,
-            actions_snapshot,
-            source_engine_version,
-            protocol_version,
-            source_duration_ticks,
-            active,
-            created_at
-          ) VALUES (
-            p_room_id,
-            1,
-            v_p1_rating,
-            v_room.p1_deck,
-            v_p1_actions,
-            'auth-v1',
-            'ranked-async-v1',
-            v_duration,
-            TRUE,
-            NOW()
-          );
-
-          v_captured_sides := v_captured_sides + 1;
+          v_p1_status := 'NEW';
         END IF;
       END IF;
     END IF;
   END IF;
 
-  -- ── LADO 2 (player2_id) ───────────────────────────────────────────────────
+  -- ── Evaluación Lado 2 (player2_id) ─────────────────────────────────────────
   SELECT COUNT(*) INTO v_p2_plant_count
     FROM public.match_actions
    WHERE room_id = p_room_id AND user_id = v_room.player2_id AND kind = 'plant';
@@ -606,68 +617,116 @@ BEGIN
         SELECT COALESCE(elo_rating, 1000) INTO v_p2_rating
           FROM public.profiles WHERE id = v_room.player2_id;
 
-        SELECT * INTO v_existing_opp
+        SELECT * INTO v_existing_opp2
           FROM public.ranked_async_opponents
          WHERE source_room_id = p_room_id AND source_side = 2;
 
         IF FOUND THEN
-          IF v_existing_opp.deck_snapshot = v_room.p2_deck
-             AND v_existing_opp.actions_snapshot = v_p2_actions
-             AND v_existing_opp.source_engine_version = 'auth-v1'
-             AND v_existing_opp.protocol_version = 'ranked-async-v1'
-             AND v_existing_opp.source_duration_ticks = v_duration
-             AND v_existing_opp.rating_snapshot = v_p2_rating
+          IF v_existing_opp2.deck_snapshot = v_room.p2_deck
+             AND v_existing_opp2.actions_snapshot = v_p2_actions
+             AND v_existing_opp2.source_engine_version = 'auth-v1'
+             AND v_existing_opp2.protocol_version = 'ranked-async-v1'
+             AND v_existing_opp2.source_duration_ticks = v_duration
+             AND v_existing_opp2.rating_snapshot = v_p2_rating
           THEN
-            v_already_existing_sides := v_already_existing_sides + 1;
+            v_p2_status := 'IDENTICAL_EXISTING';
           ELSE
-            v_conflicted_sides := v_conflicted_sides + 1;
+            v_p2_status := 'CONFLICT';
           END IF;
         ELSE
-          INSERT INTO public.ranked_async_opponents (
-            source_room_id,
-            source_side,
-            rating_snapshot,
-            deck_snapshot,
-            actions_snapshot,
-            source_engine_version,
-            protocol_version,
-            source_duration_ticks,
-            active,
-            created_at
-          ) VALUES (
-            p_room_id,
-            2,
-            v_p2_rating,
-            v_room.p2_deck,
-            v_p2_actions,
-            'auth-v1',
-            'ranked-async-v1',
-            v_duration,
-            TRUE,
-            NOW()
-          );
-
-          v_captured_sides := v_captured_sides + 1;
+          v_p2_status := 'NEW';
         END IF;
       END IF;
     END IF;
   END IF;
 
-  IF v_conflicted_sides > 0 THEN
+  -- ── COMPROBACIÓN DE CONFLICTOS: All-or-nothing (0 escrituras si hay conflicto) ───
+  IF v_p1_status = 'CONFLICT' OR v_p2_status = 'CONFLICT' THEN
     RETURN jsonb_build_object(
       'ok', FALSE,
       'reason', 'SOURCE_SNAPSHOT_CONFLICT',
-      'capturedSides', v_captured_sides,
-      'alreadyExistingSides', v_already_existing_sides,
-      'conflictedSides', v_conflicted_sides
+      'capturedSides', 0,
+      'alreadyExistingSides', 0,
+      'notEligibleSides', 0,
+      'conflictedSides', (CASE WHEN v_p1_status = 'CONFLICT' THEN 1 ELSE 0 END) + (CASE WHEN v_p2_status = 'CONFLICT' THEN 1 ELSE 0 END),
+      'details', 'Conflicto detectado en snapshot existente para la sala fuente. No se realizaron cambios.'
     );
+  END IF;
+
+  -- ═══════════════════════════════════════════════════════════════════════════
+  -- FASE 2: WRITE ONLY (SÓLO SI NO HUBO NINGÚN CONFLICTO)
+  -- ═══════════════════════════════════════════════════════════════════════════
+
+  -- Lado 1
+  IF v_p1_status = 'NEW' THEN
+    INSERT INTO public.ranked_async_opponents (
+      source_room_id,
+      source_side,
+      rating_snapshot,
+      deck_snapshot,
+      actions_snapshot,
+      source_engine_version,
+      protocol_version,
+      source_duration_ticks,
+      active,
+      created_at
+    ) VALUES (
+      p_room_id,
+      1,
+      v_p1_rating,
+      v_room.p1_deck,
+      v_p1_actions,
+      'auth-v1',
+      'ranked-async-v1',
+      v_duration,
+      TRUE,
+      NOW()
+    );
+    v_captured_sides := v_captured_sides + 1;
+  ELSIF v_p1_status = 'IDENTICAL_EXISTING' THEN
+    v_already_existing_sides := v_already_existing_sides + 1;
+  ELSE
+    v_not_eligible_sides := v_not_eligible_sides + 1;
+  END IF;
+
+  -- Lado 2
+  IF v_p2_status = 'NEW' THEN
+    INSERT INTO public.ranked_async_opponents (
+      source_room_id,
+      source_side,
+      rating_snapshot,
+      deck_snapshot,
+      actions_snapshot,
+      source_engine_version,
+      protocol_version,
+      source_duration_ticks,
+      active,
+      created_at
+    ) VALUES (
+      p_room_id,
+      2,
+      v_p2_rating,
+      v_room.p2_deck,
+      v_p2_actions,
+      'auth-v1',
+      'ranked-async-v1',
+      v_duration,
+      TRUE,
+      NOW()
+    );
+    v_captured_sides := v_captured_sides + 1;
+  ELSIF v_p2_status = 'IDENTICAL_EXISTING' THEN
+    v_already_existing_sides := v_already_existing_sides + 1;
+  ELSE
+    v_not_eligible_sides := v_not_eligible_sides + 1;
   END IF;
 
   RETURN jsonb_build_object(
     'ok', TRUE,
     'capturedSides', v_captured_sides,
     'alreadyExistingSides', v_already_existing_sides,
-    'conflictedSides', v_conflicted_sides
+    'notEligibleSides', v_not_eligible_sides,
+    'conflictedSides', 0
   );
 END;
 $$;
@@ -687,6 +746,7 @@ DECLARE
   v_captured  INTEGER := 0;
   v_existing  INTEGER := 0;
   v_skipped   INTEGER := 0;
+  v_conflicted INTEGER := 0;
 BEGIN
   FOR v_rec IN (
     SELECT id
@@ -716,12 +776,15 @@ BEGIN
       v_captured := v_captured + COALESCE((v_res->>'capturedSides')::INTEGER, 0);
       v_existing := v_existing + COALESCE((v_res->>'alreadyExistingSides')::INTEGER, 0);
     ELSE
+      IF (v_res->>'reason') = 'SOURCE_SNAPSHOT_CONFLICT' THEN
+        v_conflicted := v_conflicted + 1;
+      END IF;
       v_skipped := v_skipped + 1;
     END IF;
   END LOOP;
 
-  RAISE NOTICE 'Backfill Rivales Semilla V1: evaluadas=%, capturadas=%, existentes=%, omitidas=%',
-    v_evaluated, v_captured, v_existing, v_skipped;
+  RAISE NOTICE 'Backfill Rivales Semilla V1: evaluadas=%, capturadas=%, existentes=%, omitidas=%, conflictos=%',
+    v_evaluated, v_captured, v_existing, v_skipped, v_conflicted;
 END;
 $$;
 
