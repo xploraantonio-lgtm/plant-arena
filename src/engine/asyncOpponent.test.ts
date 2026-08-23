@@ -4381,7 +4381,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(sqlContent).toMatch(/FASE 2: WRITE ONLY \(SÓLO SI NO HUBO NINGÚN CONFLICTO\)/i)
   })
 
-  // 209. Auditoría estática: Backfill registra y maneja conflictos sin dejar escrituras parciales
+  // 209. Auditoría estática: Backfill DO contabiliza conflictos y no usa WHEN OTHERS
   it('209. Auditoría estática: Backfill DO contabiliza conflictos y no usa WHEN OTHERS', () => {
     const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
     const sqlContent = readFileSync(sqlPath, 'utf8')
@@ -4389,6 +4389,78 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(sqlContent).toMatch(/v_conflicted INTEGER := 0;/i)
     expect(sqlContent).toMatch(/v_res->>'reason'\) = 'SOURCE_SNAPSHOT_CONFLICT'/i)
     expect(sqlContent).not.toMatch(/WHEN OTHERS/i)
+  })
+
+  // 210. Auditoría estática: _active_deck_for no se invoca y claim_ranked_async_opponent usa _active_deck
+  it('210. Auditoría estática: claim_ranked_async_opponent invoca public._active_deck(v_uid)', () => {
+    const mig36Path = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const hotfix37Path = join(process.cwd(), 'supabase', '37-fix-rival-semilla-active-deck.sql')
+
+    const mig36Content = readFileSync(mig36Path, 'utf8')
+    const hotfix37Content = readFileSync(hotfix37Path, 'utf8')
+
+    // Ambos deben invocar public._active_deck(v_uid)
+    expect(mig36Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
+    expect(hotfix37Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
+
+    // No deben invocar _active_deck_for
+    expect(mig36Content).not.toMatch(/public\._active_deck_for/i)
+    expect(hotfix37Content).not.toMatch(/public\._active_deck_for/i)
+  })
+
+  // 211. Contrato de Mazo: _active_deck produce estructura validable por _validate_ranked_async_deck
+  it('211. Contrato de Mazo: Estructura de cartas devuelta por _active_deck es compatible con _validate_ranked_async_deck', () => {
+    const activeDeckSample = [
+      {
+        instanceId: '645f1165-1731-4fd5-8ec5-404b1075a675',
+        plantId: 'sunflower',
+        slot: 0,
+        rarity: 'common',
+        level: 0,
+        statRolls: [],
+        isBase: false,
+      },
+      {
+        instanceId: '292375ae-0c39-483f-b46c-c36cf3f917ed',
+        plantId: 'peashooter',
+        slot: 1,
+        rarity: 'common',
+        level: 0,
+        statRolls: [],
+        isBase: false,
+      },
+      {
+        instanceId: 'c098621e-8d1a-48e1-bd2c-24933a636dec',
+        plantId: 'wallnut',
+        slot: 2,
+        rarity: 'common',
+        level: 0,
+        statRolls: [],
+        isBase: false,
+      },
+      {
+        instanceId: '0a573eab-e7ae-438c-9a43-bf5e894945b5',
+        plantId: 'chomper',
+        slot: 3,
+        rarity: 'common',
+        level: 0,
+        statRolls: [],
+        isBase: false,
+      },
+    ]
+
+    const val = validarMazoAsyncRanked(activeDeckSample)
+    expect(val.ok).toBe(true)
+    if (val.ok) {
+      expect(val.deck.length).toBe(4)
+      expect(val.deck[0].plantId).toBe('sunflower')
+      expect(val.deck[1].plantId).toBe('peashooter')
+    }
+
+    // Mazo con carta no permitida falla
+    const mazoInvalido = [...activeDeckSample, { instanceId: 'bad', plantId: 'fakePlant', slot: 4 }]
+    const valBad = validarMazoAsyncRanked(mazoInvalido)
+    expect(valBad.ok).toBe(false)
   })
 })
 

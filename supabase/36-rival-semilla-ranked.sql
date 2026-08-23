@@ -880,7 +880,7 @@ BEGIN
   END IF;
 
   -- ── VALIDAR MAZO ACTIVO DEL JUGADOR ───────────────────────────────────────
-  v_player_deck := public._active_deck_for(v_uid);
+  v_player_deck := public._active_deck(v_uid);
   v_deck_val := public._validate_ranked_async_deck(v_player_deck);
   IF (v_deck_val->>'ok')::BOOLEAN IS NOT TRUE THEN
     RETURN jsonb_build_object(
