@@ -916,7 +916,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
 
     // Consulta tabla privada ranked_async_room_plans
     expect(verifyContent).toMatch(/from\(['"]ranked_async_room_plans['"]\)/i)
-    expect(verifyContent).toMatch(/select\(['"]actions_snapshot['"]\)/i)
+    expect(verifyContent).toMatch(/select\(['"]actions_snapshot/i)
 
     // Falla cerrado con async_plan_missing si no existe
     expect(verifyContent).toMatch(/async_plan_missing/i)
@@ -3585,5 +3585,526 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
       expect(strictVal.reason).toBe('MISSING_ISSUED_TICK')
     }
   })
+
+  // ===========================================================================
+  // BM. PRUEBAS DE CAPTURA DE SEMILLAS (capture_ranked_async_opponents_from_room)
+  // ===========================================================================
+
+  // 136. source issued_tick NULL no captura y reporta razón explícita
+  it('136. Captura de semilla: source con issued_tick NULL no se captura como Rival Semilla', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    // capture_ranked_async_opponents_from_room comprueba que no haya issued_tick NULL
+    expect(sqlContent).toMatch(/v_p1_missing_issued = 0/i)
+    expect(sqlContent).toMatch(/v_p2_missing_issued = 0/i)
+    expect(sqlContent).not.toMatch(/COALESCE\(issued_tick,\s*GREATEST\(0,\s*tick\s*-\s*6\)\)/i)
+  })
+
+  // 137. source seq duplicado no captura
+  it('137. Captura de semilla: source con seq duplicado o inválido no se captura', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_p1_invalid_seq = 0/i)
+    expect(sqlContent).toMatch(/v_p2_invalid_seq = 0/i)
+  })
+
+  // 138. source tick relation inválida es rechazada por _validate_ranked_async_plan
+  it('138. Captura de semilla: source con tick relation inválida es rechazada por _validate_ranked_async_plan', () => {
+    const rawBadIntents = [
+      { seq: 1, tick: 100, issuedTick: 50, kind: 'plant', plantId: 'sunflower', lane: 0 },
+    ]
+    const val = validarYNormalizarIntencionesAsyncRanked(rawBadIntents)
+    expect(val.ok).toBe(false)
+    if (!val.ok) {
+      expect(val.reason).toBe('INVALID_TICK_RELATION')
+    }
+  })
+
+  // 139. source deck inválido no captura
+  it('139. Captura de semilla: source con deck inválido o vacío es rechazada', () => {
+    const valBadDeck = validarMazoAsyncRanked([])
+    expect(valBadDeck.ok).toBe(false)
+    if (!valBadDeck.ok) {
+      expect(valBadDeck.reason).toBe('INVALID_ASYNC_DECK')
+    }
+  })
+
+  // 140. source resuelto por ranked_client_consensus NO se captura (criterio positivo)
+  it('140. Captura de semilla: source resuelto por client consensus se excluye expresamente', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/excluded_client_consensus/i)
+    expect(sqlContent).toMatch(/ranked_client_consensus/i)
+  })
+
+  // 141. source replay autoritativo válido captura con protocol_version y source_engine_version
+  it('141. Captura de semilla: partida con replay autoritativo consistente y 0 ilegales se captura con protocol_version', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/'ranked-async-v1'/i)
+    expect(sqlContent).toMatch(/'auth-v1'/i)
+    expect(sqlContent).toMatch(/simulation_not_consistent/i)
+    expect(sqlContent).toMatch(/had_illegal_actions/i)
+  })
+
+  // 142. Ejecutar captura dos veces es idempotente (ON CONFLICT DO NOTHING)
+  it('142. Captura de semilla: captura doble de la misma sala y lado es idempotente', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/ON CONFLICT \(source_room_id, source_side\) DO NOTHING/i)
+  })
+
+  // 143. source async match no se captura (sin cascada de semillas)
+  it('143. Captura de semilla: sala que ya es asíncrona no se captura para evitar cascadas', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/already_async_match/i)
+    expect(sqlContent).toMatch(/is_async_match.*= TRUE/i)
+  })
+
+  // ===========================================================================
+  // BN. PRUEBAS DE SELECCIÓN Y CLAIM (claim_ranked_async_opponent)
+  // ===========================================================================
+
+  // 144. < 60s no permite Rival Semilla
+  it('144. claim_ranked_async_opponent: tiempo < 60 s devuelve tiempo_insuficiente', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/tiempo_insuficiente/i)
+    expect(sqlContent).toMatch(/v_waited < 60/i)
+  })
+
+  // 145. Humano disponible gana prioridad absoluta
+  it('145. claim_ranked_async_opponent: si _try_match encuentra humano, retorna la sala humana', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_human_room := public\._try_match\(v_uid\);/i)
+    expect(sqlContent).toMatch(/'isAsyncMatch',\s*FALSE/i)
+  })
+
+  // 146. Candidato corrupto se sanea (active=false) y no se crea sala corrupta
+  it('146. claim_ranked_async_opponent: candidato con snapshot corrupto es desactivado y se busca otro', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/UPDATE public\.ranked_async_opponents SET active = FALSE WHERE id = v_candidate\.id/i)
+    expect(sqlContent).toMatch(/v_cand_deck_val := public\._validate_ranked_async_deck/i)
+    expect(sqlContent).toMatch(/v_cand_plan_val := public\._validate_ranked_async_plan/i)
+  })
+
+  // 147. Candidato válido crea sala y plan privado atómicamente
+  it('147. claim_ranked_async_opponent: candidato válido crea game_rooms y ranked_async_room_plans en la misma transacción', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/INSERT INTO public\.game_rooms/i)
+    expect(sqlContent).toMatch(/INSERT INTO public\.ranked_async_room_plans/i)
+    expect(sqlContent).toMatch(/RETURNING id INTO v_new_room_id/i)
+  })
+
+  // 148. Player deck inválido aborta sin crear sala
+  it('148. claim_ranked_async_opponent: mazo de jugador inválido retorna invalid_player_deck', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/invalid_player_deck/i)
+    expect(sqlContent).toMatch(/v_deck_val := public\._validate_ranked_async_deck\(v_player_deck\)/i)
+  })
+
+  // 149. Concurrencia protegida mediante FOR UPDATE en cola
+  it('149. claim_ranked_async_opponent: bloquea la fila de matchmaking_queue con FOR UPDATE', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/FROM public\.matchmaking_queue/i)
+    expect(sqlContent).toMatch(/FOR UPDATE/i)
+  })
+
+  // 150. Pool vacío retorna no_hay_candidato_semilla
+  it('150. claim_ranked_async_opponent: si no hay candidatos activos, retorna no_hay_candidato_semilla', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/no_hay_candidato_semilla/i)
+  })
+
+  // ===========================================================================
+  // BO. PRUEBAS DE FEED Y POLL (poll_ranked_async_intents)
+  // ===========================================================================
+
+  // 151. Plan ausente lanza error y NUNCA devuelve []
+  it('151. poll_ranked_async_intents: plan ausente lanza ASYNC_PLAN_MISSING en vez de devolver intents vacíos', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/ASYNC_PLAN_MISSING/i)
+    expect(sqlContent).not.toMatch(/IF NOT FOUND THEN\s*RETURN jsonb_build_object\([^)]*'intents',\s*'\[\]'::JSONB/i)
+  })
+
+  // 152. Plan no-array lanza INVALID_ASYNC_PLAN
+  it('152. poll_ranked_async_intents: plan no-array lanza INVALID_ASYNC_PLAN', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/INVALID_ASYNC_PLAN/i)
+    expect(sqlContent).toMatch(/jsonb_typeof\(v_plan\.actions_snapshot\) <> 'array'/i)
+  })
+
+  // 153. issuedTick es obligatorio sin fallback a tick
+  it('153. poll_ranked_async_intents: extrae issuedTick exclusivamente sin COALESCE(issuedTick, tick)', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/'issuedTick',\s*\(elem->>'issuedTick'\)::INTEGER/i)
+    expect(sqlContent).not.toMatch(/COALESCE\(\(elem->>'issuedTick'\)::INTEGER,\s*\(elem->>'tick'\)::INTEGER\)/i)
+  })
+
+  // 154. p_after_seq negativo o nulo es rechazado
+  it('154. poll_ranked_async_intents: p_after_seq < 0 es rechazado con error', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/p_after_seq IS NULL OR p_after_seq < 0/i)
+  })
+
+  // 155. Ventana futura se restringe a serverTick + 18
+  it('155. poll_ranked_async_intents: no entrega intenciones más allá de serverTick + 18', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_max_reveal_tick := v_server_tick \+ 18/i)
+    expect(sqlContent).toMatch(/\(elem->>'issuedTick'\)::INTEGER <= v_max_reveal_tick/i)
+  })
+
+  // 156. Orden estricto issuedTick ASC, seq ASC
+  it('156. poll_ranked_async_intents: ordena estrictamente por issuedTick ASC, seq ASC', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/ORDER BY \(elem->>'issuedTick'\)::INTEGER ASC, \(elem->>'seq'\)::INTEGER ASC/i)
+  })
+
+  // 157. Usuario ajeno a la partida es rechazado con forbidden
+  it('157. poll_ranked_async_intents: usuario distinto de player1_id es rechazado', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_room\.player1_id <> v_uid/i)
+    expect(sqlContent).toMatch(/No participas en esta partida/i)
+  })
+
+  // ===========================================================================
+  // BP. PRUEBAS DE INGESTIÓN submit_match_action
+  // ===========================================================================
+
+  // 158. issued_tick NULL en auth-v1 es rechazado
+  it('158. submit_match_action: issued_tick NULL en auth-v1 es rechazado inmediatamente', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/issued_tick obligatorio y no negativo en auth-v1/i)
+  })
+
+  // 159. seq negativo o nulo es rechazado
+  it('159. submit_match_action: seq nulo o negativo es rechazado', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/p_seq IS NULL OR p_seq < 0/i)
+  })
+
+  // 160. Duplicado exacto devuelve duplicate: true con el mismo id
+  it('160. submit_match_action: acción idéntica con el mismo seq retorna duplicate: true', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/'duplicate',\s*TRUE/i)
+  })
+
+  // 161. Mismo seq con contenido distinto falla con SEQ_CONFLICT
+  it('161. submit_match_action: seq duplicado con contenido dispar rechaza con error de conflicto', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/seq ya usado con otra acción/i)
+  })
+
+  // 162. Plant sin slot o sin plant_id es rechazada
+  it('162. submit_match_action: plant sin slot o sin plant_id válido es rechazada', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/plant_id obligatorio en plant/i)
+    expect(sqlContent).toMatch(/slot obligatorio \(0\.\.5\) en plant/i)
+  })
+
+  // 163. Collect sin target_id es rechazada
+  it('163. submit_match_action: collect sin target_id es rechazada', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/target_id obligatorio y no vacío en collect/i)
+  })
+
+  // 164. Relación temporal incorrecta (plant tick != issued + 6) es rechazada
+  it('164. submit_match_action: relación tick != issued_tick + 6 es rechazada', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/margen de red inválido: tick debe ser issued_tick \+ 6/i)
+  })
+
+  // 165. Acciones durante verificación (verifying/verified/failed) son rechazadas
+  it('165. submit_match_action: acción después del freeze es rechazada', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/verification_status IN \('verifying', 'verified', 'failed'\)/i)
+  })
+
+  // ===========================================================================
+  // BQ. PRUEBAS DE VERIFICACIÓN verify-match
+  // ===========================================================================
+
+  // 166. verify-match: plan missing marca failed y no liquida ELO
+  it('166. verify-match: plan ausente marca failed y no altera ELO', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/async_plan_missing/i)
+    expect(verifyContent).toMatch(/mark_match_verification_failed/i)
+  })
+
+  // 167. verify-match: protocol_version no coincidente marca PROTOCOL_VERSION_MISMATCH
+  it('167. verify-match: protocol_version dispar marca PROTOCOL_VERSION_MISMATCH', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/PROTOCOL_VERSION_MISMATCH/i)
+  })
+
+  // 168. verify-match: async_opponent_id dispar marca ASYNC_SNAPSHOT_MISMATCH
+  it('168. verify-match: snapshot dispar entre room y plan marca ASYNC_SNAPSHOT_MISMATCH', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/ASYNC_SNAPSHOT_MISMATCH/i)
+  })
+
+  // 169. verify-match: mazo snapshot corrupto marca invalid_deck_snapshot
+  it('169. verify-match: deck snapshot corrupto falla con invalid_deck_snapshot', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/invalid_deck_snapshot/i)
+    expect(verifyContent).toMatch(/validarMazoAsyncRanked\(room\.p1_deck\)/i)
+    expect(verifyContent).toMatch(/validarMazoAsyncRanked\(room\.async_deck_snapshot\)/i)
+  })
+
+  // 170. verify-match: no-result sin ganador falla cerrado sin settlement ni ELO
+  it('170. verify-match: partida asíncrona sin ganador 1 o 2 falla cerrado sin liquidar ELO', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/resAsync\.ganador !== 1 && resAsync\.ganador !== 2/i)
+    expect(verifyContent).toMatch(/mark_match_verification_failed/i)
+  })
+
+  // 171. verify-match: ganador 1 o 2 liquida con settle_verified_async_ranked_match
+  it('171. verify-match: ganador determinista 1 o 2 liquida con settle_verified_async_ranked_match', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/settle_verified_async_ranked_match/i)
+    expect(verifyContent).toMatch(/p_winner_side: winnerSide/i)
+  })
+
+  // 172. verify-match: consensus no se aplica a partidas asíncronas
+  it('172. verify-match: partidas asíncronas no usan client consensus bajo ninguna circunstancia', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    // La rama de consenso está exclusivamente dentro de CASO 2 (humano vs humano)
+    const asyncCaseIndex = verifyContent.indexOf('CASO 1: PARTIDA ASÍNCRONA')
+    const humanCaseIndex = verifyContent.indexOf('CASO 2: PARTIDA HUMANO VS HUMANO')
+    const consensusIndex = verifyContent.indexOf('ranked_client_consensus')
+
+    expect(asyncCaseIndex).toBeGreaterThan(-1)
+    expect(humanCaseIndex).toBeGreaterThan(-1)
+    expect(consensusIndex).toBeGreaterThan(humanCaseIndex)
+  })
+
+  // ===========================================================================
+  // BR. PRUEBAS DE SURRENDER Y REPORT RESULT
+  // ===========================================================================
+
+  // 173. report_match_result en async match es sólo solicitud de verificación (no autoritativo)
+  it('173. report_match_result: en salas asíncronas sólo registra verification_requested_at sin declarar ganador', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/IF v_room\.is_async_match THEN[\s\S]*verification_requested_at = COALESCE\(verification_requested_at, NOW\(\)\)[\s\S]*'status',\s*'verificacion_pendiente'/i)
+  })
+
+  // 174. surrender_match en async match deduce ELO autoritativamente
+  it('174. surrender_match: en salas asíncronas otorga derrota al jugador real e impone p2_won con server_winner_id NULL', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/status = 'p2_won'[\s\S]*server_winner_id = NULL/i)
+    expect(sqlContent).toMatch(/elo_rating = GREATEST\(0, elo_rating - v_menos\)/i)
+  })
+
+  // 175. surrender_match durante verifying/failed es rechazado
+  it('175. surrender_match: si la partida está en verificación o cerrada, es rechazado', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_room\.verification_status IN \('verifying', 'failed'\)/i)
+  })
+
+  // 176. surrender_match no modifica la cuenta fuente de la semilla
+  it('176. surrender_match: no modifica perfiles distintos al usuario real player1_id', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/UPDATE public\.profiles[\s\S]*WHERE id = v_uid/i)
+    expect(sqlContent).not.toMatch(/UPDATE public\.profiles[\s\S]*WHERE id = v_room\.async_opponent_id/i)
+  })
+
+  // ===========================================================================
+  // BS. SECURITY TESTS & AUDITORÍA ESTÁTICA
+  // ===========================================================================
+
+  // 177. RLS y permisos en tablas privadas
+  it('177. Seguridad: ranked_async_opponents y ranked_async_room_plans tienen RLS activado y REVOKE de anon/authenticated', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/ALTER TABLE public\.ranked_async_opponents ENABLE ROW LEVEL SECURITY;/i)
+    expect(sqlContent).toMatch(/REVOKE ALL ON public\.ranked_async_opponents FROM anon, authenticated, PUBLIC;/i)
+    expect(sqlContent).toMatch(/GRANT ALL ON public\.ranked_async_opponents TO service_role;/i)
+
+    expect(sqlContent).toMatch(/ALTER TABLE public\.ranked_async_room_plans ENABLE ROW LEVEL SECURITY;/i)
+    expect(sqlContent).toMatch(/REVOKE ALL ON public\.ranked_async_room_plans FROM anon, authenticated, PUBLIC;/i)
+    expect(sqlContent).toMatch(/GRANT ALL ON public\.ranked_async_room_plans TO service_role;/i)
+  })
+
+  // 178. Funciones sensibles sólo ejecutables por service_role
+  it('178. Seguridad: capture_ranked_async_opponents_from_room y settle_verified_async_ranked_match son exclusivas de service_role', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/REVOKE EXECUTE ON FUNCTION public\.capture_ranked_async_opponents_from_room\(UUID\) FROM anon, authenticated, PUBLIC;/i)
+    expect(sqlContent).toMatch(/GRANT  EXECUTE ON FUNCTION public\.capture_ranked_async_opponents_from_room\(UUID\) TO service_role;/i)
+
+    expect(sqlContent).toMatch(/REVOKE EXECUTE ON FUNCTION public\.settle_verified_async_ranked_match\(UUID, SMALLINT, JSONB\)[\s\S]*FROM PUBLIC, anon, authenticated;/i)
+    expect(sqlContent).toMatch(/GRANT EXECUTE ON FUNCTION public\.settle_verified_async_ranked_match\(UUID, SMALLINT, JSONB\) TO service_role;/i)
+  })
+
+  // 179. Todas las funciones SECURITY DEFINER tienen search_path seguro
+  it('179. Seguridad: todas las funciones SECURITY DEFINER definen search_path = public, pg_temp', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    const secDefCount = (sqlContent.match(/SECURITY DEFINER/g) || []).length
+    const searchPathCount = (sqlContent.match(/SET search_path = public, pg_temp/g) || []).length
+
+    expect(secDefCount).toBeGreaterThan(0)
+    expect(searchPathCount).toBe(secDefCount)
+  })
+
+  // 180. Preflight audit script no contiene comandos de modificación (INSERT, UPDATE, DELETE, ALTER, DROP)
+  it('180. Preflight audit: script 36-rival-semilla-ranked-preflight.sql es estrictamente read-only', () => {
+    const preflightPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked-preflight.sql')
+    const preflightContent = readFileSync(preflightPath, 'utf8')
+
+    expect(preflightContent).not.toMatch(/^\s*INSERT\s+INTO/im)
+    expect(preflightContent).not.toMatch(/^\s*UPDATE\s+/im)
+    expect(preflightContent).not.toMatch(/^\s*DELETE\s+FROM/im)
+    expect(preflightContent).not.toMatch(/^\s*DROP\s+/im)
+    expect(preflightContent).not.toMatch(/^\s*ALTER\s+/im)
+  })
+
+  // 181. Postcheck script es estrictamente read-only
+  it('181. Postcheck audit: script 36-rival-semilla-ranked-postcheck.sql es estrictamente read-only', () => {
+    const postcheckPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked-postcheck.sql')
+    const postcheckContent = readFileSync(postcheckPath, 'utf8')
+
+    expect(postcheckContent).not.toMatch(/^\s*INSERT\s+INTO/im)
+    expect(postcheckContent).not.toMatch(/^\s*UPDATE\s+/im)
+    expect(postcheckContent).not.toMatch(/^\s*DELETE\s+FROM/im)
+    expect(postcheckContent).not.toMatch(/^\s*DROP\s+/im)
+    expect(postcheckContent).not.toMatch(/^\s*ALTER\s+/im)
+  })
+
+  // 182. Auditoría estática de Migración 36: No existen inferencias de issued_tick
+  it('182. Auditoría estática: Migración 36 no contiene inferencias ni COALESCE de issued_tick', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).not.toMatch(/COALESCE\(\s*issued_tick/i)
+    expect(sqlContent).not.toMatch(/COALESCE\(\s*issuedTick/i)
+    expect(sqlContent).not.toMatch(/COALESCE\(\s*p_issued_tick/i)
+    expect(sqlContent).not.toMatch(/COALESCE\(\s*elem->>'issuedTick'/i)
+  })
+
+  // 183. Auditoría estática de Migración 36: No existen fallbacks silenciosos de engine_version
+  it('183. Auditoría estática: Migración 36 no contiene COALESCE de engine_version para semillas', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).not.toMatch(/COALESCE\(.*engine_version,\s*'auth-v1'\)/i)
+  })
+
+  // 184. Auditoría estática de Migración 36: Backfill no captura WHEN OTHERS silencioso
+  it('184. Auditoría estática: Backfill no utiliza EXCEPTION WHEN OTHERS para ocultar fallos', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).not.toMatch(/EXCEPTION\s+WHEN\s+OTHERS/i)
+  })
+
+  // 185. Validación estricta de plantId en catálogo
+  it('185. Validación de plantId: sólo las 15 plantas registradas son admitidas', () => {
+    const validPlants = [
+      'sunflower', 'peashooter', 'repeater', 'wallnut', 'melonpult',
+      'chomper', 'bonkchoy', 'garlic', 'squash', 'twinsunflower',
+      'threepeater', 'tallnut', 'jalapeno', 'iceberglettuce', 'aloe'
+    ]
+
+    for (const p of validPlants) {
+      expect(validarAccionP1RankedEstricta({
+        seq: 1,
+        tick: 16,
+        issuedTick: 10,
+        kind: 'plant',
+        plantId: p,
+        slot: 0,
+        lane: 0,
+        col: 0,
+      }).ok).toBe(true)
+    }
+
+    expect(validarAccionP1RankedEstricta({
+      seq: 1,
+      tick: 16,
+      issuedTick: 10,
+      kind: 'plant',
+      plantId: 'cattail_invented',
+      slot: 0,
+      lane: 0,
+      col: 0,
+    }).ok).toBe(false)
+  })
 })
+
 

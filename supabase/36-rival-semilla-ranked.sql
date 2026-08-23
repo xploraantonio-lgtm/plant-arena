@@ -8,31 +8,308 @@
 -- crea una partida asíncrona contra un snapshot histórico verificado con nueva
 -- semilla RNG, nombre/avatar inventados y liquidación autoritativa.
 --
--- Principios de seguridad:
---   1. player1_id = usuario_real, player2_id = NULL, is_async_match = TRUE.
---   2. La cuenta fuente NUNCA se modifica.
---   3. Coliseo, Amistoso y Torneo quedan completamente aislados (sólo humanos).
+-- =============================================================================
+-- CONTRATO DE PROTOCOLO CANÓNICO (AUTH-V1 & RANKED-ASYNC-V1)
+-- =============================================================================
+--
+-- 1. ACCIÓN P1 AUTH-V1 (match_actions / AccionP1RankedEstricta):
+--    - seq: INTEGER NOT NULL, >= 0, único por (room_id, user_id, seq).
+--    - issued_tick: INTEGER NOT NULL, >= 0 (NO se permite NULL ni inferencias).
+--    - tick: INTEGER NOT NULL, >= 0.
+--    - kind: TEXT NOT NULL, estrictamente 'plant' | 'dig' | 'collect'.
+--    - Relación temporal:
+--        * plant / dig: tick = issued_tick + 6 (MARGEN_DE_RED_TICS).
+--        * collect: tick = issued_tick.
+--    - collect: target_id NOT NULL, longitud 1..160. Demás campos NULL.
+--    - dig: lane en 0..2, col en 0..5 (P1_COLUMNS). Demás campos NULL.
+--    - plant: plant_id válido en catálogo, slot en 0..5 (perteneciente al mazo),
+--             lane en 0..2, col en 0..5. target_id NULL.
+--
+-- 2. INTENCIÓN P2 ASYNC-V1 (AsyncOpponentIntentRankedEstricta):
+--    - seq: INTEGER NOT NULL, >= 0, único dentro del lote/plan.
+--    - issuedTick: INTEGER NOT NULL, >= 0.
+--    - tick: INTEGER NOT NULL, >= 0.
+--    - kind: TEXT NOT NULL, estrictamente 'plant' | 'dig'.
+--    - Relación temporal: tick = issuedTick + 6 O tick = issuedTick.
+--    - dig: lane en 0..2, col en 0..5.
+--    - plant: plantId válido en catálogo, lane en 0..2, col en 0..5 (o NULL si camina),
+--             slot en 0..5 (o NULL).
+--
+-- 3. DECK SNAPSHOT (CartaDeMazo[]):
+--    - JSONB array de 1 a 6 cartas.
+--    - Cada carta es un objeto con:
+--        * plantId: TEXT válido en catálogo de 15 plantas.
+--        * slot: INTEGER NULL o 0..5.
+--        * level: INTEGER NULL o >= 0.
+--        * statRolls: JSONB array NULL o de strings ('hp','damage','attackSpeed','moveSpeed','cooldown').
+--
+-- 4. PLAN SNAPSHOT:
+--    - JSONB array de intenciones P2 válidas ordenadas por issuedTick ASC, seq ASC.
+--    - Sin colisiones de seq con contenido dispar.
+--
+-- 5. PROTOCOL & ENGINE VERSIONING:
+--    - source_engine_version = 'auth-v1' exactamente (NO COALESCE).
+--    - protocol_version = 'ranked-async-v1' exactamente.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- 1. TABLA INTERNA ranked_async_opponents
+-- 0. HELPERS PRIVADOS DE VALIDACIÓN REUTILIZABLES (SERVER-ONLY)
+-- -----------------------------------------------------------------------------
+
+/**
+ * Valida formalmente un deck snapshot según las reglas estrictas de Ranked Async V1.
+ * Retorna JSONB con { "ok": true, "deck": [...] } o { "ok": false, "reason": "...", "details": "..." }.
+ */
+CREATE OR REPLACE FUNCTION public._validate_ranked_async_deck(p_deck JSONB)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_elem JSONB;
+  v_plant_id TEXT;
+  v_slot INTEGER;
+  v_level INTEGER;
+  v_stat_rolls JSONB;
+  v_stat_elem JSONB;
+  v_count INTEGER := 0;
+  v_valid_plants TEXT[] := ARRAY[
+    'sunflower', 'peashooter', 'repeater', 'wallnut', 'melonpult',
+    'chomper', 'bonkchoy', 'garlic', 'squash', 'twinsunflower',
+    'threepeater', 'tallnut', 'jalapeno', 'iceberglettuce', 'aloe'
+  ];
+  v_valid_stats TEXT[] := ARRAY['hp', 'damage', 'attackSpeed', 'moveSpeed', 'cooldown'];
+BEGIN
+  IF p_deck IS NULL OR jsonb_typeof(p_deck) <> 'array' THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'El mazo debe ser un array JSON');
+  END IF;
+
+  v_count := jsonb_array_length(p_deck);
+  IF v_count < 1 OR v_count > 6 THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'El mazo debe contener entre 1 y 6 cartas');
+  END IF;
+
+  FOR v_elem IN SELECT * FROM jsonb_array_elements(p_deck) LOOP
+    IF jsonb_typeof(v_elem) <> 'object' THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'Cada carta debe ser un objeto JSON');
+    END IF;
+
+    v_plant_id := v_elem->>'plantId';
+    IF v_plant_id IS NULL OR NOT (v_plant_id = ANY(v_valid_plants)) THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'plantId inválido o desconocido: ' || COALESCE(v_plant_id, 'NULL'));
+    END IF;
+
+    IF v_elem ? 'slot' AND v_elem->>'slot' IS NOT NULL THEN
+      IF (v_elem->>'slot') !~ '^\d+$' THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'slot debe ser un entero no negativo');
+      END IF;
+      v_slot := (v_elem->>'slot')::INTEGER;
+      IF v_slot < 0 OR v_slot > 5 THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'slot fuera de rango (0..5)');
+      END IF;
+    END IF;
+
+    IF v_elem ? 'level' AND v_elem->>'level' IS NOT NULL THEN
+      IF (v_elem->>'level') !~ '^\d+$' THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'level debe ser un entero no negativo');
+      END IF;
+      v_level := (v_elem->>'level')::INTEGER;
+      IF v_level < 0 THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'level no puede ser negativo');
+      END IF;
+    END IF;
+
+    IF v_elem ? 'statRolls' AND v_elem->'statRolls' IS NOT NULL AND jsonb_typeof(v_elem->'statRolls') <> 'null' THEN
+      v_stat_rolls := v_elem->'statRolls';
+      IF jsonb_typeof(v_stat_rolls) <> 'array' THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'statRolls debe ser un array JSON');
+      END IF;
+      FOR v_stat_elem IN SELECT * FROM jsonb_array_elements(v_stat_rolls) LOOP
+        IF jsonb_typeof(v_stat_elem) <> 'string' OR NOT ((v_stat_elem#>>'{}') = ANY(v_valid_stats)) THEN
+          RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_DECK', 'details', 'statRolls contiene estadística inválida: ' || COALESCE(v_stat_elem#>>'{}', 'NULL'));
+        END IF;
+      END LOOP;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', TRUE, 'deck', p_deck);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._validate_ranked_async_deck(JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._validate_ranked_async_deck(JSONB) TO service_role;
+
+
+/**
+ * Valida formalmente un plan de intenciones P2 para Ranked Async V1.
+ * Exige campos exactos, verifica unicidad/conflictos de seq y coherencia temporal.
+ */
+CREATE OR REPLACE FUNCTION public._validate_ranked_async_plan(p_actions JSONB)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_elem JSONB;
+  v_seq INTEGER;
+  v_tick INTEGER;
+  v_issued_tick INTEGER;
+  v_kind TEXT;
+  v_plant_id TEXT;
+  v_slot INTEGER;
+  v_lane INTEGER;
+  v_col INTEGER;
+  v_seen_seqs JSONB := '{}'::JSONB;
+  v_existing_intent JSONB;
+  v_valid_plants TEXT[] := ARRAY[
+    'sunflower', 'peashooter', 'repeater', 'wallnut', 'melonpult',
+    'chomper', 'bonkchoy', 'garlic', 'squash', 'twinsunflower',
+    'threepeater', 'tallnut', 'jalapeno', 'iceberglettuce', 'aloe'
+  ];
+BEGIN
+  IF p_actions IS NULL OR jsonb_typeof(p_actions) <> 'array' THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_PLAN', 'details', 'El plan de acciones debe ser un array JSON');
+  END IF;
+
+  FOR v_elem IN SELECT * FROM jsonb_array_elements(p_actions) LOOP
+    IF jsonb_typeof(v_elem) <> 'object' THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_PLAN', 'details', 'Cada intención debe ser un objeto JSON');
+    END IF;
+
+    -- seq
+    IF v_elem->>'seq' IS NULL OR (v_elem->>'seq') !~ '^\d+$' THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'MISSING_SEQ', 'details', 'seq obligatorio y entero no negativo');
+    END IF;
+    v_seq := (v_elem->>'seq')::INTEGER;
+
+    -- issuedTick
+    IF v_elem->>'issuedTick' IS NULL THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'MISSING_ISSUED_TICK', 'seq', v_seq, 'details', 'issuedTick es obligatorio');
+    END IF;
+    IF (v_elem->>'issuedTick') !~ '^\d+$' THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ISSUED_TICK', 'seq', v_seq, 'details', 'issuedTick debe ser un entero no negativo');
+    END IF;
+    v_issued_tick := (v_elem->>'issuedTick')::INTEGER;
+
+    -- tick
+    IF v_elem->>'tick' IS NULL OR (v_elem->>'tick') !~ '^\d+$' THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'MISSING_TICK', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'tick es obligatorio');
+    END IF;
+    v_tick := (v_elem->>'tick')::INTEGER;
+
+    -- kind
+    v_kind := v_elem->>'kind';
+    IF v_kind IS NULL OR v_kind NOT IN ('plant', 'dig') THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_KIND', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'kind debe ser plant o dig');
+    END IF;
+
+    -- Relación temporal
+    IF v_tick <> v_issued_tick + 6 AND v_tick <> v_issued_tick THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_TICK_RELATION', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'tick debe ser issuedTick+6 o issuedTick');
+    END IF;
+
+    -- lane
+    IF v_elem->>'lane' IS NULL OR (v_elem->>'lane') !~ '^\d+$' THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_INTENT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'lane obligatorio');
+    END IF;
+    v_lane := (v_elem->>'lane')::INTEGER;
+    IF v_lane < 0 OR v_lane > 2 THEN
+      RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_ASYNC_INTENT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'lane fuera de rango (0..2)');
+    END IF;
+
+    -- dig específico
+    IF v_kind = 'dig' THEN
+      IF v_elem->>'col' IS NULL OR (v_elem->>'col') !~ '^\d+$' THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_DIG_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'col obligatorio en dig');
+      END IF;
+      v_col := (v_elem->>'col')::INTEGER;
+      IF v_col < 0 OR v_col > 5 THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_DIG_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'col fuera de rango en dig (0..5)');
+      END IF;
+    END IF;
+
+    -- plant específico
+    IF v_kind = 'plant' THEN
+      v_plant_id := v_elem->>'plantId';
+      IF v_plant_id IS NULL OR NOT (v_plant_id = ANY(v_valid_plants)) THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_PLANT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'plantId inválido en intención P2: ' || COALESCE(v_plant_id, 'NULL'));
+      END IF;
+
+      IF v_elem ? 'col' AND v_elem->>'col' IS NOT NULL THEN
+        IF (v_elem->>'col') !~ '^\d+$' THEN
+          RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_PLANT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'col debe ser un entero');
+        END IF;
+        v_col := (v_elem->>'col')::INTEGER;
+        IF v_col < 0 OR v_col > 5 THEN
+          RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_PLANT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'col fuera de rango en plant (0..5)');
+        END IF;
+      END IF;
+
+      IF v_elem ? 'slot' AND v_elem->>'slot' IS NOT NULL THEN
+        IF (v_elem->>'slot') !~ '^\d+$' THEN
+          RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_PLANT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'slot debe ser un entero');
+        END IF;
+        v_slot := (v_elem->>'slot')::INTEGER;
+        IF v_slot < 0 OR v_slot > 5 THEN
+          RETURN jsonb_build_object('ok', FALSE, 'reason', 'INVALID_PLANT_DATA', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'slot fuera de rango en plant (0..5)');
+        END IF;
+      END IF;
+    END IF;
+
+    -- Comprobar colisiones de seq dentro del plan
+    v_existing_intent := v_seen_seqs->(v_seq::TEXT);
+    IF v_existing_intent IS NOT NULL THEN
+      IF (v_existing_intent->>'kind' <> v_kind)
+         OR (v_existing_intent->>'issuedTick')::INTEGER <> v_issued_tick
+         OR (v_existing_intent->>'tick')::INTEGER <> v_tick
+         OR (v_existing_intent->>'lane')::INTEGER <> v_lane
+         OR (v_existing_intent->>'col' IS DISTINCT FROM v_elem->>'col')
+         OR (COALESCE(v_existing_intent->>'plantId', '') IS DISTINCT FROM COALESCE(v_plant_id, ''))
+      THEN
+        RETURN jsonb_build_object('ok', FALSE, 'reason', 'SEQ_CONFLICT', 'seq', v_seq, 'issuedTick', v_issued_tick, 'details', 'Conflicto de seq en plan: seq ' || v_seq || ' duplicado con contenido distinto');
+      END IF;
+    ELSE
+      v_seen_seqs := jsonb_set(v_seen_seqs, ARRAY[v_seq::TEXT], jsonb_build_object(
+        'kind', v_kind,
+        'issuedTick', v_issued_tick,
+        'tick', v_tick,
+        'lane', v_lane,
+        'col', v_elem->>'col',
+        'plantId', v_plant_id
+      ));
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', TRUE, 'intents', p_actions);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public._validate_ranked_async_plan(JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._validate_ranked_async_plan(JSONB) TO service_role;
+
+
+-- -----------------------------------------------------------------------------
+-- 1. TABLA INTERNA ranked_async_opponents (POOL DE RIVALES SEMILLA)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.ranked_async_opponents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_room_id UUID NOT NULL,
   source_side SMALLINT NOT NULL CHECK (source_side IN (1, 2)),
-  rating_snapshot INTEGER NOT NULL,
-  deck_snapshot JSONB NOT NULL,
-  actions_snapshot JSONB NOT NULL,
-  source_engine_version TEXT NOT NULL,
-  source_duration_ticks INTEGER NOT NULL,
+  rating_snapshot INTEGER NOT NULL CHECK (rating_snapshot >= 0 AND rating_snapshot <= 5000),
+  deck_snapshot JSONB NOT NULL CHECK (jsonb_typeof(deck_snapshot) = 'array'),
+  actions_snapshot JSONB NOT NULL CHECK (jsonb_typeof(actions_snapshot) = 'array'),
+  source_engine_version TEXT NOT NULL CHECK (source_engine_version = 'auth-v1'),
+  protocol_version TEXT NOT NULL DEFAULT 'ranked-async-v1' CHECK (protocol_version = 'ranked-async-v1'),
+  source_duration_ticks INTEGER NOT NULL CHECK (source_duration_ticks >= 300),
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_ranked_async_opponents_source UNIQUE(source_room_id, source_side)
 );
 
 CREATE INDEX IF NOT EXISTS idx_ranked_async_opponents_active_rating
-  ON public.ranked_async_opponents (active, rating_snapshot);
+  ON public.ranked_async_opponents (active, protocol_version, source_engine_version, rating_snapshot);
 
 -- Server-only: ningún cliente anon o authenticated puede acceder directamente.
 ALTER TABLE public.ranked_async_opponents ENABLE ROW LEVEL SECURITY;
@@ -54,12 +331,15 @@ ALTER TABLE public.game_rooms
   ADD COLUMN IF NOT EXISTS async_rating_snapshot INTEGER,
   ADD COLUMN IF NOT EXISTS async_deck_snapshot JSONB;
 
+CREATE INDEX IF NOT EXISTS idx_game_rooms_async
+  ON public.game_rooms (player1_id, is_async_match, created_at);
+
 -- Tabla privada para los planes completos de acciones del Rival Semilla.
--- Almacena el snapshot completo sin exponerlo en game_rooms (protege contra rooms_select_own).
 CREATE TABLE IF NOT EXISTS public.ranked_async_room_plans (
   room_id UUID PRIMARY KEY REFERENCES public.game_rooms(id) ON DELETE CASCADE,
   async_opponent_id UUID NOT NULL REFERENCES public.ranked_async_opponents(id),
-  actions_snapshot JSONB NOT NULL,
+  protocol_version TEXT NOT NULL DEFAULT 'ranked-async-v1' CHECK (protocol_version = 'ranked-async-v1'),
+  actions_snapshot JSONB NOT NULL CHECK (jsonb_typeof(actions_snapshot) = 'array'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -71,7 +351,7 @@ ALTER TABLE public.ranked_async_room_plans ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.ranked_async_room_plans FROM anon, authenticated, PUBLIC;
 GRANT ALL ON public.ranked_async_room_plans TO service_role;
 
--- Actualizar política de lectura de salas para permitir player2_id nulo
+-- Actualizar política de lectura de salas para permitir player2_id nulo en async
 DROP POLICY IF EXISTS "rooms_select_own" ON public.game_rooms;
 CREATE POLICY "rooms_select_own" ON public.game_rooms
   FOR SELECT TO authenticated
@@ -80,13 +360,25 @@ CREATE POLICY "rooms_select_own" ON public.game_rooms
     OR (player2_id IS NOT NULL AND auth.uid() = player2_id)
   );
 
+-- Garantía de unicidad DB para match_actions por (room_id, user_id, seq)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_match_actions_room_user_seq
+  ON public.match_actions (room_id, user_id, seq);
+
 
 -- -----------------------------------------------------------------------------
 -- 3. CAPTURA DEL POOL DE RIVALES SEMILLA DESDE PARTIDAS VERIFICADAS
 -- -----------------------------------------------------------------------------
 /**
  * Captura snapshots de intenciones y mazo a partir de una partida Ranked humana
- * verificada con éxito.
+ * verificada determinísticamente con éxito por el servidor.
+ *
+ * CRITERIO POSITIVO ESTRICTO:
+ * - engine_version = 'auth-v1' exactamente.
+ * - verification_status = 'verified'.
+ * - verification_payload con consistent=true, illegalCount=0.
+ * - resolutionSource DIFERENTE de 'ranked_client_consensus'.
+ * - Motivo no es forfeit ni surrender.
+ * - Acciones históricas con seq e issued_tick explícitos y únicos (sin inferir).
  */
 CREATE OR REPLACE FUNCTION public.capture_ranked_async_opponents_from_room(p_room_id UUID)
 RETURNS JSONB
@@ -98,12 +390,23 @@ DECLARE
   v_room RECORD;
   v_duration INTEGER;
   v_illegal_count INTEGER;
+  v_is_consistent BOOLEAN;
+  v_resolution_source TEXT;
+  v_reason TEXT;
   v_p1_rating INTEGER;
   v_p2_rating INTEGER;
+  v_p1_deck_val JSONB;
+  v_p2_deck_val JSONB;
   v_p1_actions JSONB;
   v_p2_actions JSONB;
+  v_p1_plan_val JSONB;
+  v_p2_plan_val JSONB;
   v_p1_plant_count INTEGER;
   v_p2_plant_count INTEGER;
+  v_p1_missing_issued INTEGER;
+  v_p2_missing_issued INTEGER;
+  v_p1_invalid_seq INTEGER;
+  v_p2_invalid_seq INTEGER;
   v_captured_sides INTEGER := 0;
 BEGIN
   SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id;
@@ -111,13 +414,17 @@ BEGIN
     RETURN jsonb_build_object('ok', FALSE, 'reason', 'room_not_found');
   END IF;
 
-  -- Criterios estrictos de elegibilidad
+  -- Criterios estrictos de elegibilidad de la sala fuente
   IF v_room.mode <> 'ranked' THEN
     RETURN jsonb_build_object('ok', FALSE, 'reason', 'mode_not_ranked');
   END IF;
 
   IF COALESCE(v_room.is_async_match, FALSE) = TRUE THEN
     RETURN jsonb_build_object('ok', FALSE, 'reason', 'already_async_match');
+  END IF;
+
+  IF v_room.engine_version IS NULL OR v_room.engine_version <> 'auth-v1' THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'engine_version_not_auth_v1');
   END IF;
 
   IF v_room.settled_at IS NULL OR v_room.verification_status <> 'verified' THEN
@@ -132,122 +439,172 @@ BEGIN
     RETURN jsonb_build_object('ok', FALSE, 'reason', 'missing_deck_snapshots');
   END IF;
 
-  -- Comprobar que no hubo acciones ilegales en la verificación
-  v_illegal_count := COALESCE((v_room.verification_payload->>'illegalCount')::INTEGER, 0);
-  IF v_illegal_count > 0 THEN
+  IF v_room.verification_payload IS NULL THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'missing_verification_payload');
+  END IF;
+
+  -- ── CRITERIO POSITIVO: SÓLO REPLAY DETERMINISTA VERIFICADO POR EL SERVIDOR ──
+  v_is_consistent := (v_room.verification_payload->>'consistent')::BOOLEAN;
+  IF v_is_consistent IS NOT TRUE THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'simulation_not_consistent');
+  END IF;
+
+  v_illegal_count := (v_room.verification_payload->>'illegalCount')::INTEGER;
+  IF v_illegal_count IS NULL OR v_illegal_count > 0 THEN
     RETURN jsonb_build_object('ok', FALSE, 'reason', 'had_illegal_actions');
   END IF;
 
-  v_duration := COALESCE((v_room.verification_payload->>'ticks')::INTEGER, 0);
-  IF v_duration < 300 THEN
+  v_resolution_source := v_room.verification_payload->>'resolutionSource';
+  IF v_resolution_source IS NOT NULL AND v_resolution_source = 'ranked_client_consensus' THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'excluded_client_consensus');
+  END IF;
+
+  v_reason := v_room.verification_payload->>'reason';
+  IF v_reason IS NOT NULL AND v_reason IN ('forfeit_p1', 'forfeit_p2', 'surrender') THEN
+    RETURN jsonb_build_object('ok', FALSE, 'reason', 'match_ended_in_forfeit_or_surrender');
+  END IF;
+
+  v_duration := (v_room.verification_payload->>'ticks')::INTEGER;
+  IF v_duration IS NULL OR v_duration < 300 THEN
     RETURN jsonb_build_object('ok', FALSE, 'reason', 'duration_too_short');
   END IF;
 
-  -- Lado 1 (player1_id)
-  SELECT COALESCE(elo_rating, 1000) INTO v_p1_rating
-    FROM public.profiles WHERE id = v_room.player1_id;
-
+  -- ── LADO 1 (player1_id) ───────────────────────────────────────────────────
   SELECT COUNT(*) INTO v_p1_plant_count
     FROM public.match_actions
    WHERE room_id = p_room_id AND user_id = v_room.player1_id AND kind = 'plant';
 
-  IF v_p1_plant_count >= 3 THEN
-    SELECT COALESCE(jsonb_agg(
-      jsonb_build_object(
-        'seq', seq,
-        'tick', tick,
-        'issuedTick', COALESCE(issued_tick, GREATEST(0, tick - 6)),
-        'kind', kind,
-        'plantId', plant_id,
-        'slot', slot,
-        'lane', lane,
-        'col', col
-      ) ORDER BY COALESCE(issued_tick, tick) ASC, id ASC
-    ), '[]'::JSONB)
-    INTO v_p1_actions
+  SELECT COUNT(*) INTO v_p1_missing_issued
     FROM public.match_actions
-    WHERE room_id = p_room_id AND user_id = v_room.player1_id AND kind IN ('plant', 'dig');
+   WHERE room_id = p_room_id AND user_id = v_room.player1_id AND (issued_tick IS NULL OR issued_tick < 0);
 
-    INSERT INTO public.ranked_async_opponents (
-      source_room_id,
-      source_side,
-      rating_snapshot,
-      deck_snapshot,
-      actions_snapshot,
-      source_engine_version,
-      source_duration_ticks,
-      active,
-      created_at
-    ) VALUES (
-      p_room_id,
-      1,
-      v_p1_rating,
-      v_room.p1_deck,
-      v_p1_actions,
-      COALESCE(v_room.engine_version, 'auth-v1'),
-      v_duration,
-      TRUE,
-      NOW()
-    ) ON CONFLICT (source_room_id, source_side) DO NOTHING;
+  SELECT COUNT(*) INTO v_p1_invalid_seq
+    FROM public.match_actions
+   WHERE room_id = p_room_id AND user_id = v_room.player1_id AND (seq IS NULL OR seq < 0);
 
-    v_captured_sides := v_captured_sides + 1;
+  IF v_p1_plant_count >= 3 AND v_p1_missing_issued = 0 AND v_p1_invalid_seq = 0 THEN
+    v_p1_deck_val := public._validate_ranked_async_deck(v_room.p1_deck);
+    IF (v_p1_deck_val->>'ok')::BOOLEAN = TRUE THEN
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'seq', seq,
+          'tick', tick,
+          'issuedTick', issued_tick,
+          'kind', kind,
+          'plantId', plant_id,
+          'slot', slot,
+          'lane', lane,
+          'col', col
+        ) ORDER BY issued_tick ASC, seq ASC
+      ), '[]'::JSONB)
+      INTO v_p1_actions
+      FROM public.match_actions
+      WHERE room_id = p_room_id AND user_id = v_room.player1_id AND kind IN ('plant', 'dig');
+
+      v_p1_plan_val := public._validate_ranked_async_plan(v_p1_actions);
+      IF (v_p1_plan_val->>'ok')::BOOLEAN = TRUE THEN
+        SELECT COALESCE(elo_rating, 1000) INTO v_p1_rating
+          FROM public.profiles WHERE id = v_room.player1_id;
+
+        INSERT INTO public.ranked_async_opponents (
+          source_room_id,
+          source_side,
+          rating_snapshot,
+          deck_snapshot,
+          actions_snapshot,
+          source_engine_version,
+          protocol_version,
+          source_duration_ticks,
+          active,
+          created_at
+        ) VALUES (
+          p_room_id,
+          1,
+          v_p1_rating,
+          v_room.p1_deck,
+          v_p1_actions,
+          'auth-v1',
+          'ranked-async-v1',
+          v_duration,
+          TRUE,
+          NOW()
+        ) ON CONFLICT (source_room_id, source_side) DO NOTHING;
+
+        v_captured_sides := v_captured_sides + 1;
+      END IF;
+    END IF;
   END IF;
 
-  -- Lado 2 (player2_id)
-  SELECT COALESCE(elo_rating, 1000) INTO v_p2_rating
-    FROM public.profiles WHERE id = v_room.player2_id;
-
+  -- ── LADO 2 (player2_id) ───────────────────────────────────────────────────
   SELECT COUNT(*) INTO v_p2_plant_count
     FROM public.match_actions
    WHERE room_id = p_room_id AND user_id = v_room.player2_id AND kind = 'plant';
 
-  IF v_p2_plant_count >= 3 THEN
-    SELECT COALESCE(jsonb_agg(
-      jsonb_build_object(
-        'seq', seq,
-        'tick', tick,
-        'issuedTick', COALESCE(issued_tick, GREATEST(0, tick - 6)),
-        'kind', kind,
-        'plantId', plant_id,
-        'slot', slot,
-        'lane', lane,
-        'col', col
-      ) ORDER BY COALESCE(issued_tick, tick) ASC, id ASC
-    ), '[]'::JSONB)
-    INTO v_p2_actions
+  SELECT COUNT(*) INTO v_p2_missing_issued
     FROM public.match_actions
-    WHERE room_id = p_room_id AND user_id = v_room.player2_id AND kind IN ('plant', 'dig');
+   WHERE room_id = p_room_id AND user_id = v_room.player2_id AND (issued_tick IS NULL OR issued_tick < 0);
 
-    INSERT INTO public.ranked_async_opponents (
-      source_room_id,
-      source_side,
-      rating_snapshot,
-      deck_snapshot,
-      actions_snapshot,
-      source_engine_version,
-      source_duration_ticks,
-      active,
-      created_at
-    ) VALUES (
-      p_room_id,
-      2,
-      v_p2_rating,
-      v_room.p2_deck,
-      v_p2_actions,
-      COALESCE(v_room.engine_version, 'auth-v1'),
-      v_duration,
-      TRUE,
-      NOW()
-    ) ON CONFLICT (source_room_id, source_side) DO NOTHING;
+  SELECT COUNT(*) INTO v_p2_invalid_seq
+    FROM public.match_actions
+   WHERE room_id = p_room_id AND user_id = v_room.player2_id AND (seq IS NULL OR seq < 0);
 
-    v_captured_sides := v_captured_sides + 1;
+  IF v_p2_plant_count >= 3 AND v_p2_missing_issued = 0 AND v_p2_invalid_seq = 0 THEN
+    v_p2_deck_val := public._validate_ranked_async_deck(v_room.p2_deck);
+    IF (v_p2_deck_val->>'ok')::BOOLEAN = TRUE THEN
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'seq', seq,
+          'tick', tick,
+          'issuedTick', issued_tick,
+          'kind', kind,
+          'plantId', plant_id,
+          'slot', slot,
+          'lane', lane,
+          'col', col
+        ) ORDER BY issued_tick ASC, seq ASC
+      ), '[]'::JSONB)
+      INTO v_p2_actions
+      FROM public.match_actions
+      WHERE room_id = p_room_id AND user_id = v_room.player2_id AND kind IN ('plant', 'dig');
+
+      v_p2_plan_val := public._validate_ranked_async_plan(v_p2_actions);
+      IF (v_p2_plan_val->>'ok')::BOOLEAN = TRUE THEN
+        SELECT COALESCE(elo_rating, 1000) INTO v_p2_rating
+          FROM public.profiles WHERE id = v_room.player2_id;
+
+        INSERT INTO public.ranked_async_opponents (
+          source_room_id,
+          source_side,
+          rating_snapshot,
+          deck_snapshot,
+          actions_snapshot,
+          source_engine_version,
+          protocol_version,
+          source_duration_ticks,
+          active,
+          created_at
+        ) VALUES (
+          p_room_id,
+          2,
+          v_p2_rating,
+          v_room.p2_deck,
+          v_p2_actions,
+          'auth-v1',
+          'ranked-async-v1',
+          v_duration,
+          TRUE,
+          NOW()
+        ) ON CONFLICT (source_room_id, source_side) DO NOTHING;
+
+        v_captured_sides := v_captured_sides + 1;
+      END IF;
+    END IF;
   END IF;
 
   RETURN jsonb_build_object('ok', TRUE, 'capturedSides', v_captured_sides);
 END;
 $$;
 
--- Permisos de captura
 REVOKE EXECUTE ON FUNCTION public.capture_ranked_async_opponents_from_room(UUID) FROM anon, authenticated, PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.capture_ranked_async_opponents_from_room(UUID) TO service_role;
 
@@ -259,27 +616,34 @@ DO $$
 DECLARE
   v_rec RECORD;
   v_res JSONB;
+  v_evaluated INTEGER := 0;
+  v_captured  INTEGER := 0;
+  v_skipped   INTEGER := 0;
 BEGIN
   FOR v_rec IN (
     SELECT id
       FROM public.game_rooms
      WHERE mode = 'ranked'
-       AND COALESCE(is_async_match, FALSE) = FALSE
+       AND is_async_match = FALSE
        AND settled_at IS NOT NULL
        AND verification_status = 'verified'
        AND player1_id IS NOT NULL
        AND player2_id IS NOT NULL
-       AND COALESCE(engine_version, '') = 'auth-v1'
+       AND engine_version = 'auth-v1'
      ORDER BY created_at DESC
      LIMIT 500
   ) LOOP
-    BEGIN
-      v_res := public.capture_ranked_async_opponents_from_room(v_rec.id);
-    EXCEPTION WHEN OTHERS THEN
-      -- No detener la migración si una partida aislada falla al capturarse
-      RAISE NOTICE 'No se pudo capturar semilla de sala %: %', v_rec.id, SQLERRM;
-    END;
+    v_evaluated := v_evaluated + 1;
+    v_res := public.capture_ranked_async_opponents_from_room(v_rec.id);
+    IF (v_res->>'ok')::BOOLEAN = TRUE AND (v_res->>'capturedSides')::INTEGER > 0 THEN
+      v_captured := v_captured + (v_res->>'capturedSides')::INTEGER;
+    ELSE
+      v_skipped := v_skipped + 1;
+    END IF;
   END LOOP;
+
+  RAISE NOTICE 'Backfill Rivales Semilla V1: evaluadas=%, capturadas=%, omitidas=%',
+    v_evaluated, v_captured, v_skipped;
 END;
 $$;
 
@@ -291,6 +655,7 @@ $$;
  * Solicita emparejamiento con un Rival Semilla tras >= 60 segundos en Ranked.
  * Garantiza PRIORIDAD HUMANA ABSOLUTA reintentando emparejamiento humano antes
  * de generar la sala asíncrona.
+ * Valida defensivamente tanto el mazo del jugador como el candidato semilla.
  */
 CREATE OR REPLACE FUNCTION public.claim_ranked_async_opponent()
 RETURNS JSONB
@@ -306,7 +671,10 @@ DECLARE
   v_human_room     UUID;
   v_player_elo     INTEGER := 1000;
   v_player_deck    JSONB;
+  v_deck_val       JSONB;
   v_candidate      RECORD;
+  v_cand_deck_val  JSONB;
+  v_cand_plan_val  JSONB;
   v_recent         UUID[];
   v_random_name    TEXT;
   v_random_avatar  TEXT;
@@ -324,7 +692,7 @@ BEGIN
     RAISE EXCEPTION 'No autenticado';
   END IF;
 
-  -- Bloquear fila de cola del usuario para evitar carreras
+  -- Bloquear fila de cola del usuario para evitar carreras concurrentes
   SELECT * INTO v_queue
     FROM public.matchmaking_queue
    WHERE user_id = v_uid AND status = 'searching'
@@ -364,7 +732,6 @@ BEGIN
   END IF;
 
   -- ── PRIORIDAD HUMANA ABSOLUTA ─────────────────────────────────────────────
-  -- Comprobar de nuevo si existe un rival humano elegible en este instante
   v_human_room := public._try_match(v_uid);
   IF v_human_room IS NOT NULL THEN
     RETURN jsonb_build_object(
@@ -374,11 +741,19 @@ BEGIN
     );
   END IF;
 
-  -- ── SELECCIÓN DEL CANDIDATO SEMILLA ───────────────────────────────────────
+  -- ── VALIDAR MAZO ACTIVO DEL JUGADOR ───────────────────────────────────────
+  v_player_deck := public._active_deck_for(v_uid);
+  v_deck_val := public._validate_ranked_async_deck(v_player_deck);
+  IF (v_deck_val->>'ok')::BOOLEAN IS NOT TRUE THEN
+    RETURN jsonb_build_object(
+      'matched', FALSE,
+      'error', 'invalid_player_deck',
+      'details', v_deck_val->>'details'
+    );
+  END IF;
+
   SELECT COALESCE(elo_rating, 1000) INTO v_player_elo
     FROM public.profiles WHERE id = v_uid;
-
-  v_player_deck := public._active_deck_for(v_uid);
 
   -- Lista de los últimos 10 Rivales Semilla usados por este jugador para anti-repetición
   SELECT COALESCE(array_agg(async_opponent_id), ARRAY[]::UUID[])
@@ -393,80 +768,99 @@ BEGIN
        LIMIT 10
     ) s;
 
-  -- Rango Tier 1: ±200 ELO (excluyendo recientes si hay alternativa)
-  SELECT * INTO v_candidate
-    FROM public.ranked_async_opponents
-   WHERE active = TRUE
-     AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
-     AND rating_snapshot BETWEEN (v_player_elo - 200) AND (v_player_elo + 200)
-     AND id <> ALL(v_recent)
-   ORDER BY random()
-   LIMIT 1;
-
-  IF NOT FOUND THEN
-    -- Tier 1 sin exclusión de recientes
+  -- ── SELECCIÓN Y VALIDACIÓN DEFENSIVA DEL CANDIDATO SEMILLA ────────────────
+  LOOP
+    -- Tier 1: ±200 ELO (sin recientes)
     SELECT * INTO v_candidate
       FROM public.ranked_async_opponents
      WHERE active = TRUE
-       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
+       AND source_engine_version = 'auth-v1'
+       AND protocol_version = 'ranked-async-v1'
        AND rating_snapshot BETWEEN (v_player_elo - 200) AND (v_player_elo + 200)
-     ORDER BY random()
-     LIMIT 1;
-  END IF;
-
-  IF NOT FOUND THEN
-    -- Rango Tier 2: ±400 ELO (excluyendo recientes)
-    SELECT * INTO v_candidate
-      FROM public.ranked_async_opponents
-     WHERE active = TRUE
-       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
-       AND rating_snapshot BETWEEN (v_player_elo - 400) AND (v_player_elo + 400)
        AND id <> ALL(v_recent)
      ORDER BY random()
      LIMIT 1;
-  END IF;
 
-  IF NOT FOUND THEN
-    -- Tier 2 sin exclusión de recientes
-    SELECT * INTO v_candidate
-      FROM public.ranked_async_opponents
-     WHERE active = TRUE
-       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
-       AND rating_snapshot BETWEEN (v_player_elo - 400) AND (v_player_elo + 400)
-     ORDER BY random()
-     LIMIT 1;
-  END IF;
+    IF NOT FOUND THEN
+      -- Tier 1 con recientes
+      SELECT * INTO v_candidate
+        FROM public.ranked_async_opponents
+       WHERE active = TRUE
+         AND source_engine_version = 'auth-v1'
+         AND protocol_version = 'ranked-async-v1'
+         AND rating_snapshot BETWEEN (v_player_elo - 200) AND (v_player_elo + 200)
+       ORDER BY random()
+       LIMIT 1;
+    END IF;
 
-  IF NOT FOUND THEN
-    -- Rango Tier 3: Cualquier candidato activo
-    SELECT * INTO v_candidate
-      FROM public.ranked_async_opponents
-     WHERE active = TRUE
-       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
-       AND id <> ALL(v_recent)
-     ORDER BY random()
-     LIMIT 1;
-  END IF;
+    IF NOT FOUND THEN
+      -- Tier 2: ±400 ELO (sin recientes)
+      SELECT * INTO v_candidate
+        FROM public.ranked_async_opponents
+       WHERE active = TRUE
+         AND source_engine_version = 'auth-v1'
+         AND protocol_version = 'ranked-async-v1'
+         AND rating_snapshot BETWEEN (v_player_elo - 400) AND (v_player_elo + 400)
+         AND id <> ALL(v_recent)
+       ORDER BY random()
+       LIMIT 1;
+    END IF;
 
-  IF NOT FOUND THEN
-    -- Tier 3 sin exclusión
-    SELECT * INTO v_candidate
-      FROM public.ranked_async_opponents
-     WHERE active = TRUE
-       AND COALESCE(source_engine_version, 'auth-v1') = 'auth-v1'
-     ORDER BY random()
-     LIMIT 1;
-  END IF;
+    IF NOT FOUND THEN
+      -- Tier 2 con recientes
+      SELECT * INTO v_candidate
+        FROM public.ranked_async_opponents
+       WHERE active = TRUE
+         AND source_engine_version = 'auth-v1'
+         AND protocol_version = 'ranked-async-v1'
+         AND rating_snapshot BETWEEN (v_player_elo - 400) AND (v_player_elo + 400)
+       ORDER BY random()
+       LIMIT 1;
+    END IF;
 
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('matched', FALSE, 'error', 'no_hay_candidato_semilla');
-  END IF;
+    IF NOT FOUND THEN
+      -- Tier 3: Cualquier candidato activo
+      SELECT * INTO v_candidate
+        FROM public.ranked_async_opponents
+       WHERE active = TRUE
+         AND source_engine_version = 'auth-v1'
+         AND protocol_version = 'ranked-async-v1'
+         AND id <> ALL(v_recent)
+       ORDER BY random()
+       LIMIT 1;
+    END IF;
+
+    IF NOT FOUND THEN
+      -- Tier 3 con recientes
+      SELECT * INTO v_candidate
+        FROM public.ranked_async_opponents
+       WHERE active = TRUE
+         AND source_engine_version = 'auth-v1'
+         AND protocol_version = 'ranked-async-v1'
+       ORDER BY random()
+       LIMIT 1;
+    END IF;
+
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('matched', FALSE, 'error', 'no_hay_candidato_semilla');
+    END IF;
+
+    -- Validar defensivamente el candidato antes de consumirlo
+    v_cand_deck_val := public._validate_ranked_async_deck(v_candidate.deck_snapshot);
+    v_cand_plan_val := public._validate_ranked_async_plan(v_candidate.actions_snapshot);
+
+    IF (v_cand_deck_val->>'ok')::BOOLEAN = TRUE AND (v_cand_plan_val->>'ok')::BOOLEAN = TRUE THEN
+      EXIT; -- Candidato validado exitosamente
+    ELSE
+      -- Candidato corrupto: desactivarlo para sanear el pool y reintentar
+      UPDATE public.ranked_async_opponents SET active = FALSE WHERE id = v_candidate.id;
+    END IF;
+  END LOOP;
 
   -- ── GENERAR METADATOS INVENTADOS Y SEMILLA RNG NUEVA GARANTIZADA ──────────
   v_random_name := v_names[1 + floor(random() * array_length(v_names, 1))::INTEGER];
   v_random_avatar := v_avatars[1 + floor(random() * array_length(v_avatars, 1))::INTEGER];
 
-  -- Garantizar por código que la semilla sea nueva e independiente
   DECLARE
     v_source_seed INTEGER;
     v_seed_attempts INTEGER := 0;
@@ -487,7 +881,7 @@ BEGIN
     END LOOP;
   END;
 
-  -- ── CREAR LA SALA ASÍNCRONA (SIN PLAN COMPLETO EN GAME_ROOMS) ────────────
+  -- ── CREACIÓN ATÓMICA DE SALA Y PLAN PRIVADO ───────────────────────────────
   INSERT INTO public.game_rooms (
     mode,
     player1_id,
@@ -522,20 +916,20 @@ BEGIN
     NOW()
   ) RETURNING id INTO v_new_room_id;
 
-  -- Guardar plan completo en tabla privada server-only (nunca accesible por cliente)
   INSERT INTO public.ranked_async_room_plans (
     room_id,
     async_opponent_id,
+    protocol_version,
     actions_snapshot,
     created_at
   ) VALUES (
     v_new_room_id,
     v_candidate.id,
+    'ranked-async-v1',
     v_candidate.actions_snapshot,
     NOW()
   );
 
-  -- Actualizar cola
   UPDATE public.matchmaking_queue
      SET status = 'matched',
          matched_room_id = v_new_room_id,
@@ -560,6 +954,7 @@ GRANT EXECUTE ON FUNCTION public.claim_ranked_async_opponent() TO authenticated;
 /**
  * Liquida una partida asíncrona de Ranked verificada por el árbitro autoritativo.
  * Actualiza ÚNICAMENTE el perfil del jugador real (player1_id).
+ * Idempotente y protegido contra doble liquidación mediante row locks.
  */
 CREATE OR REPLACE FUNCTION public.settle_verified_async_ranked_match(
   p_room_id UUID,
@@ -595,6 +990,18 @@ BEGIN
 
   IF v_room.mode <> 'ranked' THEN
     RAISE EXCEPTION 'Sólo para partidas Ranked';
+  END IF;
+
+  IF v_room.engine_version <> 'auth-v1' THEN
+    RAISE EXCEPTION 'Sólo para salas con engine_version auth-v1';
+  END IF;
+
+  IF v_room.player1_id IS NULL OR v_room.player2_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Estructura de jugadores inválida para partida asíncrona';
+  END IF;
+
+  IF v_room.async_opponent_id IS NULL THEN
+    RAISE EXCEPTION 'Falta async_opponent_id';
   END IF;
 
   IF v_room.settled_at IS NOT NULL THEN
@@ -637,12 +1044,12 @@ BEGIN
 
     UPDATE public.game_rooms
        SET status = 'p1_won',
-           settled_at = NOW(),
-           verification_status = 'verified',
-           verified_at = NOW(),
-           server_winner_id = v_room.player1_id,
-           verification_note = 'server_verified_async',
-           verification_payload = COALESCE(p_payload, '{}'::JSONB)
+            settled_at = NOW(),
+            verification_status = 'verified',
+            verified_at = NOW(),
+            server_winner_id = v_room.player1_id,
+            verification_note = 'server_verified_async',
+            verification_payload = COALESCE(p_payload, '{}'::JSONB)
      WHERE id = p_room_id;
 
     RETURN jsonb_build_object(
@@ -657,7 +1064,7 @@ BEGIN
       'isAsyncMatch', TRUE
     );
   ELSE
-    -- Derrota del jugador real
+    -- Derrota del jugador real (Rival Semilla gana)
     v_menos := (public._elo_deltas(v_elo_p1)->>'lose')::INTEGER;
 
     UPDATE public.profiles
@@ -666,12 +1073,12 @@ BEGIN
 
     UPDATE public.game_rooms
        SET status = 'p2_won',
-           settled_at = NOW(),
-           verification_status = 'verified',
-           verified_at = NOW(),
-           server_winner_id = NULL,
-           verification_note = 'server_verified_async',
-           verification_payload = COALESCE(p_payload, '{}'::JSONB)
+            settled_at = NOW(),
+            verification_status = 'verified',
+            verified_at = NOW(),
+            server_winner_id = NULL,
+            verification_note = 'server_verified_async',
+            verification_payload = COALESCE(p_payload, '{}'::JSONB)
      WHERE id = p_room_id;
 
     RETURN jsonb_build_object(
@@ -780,7 +1187,7 @@ GRANT  EXECUTE ON FUNCTION public.game_room_info(UUID) TO authenticated;
  * autorizada (serverTick + 18 tics ≈ 600 ms).
  * El límite temporal depende EXCLUSIVAMENTE del reloj del servidor.
  * Lee las acciones desde ranked_async_room_plans.
- * Filtra seq > p_after_seq para evitar reenviar todo continuamente.
+ * Si el plan no existe o es corrupto, falla cerrado con error (NUNCA devuelve []).
  */
 CREATE OR REPLACE FUNCTION public.poll_ranked_async_intents(
   p_room_id UUID,
@@ -801,6 +1208,10 @@ DECLARE
   v_intents JSONB;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
+  IF p_after_seq IS NULL OR p_after_seq < 0 THEN
+    RAISE EXCEPTION 'p_after_seq inválido';
+  END IF;
+
   SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada'; END IF;
 
@@ -822,12 +1233,11 @@ BEGIN
 
   SELECT * INTO v_plan FROM public.ranked_async_room_plans WHERE room_id = p_room_id;
   IF NOT FOUND THEN
-    RETURN jsonb_build_object(
-      'ok', TRUE,
-      'serverTick', 0,
-      'maxRevealedTick', 0,
-      'intents', '[]'::JSONB
-    );
+    RAISE EXCEPTION 'ASYNC_PLAN_MISSING';
+  END IF;
+
+  IF v_plan.actions_snapshot IS NULL OR jsonb_typeof(v_plan.actions_snapshot) <> 'array' THEN
+    RAISE EXCEPTION 'INVALID_ASYNC_PLAN';
   END IF;
 
   -- Calcular tic del servidor (33ms por tic)
@@ -841,18 +1251,18 @@ BEGIN
     jsonb_build_object(
       'seq', (elem->>'seq')::INTEGER,
       'tick', (elem->>'tick')::INTEGER,
-      'issuedTick', COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER),
+      'issuedTick', (elem->>'issuedTick')::INTEGER,
       'kind', elem->>'kind',
       'plantId', elem->>'plantId',
       'slot', (elem->>'slot')::INTEGER,
       'lane', (elem->>'lane')::INTEGER,
       'col', (elem->>'col')::INTEGER
-    ) ORDER BY COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) ASC, (elem->>'seq')::INTEGER ASC
+    ) ORDER BY (elem->>'issuedTick')::INTEGER ASC, (elem->>'seq')::INTEGER ASC
   ), '[]'::JSONB)
   INTO v_intents
   FROM jsonb_array_elements(v_plan.actions_snapshot) AS elem
-  WHERE (elem->>'seq')::INTEGER > COALESCE(p_after_seq, 0)
-    AND COALESCE((elem->>'issuedTick')::INTEGER, (elem->>'tick')::INTEGER) <= v_max_reveal_tick;
+  WHERE (elem->>'seq')::INTEGER > p_after_seq
+    AND (elem->>'issuedTick')::INTEGER <= v_max_reveal_tick;
 
   RETURN jsonb_build_object(
     'ok', TRUE,
@@ -899,7 +1309,7 @@ DECLARE
   v_existente RECORD;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
-  IF p_seq IS NULL OR p_seq <= 0 THEN RAISE EXCEPTION 'seq inválido'; END IF;
+  IF p_seq IS NULL OR p_seq < 0 THEN RAISE EXCEPTION 'seq inválido'; END IF;
   IF p_tick IS NULL OR p_tick < 0 THEN RAISE EXCEPTION 'tick inválido'; END IF;
   IF p_kind NOT IN ('plant', 'dig', 'collect') THEN RAISE EXCEPTION 'tipo de acción inválido'; END IF;
 
@@ -926,7 +1336,7 @@ BEGIN
     RAISE EXCEPTION 'La partida ya está cerrada para verificación';
   END IF;
 
-  -- Idempotencia fuerte por seq
+  -- ── IDEMPOTENCIA FUERTE POR (room_id, user_id, seq) ───────────────────────
   SELECT * INTO v_existente
     FROM public.match_actions
    WHERE room_id = p_room_id AND user_id = v_uid AND seq = p_seq;
@@ -946,6 +1356,7 @@ BEGIN
     RAISE EXCEPTION 'seq ya usado con otra acción';
   END IF;
 
+  -- ── VENTANA DE TIEMPO Y LÍMITES ───────────────────────────────────────────
   SELECT COALESCE((SELECT value::INTEGER FROM public.shop_config
                     WHERE key = 'ma_tolerancia_tics_atras'), 30)
     INTO v_atras;
@@ -971,12 +1382,60 @@ BEGIN
     FLOOR(EXTRACT(EPOCH FROM (clock_timestamp() - v_inicio)) * 1000.0 / 33.0)::INTEGER
   );
 
-  IF p_tick < (v_tic_ahora - v_atras) THEN
-    RAISE EXCEPTION 'tick en el pasado';
-  END IF;
+  -- ── VALIDACIÓN ESTRICTA AUTH-V1 ───────────────────────────────────────────
+  IF v_room.engine_version = 'auth-v1' THEN
+    IF p_issued_tick IS NULL OR p_issued_tick < 0 THEN
+      RAISE EXCEPTION 'issued_tick obligatorio y no negativo en auth-v1';
+    END IF;
 
-  IF p_tick > (v_tic_ahora + v_adelante) THEN
-    RAISE EXCEPTION 'tick demasiado en el futuro';
+    IF p_issued_tick < v_tic_ahora - v_atras OR p_issued_tick > v_tic_ahora + v_adelante THEN
+      RAISE EXCEPTION 'issued_tick fuera de ventana (cliente %, servidor %)', p_issued_tick, v_tic_ahora;
+    END IF;
+
+    IF p_kind IN ('plant', 'dig') THEN
+      IF p_tick <> p_issued_tick + 6 THEN
+        RAISE EXCEPTION 'margen de red inválido: tick debe ser issued_tick + 6';
+      END IF;
+      IF p_lane IS NULL OR p_lane NOT BETWEEN 0 AND 2 THEN
+        RAISE EXCEPTION 'lane inválido (debe ser 0..2)';
+      END IF;
+      IF p_col IS NULL OR p_col NOT BETWEEN 0 AND 5 THEN
+        RAISE EXCEPTION 'col fuera de rango (debe ser 0..5)';
+      END IF;
+    ELSE
+      -- collect
+      IF p_tick <> p_issued_tick THEN
+        RAISE EXCEPTION 'collect debe ocurrir en issued_tick';
+      END IF;
+    END IF;
+
+    IF p_kind = 'plant' THEN
+      IF p_plant IS NULL THEN RAISE EXCEPTION 'plant_id obligatorio en plant'; END IF;
+      IF p_slot IS NULL OR p_slot NOT BETWEEN 0 AND 5 THEN RAISE EXCEPTION 'slot obligatorio (0..5) en plant'; END IF;
+      IF NOT public._carta_en_slot(p_room_id, v_uid, p_slot, p_plant) THEN
+        RAISE EXCEPTION 'esa carta no pertenece a ese slot de tu mazo';
+      END IF;
+      IF p_target_id IS NOT NULL THEN RAISE EXCEPTION 'plant no usa target_id'; END IF;
+    ELSIF p_kind = 'dig' THEN
+      IF p_plant IS NOT NULL OR p_slot IS NOT NULL OR p_target_id IS NOT NULL THEN
+        RAISE EXCEPTION 'dig tiene campos incompatibles';
+      END IF;
+    ELSIF p_kind = 'collect' THEN
+      IF p_target_id IS NULL OR char_length(p_target_id) NOT BETWEEN 1 AND 160 THEN
+        RAISE EXCEPTION 'target_id obligatorio y no vacío en collect';
+      END IF;
+      IF p_plant IS NOT NULL OR p_lane IS NOT NULL OR p_col IS NOT NULL OR p_slot IS NOT NULL THEN
+        RAISE EXCEPTION 'collect tiene campos incompatibles';
+      END IF;
+    END IF;
+  ELSE
+    -- Legacy compatibility
+    IF p_tick < (v_tic_ahora - v_atras) OR p_tick > (v_tic_ahora + v_adelante) THEN
+      RAISE EXCEPTION 'tick fuera de ventana';
+    END IF;
+    IF p_kind = 'plant' AND (p_plant IS NULL OR NOT public._carta_en_mazo(p_room_id, v_uid, p_plant)) THEN
+      RAISE EXCEPTION 'esa carta no está en tu mazo';
+    END IF;
   END IF;
 
   SELECT COUNT(*) INTO v_cuantas
@@ -988,12 +1447,12 @@ BEGIN
   END IF;
 
   INSERT INTO public.match_actions
-    (room_id, user_id, seq, tick, issued_tick, kind, plant_id, lane, col, slot, target_id)
+    (room_id, user_id, seq, tick, issued_tick, server_tick, kind, plant_id, lane, col, slot, target_id)
   VALUES
-    (p_room_id, v_uid, p_seq, p_tick, p_issued_tick, p_kind, p_plant, p_lane, p_col, p_slot, p_target_id)
+    (p_room_id, v_uid, p_seq, p_tick, p_issued_tick, v_tic_ahora, p_kind, p_plant, p_lane, p_col, p_slot, p_target_id)
   RETURNING id INTO v_id;
 
-  RETURN jsonb_build_object('ok', TRUE, 'id', v_id);
+  RETURN jsonb_build_object('ok', TRUE, 'id', v_id, 'serverTick', v_tic_ahora);
 END;
 $$;
 
@@ -1033,6 +1492,19 @@ BEGIN
     RETURN jsonb_build_object('success', TRUE, 'status', 'ya_liquidada');
   END IF;
 
+  -- Para partidas asíncronas, el reporte del cliente es sólo solicitud de verificación (NO autoritativo)
+  IF v_room.is_async_match THEN
+    UPDATE public.game_rooms
+       SET verification_requested_at = COALESCE(verification_requested_at, NOW())
+     WHERE id = p_room_id;
+    RETURN jsonb_build_object(
+      'success', TRUE,
+      'status', 'verificacion_pendiente',
+      'authoritative', TRUE
+    );
+  END IF;
+
+  -- Partidas humanas
   IF v_uid = v_room.player1_id THEN
     IF v_room.p1_reported_winner IS NOT NULL AND v_room.p1_reported_winner <> p_winner_id THEN
       RAISE EXCEPTION 'No puedes cambiar tu reporte';
@@ -1127,7 +1599,6 @@ BEGIN
        SET status = 'p2_won',
            settled_at = NOW(),
            server_winner_id = NULL,
-           p1_reported_winner = COALESCE(v_room.async_opponent_id, '00000000-0000-0000-0000-000000000000'::UUID),
            verification_status = 'verified',
            verified_at = NOW(),
            verification_note = 'server_verified_surrender',
@@ -1273,7 +1744,7 @@ GRANT  EXECUTE ON FUNCTION public.room_result(UUID) TO authenticated;
 
 INSERT INTO public._migration_audit(fase, detalle)
 VALUES ('36_rival_semilla_ranked_v1', jsonb_build_object(
-  'descripcion', 'Implementacion autoritativa de Rival Semilla Ranked V1 y liquidacion asincrona',
+  'descripcion', 'Implementacion autoritativa de Rival Semilla Ranked V1 y liquidacion asincrona estricta',
+  'protocol_version', 'ranked-async-v1',
   'aplicada_en', NOW()
 )) ON CONFLICT DO NOTHING;
-

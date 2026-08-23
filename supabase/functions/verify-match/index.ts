@@ -7,6 +7,9 @@ import {
 import {
   simulateAsyncMatch,
 } from '../../../src/engine/asyncOpponent.ts'
+import {
+  validarMazoAsyncRanked,
+} from '../../../src/engine/asyncP1History.ts'
 import { TICK_MS } from '../../../src/engine/time.ts'
 
 const CORS = {
@@ -309,14 +312,32 @@ Deno.serve(async (req) => {
     // CASO 1: PARTIDA ASÍNCRONA (RIVAL SEMILLA RANKED)
     // =========================================================================
     if (esAsync) {
-      // Cargar plan privado de acciones del Rival Semilla desde tabla server-only
+      // 1. Validaciones estructurales previas de la sala
+      if (room.player1_id === null || room.player2_id !== null) {
+        const auditStructural = {
+          engineVersion: 'auth-v1',
+          isAsyncMatch: true,
+          winnerSide: null,
+          reason: 'invalid_async_room_structure',
+          error: 'player1_id required and player2_id must be null for async matches',
+        }
+        await admin.rpc('mark_match_verification_failed', {
+          p_room_id: roomId,
+          p_note: 'invalid_async_room_structure',
+          p_details: auditStructural,
+        })
+        lockedRoomId = null
+        return json({ ok: false, status: 'failed', reviewRequired: true, isAsyncMatch: true })
+      }
+
+      // 2. Cargar plan privado de acciones del Rival Semilla desde tabla server-only
       const { data: planData, error: planError } = await admin
         .from('ranked_async_room_plans')
-        .select('actions_snapshot')
+        .select('actions_snapshot, protocol_version, async_opponent_id')
         .eq('room_id', roomId)
         .single()
 
-      if (planError || !planData || !planData.actions_snapshot) {
+      if (planError || !planData || !planData.actions_snapshot || !Array.isArray(planData.actions_snapshot)) {
         const auditPlanMissing = {
           engineVersion: 'auth-v1',
           isAsyncMatch: true,
@@ -335,6 +356,78 @@ Deno.serve(async (req) => {
           status: 'failed',
           reviewRequired: true,
           reason: 'async_plan_missing',
+          isAsyncMatch: true,
+        })
+      }
+
+      if (planData.protocol_version !== 'ranked-async-v1') {
+        const auditProtocolMismatch = {
+          engineVersion: 'auth-v1',
+          isAsyncMatch: true,
+          winnerSide: null,
+          reason: 'PROTOCOL_VERSION_MISMATCH',
+          error: `protocol_version '${String(planData.protocol_version)}' no coincide con 'ranked-async-v1'`,
+        }
+        await admin.rpc('mark_match_verification_failed', {
+          p_room_id: roomId,
+          p_note: 'PROTOCOL_VERSION_MISMATCH',
+          p_details: auditProtocolMismatch,
+        })
+        lockedRoomId = null
+        return json({
+          ok: false,
+          status: 'failed',
+          reviewRequired: true,
+          reason: 'PROTOCOL_VERSION_MISMATCH',
+          isAsyncMatch: true,
+        })
+      }
+
+      if (planData.async_opponent_id !== room.async_opponent_id) {
+        const auditSnapshotMismatch = {
+          engineVersion: 'auth-v1',
+          isAsyncMatch: true,
+          winnerSide: null,
+          reason: 'ASYNC_SNAPSHOT_MISMATCH',
+          error: 'async_opponent_id en room no coincide con el plan privado',
+        }
+        await admin.rpc('mark_match_verification_failed', {
+          p_room_id: roomId,
+          p_note: 'ASYNC_SNAPSHOT_MISMATCH',
+          p_details: auditSnapshotMismatch,
+        })
+        lockedRoomId = null
+        return json({
+          ok: false,
+          status: 'failed',
+          reviewRequired: true,
+          reason: 'ASYNC_SNAPSHOT_MISMATCH',
+          isAsyncMatch: true,
+        })
+      }
+
+      // 3. Validar formalmente los mazos snapshot de P1 y P2
+      const p1DeckVal = validarMazoAsyncRanked(room.p1_deck)
+      const p2DeckVal = validarMazoAsyncRanked(room.async_deck_snapshot)
+      if (!p1DeckVal.ok || !p2DeckVal.ok) {
+        const auditDeckInvalid = {
+          engineVersion: 'auth-v1',
+          isAsyncMatch: true,
+          winnerSide: null,
+          reason: !p1DeckVal.ok ? p1DeckVal.reason : p2DeckVal.reason,
+          error: !p1DeckVal.ok ? p1DeckVal.details : p2DeckVal.details,
+        }
+        await admin.rpc('mark_match_verification_failed', {
+          p_room_id: roomId,
+          p_note: 'invalid_deck_snapshot',
+          p_details: auditDeckInvalid,
+        })
+        lockedRoomId = null
+        return json({
+          ok: false,
+          status: 'failed',
+          reviewRequired: true,
+          reason: 'invalid_deck_snapshot',
           isAsyncMatch: true,
         })
       }
@@ -702,13 +795,8 @@ Deno.serve(async (req) => {
           throw new Error(`consensus_settle_failed:${error.message}`)
         }
 
-        if (room.mode === 'ranked') {
-          try {
-            await admin.rpc('capture_ranked_async_opponents_from_room', { p_room_id: roomId })
-          } catch (captureErr) {
-            console.warn('capture_ranked_async_opponents_from_room fallo:', captureErr)
-          }
-        }
+        // NOTA DE SEGURIDAD V1: Las partidas resueltas por consenso de clientes
+        // NUNCA son capturadas como semillas de Rivales Semilla (criterio positivo).
 
         lockedRoomId = null
 
