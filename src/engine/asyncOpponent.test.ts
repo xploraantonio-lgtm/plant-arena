@@ -4345,14 +4345,21 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     }
   })
 
-  // 206. Auditoría estática: _validate_ranked_async_plan resetea variables y canonicaliza explícitamente
-  it('206. Auditoría estática: _validate_ranked_async_plan resetea variables por iteración y canonicaliza dig sin residuos de plant', () => {
+  // 206. Auditoría estática: _validate_ranked_async_plan declara variables, las resetea y canonicaliza explícitamente
+  it('206. Auditoría estática: _validate_ranked_async_plan declara v_canonical_intent, resetea variables y canonicaliza DIG y PLANT', () => {
     const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
     const sqlContent = readFileSync(sqlPath, 'utf8')
 
-    expect(sqlContent).toMatch(/v_plant_id := NULL;/i)
-    expect(sqlContent).toMatch(/v_slot := NULL;/i)
+    // 1. Declaración explícita
+    expect(sqlContent).toMatch(/v_canonical_intent\s+JSONB;/i)
+    // 2. Reset por iteración
+    expect(sqlContent).toMatch(/v_canonical_intent\s*:=\s*NULL;/i)
+    expect(sqlContent).toMatch(/v_plant_id\s*:=\s*NULL;/i)
+    expect(sqlContent).toMatch(/v_slot\s*:=\s*NULL;/i)
+    // 3. Canonicalización DIG (plantId y slot explícitamente NULL)
     expect(sqlContent).toMatch(/'plantId',\s*NULL,\s*'slot',\s*NULL/i)
+    // 4. Canonicalización PLANT (plantId y slot mapeados)
+    expect(sqlContent).toMatch(/'plantId',\s*v_plant_id,\s*'slot',\s*v_slot/i)
   })
 
   // 207. Auditoría estática: capture_ranked_async_opponents_from_room ejecuta row lock de concurrencia

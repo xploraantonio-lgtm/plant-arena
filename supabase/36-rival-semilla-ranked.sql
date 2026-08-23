@@ -163,6 +163,7 @@ DECLARE
   v_col INTEGER;
   v_seen_seqs JSONB := '{}'::JSONB;
   v_existing_intent JSONB;
+  v_canonical_intent JSONB;
   v_valid_plants TEXT[] := ARRAY[
     'sunflower', 'peashooter', 'repeater', 'wallnut', 'melonpult',
     'chomper', 'bonkchoy', 'garlic', 'squash', 'twinsunflower',
