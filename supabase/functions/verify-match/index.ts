@@ -715,10 +715,14 @@ Deno.serve(async (req) => {
 
     if (resultado.ganador === 1 || resultado.ganador === 2) {
       const winnerId = resultado.ganador === 1 ? room.player1_id : room.player2_id
+      const payloadAuthoritative = {
+        ...audit,
+        resolutionSource: 'authoritative_replay',
+      }
       const { data, error } = await admin.rpc('settle_verified_match', {
         p_room_id: roomId,
         p_winner_id: winnerId,
-        p_payload: audit,
+        p_payload: payloadAuthoritative,
       })
       if (error) throw new Error(`settle_failed:${error.message}`)
 
@@ -743,9 +747,13 @@ Deno.serve(async (req) => {
     }
 
     if (resultado.motivo === 'true_draw' && resultado.consistente) {
+      const payloadDraw = {
+        ...audit,
+        resolutionSource: 'authoritative_replay',
+      }
       const { data, error } = await admin.rpc('settle_verified_draw', {
         p_room_id: roomId,
-        p_payload: audit,
+        p_payload: payloadDraw,
       })
       if (error) throw new Error(`draw_settle_failed:${error.message}`)
       lockedRoomId = null

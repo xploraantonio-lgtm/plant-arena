@@ -3632,12 +3632,12 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
   })
 
   // 140. source resuelto por ranked_client_consensus NO se captura (criterio positivo)
-  it('140. Captura de semilla: source resuelto por client consensus se excluye expresamente', () => {
+  it('140. Captura de semilla: exige resolutionSource = authoritative_replay afirmativo y excluye client consensus o valores nulos', () => {
     const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
     const sqlContent = readFileSync(sqlPath, 'utf8')
 
-    expect(sqlContent).toMatch(/excluded_client_consensus/i)
-    expect(sqlContent).toMatch(/ranked_client_consensus/i)
+    expect(sqlContent).toMatch(/INVALID_SOURCE_VERIFICATION/i)
+    expect(sqlContent).toMatch(/v_resolution_source <> 'authoritative_replay'/i)
   })
 
   // 141. source replay autoritativo válido captura con protocol_version y source_engine_version
@@ -3651,12 +3651,14 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(sqlContent).toMatch(/had_illegal_actions/i)
   })
 
-  // 142. Ejecutar captura dos veces es idempotente (ON CONFLICT DO NOTHING)
-  it('142. Captura de semilla: captura doble de la misma sala y lado es idempotente', () => {
+  // 142. Ejecutar captura dos veces con snapshot idéntico es idempotente y no incrementa capturedSides
+  it('142. Captura de semilla: captura doble de la misma sala y lado es idempotente y devuelve alreadyExistingSides', () => {
     const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
     const sqlContent = readFileSync(sqlPath, 'utf8')
 
-    expect(sqlContent).toMatch(/ON CONFLICT \(source_room_id, source_side\) DO NOTHING/i)
+    expect(sqlContent).toMatch(/alreadyExistingSides/i)
+    expect(sqlContent).toMatch(/v_existing_opp\.deck_snapshot = v_room\.p1_deck/i)
+    expect(sqlContent).toMatch(/v_already_existing_sides := v_already_existing_sides \+ 1;/i)
   })
 
   // 143. source async match no se captura (sin cascada de semillas)
@@ -4105,6 +4107,208 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
       col: 0,
     }).ok).toBe(false)
   })
+
+  // ===========================================================================
+  // BLOQUEADORES RECIENTES: TESTS ESPECÍFICOS (186-203)
+  // ===========================================================================
+
+  // 186. resolutionSource NULL / missing → no captura (INVALID_SOURCE_VERIFICATION)
+  it('186. resolutionSource NULL en verification_payload rechaza la captura con INVALID_SOURCE_VERIFICATION', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_resolution_source IS NULL OR v_resolution_source <> 'authoritative_replay'/i)
+    expect(sqlContent).toMatch(/INVALID_SOURCE_VERIFICATION/i)
+  })
+
+  // 187. resolutionSource desconocido → no captura
+  it('187. resolutionSource desconocido o no autoritativo rechaza la captura', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/resolutionSource debe ser authoritative_replay/i)
+  })
+
+  // 188. authoritative_replay afirmativo y válido es capturado
+  it('188. Partida con resolutionSource = authoritative_replay, consistent=true y 0 ilegales es capturada positivamente', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/resolutionSource' = 'authoritative_replay'/i)
+    expect(sqlContent).toMatch(/v_room\.verification_payload->>'consistent' <> 'true'/i)
+  })
+
+  // 189. verify-match humano ganador escribe resolutionSource = authoritative_replay
+  it('189. verify-match escribe explícitamente resolutionSource: authoritative_replay al liquidar ganador humano por replay', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/payloadAuthoritative\s*=\s*\{[\s\S]*resolutionSource:\s*'authoritative_replay'/i)
+  })
+
+  // 190. verify-match true_draw autoritativo escribe resolutionSource = authoritative_replay
+  it('190. verify-match escribe explícitamente resolutionSource: authoritative_replay al liquidar empate autoritativo (true_draw)', () => {
+    const verifyPath = join(process.cwd(), 'supabase', 'functions', 'verify-match', 'index.ts')
+    const verifyContent = readFileSync(verifyPath, 'utf8')
+
+    expect(verifyContent).toMatch(/payloadDraw\s*=\s*\{[\s\S]*resolutionSource:\s*'authoritative_replay'/i)
+  })
+
+  // 191. _validate_ranked_async_plan detecta SEQ_CONFLICT cuando sólo difiere en slot
+  it('191. _validate_ranked_async_plan detecta SEQ_CONFLICT cuando dos intenciones con mismo seq difieren únicamente en slot', () => {
+    const rawPlan = [
+      { seq: 50, issuedTick: 100, tick: 106, kind: 'plant', plantId: 'peashooter', lane: 0, col: 0, slot: 0 },
+      { seq: 50, issuedTick: 100, tick: 106, kind: 'plant', plantId: 'peashooter', lane: 0, col: 0, slot: 4 },
+    ]
+    const val = validarYNormalizarIntencionesAsyncRanked(rawPlan)
+    expect(val.ok).toBe(false)
+    if (!val.ok) {
+      expect(val.reason).toBe('SEQ_CONFLICT')
+    }
+  })
+
+  // 192. _validate_ranked_async_plan detecta SEQ_CONFLICT ante diferencias en tick, issuedTick, kind, lane, col, plantId
+  it('192. _validate_ranked_async_plan detecta SEQ_CONFLICT ante cualquier diferencia individual de campos', () => {
+    const baseIntent = { seq: 10, issuedTick: 50, tick: 56, kind: 'plant', plantId: 'sunflower', lane: 1, col: 1, slot: 0 }
+
+    // Diferencia en issuedTick
+    const diffIssued = [baseIntent, { ...baseIntent, issuedTick: 60, tick: 66 }]
+    expect(validarYNormalizarIntencionesAsyncRanked(diffIssued).ok).toBe(false)
+
+    // Diferencia en tick
+    const diffTick = [baseIntent, { ...baseIntent, tick: 50 }]
+    expect(validarYNormalizarIntencionesAsyncRanked(diffTick).ok).toBe(false)
+
+    // Diferencia en kind
+    const diffKind = [baseIntent, { ...baseIntent, kind: 'dig', plantId: undefined, slot: undefined }]
+    expect(validarYNormalizarIntencionesAsyncRanked(diffKind).ok).toBe(false)
+
+    // Diferencia en lane
+    const diffLane = [baseIntent, { ...baseIntent, lane: 2 }]
+    expect(validarYNormalizarIntencionesAsyncRanked(diffLane).ok).toBe(false)
+
+    // Diferencia en col
+    const diffCol = [baseIntent, { ...baseIntent, col: 3 }]
+    expect(validarYNormalizarIntencionesAsyncRanked(diffCol).ok).toBe(false)
+
+    // Diferencia en plantId
+    const diffPlant = [baseIntent, { ...baseIntent, plantId: 'wallnut' }]
+    expect(validarYNormalizarIntencionesAsyncRanked(diffPlant).ok).toBe(false)
+  })
+
+  // 193. _validate_ranked_async_plan acepta duplicado idéntico completo como idempotente
+  it('193. _validate_ranked_async_plan acepta duplicado idéntico completo con mismo seq sin conflicto', () => {
+    const identicalPlan = [
+      { seq: 25, issuedTick: 100, tick: 106, kind: 'plant', plantId: 'repeater', lane: 1, col: 2, slot: 1 },
+      { seq: 25, issuedTick: 100, tick: 106, kind: 'plant', plantId: 'repeater', lane: 1, col: 2, slot: 1 },
+    ]
+    const val = validarYNormalizarIntencionesAsyncRanked(identicalPlan)
+    expect(val.ok).toBe(true)
+    if (val.ok) {
+      expect(val.intenciones.length).toBe(1)
+    }
+  })
+
+  // 194. settle_verified_async_ranked_match valida independientemente plan missing
+  it('194. settle_verified_async_ranked_match valida independientemente que el plan privado exista', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/SELECT \* INTO v_plan FROM public\.ranked_async_room_plans WHERE room_id = p_room_id;/i)
+    expect(sqlContent).toMatch(/RAISE EXCEPTION 'ASYNC_PLAN_MISSING';/i)
+  })
+
+  // 195. settle_verified_async_ranked_match valida protocol mismatch
+  it('195. settle_verified_async_ranked_match valida que protocol_version sea ranked-async-v1', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_plan\.protocol_version <> 'ranked-async-v1'/i)
+    expect(sqlContent).toMatch(/RAISE EXCEPTION 'PROTOCOL_VERSION_MISMATCH';/i)
+  })
+
+  // 196. settle_verified_async_ranked_match valida opponent mismatch
+  it('196. settle_verified_async_ranked_match valida que el plan pertenezca al async_opponent_id de la sala', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_plan\.async_opponent_id <> v_room\.async_opponent_id/i)
+    expect(sqlContent).toMatch(/RAISE EXCEPTION 'ASYNC_OPPONENT_MISMATCH';/i)
+  })
+
+  // 197. settle_verified_async_ranked_match valida coherencia de deck snapshots
+  it('197. settle_verified_async_ranked_match valida coherencia de deck snapshot contra el Rival Semilla', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_room\.async_deck_snapshot <> v_opp\.deck_snapshot/i)
+    expect(sqlContent).toMatch(/RAISE EXCEPTION 'ASYNC_DECK_SNAPSHOT_MISMATCH';/i)
+  })
+
+  // 198. capture_ranked_async_opponents_from_room no incrementa capturedSides ante snapshot ya existente
+  it('198. capture_ranked_async_opponents_from_room reporta alreadyExistingSides sin duplicar capturedSides', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/v_already_existing_sides := v_already_existing_sides \+ 1;/i)
+    expect(sqlContent).toMatch(/'alreadyExistingSides',\s*v_already_existing_sides/i)
+  })
+
+  // 199. capture_ranked_async_opponents_from_room devuelve SOURCE_SNAPSHOT_CONFLICT si difiere
+  it('199. capture_ranked_async_opponents_from_room devuelve SOURCE_SNAPSHOT_CONFLICT ante snapshot contradictorio', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/SOURCE_SNAPSHOT_CONFLICT/i)
+    expect(sqlContent).toMatch(/'conflictedSides',\s*v_conflicted_sides/i)
+  })
+
+  // 200. Preflight audit script exige resolutionSource = 'authoritative_replay'
+  it('200. Preflight script exige resolutionSource = authoritative_replay afirmativo y no usa COALESCE', () => {
+    const preflightPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked-preflight.sql')
+    const preflightContent = readFileSync(preflightPath, 'utf8')
+
+    expect(preflightContent).toMatch(/verification_payload->>'resolutionSource' = 'authoritative_replay'/i)
+    expect(preflightContent).not.toMatch(/resolutionSource.*IS DISTINCT FROM/i)
+    expect(preflightContent).not.toMatch(/COALESCE\(.*illegalCount/i)
+    expect(preflightContent).not.toMatch(/COALESCE\(.*ticks/i)
+  })
+
+  // 201. Preflight audit contiene desglose detallado de incompatibilidades
+  it('201. Preflight script contiene consultas de desglose para inconsistent, illegals, consensus y forfeits', () => {
+    const preflightPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked-preflight.sql')
+    const preflightContent = readFileSync(preflightPath, 'utf8')
+
+    expect(preflightContent).toMatch(/2\.1 Salas sin verification_payload/i)
+    expect(preflightContent).toMatch(/2\.2 Salas sin consistent o consistent != true/i)
+    expect(preflightContent).toMatch(/2\.3 Salas con illegalCount ausente o distinto de cero/i)
+    expect(preflightContent).toMatch(/2\.4 Salas con resolutionSource ausente o distinto de authoritative_replay/i)
+    expect(preflightContent).toMatch(/2\.5 Salas resueltas por consenso de clientes/i)
+    expect(preflightContent).toMatch(/2\.6 Salas con ticks ausentes o menores a 300/i)
+    expect(preflightContent).toMatch(/2\.7 Salas finalizadas por surrender o forfeit/i)
+  })
+
+  // 202. Postcheck audit contiene validaciones semánticas completas
+  it('202. Postcheck script valida semántica de mazos y planes usando funciones de validación oficiales', () => {
+    const postcheckPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked-postcheck.sql')
+    const postcheckContent = readFileSync(postcheckPath, 'utf8')
+
+    expect(postcheckContent).toMatch(/public\._validate_ranked_async_deck\(deck_snapshot\)/i)
+    expect(postcheckContent).toMatch(/public\._validate_ranked_async_plan\(actions_snapshot\)/i)
+    expect(postcheckContent).toMatch(/p\.async_opponent_id <> gr\.async_opponent_id/i)
+    expect(postcheckContent).toMatch(/gr\.async_deck_snapshot <> o\.deck_snapshot/i)
+    expect(postcheckContent).toMatch(/r\.verification_payload->>'resolutionSource' <> 'authoritative_replay'/i)
+  })
+
+  // 203. Formato seguro de verification_payload previene fallos por strings malformados sin usar WHEN OTHERS
+  it('203. capture_ranked_async_opponents_from_room valida formato de texto antes de convertir a entero', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    expect(sqlContent).toMatch(/\(v_room\.verification_payload->>'illegalCount'\) !~ '\^\\d\+\$'/i)
+    expect(sqlContent).toMatch(/\(v_room\.verification_payload->>'ticks'\) !~ '\^\\d\+\$'/i)
+  })
 })
+
 
 

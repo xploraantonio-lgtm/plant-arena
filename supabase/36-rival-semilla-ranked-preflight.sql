@@ -59,47 +59,121 @@ WHERE gr.engine_version = 'auth-v1'
 
 
 -- -----------------------------------------------------------------------------
--- 2. AUDITORÍA DE SALAS HISTÓRICAS Y METADATOS DE VERIFICACIÓN
+-- 2. AUDITORÍA DE SALAS HISTÓRICAS Y METADATOS DE VERIFICACIÓN (DESGLOSE)
 -- -----------------------------------------------------------------------------
 
--- 2.1 Salas verificadas sólo por consenso de clientes (resolutionSource = 'ranked_client_consensus')
+-- 2.1 Salas ranked verificadas sin verification_payload
 SELECT
-  '2.1 Salas resueltas por consenso de clientes' AS chequeo,
+  '2.1 Salas sin verification_payload' AS chequeo,
+  COUNT(*) AS total_sin_payload
+FROM public.game_rooms
+WHERE mode = 'ranked'
+  AND verification_status = 'verified'
+  AND verification_payload IS NULL;
+
+-- 2.2 Salas ranked verificadas sin campo consistent o con consistent <> true
+SELECT
+  '2.2 Salas sin consistent o consistent != true' AS chequeo,
+  COUNT(*) AS total_no_consistente
+FROM public.game_rooms
+WHERE mode = 'ranked'
+  AND verification_status = 'verified'
+  AND (
+    verification_payload->>'consistent' IS NULL
+    OR verification_payload->>'consistent' <> 'true'
+  );
+
+-- 2.3 Salas ranked verificadas sin illegalCount o con illegalCount <> 0
+SELECT
+  '2.3 Salas con illegalCount ausente o distinto de cero' AS chequeo,
+  COUNT(*) AS total_con_ilegales
+FROM public.game_rooms
+WHERE mode = 'ranked'
+  AND verification_status = 'verified'
+  AND (
+    verification_payload->>'illegalCount' IS NULL
+    OR (verification_payload->>'illegalCount') !~ '^\d+$'
+    OR (verification_payload->>'illegalCount')::INTEGER <> 0
+  );
+
+-- 2.4 Salas ranked verificadas sin resolutionSource o con resolutionSource <> authoritative_replay
+SELECT
+  '2.4 Salas con resolutionSource ausente o distinto de authoritative_replay' AS chequeo,
+  COUNT(*) AS total_no_authoritative_replay
+FROM public.game_rooms
+WHERE mode = 'ranked'
+  AND verification_status = 'verified'
+  AND (
+    verification_payload->>'resolutionSource' IS NULL
+    OR verification_payload->>'resolutionSource' <> 'authoritative_replay'
+  );
+
+-- 2.5 Salas ranked verificadas resueltas por consenso de clientes
+SELECT
+  '2.5 Salas resueltas por consenso de clientes (resolutionSource = ranked_client_consensus)' AS chequeo,
   COUNT(*) AS total_consenso_cliente
 FROM public.game_rooms
 WHERE mode = 'ranked'
   AND verification_status = 'verified'
   AND (verification_payload->>'resolutionSource') = 'ranked_client_consensus';
 
--- 2.2 Salas verificadas con acciones ilegales (illegalCount > 0)
+-- 2.6 Salas ranked verificadas con ticks ausentes o menores a 300
 SELECT
-  '2.2 Salas con acciones ilegales registradas' AS chequeo,
-  COUNT(*) AS total_con_ilegales
+  '2.6 Salas con ticks ausentes o menores a 300' AS chequeo,
+  COUNT(*) AS total_duracion_invalida
 FROM public.game_rooms
 WHERE mode = 'ranked'
   AND verification_status = 'verified'
-  AND COALESCE((verification_payload->>'illegalCount')::INTEGER, 0) > 0;
+  AND (
+    verification_payload->>'ticks' IS NULL
+    OR (verification_payload->>'ticks') !~ '^\d+$'
+    OR (verification_payload->>'ticks')::INTEGER < 300
+  );
 
--- 2.3 Salas potencialmente elegibles para Rivales Semilla V1 (criterio positivo)
+-- 2.7 Salas ranked finalizadas por surrender o forfeit
 SELECT
-  '2.3 Salas estrictamente elegibles para pool V1' AS chequeo,
+  '2.7 Salas finalizadas por surrender o forfeit' AS chequeo,
+  COUNT(*) AS total_surrender_forfeit
+FROM public.game_rooms
+WHERE mode = 'ranked'
+  AND verification_status = 'verified'
+  AND (verification_payload->>'reason') IN ('forfeit_p1', 'forfeit_p2', 'surrender');
+
+-- 2.8 Salas ranked sin mazos snapshot válidos
+SELECT
+  '2.8 Salas sin mazos snapshots' AS chequeo,
+  COUNT(*) AS total_sin_mazo
+FROM public.game_rooms
+WHERE mode = 'ranked'
+  AND verification_status = 'verified'
+  AND (
+    p1_deck IS NULL OR jsonb_typeof(p1_deck) <> 'array'
+    OR p2_deck IS NULL OR jsonb_typeof(p2_deck) <> 'array'
+  );
+
+-- 2.9 Salas potencialmente elegibles para Rivales Semilla V1 (CRITERIO POSITIVO ESTRICTO)
+SELECT
+  '2.9 Salas estrictamente elegibles para pool V1' AS chequeo,
   COUNT(*) AS total_salas_elegibles
 FROM public.game_rooms
 WHERE mode = 'ranked'
-  AND COALESCE(is_async_match, FALSE) = FALSE
+  AND is_async_match = FALSE
   AND settled_at IS NOT NULL
   AND verification_status = 'verified'
   AND player1_id IS NOT NULL
   AND player2_id IS NOT NULL
   AND engine_version = 'auth-v1'
   AND verification_payload IS NOT NULL
-  AND (verification_payload->>'consistent')::BOOLEAN = TRUE
-  AND COALESCE((verification_payload->>'illegalCount')::INTEGER, 0) = 0
-  AND (verification_payload->>'resolutionSource') IS DISTINCT FROM 'ranked_client_consensus'
-  AND COALESCE((verification_payload->>'reason'), '') NOT IN ('forfeit_p1', 'forfeit_p2', 'surrender')
-  AND COALESCE((verification_payload->>'ticks')::INTEGER, 0) >= 300
+  AND verification_payload->>'resolutionSource' = 'authoritative_replay'
+  AND verification_payload->>'consistent' = 'true'
+  AND verification_payload->>'illegalCount' = '0'
+  AND (verification_payload->>'ticks') ~ '^\d+$'
+  AND (verification_payload->>'ticks')::INTEGER >= 300
+  AND COALESCE(verification_payload->>'reason', '') NOT IN ('forfeit_p1', 'forfeit_p2', 'surrender')
   AND p1_deck IS NOT NULL
-  AND p2_deck IS NOT NULL;
+  AND jsonb_typeof(p1_deck) = 'array'
+  AND p2_deck IS NOT NULL
+  AND jsonb_typeof(p2_deck) = 'array';
 
 
 -- -----------------------------------------------------------------------------

@@ -4,7 +4,7 @@
 --
 -- Este script ejecuta EXCLUSIVAMENTE consultas de solo lectura.
 -- Diseñado para ejecutarse DESPUÉS de un despliegue para certificar la integridad
--- estructural, permisos, RLS, consistencia de pools y planes de partida.
+-- estructural, semántica, permisos, RLS, consistencia de pools y planes de partida.
 --
 -- NO MODIFICA DATOS NI EJECUTA MIGRACIONES.
 -- =============================================================================
@@ -37,32 +37,20 @@ ORDER BY table_name, grantee;
 
 
 -- -----------------------------------------------------------------------------
--- 2. INTEGRIDAD DEL POOL DE RIVALES SEMILLA
+-- 2. INTEGRIDAD Y SEMÁNTICA DEL POOL DE RIVALES SEMILLA (DEBEN SER CERO)
 -- -----------------------------------------------------------------------------
 
--- 2.1 Cantidad de semillas activas vs inactivas por versión de protocolo
+-- 2.1 Semillas activas con versión de motor o protocolo inválidas (DEBE SER CERO)
 SELECT
-  '2.1 Resumen del pool de semillas' AS chequeo,
-  protocol_version,
-  source_engine_version,
-  active,
-  COUNT(*) AS total_semillas,
-  MIN(rating_snapshot) AS min_rating,
-  MAX(rating_snapshot) AS max_rating
-FROM public.ranked_async_opponents
-GROUP BY protocol_version, source_engine_version, active;
-
--- 2.2 Semillas activas con versión de motor o protocolo inválidas (DEBE SER CERO)
-SELECT
-  '2.2 Semillas con versión inválida (DEBE SER 0)' AS chequeo,
+  '2.1 Semillas con versión inválida (DEBE SER 0)' AS chequeo,
   COUNT(*) AS total_corruptas
 FROM public.ranked_async_opponents
 WHERE active = TRUE
   AND (source_engine_version <> 'auth-v1' OR protocol_version <> 'ranked-async-v1');
 
--- 2.3 Semillas con snapshots que no son arrays JSON (DEBE SER CERO)
+-- 2.2 Semillas con snapshots que no son arrays JSON (DEBE SER CERO)
 SELECT
-  '2.3 Semillas con snapshots no-array (DEBE SER 0)' AS chequeo,
+  '2.2 Semillas con snapshots no-array (DEBE SER 0)' AS chequeo,
   COUNT(*) AS total_corruptas
 FROM public.ranked_async_opponents
 WHERE active = TRUE
@@ -72,9 +60,44 @@ WHERE active = TRUE
     OR source_duration_ticks < 300
   );
 
+-- 2.3 Semillas activas con mazo snapshot semánticamente inválido (DEBE SER CERO)
+SELECT
+  '2.3 Semillas activas con mazo inválido por _validate_ranked_async_deck (DEBE SER 0)' AS chequeo,
+  COUNT(*) AS total_mazos_invalidos
+FROM public.ranked_async_opponents
+WHERE active = TRUE
+  AND (public._validate_ranked_async_deck(deck_snapshot)->>'ok') <> 'true';
+
+-- 2.4 Semillas activas con plan de intenciones semánticamente inválido (DEBE SER CERO)
+SELECT
+  '2.4 Semillas activas con plan inválido por _validate_ranked_async_plan (DEBE SER 0)' AS chequeo,
+  COUNT(*) AS total_planes_invalidos
+FROM public.ranked_async_opponents
+WHERE active = TRUE
+  AND (public._validate_ranked_async_plan(actions_snapshot)->>'ok') <> 'true';
+
+-- 2.5 Semillas activas cuya sala fuente no cumple elegibilidad estricta (DEBE SER CERO)
+SELECT
+  '2.5 Semillas activas con sala fuente no elegible (DEBE SER 0)' AS chequeo,
+  COUNT(*) AS total_fuentes_invalidas
+FROM public.ranked_async_opponents o
+JOIN public.game_rooms r ON r.id = o.source_room_id
+WHERE o.active = TRUE
+  AND (
+    r.mode <> 'ranked'
+    OR r.is_async_match = TRUE
+    OR r.settled_at IS NULL
+    OR r.verification_status <> 'verified'
+    OR r.engine_version <> 'auth-v1'
+    OR r.verification_payload IS NULL
+    OR r.verification_payload->>'resolutionSource' <> 'authoritative_replay'
+    OR r.verification_payload->>'consistent' <> 'true'
+    OR r.verification_payload->>'illegalCount' <> '0'
+  );
+
 
 -- -----------------------------------------------------------------------------
--- 3. INTEGRIDAD DE SALAS ASÍNCRONAS Y PLANES PRIVADOS
+-- 3. INTEGRIDAD DE SALAS ASÍNCRONAS Y PLANES PRIVADOS (DEBEN SER CERO)
 -- -----------------------------------------------------------------------------
 
 -- 3.1 Planes privados huérfanos sin sala (DEBE SER CERO)
@@ -102,9 +125,30 @@ FROM public.game_rooms
 WHERE is_async_match = TRUE
   AND player2_id IS NOT NULL;
 
--- 3.4 Salas asíncronas con discordancia de protocol_version (DEBE SER CERO)
+-- 3.4 Salas asíncronas con discordancia de opponent_id entre room y plan (DEBE SER CERO)
 SELECT
-  '3.4 Discordancia de protocolo en planes (DEBE SER 0)' AS chequeo,
+  '3.4 Salas asíncronas con discordancia room/plan opponent_id (DEBE SER 0)' AS chequeo,
+  COUNT(*) AS total_mismatches
+FROM public.game_rooms gr
+JOIN public.ranked_async_room_plans p ON p.room_id = gr.id
+WHERE gr.is_async_match = TRUE
+  AND p.async_opponent_id <> gr.async_opponent_id;
+
+-- 3.5 Salas asíncronas con discordancia de deck_snapshot con el opponent (DEBE SER CERO)
+SELECT
+  '3.5 Salas asíncronas con discordancia de mazo vs opponent (DEBE SER 0)' AS chequeo,
+  COUNT(*) AS total_deck_mismatches
+FROM public.game_rooms gr
+JOIN public.ranked_async_opponents o ON o.id = gr.async_opponent_id
+WHERE gr.is_async_match = TRUE
+  AND (
+    gr.async_deck_snapshot <> o.deck_snapshot
+    OR (gr.p2_deck IS NOT NULL AND gr.p2_deck <> o.deck_snapshot)
+  );
+
+-- 3.6 Salas asíncronas con discordancia de protocol_version (DEBE SER CERO)
+SELECT
+  '3.6 Discordancia de protocolo en planes (DEBE SER 0)' AS chequeo,
   COUNT(*) AS total_mismatches
 FROM public.ranked_async_room_plans p
 JOIN public.game_rooms gr ON gr.id = p.room_id
