@@ -171,6 +171,6 @@ WHERE schemaname = 'public'
     'idx_ranked_async_opponents_active_rating',
     'idx_ranked_async_room_plans_opp',
     'idx_game_rooms_async',
-    'uq_match_actions_room_user_seq'
+    'match_actions_room_id_user_id_seq_key'
   )
 ORDER BY tablename, indexname;

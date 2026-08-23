@@ -388,10 +388,6 @@ CREATE POLICY "rooms_select_own" ON public.game_rooms
     OR (player2_id IS NOT NULL AND auth.uid() = player2_id)
   );
 
--- Garantía de unicidad DB para match_actions por (room_id, user_id, seq)
-CREATE UNIQUE INDEX IF NOT EXISTS uq_match_actions_room_user_seq
-  ON public.match_actions (room_id, user_id, seq);
-
 
 -- -----------------------------------------------------------------------------
 -- 3. CAPTURA DEL POOL DE RIVALES SEMILLA DESDE PARTIDAS VERIFICADAS
