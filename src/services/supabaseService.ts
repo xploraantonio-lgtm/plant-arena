@@ -2,7 +2,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import type { Database } from '../types/database.types'
 import type { FreePackSlot } from '../utils/freePackManager'
 import type { DatosDeRepeticion } from '../engine/replay'
-import { parseLeaderboardRow } from '../utils/leaderboardParser'
+import { parseLeaderboardRow, type ParsedLeaderboardRow } from '../utils/leaderboardParser'
 import { validateMatchClock } from '../utils/matchClock'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
@@ -221,7 +221,7 @@ export const SupabaseService = {
   // ---------------------------------------------------------------------------
   // GLOBAL RANKING & LEADERBOARDS (REAL DATA)
   // ---------------------------------------------------------------------------
-  async getGlobalLeaderboard(limit?: number): Promise<LeaderboardRow[]> {
+  async getGlobalLeaderboard(limit?: number): Promise<ParsedLeaderboardRow[]> {
     if (!isSupabaseConfigured()) {
       throw new Error('Supabase no está configurado')
     }
@@ -244,8 +244,8 @@ export const SupabaseService = {
       if (!Array.isArray(data)) {
         throw new Error('Respuesta de clasificación inválida: no es un array')
       }
-      // Validar cada fila estrictamente con parseLeaderboardRow
-      return data.map((row) => parseLeaderboardRow(row)) as unknown as LeaderboardRow[]
+      // Validar cada fila estrictamente con parseLeaderboardRow (frontera única)
+      return data.map((row) => parseLeaderboardRow(row))
     } catch (e: any) {
       logError('getGlobalLeaderboard', e)
       throw e

@@ -4,7 +4,6 @@ import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { SupabaseService } from '../../services/supabaseService'
 import { UserManager } from '../../utils/userManager'
-import { parseLeaderboardRow } from '../../utils/leaderboardParser'
 import './Ranking.css'
 
 import type { Database } from '../../types/database.types'
@@ -105,21 +104,20 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
     SupabaseService.getGlobalLeaderboard()
       .then((profiles) => {
         const mapped: LeaderboardUser[] = profiles.map((p) => {
-          const parsed = parseLeaderboardRow(p)
-          const arena = getArenaForElo(parsed.elo_rating)
+          const arena = getArenaForElo(p.elo_rating)
           const isMe = Boolean(
-            (myId && parsed.id === myId) ||
-            (parsed.username && parsed.username.trim().toLowerCase() === myUsername)
+            (myId && p.id === myId) ||
+            (p.username.trim().toLowerCase() === myUsername)
           )
 
           return {
-            rank: parsed.rank_position,
-            username: parsed.username,
+            rank: p.rank_position,
+            username: p.username,
             clan: '-',
-            elo: parsed.elo_rating,
-            wins: parsed.ranked_wins,
-            losses: parsed.ranked_losses,
-            winRate: parsed.ranked_win_rate,
+            elo: p.elo_rating,
+            wins: p.ranked_wins,
+            losses: p.ranked_losses,
+            winRate: p.ranked_win_rate,
             arenaName: arena.name,
             bestPlantName: 'Sunflower',
             bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
