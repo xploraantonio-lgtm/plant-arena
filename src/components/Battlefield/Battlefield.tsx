@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { PlantId, ColosseumMatchConfig } from '../../types/game'
 import { TournamentManager, type ActiveTournamentSession } from '../../utils/tournamentManager'
 import { useGameEngine } from '../../hooks/useGameEngine'
@@ -275,6 +275,39 @@ export default function Battlefield({
     packResult?: { awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean }
     isSurrendered?: boolean
   } | null>(null)
+
+  const [clockSyncStatus, setClockSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
+  const [clockSyncError, setClockSyncError] = useState<string | null>(null)
+  const matchClockGenRef = useRef<number>(0)
+  const startedGensRef = useRef<Set<number>>(new Set())
+
+  const syncAndStartMatchClock = useCallback((targetRoomId: string) => {
+    matchClockGenRef.current += 1
+    const attemptGen = matchClockGenRef.current
+    setClockSyncStatus('syncing')
+    setClockSyncError(null)
+
+    SupabaseService.startMatchClock(targetRoomId)
+      .then((reloj) => {
+        // Protección contra respuestas stale o doble inicio:
+        if (matchClockGenRef.current !== attemptGen || startedGensRef.current.has(attemptGen)) {
+          return
+        }
+        if (!reloj || typeof reloj.ancoraMs !== 'number' || !Number.isFinite(reloj.ancoraMs)) {
+          throw new Error('Reloj autoritativo incompleto o inválido.')
+        }
+        startedGensRef.current.add(attemptGen)
+        setClockSyncStatus('synced')
+        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch)
+      })
+      .catch((err: any) => {
+        if (matchClockGenRef.current !== attemptGen) {
+          return
+        }
+        setClockSyncStatus('error')
+        setClockSyncError(err?.message || 'No se pudo sincronizar la partida con el servidor.')
+      })
+  }, [seed, soyP1, mazosDeLaSala, isAsyncMatch, startGame])
 
   const [colosseumResult, setColosseumResult] = useState<{
     payoutGems: number
@@ -855,28 +888,15 @@ export default function Battlefield({
       hasHandledEndRef.current = false
 
       if (roomId) {
-        // Con sala, la partida NO empieza en cuanto se pinta la pantalla: primero
-        // se pide al servidor el reloj común, para que el tic 0 sea el mismo para
-        // los dos. Si arrancáramos ya y lo alineáramos después, los primeros
-        // segundos irían desalineados — y ahí es donde caen los primeros soles.
-        void SupabaseService.startMatchClock(roomId).then((reloj) => {
-          // Sin reloj (la migración 23 aún no está, o falló la llamada) se arranca
-          // igual y se juega desalineado, que es peor pero mejor que no jugar.
-          // El último parámetro es de qué lado estoy: sin él no se toman huellas
-          // del tablero, y sin huellas no hay forma de saber si las dos pantallas
-          // siguen jugando la misma partida.
-          // Y los mazos de la sala: de ahí salen las mejoras de las cartas de los
-          // dos lados, que es lo que hace que las dos pantallas simulen la misma
-          // planta en lugar de una mejorada contra una básica.
-          startGame(seed, true, reloj?.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch)
-        })
+        // Con sala real (Ranked PvP / Rival Semilla), la partida exige reloj autoritativo.
+        // Fail-closed: si el reloj falla o no está disponible, no se arranca desalineada.
+        syncAndStartMatchClock(roomId)
       } else {
-        // Entrenamiento contra el bot: no hay reloj que alinear, y el nivel del
-        // bot se saca de tu ELO para que se parezca a alguien de tu nivel.
+        // Entrenamiento contra el bot local: no hay reloj que alinear
         startGame(seed, false, undefined, userElo)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, soyP1, mazosDeLaSala, isAsyncMatch])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, syncAndStartMatchClock])
 
   /**
    * LA HUELLA DEL TABLERO
@@ -1129,10 +1149,46 @@ export default function Battlefield({
           onMouseDown={(e) => e.stopPropagation()}
         >
           <div className="game-card" onClick={(e) => e.stopPropagation()}>
-            <h2 className="game-card__title">Preparando partida…</h2>
-            <p className="game-card__text">
-              Sincronizando con el servidor. La batalla comenzará en breve.
-            </p>
+            {clockSyncStatus === 'error' ? (
+              <>
+                <h2 className="game-card__title">Error de Sincronización</h2>
+                <p className="game-card__text" style={{ color: '#ff6b6b' }}>
+                  {clockSyncError || 'No se pudo sincronizar la partida con el servidor.'}
+                </p>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
+                  <button
+                    className="game-button"
+                    type="button"
+                    onClick={() => {
+                      if (roomId) syncAndStartMatchClock(roomId)
+                    }}
+                  >
+                    🔄 Reintentar
+                  </button>
+                  <button
+                    className="game-button game-button--secondary"
+                    type="button"
+                    onClick={() => {
+                      if (onBackToMenu) onBackToMenu()
+                      else if (onBackToCollection) onBackToCollection()
+                    }}
+                  >
+                    ⬅️ Salir
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="game-card__title">Preparando partida…</h2>
+                <p className="game-card__text">
+                  Sincronizando partida con el servidor autoritativo. La batalla comenzará en breve.
+                </p>
+                <div className="resultado-servidor__cargando" style={{ marginTop: '12px' }}>
+                  <span className="resultado-servidor__spinner" aria-hidden="true" />
+                  <span>Sincronizando…</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

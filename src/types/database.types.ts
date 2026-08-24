@@ -24,6 +24,7 @@ export interface Database {
           has_vip_pass: boolean
           claimed_vip_levels: number[]
           is_admin: boolean
+          exclude_from_ranking?: boolean
           referral_code: string | null
           referred_by: string | null
           created_at: string
@@ -43,6 +44,7 @@ export interface Database {
           has_vip_pass?: boolean
           claimed_vip_levels?: number[]
           is_admin?: boolean
+          exclude_from_ranking?: boolean
           referral_code?: string | null
           referred_by?: string | null
           created_at?: string
@@ -62,6 +64,7 @@ export interface Database {
           has_vip_pass?: boolean
           claimed_vip_levels?: number[]
           is_admin?: boolean
+          exclude_from_ranking?: boolean
           referral_code?: string | null
           referred_by?: string | null
           created_at?: string

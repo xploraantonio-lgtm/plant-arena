@@ -2,6 +2,8 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import type { Database } from '../types/database.types'
 import type { FreePackSlot } from '../utils/freePackManager'
 import type { DatosDeRepeticion } from '../engine/replay'
+import { parseLeaderboardRow } from '../utils/leaderboardParser'
+import { validateMatchClock } from '../utils/matchClock'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -220,7 +222,9 @@ export const SupabaseService = {
   // GLOBAL RANKING & LEADERBOARDS (REAL DATA)
   // ---------------------------------------------------------------------------
   async getGlobalLeaderboard(limit?: number): Promise<LeaderboardRow[]> {
-    if (!isSupabaseConfigured()) return []
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase no está configurado')
+    }
     try {
       // De la VISTA leaderboard con orden determinista rank_position y estadísticas W/L autoritativas
       let query = supabase
@@ -235,30 +239,49 @@ export const SupabaseService = {
       const { data, error } = await query
       if (error) {
         logError('getGlobalLeaderboard', error)
-        return []
+        throw new Error(error.message || 'Error al obtener la tabla de clasificación')
       }
-      return (data || []) as unknown as LeaderboardRow[]
-    } catch (e) {
+      if (!Array.isArray(data)) {
+        throw new Error('Respuesta de clasificación inválida: no es un array')
+      }
+      // Validar cada fila estrictamente con parseLeaderboardRow
+      return data.map((row) => parseLeaderboardRow(row)) as unknown as LeaderboardRow[]
+    } catch (e: any) {
       logError('getGlobalLeaderboard', e)
-      return []
+      throw e
     }
   },
 
-  async getUserRank(userId?: string): Promise<number> {
-    if (!isSupabaseConfigured() || !userId) return 1
+  async getUserRank(userId?: string): Promise<number | null> {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase no está configurado')
+    }
+    if (!userId) return null
     try {
       const { data, error } = await supabase
         .from('leaderboard')
         .select('rank_position')
         .eq('id', userId)
         .maybeSingle()
-      if (!error && data?.rank_position) {
-        return Number(data.rank_position)
+
+      if (error) {
+        logError('getUserRank', error)
+        throw new Error(error.message || 'Error al consultar la posición de ranking')
       }
-      return 1
-    } catch (e) {
+
+      if (!data || data.rank_position === null || data.rank_position === undefined) {
+        return null
+      }
+
+      const rank = typeof data.rank_position === 'number' ? data.rank_position : Number(data.rank_position)
+      if (!Number.isInteger(rank) || rank <= 0) {
+        throw new Error(`rank_position inválido en el servidor: ${data.rank_position}`)
+      }
+
+      return rank
+    } catch (e: any) {
       logError('getUserRank', e)
-      return 1
+      throw e
     }
   },
 
@@ -762,8 +785,13 @@ export const SupabaseService = {
     /** El instante de Date.now() del navegador que corresponde al tic 0. */
     ancoraMs: number
     currentTick: number
-  } | null> {
-    if (!isSupabaseConfigured()) return null
+  }> {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase no está configurado')
+    }
+    if (!roomId) {
+      throw new Error('roomId es requerido para sincronizar el reloj de partida')
+    }
     try {
       // Se mide alrededor de la llamada para estimar el viaje de ida y vuelta.
       const antes = Date.now()
@@ -774,27 +802,13 @@ export const SupabaseService = {
 
       if (error) {
         logError('startMatchClock', error)
-        return null
+        throw new Error(error.message || 'Error al iniciar reloj de partida')
       }
-      if (!data?.startedAt || !data?.serverNow) return null
 
-      const inicioServidor = new Date(data.startedAt).getTime()
-      const ahoraServidor = new Date(data.serverNow).getTime()
-
-      // La respuesta del servidor describe SU reloj. Para traducirlo al nuestro:
-      // cuánto hace, según el servidor, que empezó la partida; y ese mismo rato
-      // hacia atrás desde nuestro ahora.
-      //
-      // Se resta la mitad del viaje de ida y vuelta porque `serverNow` se generó
-      // a mitad de camino, no cuando llegó la respuesta.
-      const medioViaje = Math.max(0, (despues - antes) / 2)
-      const llevaAndando = ahoraServidor - inicioServidor
-      const ancoraMs = despues - medioViaje - llevaAndando
-
-      return { ancoraMs, currentTick: data.currentTick ?? 0 }
-    } catch (e) {
+      return validateMatchClock(data, antes, despues)
+    } catch (e: any) {
       logError('startMatchClock', e)
-      return null
+      throw e
     }
   },
 

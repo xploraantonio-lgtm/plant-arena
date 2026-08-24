@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { SupabaseService } from '../../services/supabaseService'
 import { UserManager } from '../../utils/userManager'
+import { parseLeaderboardRow } from '../../utils/leaderboardParser'
 import './Ranking.css'
 
 import type { Database } from '../../types/database.types'
@@ -78,6 +79,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
   const [realLeaderboard, setRealLeaderboard] = useState<LeaderboardUser[]>([])
   const [userRank, setUserRank] = useState<number | null>(null)
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState<boolean>(true)
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null)
 
   // Leaderboard pagination & search states
   const [leaderboardSearch, setLeaderboardSearch] = useState<string>('')
@@ -93,52 +95,63 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
   const [referralPageSize, setReferralPageSize] = useState<number | 'all'>(20)
   const referralTableRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    let mounted = true
+  const loadLeaderboard = useCallback(() => {
     const myId = userProfile?.id
     const myUsername = (userProfile?.username || UserManager.getProfile().name || 'Guerrero').trim().toLowerCase()
 
     setIsLoadingLeaderboard(true)
-    SupabaseService.getGlobalLeaderboard().then((profiles) => {
-      if (!mounted) return
-      const mapped: LeaderboardUser[] = profiles.map((p, idx) => {
-        const arena = getArenaForElo(p.elo_rating)
-        const isMe = Boolean(
-          (myId && p.id === myId) ||
-          (p.username && p.username.trim().toLowerCase() === myUsername)
-        )
-        const wins = Number(p.ranked_wins) || 0
-        const losses = Number(p.ranked_losses) || 0
-        const winRate =
-          typeof p.ranked_win_rate === 'number'
-            ? `${p.ranked_win_rate}%`
-            : (wins + losses > 0 ? `${Math.round((wins * 100) / (wins + losses))}%` : '0%')
+    setLeaderboardError(null)
 
-        return {
-          rank: Number(p.rank_position) || idx + 1,
-          username: p.username || 'Guerrero',
-          clan: '-',
-          elo: p.elo_rating ?? 1000,
-          wins,
-          losses,
-          winRate,
-          arenaName: arena.name,
-          bestPlantName: 'Sunflower',
-          bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
-          isCurrentUser: isMe,
-        }
+    SupabaseService.getGlobalLeaderboard()
+      .then((profiles) => {
+        const mapped: LeaderboardUser[] = profiles.map((p) => {
+          const parsed = parseLeaderboardRow(p)
+          const arena = getArenaForElo(parsed.elo_rating)
+          const isMe = Boolean(
+            (myId && parsed.id === myId) ||
+            (parsed.username && parsed.username.trim().toLowerCase() === myUsername)
+          )
+
+          return {
+            rank: parsed.rank_position,
+            username: parsed.username,
+            clan: '-',
+            elo: parsed.elo_rating,
+            wins: parsed.ranked_wins,
+            losses: parsed.ranked_losses,
+            winRate: parsed.ranked_win_rate,
+            arenaName: arena.name,
+            bestPlantName: 'Sunflower',
+            bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
+            isCurrentUser: isMe,
+          }
+        })
+        setRealLeaderboard(mapped)
+        setIsLoadingLeaderboard(false)
       })
-      setRealLeaderboard(mapped)
-      setIsLoadingLeaderboard(false)
-    }).catch(() => {
-      if (mounted) setIsLoadingLeaderboard(false)
-    })
+      .catch((err) => {
+        setLeaderboardError(err?.message || 'No se pudo cargar la clasificación global.')
+        setIsLoadingLeaderboard(false)
+      })
 
     if (myId) {
-      SupabaseService.getUserRank(myId).then((r) => {
-        if (mounted) setUserRank(r)
-      }).catch(() => {})
+      SupabaseService.getUserRank(myId)
+        .then((r) => {
+          setUserRank(r)
+        })
+        .catch(() => {
+          setUserRank(null)
+        })
+    } else {
+      setUserRank(null)
     }
+  }, [userProfile?.id, userProfile?.username])
+
+  useEffect(() => {
+    let mounted = true
+    const myUsername = (userProfile?.username || UserManager.getProfile().name || 'Guerrero').trim().toLowerCase()
+
+    loadLeaderboard()
 
     // Cargar ranking real de referidos
     setIsLoadingReferrals(true)
@@ -168,7 +181,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
     return () => {
       mounted = false
     }
-  }, [userProfile, userElo])
+  }, [loadLeaderboard, userProfile, userElo])
 
   const leaderboardData = realLeaderboard
 
@@ -399,6 +412,23 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
               {isLoadingLeaderboard ? (
                 <div className="leaderboard-loading-state">
                   <span>⏳ Cargando todos los usuarios registrados...</span>
+                </div>
+              ) : leaderboardError ? (
+                <div className="leaderboard-error-state" style={{ textAlign: 'center', padding: '40px 16px' }}>
+                  <p style={{ color: '#ff6b6b', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '16px' }}>
+                    ⚠️ {leaderboardError}
+                  </p>
+                  <button
+                    type="button"
+                    className="game-button"
+                    style={{ padding: '8px 24px', fontSize: '0.95rem' }}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.3)
+                      loadLeaderboard()
+                    }}
+                  >
+                    🔄 Reintentar
+                  </button>
                 </div>
               ) : leaderboardData.length === 0 ? (
                 <div className="leaderboard-empty-state">
@@ -664,7 +694,9 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                   {!leaderboardData.some((u) => u.isCurrentUser) && (
                     <div className="leaderboard-my-rank-banner">
                       <div className="my-rank-left">
-                        <span className="my-rank-pos">#{userRank ?? '—'}</span>
+                        <span className="my-rank-pos">
+                          {userProfile?.exclude_from_ranking || userRank === null ? '—' : `#${userRank}`}
+                        </span>
                         <div className="my-rank-user">
                           <strong className={hasVipPass ? 'vip-gold-text' : ''}>
                             {hasVipPass && '👑 '}
