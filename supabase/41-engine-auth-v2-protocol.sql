@@ -1573,8 +1573,185 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.game_room_info(UUID) FROM anon, PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.game_room_info(UUID) TO authenticated;
+-- Actualizar begin_match_verification
+CREATE OR REPLACE FUNCTION public.begin_match_verification(p_room_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_room RECORD;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Sólo service_role';
+  END IF;
+
+  SELECT *
+    INTO v_room
+    FROM public.game_rooms
+   WHERE id = p_room_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Sala no encontrada';
+  END IF;
+
+  IF v_room.engine_version NOT IN ('auth-v1', 'auth-v2') THEN
+    RAISE EXCEPTION 'Sala no autoritativa';
+  END IF;
+
+  IF v_room.settled_at IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'ok', TRUE,
+      'alreadySettled', TRUE,
+      'winner', v_room.server_winner_id,
+      'status', v_room.status
+    );
+  END IF;
+
+  IF v_room.verification_status = 'failed' THEN
+    RETURN jsonb_build_object(
+      'ok', FALSE,
+      'locked', TRUE,
+      'status', 'failed',
+      'note', v_room.verification_note
+    );
+  END IF;
+
+  IF v_room.verification_status = 'verified' THEN
+    RETURN jsonb_build_object(
+      'ok', TRUE,
+      'alreadySettled', v_room.settled_at IS NOT NULL,
+      'locked', TRUE,
+      'status', 'verified'
+    );
+  END IF;
+
+  IF v_room.verification_status = 'verifying' THEN
+    RETURN jsonb_build_object(
+      'ok', TRUE,
+      'busy', TRUE,
+      'status', 'verifying',
+      'startedAt', v_room.verification_started_at
+    );
+  END IF;
+
+  UPDATE public.game_rooms
+     SET verification_status = 'verifying',
+         verification_requested_at = COALESCE(verification_requested_at, NOW()),
+         verification_started_at = NOW(),
+         verification_note = NULL,
+         verification_next_at = NULL,
+         verification_last_error = NULL,
+         verification_attempts = verification_attempts + 1
+   WHERE id = p_room_id;
+
+  RETURN jsonb_build_object(
+    'ok', TRUE,
+    'alreadySettled', FALSE,
+    'busy', FALSE
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.begin_match_verification(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.begin_match_verification(UUID) TO service_role;
+
+-- Actualizar claim_pending_match_verifications
+CREATE OR REPLACE FUNCTION public.claim_pending_match_verifications(
+  p_limit INTEGER DEFAULT 8
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_limit INTEGER := LEAST(GREATEST(COALESCE(p_limit, 8), 1), 25);
+  v_result JSONB;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Sólo service_role';
+  END IF;
+
+  WITH candidatas AS (
+    SELECT r.id
+      FROM public.game_rooms r
+     WHERE r.engine_version IN ('auth-v1', 'auth-v2')
+       AND r.settled_at IS NULL
+       AND r.verification_status = 'pending'
+       AND r.verification_requested_at IS NOT NULL
+       AND (
+         r.verification_next_at IS NULL
+         OR r.verification_next_at <= NOW()
+       )
+     ORDER BY r.verification_requested_at ASC, r.created_at ASC
+     LIMIT v_limit
+     FOR UPDATE SKIP LOCKED
+  ),
+  reclamadas AS (
+    UPDATE public.game_rooms r
+       SET verification_next_at = NOW() + INTERVAL '30 seconds'
+      FROM candidatas c
+     WHERE r.id = c.id
+    RETURNING r.id
+  )
+  SELECT jsonb_agg(id) INTO v_result FROM reclamadas;
+
+  RETURN COALESCE(v_result, '[]'::JSONB);
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.claim_pending_match_verifications(INTEGER) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_pending_match_verifications(INTEGER) TO service_role;
+
+-- Actualizar mark_stuck_match_verifications
+CREATE OR REPLACE FUNCTION public.mark_stuck_match_verifications(
+  p_age_seconds INTEGER DEFAULT 180
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_age INTEGER := LEAST(GREATEST(COALESCE(p_age_seconds, 180), 60), 3600);
+  v_count INTEGER;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Sólo service_role';
+  END IF;
+
+  WITH marcadas AS (
+    UPDATE public.game_rooms
+       SET verification_status = 'failed',
+           verification_note = 'worker_stuck_after_verification_lock',
+           verification_last_error = 'verifying excedió el tiempo máximo del worker',
+           verification_payload =
+             COALESCE(verification_payload, '{}'::JSONB)
+             || jsonb_build_object(
+                  'workerRecovery', TRUE,
+                  'failedAt', NOW(),
+                  'reason', 'worker_stuck_after_verification_lock'
+                )
+     WHERE engine_version IN ('auth-v1', 'auth-v2')
+       AND settled_at IS NULL
+       AND verification_status = 'verifying'
+       AND verification_started_at IS NOT NULL
+       AND verification_started_at < NOW() - make_interval(secs => v_age)
+    RETURNING id
+  )
+  SELECT COUNT(*) INTO v_count FROM marcadas;
+
+  RETURN jsonb_build_object(
+    'ok', TRUE,
+    'markedForReview', v_count,
+    'escrowReleased', FALSE
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.mark_stuck_match_verifications(INTEGER) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_stuck_match_verifications(INTEGER) TO service_role;
 
 -- ── 11. REGISTRO DE AUDITORÍA ───────────────────────────────────────────────
 INSERT INTO public._migration_audit (fase, detalle, ejecutado_en)
