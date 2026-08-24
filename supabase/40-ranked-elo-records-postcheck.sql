@@ -117,8 +117,8 @@ WHERE p.id IN ('71c01a7a-8b97-4dcc-9e3e-d725c6a150ef', 'f5ca7d23-78fb-45cf-beec-
 -- -----------------------------------------------------------------------------
 SELECT 
     id,
-    migration_name,
-    executed_at,
-    details
+    fase,
+    ejecutado_en,
+    detalle
 FROM public._migration_audit
-WHERE migration_name = '40_ranked_elo_records';
+WHERE fase = '40_ranked_elo_records';

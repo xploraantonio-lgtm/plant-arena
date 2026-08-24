@@ -832,7 +832,7 @@ WHERE s.user_id = p.id;
 -- -----------------------------------------------------------------------------
 -- 9. REGISTRO EN AUDITORÍA DE MIGRACIONES
 -- -----------------------------------------------------------------------------
-INSERT INTO public._migration_audit (migration_name, executed_at, details)
+INSERT INTO public._migration_audit (fase, ejecutado_en, detalle)
 VALUES (
   '40_ranked_elo_records',
   NOW(),
