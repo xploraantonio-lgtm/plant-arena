@@ -107,14 +107,21 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
           (myId && p.id === myId) ||
           (p.username && p.username.trim().toLowerCase() === myUsername)
         )
+        const wins = Number(p.ranked_wins) || 0
+        const losses = Number(p.ranked_losses) || 0
+        const winRate =
+          typeof p.ranked_win_rate === 'number'
+            ? `${p.ranked_win_rate}%`
+            : (wins + losses > 0 ? `${Math.round((wins * 100) / (wins + losses))}%` : '0%')
+
         return {
-          rank: idx + 1,
+          rank: Number(p.rank_position) || idx + 1,
           username: p.username || 'Guerrero',
           clan: '-',
           elo: p.elo_rating ?? 1000,
-          wins: 0,
-          losses: 0,
-          winRate: '100%',
+          wins,
+          losses,
+          winRate,
           arenaName: arena.name,
           bestPlantName: 'Sunflower',
           bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
@@ -127,9 +134,11 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
       if (mounted) setIsLoadingLeaderboard(false)
     })
 
-    SupabaseService.getUserRank(userElo).then((r) => {
-      if (mounted) setUserRank(r)
-    }).catch(() => {})
+    if (myId) {
+      SupabaseService.getUserRank(myId).then((r) => {
+        if (mounted) setUserRank(r)
+      }).catch(() => {})
+    }
 
     // Cargar ranking real de referidos
     setIsLoadingReferrals(true)
@@ -410,6 +419,9 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           </span>
                           <span className="podium-clan">{leaderboardData[1].clan}</span>
                           <span className="podium-elo">🏆 {leaderboardData[1].elo} Copas</span>
+                          <span className="podium-winrate" style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '2px' }}>
+                            {leaderboardData[1].winRate} ({leaderboardData[1].wins}W / {leaderboardData[1].losses}L)
+                          </span>
                           <div className="podium-best-plant">
                             <img src={leaderboardData[1].bestPlantImg} alt="" className="podium-plant-img" />
                             <span>{leaderboardData[1].bestPlantName}</span>
@@ -430,6 +442,9 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           </span>
                           <span className="podium-clan">{leaderboardData[0].clan}</span>
                           <span className="podium-elo">🏆 {leaderboardData[0].elo} Copas</span>
+                          <span className="podium-winrate" style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '2px' }}>
+                            {leaderboardData[0].winRate} ({leaderboardData[0].wins}W / {leaderboardData[0].losses}L)
+                          </span>
                           <div className="podium-best-plant">
                             <img src={leaderboardData[0].bestPlantImg} alt="" className="podium-plant-img" />
                             <span>{leaderboardData[0].bestPlantName}</span>
@@ -447,6 +462,9 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           </span>
                           <span className="podium-clan">{leaderboardData[2].clan}</span>
                           <span className="podium-elo">🏆 {leaderboardData[2].elo} Copas</span>
+                          <span className="podium-winrate" style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '2px' }}>
+                            {leaderboardData[2].winRate} ({leaderboardData[2].wins}W / {leaderboardData[2].losses}L)
+                          </span>
                           <div className="podium-best-plant">
                             <img src={leaderboardData[2].bestPlantImg} alt="" className="podium-plant-img" />
                             <span>{leaderboardData[2].bestPlantName}</span>

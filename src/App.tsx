@@ -656,6 +656,13 @@ function App() {
     return { surrenderElo: deltas.surrenderElo, newElo }
   }
 
+  const handleServerEloUpdated = (newElo: number) => {
+    if (typeof newElo === 'number' && !isNaN(newElo)) {
+      setUserElo(newElo)
+      void refreshFromServer()
+    }
+  }
+
   const hasMorePacksOfSameType = lastOpenedPackType
     ? inventoryPacks.some((p) => p.packId === lastOpenedPackType)
     : false
@@ -794,6 +801,7 @@ function App() {
             onBackToCollection={() => setScreen('collection')}
             onBattleComplete={handleBattleComplete}
             onSurrender={handleSurrender}
+            onServerEloUpdated={handleServerEloUpdated}
             practicePlantId={practicePlantId}
             activeDeck={activeDeck}
             userElo={userElo}

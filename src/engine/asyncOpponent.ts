@@ -1123,9 +1123,14 @@ export interface VerificacionServidorPayload {
   winnerSide?: 1 | 2 | null
   winnerId?: string | null
   settlement?: {
+    eloBefore?: number
+    opponentElo?: number
+    eloDelta?: number
+    eloAfter?: number
     eloGained?: number
     eloLost?: number
     payout?: number
+    [key: string]: unknown
   }
   error?: string
 }
@@ -1134,6 +1139,10 @@ export interface ResultadoLiquidacionMatch {
   mostrarResultado: boolean
   resultadoFinal: 'victory' | 'defeat' | 'draw' | 'hold'
   statusServidor: 'liquidada' | 'empate_verificado' | 'verificacion_pendiente' | 'revision_servidor'
+  eloBefore?: number
+  opponentElo?: number
+  eloDelta?: number
+  eloAfter?: number
   eloGained?: number
   eloLost?: number
   payout: number
@@ -1159,12 +1168,27 @@ export function resolverLiquidacionPartida(options: {
       ? serverVerification.winnerSide === 1
       : (serverVerification.winnerId === currentUserId || serverVerification.winnerSide === (soyP1 ? 1 : 2))
     const s = serverVerification.settlement ?? {}
+    const eloDelta = typeof s.eloDelta === 'number' ? s.eloDelta : undefined
+    const eloBefore = typeof s.eloBefore === 'number' ? s.eloBefore : undefined
+    const eloAfter = typeof s.eloAfter === 'number' ? s.eloAfter : undefined
+    const opponentElo = typeof s.opponentElo === 'number' ? s.opponentElo : undefined
+    const eloGained = yoGaneServidor
+      ? (typeof s.eloGained === 'number' && s.eloGained > 0 ? s.eloGained : (eloDelta !== undefined && eloDelta > 0 ? eloDelta : undefined))
+      : undefined
+    const eloLost = !yoGaneServidor
+      ? (typeof s.eloLost === 'number' && s.eloLost > 0 ? s.eloLost : (eloDelta !== undefined && eloDelta < 0 ? Math.abs(eloDelta) : undefined))
+      : undefined
+
     return {
       mostrarResultado: true,
       resultadoFinal: yoGaneServidor ? 'victory' : 'defeat',
       statusServidor: 'liquidada',
-      eloGained: yoGaneServidor && typeof s.eloGained === 'number' ? s.eloGained : undefined,
-      eloLost: !yoGaneServidor && typeof s.eloLost === 'number' ? s.eloLost : undefined,
+      eloBefore,
+      opponentElo,
+      eloDelta,
+      eloAfter,
+      eloGained,
+      eloLost,
       payout: yoGaneServidor && typeof s.payout === 'number' ? s.payout : 0,
     }
   }

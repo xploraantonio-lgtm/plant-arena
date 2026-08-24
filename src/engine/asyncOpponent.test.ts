@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { calcularRankedEloDelta, RANKED_ELO_K } from './rankedElo.ts'
 import {
   createAsyncOpponentController,
   createAsyncOpponentControllerFromValidated,
@@ -4763,6 +4764,194 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(intencionBody).not.toMatch(/plant_id/)
     expect(intencionBody).not.toMatch(/target_id/)
     expect(intencionBody).not.toMatch(/stat_rolls/)
+  })
+
+  // 219. Fórmula ELO canónica (K=32): 1000 vs 1000 produce +16 / -16 / 0
+  it('219. Fórmula ELO canónica (K=32): ratings iguales producen delta +16 por victoria, -16 por derrota, 0 por empate', () => {
+    expect(RANKED_ELO_K).toBe(32)
+
+    const winDelta = calcularRankedEloDelta(1000, 1000, 1.0)
+    expect(winDelta).toBe(16)
+
+    const lossDelta = calcularRankedEloDelta(1000, 1000, 0.0)
+    expect(lossDelta).toBe(-16)
+
+    const drawDelta = calcularRankedEloDelta(1000, 1000, 0.5)
+    expect(drawDelta).toBe(0)
+  })
+
+  // 220. ELO Asimétrico Underdog vs Favorite
+  it('220. ELO Asimétrico: Victoria de desfavorecido otorga más ELO (+24) y victoria de favorito menos (+8)', () => {
+    // Underdog (900) vs Favorite (1100)
+    const underdogWin = calcularRankedEloDelta(900, 1100, 1.0)
+    expect(underdogWin).toBe(24)
+
+    const underdogLoss = calcularRankedEloDelta(900, 1100, 0.0)
+    expect(underdogLoss).toBe(-8)
+
+    // Favorite (1100) vs Underdog (900)
+    const favoriteWin = calcularRankedEloDelta(1100, 900, 1.0)
+    expect(favoriteWin).toBe(8)
+
+    const favoriteLoss = calcularRankedEloDelta(1100, 900, 0.0)
+    expect(favoriteLoss).toBe(-24)
+  })
+
+  // 221. Suma cero estricta en PvP humano
+  it('221. Suma cero estricta: delta(A, B, 1.0) + delta(B, A, 0.0) === 0 en todo diferencial de rating (150+ pares)', () => {
+    const ratings = [0, 100, 500, 750, 800, 900, 950, 1000, 1050, 1100, 1200, 1300, 1500, 2000]
+    let pairsTested = 0
+
+    for (const rA of ratings) {
+      for (const rB of ratings) {
+        const deltaAWin = calcularRankedEloDelta(rA, rB, 1.0)
+        const deltaBLoss = calcularRankedEloDelta(rB, rA, 0.0)
+        expect(deltaAWin + deltaBLoss).toBe(0)
+
+        const deltaALoss = calcularRankedEloDelta(rA, rB, 0.0)
+        const deltaBWin = calcularRankedEloDelta(rB, rA, 1.0)
+        expect(deltaALoss + deltaBWin).toBe(0)
+
+        // Draw simétrico
+        const deltaADraw = calcularRankedEloDelta(rA, rB, 0.5)
+        const deltaBDraw = calcularRankedEloDelta(rB, rA, 0.5)
+        expect(deltaADraw + deltaBDraw).toBe(0)
+
+        pairsTested++
+      }
+    }
+
+    expect(pairsTested).toBeGreaterThanOrEqual(100)
+  })
+
+  // 222. resolverLiquidacionPartida propaga eloBefore, eloDelta, eloAfter en victoria
+  it('222. resolverLiquidacionPartida extrae eloBefore, opponentElo, eloDelta, eloAfter en victoria autoritativa', () => {
+    const mockPayload = {
+      status: 'verified',
+      winnerSide: 1 as const,
+      settlement: {
+        eloBefore: 1000,
+        opponentElo: 1000,
+        eloDelta: 16,
+        eloAfter: 1016,
+        eloGained: 16,
+        eloLost: 0,
+        payout: 0,
+      },
+    }
+
+    const liq = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'p1-uuid',
+      serverVerification: mockPayload,
+    })
+
+    expect(liq.mostrarResultado).toBe(true)
+    expect(liq.resultadoFinal).toBe('victory')
+    expect(liq.statusServidor).toBe('liquidada')
+    expect(liq.eloBefore).toBe(1000)
+    expect(liq.opponentElo).toBe(1000)
+    expect(liq.eloDelta).toBe(16)
+    expect(liq.eloAfter).toBe(1016)
+    expect(liq.eloGained).toBe(16)
+    expect(liq.eloLost).toBeUndefined()
+  })
+
+  // 223. resolverLiquidacionPartida propaga eloBefore, eloDelta, eloAfter en derrota
+  it('223. resolverLiquidacionPartida extrae eloBefore, opponentElo, eloDelta, eloAfter en derrota autoritativa', () => {
+    const mockPayload = {
+      status: 'verified',
+      winnerSide: 2 as const,
+      settlement: {
+        eloBefore: 1016,
+        opponentElo: 1000,
+        eloDelta: -17,
+        eloAfter: 999,
+        eloGained: 0,
+        eloLost: 17,
+        payout: 0,
+      },
+    }
+
+    const liq = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'p1-uuid',
+      serverVerification: mockPayload,
+    })
+
+    expect(liq.mostrarResultado).toBe(true)
+    expect(liq.resultadoFinal).toBe('defeat')
+    expect(liq.statusServidor).toBe('liquidada')
+    expect(liq.eloBefore).toBe(1016)
+    expect(liq.opponentElo).toBe(1000)
+    expect(liq.eloDelta).toBe(-17)
+    expect(liq.eloAfter).toBe(999)
+    expect(liq.eloLost).toBe(17)
+  })
+
+  // 224. resolverLiquidacionPartida: fallos y verificaciones pendientes no tocan ELO
+  it('224. resolverLiquidacionPartida: status failed o pending nunca otorgan resultado ni alteran ELO', () => {
+    const liqPending = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'p1-uuid',
+      serverVerification: { status: 'pending' },
+    })
+    expect(liqPending.mostrarResultado).toBe(false)
+    expect(liqPending.resultadoFinal).toBe('hold')
+    expect(liqPending.statusServidor).toBe('verificacion_pendiente')
+    expect(liqPending.eloDelta).toBeUndefined()
+
+    const liqFailed = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'p1-uuid',
+      serverVerification: { status: 'failed', error: 'Inconsistencia de ticks' },
+    })
+    expect(liqFailed.mostrarResultado).toBe(false)
+    expect(liqFailed.resultadoFinal).toBe('hold')
+    expect(liqFailed.statusServidor).toBe('revision_servidor')
+    expect(liqFailed.error).toBe('Inconsistencia de ticks')
+  })
+
+  // 225. Script 40-ranked-elo-records-preflight.sql es estrictamente read-only
+  it('225. Preflight 40: 40-ranked-elo-records-preflight.sql contiene CERO comandos de mutación DDL/DML', () => {
+    const preflightPath = join(process.cwd(), 'supabase', '40-ranked-elo-records-preflight.sql')
+    const rawContent = readFileSync(preflightPath, 'utf8')
+    // Eliminar comentarios SQL de línea y bloque
+    const content = rawContent.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+
+    expect(content).not.toMatch(/\bINSERT\s+INTO\b/i)
+    expect(content).not.toMatch(/\bUPDATE\s+\w+\s+SET\b/i)
+    expect(content).not.toMatch(/\bDELETE\s+FROM\b/i)
+    expect(content).not.toMatch(/\bALTER\s+TABLE\b/i)
+    expect(content).not.toMatch(/\bDROP\s+TABLE\b/i)
+    expect(content).not.toMatch(/\bCREATE\s+TABLE\b/i)
+    expect(content).not.toMatch(/\bTRUNCATE\b/i)
+  })
+
+  // 226. Script 40-ranked-elo-records.sql contiene estructura completa
+  it('226. Migración 40: 40-ranked-elo-records.sql define _ranked_elo_delta, ranked_player_stats, leaderboard y audit', () => {
+    const migPath = join(process.cwd(), 'supabase', '40-ranked-elo-records.sql')
+    const content = migPath ? readFileSync(migPath, 'utf8') : ''
+
+    expect(content).toMatch(/FUNCTION\s+public\._ranked_elo_delta/i)
+    expect(content).toMatch(/TABLE\s+IF\s+NOT\s+EXISTS\s+public\.ranked_player_stats/i)
+    expect(content).toMatch(/ENABLE\s+ROW\s+LEVEL\s+SECURITY/i)
+    expect(content).toMatch(/VIEW\s+public\.leaderboard/i)
+    expect(content).toMatch(/40_ranked_elo_records/)
+  })
+
+  // 227. Script 40-ranked-elo-records-postcheck.sql verifica integridad de permisos y esquema
+  it('227. Postcheck 40: 40-ranked-elo-records-postcheck.sql audita _ranked_elo_delta, RLS y backfill', () => {
+    const postcheckPath = join(process.cwd(), 'supabase', '40-ranked-elo-records-postcheck.sql')
+    const content = readFileSync(postcheckPath, 'utf8')
+
+    expect(content).toMatch(/_ranked_elo_delta/i)
+    expect(content).toMatch(/ranked_player_stats/i)
+    expect(content).toMatch(/40_ranked_elo_records/i)
   })
 })
 

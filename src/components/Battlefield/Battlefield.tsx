@@ -156,6 +156,7 @@ interface BattlefieldProps {
    */
   mazosDeLaSala?: { mio: unknown; rival: unknown } | null
   isAsyncMatch?: boolean
+  onServerEloUpdated?: (newElo: number) => void
 }
 
 export default function Battlefield({
@@ -163,6 +164,7 @@ export default function Battlefield({
   onBackToCollection,
   onBattleComplete,
   onSurrender,
+  onServerEloUpdated,
   practicePlantId,
   activeDeck,
   userElo = 1000,
@@ -240,6 +242,10 @@ export default function Battlefield({
   const [resultadoServidor, setResultadoServidor] = useState<{
     success?: boolean
     status?: string
+    eloBefore?: number
+    opponentElo?: number
+    eloDelta?: number
+    eloAfter?: number
     eloGained?: number
     eloLost?: number
     payout?: number
@@ -775,11 +781,19 @@ export default function Battlefield({
           setResultadoServidor({
             success: liq.statusServidor === 'liquidada' || liq.statusServidor === 'empate_verificado' || liq.statusServidor === 'verificacion_pendiente',
             status: liq.statusServidor,
+            eloBefore: liq.eloBefore,
+            opponentElo: liq.opponentElo,
+            eloDelta: liq.eloDelta,
+            eloAfter: liq.eloAfter,
             eloGained: liq.eloGained,
             eloLost: liq.eloLost,
             payout: liq.payout,
             error: liq.error,
           })
+
+          if (liq.statusServidor === 'liquidada' && typeof liq.eloAfter === 'number' && onServerEloUpdated) {
+            onServerEloUpdated(liq.eloAfter)
+          }
 
           if (liq.mostrarResultado && (liq.resultadoFinal === 'victory' || liq.resultadoFinal === 'defeat')) {
             terminarPorOrdenDelServidor(liq.resultadoFinal)
@@ -829,7 +843,7 @@ export default function Battlefield({
         }
       }
     }
-  }, [gameStatus, onBattleComplete, matchMode, onColosseumComplete, roomId, opponentId, currentUserId, tournamentOpponent?.tournamentId, terminarPorOrdenDelServidor, isAsyncMatch, soyP1])
+  }, [gameStatus, onBattleComplete, onServerEloUpdated, matchMode, onColosseumComplete, roomId, opponentId, currentUserId, tournamentOpponent?.tournamentId, terminarPorOrdenDelServidor, isAsyncMatch, soyP1])
 
   useEffect(() => {
     if (practicePlantId) {
@@ -907,8 +921,11 @@ export default function Battlefield({
     // volvía el ELO de antes; y el rival se quedaba esperando un reporte que no
     // llegaba nunca.
     if (roomId) {
-      void SupabaseService.surrenderMatch(roomId).then((r) => {
+      void SupabaseService.surrenderMatch(roomId).then((r: any) => {
         setResultadoServidor(r)
+        if (r && typeof r.eloAfter === 'number' && onServerEloUpdated) {
+          onServerEloUpdated(r.eloAfter)
+        }
       })
       return
     }
@@ -1471,12 +1488,21 @@ export default function Battlefield({
                   <p className="resultado-servidor__ok">
                     ✅ Partida Confirmada
 
-                    {typeof resultadoServidor.eloGained === 'number' &&
+                    {typeof resultadoServidor.eloDelta === 'number' && (
+                      resultadoServidor.eloDelta >= 0
+                        ? ` +${resultadoServidor.eloDelta} 🏆`
+                        : ` ${resultadoServidor.eloDelta} 🏆`
+                    )}
+
+                    {typeof resultadoServidor.eloDelta !== 'number' && typeof resultadoServidor.eloGained === 'number' &&
                       ` +${resultadoServidor.eloGained} 🏆`}
 
-                    {typeof resultadoServidor.eloLost === 'number' &&
+                    {typeof resultadoServidor.eloDelta !== 'number' && typeof resultadoServidor.eloLost === 'number' &&
                       resultadoServidor.eloLost > 0 &&
                       ` -${resultadoServidor.eloLost} 🏆`}
+
+                    {typeof resultadoServidor.eloAfter === 'number' &&
+                      ` (Total: ${resultadoServidor.eloAfter} 🏆)`}
 
                     {typeof resultadoServidor.payout === 'number' &&
                       resultadoServidor.payout > 0 &&

@@ -74,6 +74,7 @@ export interface MisReferidos {
 }
 
 export type EditableProfileFields = Pick<ProfileUpdate, 'username' | 'avatar_id' | 'country'>
+export type LeaderboardRow = Database['public']['Views']['leaderboard']['Row']
 
 /** Las llamadas a Supabase no lanzan excepción: devuelven `{ error }`. Cuando
  *  eso se descarta, un permiso denegado o una política que rechaza es
@@ -84,6 +85,9 @@ export type EditableProfileFields = Pick<ProfileUpdate, 'username' | 'avatar_id'
  *  rankings piden sólo esto, y de paso dejan de exponer el saldo ajeno. */
 const PUBLIC_PROFILE_COLUMNS =
   'id, username, avatar_id, country, elo_rating, colosseum_current_streak, colosseum_max_streak, created_at'
+
+const LEADERBOARD_COLUMNS =
+  'id, username, avatar_id, country, elo_rating, ranked_wins, ranked_losses, ranked_draws, ranked_games, ranked_win_rate, rank_position, colosseum_current_streak, colosseum_max_streak, created_at'
 
 function logError(op: string, error: unknown): void {
   const e = error as { message?: string; code?: string; details?: string } | null
@@ -215,69 +219,43 @@ export const SupabaseService = {
   // ---------------------------------------------------------------------------
   // GLOBAL RANKING & LEADERBOARDS (REAL DATA)
   // ---------------------------------------------------------------------------
-  async getGlobalLeaderboard(limit?: number): Promise<ProfileRow[]> {
+  async getGlobalLeaderboard(limit?: number): Promise<LeaderboardRow[]> {
     if (!isSupabaseConfigured()) return []
     try {
-      // De la VISTA, no de la tabla: la vista ya deja fuera a las cuentas
-      // marcadas como que no compiten (la del dueño, las de prueba). La regla vive
-      // en el servidor a propósito: si la pusiera el cliente, bastaría con no
-      // ponerla para volver a salir en la clasificación.
+      // De la VISTA leaderboard con orden determinista rank_position y estadísticas W/L autoritativas
       let query = supabase
         .from('leaderboard')
-        .select(PUBLIC_PROFILE_COLUMNS)
-        .order('elo_rating', { ascending: false })
+        .select(LEADERBOARD_COLUMNS)
+        .order('rank_position', { ascending: true })
 
       if (typeof limit === 'number' && limit > 0) {
         query = query.limit(limit)
       }
 
-      let { data, error } = await query
-      if (error) {
-        // Respaldo contra la tabla profiles si la vista leaderboard no estuviera disponible
-        let fbQuery = supabase
-          .from('profiles')
-          .select(PUBLIC_PROFILE_COLUMNS)
-          .order('elo_rating', { ascending: false })
-
-        if (typeof limit === 'number' && limit > 0) {
-          fbQuery = fbQuery.limit(limit)
-        }
-
-        const fbRes = await fbQuery
-        if (!fbRes.error && fbRes.data) {
-          data = fbRes.data
-          error = null
-        }
-      }
-
+      const { data, error } = await query
       if (error) {
         logError('getGlobalLeaderboard', error)
         return []
       }
-      return (data || []) as unknown as ProfileRow[]
+      return (data || []) as unknown as LeaderboardRow[]
     } catch (e) {
       logError('getGlobalLeaderboard', e)
       return []
     }
   },
 
-  async getUserRank(userElo: number): Promise<number> {
-    if (!isSupabaseConfigured()) return 1
+  async getUserRank(userId?: string): Promise<number> {
+    if (!isSupabaseConfigured() || !userId) return 1
     try {
-      // 'id' y no '*': con head:true PostgREST sigue resolviendo la lista de
-      // columnas, y '*' incluye las que anon no puede leer.
-      // Contra la vista, igual que la clasificación: si contara sobre la tabla,
-      // el puesto incluiría a las cuentas excluidas y no cuadraría con la lista
-      // que el jugador ve justo al lado.
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from('leaderboard')
-        .select('id', { count: 'exact', head: true })
-        .gt('elo_rating', userElo)
-      if (error) {
-        logError('getUserRank', error)
-        return 1
+        .select('rank_position')
+        .eq('id', userId)
+        .maybeSingle()
+      if (!error && data?.rank_position) {
+        return Number(data.rank_position)
       }
-      return (count ?? 0) + 1
+      return 1
     } catch (e) {
       logError('getUserRank', e)
       return 1

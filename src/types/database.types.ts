@@ -613,18 +613,42 @@ export interface Database {
         }
         Relationships: []
       }
+      ranked_player_stats: {
+        Row: {
+          user_id: string
+          wins: number
+          losses: number
+          draws: number
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          wins?: number
+          losses?: number
+          draws?: number
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          wins?: number
+          losses?: number
+          draws?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'ranked_player_stats_user_id_fkey'
+            columns: ['user_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       /**
-       * La clasificación, ya filtrada por el servidor.
-       *
-       * Es `profiles` menos las cuentas marcadas con exclude_from_ranking (la del
-       * dueño, las de prueba) y sólo con columnas públicas: ni saldos, ni is_admin,
-       * ni el propio exclude_from_ranking. La creó la migración 18.
-       *
-       * Se lee de aquí y no de `profiles` a propósito: una regla sobre quién sale
-       * en la clasificación tiene que estar en el servidor. Si la aplicara el
-       * cliente, bastaría con no aplicarla.
+       * La clasificación, ya filtrada por el servidor y con orden determinista.
+       * Incluye estadísticas W/L de partidas Ranked verificadas.
        */
       leaderboard: {
         Row: {
@@ -633,6 +657,12 @@ export interface Database {
           avatar_id: string
           country: string
           elo_rating: number
+          ranked_wins: number
+          ranked_losses: number
+          ranked_draws: number
+          ranked_games: number
+          ranked_win_rate: number
+          rank_position: number
           colosseum_current_streak: number
           colosseum_max_streak: number
           created_at: string
