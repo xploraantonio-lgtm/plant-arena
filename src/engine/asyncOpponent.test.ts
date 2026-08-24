@@ -5007,8 +5007,8 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(postC2 - 5).toBe(-5)
   })
 
-  // 230. Idempotencia en liquidación: Repetición de llamada no re-aplica ELO ni W/L
-  it('230. Idempotencia de settlement: Respuesta settled o ya_liquidada devuelve resultado consistente sin duplicar deltas', () => {
+  // 230. Idempotencia y Consistencia de Frontend: resolverLiquidacionPartida ante respuestas repetidas ('settled' / 'ya_liquidada') devuelve resultados deterministas e idénticos
+  it('230. Idempotencia de Frontend: resolverLiquidacionPartida ante respuestas repetidas de settlement devuelve resultado determinista sin alterar estado local', () => {
     const payloadYaLiquidada = {
       status: 'settled',
       winnerSide: 1 as const,
@@ -5041,6 +5041,28 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(res2.eloAfter).toBe(1016)
     expect(res1.eloDelta).toBe(16)
     expect(res2.eloDelta).toBe(16)
+  })
+
+  // 231. Auditoría Estática de Idempotencia SQL: Barreras FOR UPDATE y settled_at en todas las funciones de settlement
+  it('231. Auditoría Estática SQL: _settle_room, settle_verified_async_ranked_match, settle_verified_draw y surrender_match adquieren FOR UPDATE antes de comprobar settled_at', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '40-ranked-elo-records.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    // 1. _settle_room
+    expect(sqlContent).toMatch(/SELECT\s+\*\s+INTO\s+v_room\s+FROM\s+public\.game_rooms\s+WHERE\s+id\s+=\s+p_room_id\s+FOR\s+UPDATE;/i)
+    expect(sqlContent).toMatch(/IF\s+v_room\.settled_at\s+IS\s+NOT\s+NULL\s+THEN\s+RAISE\s+EXCEPTION\s+'Partida ya liquidada';/i)
+
+    // 2. settle_verified_async_ranked_match
+    expect(sqlContent).toMatch(/IF\s+v_room\.settled_at\s+IS\s+NOT\s+NULL\s+THEN[\s\S]*?'status',\s*'ya_liquidada'/i)
+
+    // 3. settle_verified_draw
+    expect(sqlContent).toMatch(/IF\s+v_room\.settled_at\s+IS\s+NOT\s+NULL\s+THEN\s+RETURN\s+jsonb_build_object\('success',\s*TRUE,\s*'status',\s*'ya_liquidada'\);/i)
+
+    // 4. surrender_match
+    expect(sqlContent).toMatch(/IF\s+v_room\.settled_at\s+IS\s+NOT\s+NULL\s+THEN\s+RETURN\s+jsonb_build_object\('success',\s*TRUE,\s*'status',\s*'ya_liquidada'\);/i)
+
+    // 5. Lock determinista por UUID para prevenir deadlocks
+    expect(sqlContent).toMatch(/IF\s+v_room\.player1_id\s+<\s+v_room\.player2_id\s+THEN/i)
   })
 })
 
