@@ -15,6 +15,7 @@ import {
   createBattleState,
   stepTick,
   type GameState,
+  type EngineVersion,
 } from './simulate.ts'
 import { leerMazo, type CartaDeMazo } from './mazoDeLaSala.ts'
 import { msToTicks } from './time.ts'
@@ -572,6 +573,7 @@ export interface RunAsyncTimelineOptions {
   validateP1?: boolean
   strictAuthoritativeHistory?: boolean
   stopOnGameOver?: boolean
+  engineVersion?: EngineVersion
 }
 
 export interface RunAsyncTimelineResult {
@@ -603,6 +605,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     validateP1 = false,
     strictAuthoritativeHistory = true,
     stopOnGameOver = true,
+    engineVersion = 'auth-v2',
   } = options
 
   let mazoP1: CartaDeMazo[] = []
@@ -619,7 +622,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         ok: false,
         reason: 'INVALID_P1_DECK',
         details: 'El mazo de P1 es obligatorio y no puede estar vacío en Ranked Async',
-        state: createBattleState(seed, false, true),
+        state: createBattleState(seed, false, true, undefined, engineVersion),
         controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: true,
         motivo: 'no_result',
@@ -632,7 +635,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         ok: false,
         reason: 'INVALID_P1_DECK',
         details: 'El mazo de P1 no contiene cartas válidas',
-        state: createBattleState(seed, false, true),
+        state: createBattleState(seed, false, true, undefined, engineVersion),
         controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: true,
         motivo: 'no_result',
@@ -648,7 +651,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         ok: false,
         reason: valDeckP2.reason,
         details: valDeckP2.details,
-        state: createBattleState(seed, false, true),
+        state: createBattleState(seed, false, true, undefined, engineVersion),
         controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: false,
         motivo: 'no_result',
@@ -666,7 +669,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         inconsistencySeq: valIntents.seq,
         inconsistencyTick: valIntents.issuedTick,
         details: valIntents.details,
-        state: createBattleState(seed, false, true),
+        state: createBattleState(seed, false, true, undefined, engineVersion),
         controller: createAsyncOpponentControllerFromValidated(mazoP2, []),
         p1Ilegal: false,
         motivo: 'no_result',
@@ -684,7 +687,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         inconsistencySeq: validacionP1.seq,
         inconsistencyTick: validacionP1.issuedTick,
         details: validacionP1.details,
-        state: createBattleState(seed, false, true),
+        state: createBattleState(seed, false, true, undefined, engineVersion),
         controller: createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2),
         p1Ilegal: true,
         motivo: 'no_result',
@@ -694,11 +697,11 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     ordenadasP1 = validacionP1.acciones
 
     // 5. Inicialización estricta de State y Controller únicamente tras validar todo
-    state = createBattleState(seed, false, true)
+    state = createBattleState(seed, false, true, undefined, engineVersion)
     controller = createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2)
   } else {
     // RUTA PERMISIVA LEGACY (solo para compatibilidad fuera de Ranked)
-    state = createBattleState(seed, false, true)
+    state = createBattleState(seed, false, true, undefined, engineVersion)
     mazoP1 = leerMazo(p1Deck) ?? []
     mazoP2 = leerMazo(asyncDeck) ?? []
     intencionesP2 = normalizarIntencionesLegacy(asyncActions) as AsyncOpponentIntentRankedEstricta[]
@@ -992,7 +995,8 @@ export function simulateAsyncMatch(
   asyncDeckRaw: unknown,
   p1Actions: AccionP1Simulacion[] | any[],
   asyncActionsRaw: unknown,
-  maxTicks = TOPE_DE_SEGURIDAD_ASYNC
+  maxTicks = TOPE_DE_SEGURIDAD_ASYNC,
+  engineVersion: EngineVersion = 'auth-v2'
 ): ResultadoSimulacionAsync {
   const res = runAsyncTimeline({
     seed,
@@ -1004,6 +1008,7 @@ export function simulateAsyncMatch(
     validateP1: true,
     strictAuthoritativeHistory: true,
     stopOnGameOver: true,
+    engineVersion,
   })
 
   return {
@@ -1044,7 +1049,8 @@ export function reconstruirPartidaAsync(
   asyncDeckSnapshot: CartaDeMazo[],
   asyncIntents: AsyncOpponentIntent[] | any[],
   p1Acciones: AccionP1Simulacion[] | any[],
-  hastaTick: number
+  hastaTick: number,
+  engineVersion: EngineVersion = 'auth-v2'
 ): ReconstruirPartidaAsyncResult {
   const res = runAsyncTimeline({
     seed,
@@ -1056,6 +1062,7 @@ export function reconstruirPartidaAsync(
     validateP1: false,
     strictAuthoritativeHistory: true,
     stopOnGameOver: true,
+    engineVersion,
   })
 
   if (!res.ok) {

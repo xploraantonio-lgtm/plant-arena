@@ -278,6 +278,7 @@ function App() {
   const { estado: estadoCola, encontrada, buscar, cancelar } = useMatchmaking()
   const [modoBuscando, setModoBuscando] = useState<ModoPartida>('ranked')
   const [salaId, setSalaId] = useState<string | null>(null)
+  const [engineVersionSala, setEngineVersionSala] = useState<string>('auth-v2')
   const [semillaPartida, setSemillaPartida] = useState<number | undefined>(undefined)
   const [rivalId, setRivalId] = useState<string | null>(null)
   /** La partida cuya repetición se está viendo. */
@@ -330,6 +331,7 @@ function App() {
         return
       }
       setSalaId(sala.id)
+      setEngineVersionSala((sala as any).engineVersion ?? (sala as any).engine_version ?? 'auth-v2')
       setSemillaPartida(Number(sala.seed))
       const soyP1 = sala.iAm === 'p1'
       setSoyJugador1(soyP1)
@@ -821,6 +823,7 @@ function App() {
                ver engine/mazoDeLaSala.ts. */
             mazosDeLaSala={mazosDeLaSala}
             isAsyncMatch={partidaAsincrona}
+            engineVersion={engineVersionSala}
             onColosseumComplete={(won) => {
               if (colosseumConfig) {
                 return resolveColosseumMatch(won, colosseumConfig.betGems, colosseumConfig.usedTicket)

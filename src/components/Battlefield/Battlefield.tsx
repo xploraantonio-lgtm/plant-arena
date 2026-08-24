@@ -156,6 +156,7 @@ interface BattlefieldProps {
    */
   mazosDeLaSala?: { mio: unknown; rival: unknown } | null
   isAsyncMatch?: boolean
+  engineVersion?: string
   onServerEloUpdated?: (newElo: number) => void
 }
 
@@ -177,6 +178,7 @@ export default function Battlefield({
   soyP1 = true,
   mazosDeLaSala = null,
   isAsyncMatch = false,
+  engineVersion = 'auth-v2',
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -298,7 +300,8 @@ export default function Battlefield({
         }
         startedGensRef.current.add(attemptGen)
         setClockSyncStatus('synced')
-        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch)
+        const resolvedEngine = engineVersion === 'auth-v1' ? 'auth-v1' : 'auth-v2'
+        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, undefined, resolvedEngine)
       })
       .catch((err: any) => {
         if (matchClockGenRef.current !== attemptGen) {
@@ -307,7 +310,7 @@ export default function Battlefield({
         setClockSyncStatus('error')
         setClockSyncError(err?.message || 'No se pudo sincronizar la partida con el servidor.')
       })
-  }, [seed, soyP1, mazosDeLaSala, isAsyncMatch, startGame])
+  }, [seed, soyP1, mazosDeLaSala, isAsyncMatch, engineVersion, startGame])
 
   const [colosseumResult, setColosseumResult] = useState<{
     payoutGems: number

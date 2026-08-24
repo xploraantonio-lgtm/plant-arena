@@ -102,4 +102,39 @@ describe('SupabaseService Ranking & Match Clock Hardening', () => {
       /Supabase no está configurado/i
     )
   })
+
+  it('enterMatchmaking envía p_engine_version="auth-v2" al RPC', async () => {
+    vi.spyOn(supabaseClientModule, 'isSupabaseConfigured').mockReturnValue(true)
+    const rpcSpy = vi.spyOn(supabaseClientModule.supabase, 'rpc').mockResolvedValue({
+      data: { matched: false, searching: true },
+      error: null,
+    } as any)
+
+    const res = await SupabaseService.enterMatchmaking('ranked')
+    expect(rpcSpy).toHaveBeenCalledWith('enter_matchmaking', {
+      p_mode: 'ranked',
+      p_bet: 0,
+      p_use_ticket: false,
+      p_room_code: null,
+      p_engine_version: 'auth-v2',
+    })
+    expect(res).toEqual({ matched: false, searching: true })
+  })
+
+  it('enterMatchmaking propaga client_update_required si el servidor rechaza versión vieja', async () => {
+    vi.spyOn(supabaseClientModule, 'isSupabaseConfigured').mockReturnValue(true)
+    vi.spyOn(supabaseClientModule.supabase, 'rpc').mockResolvedValue({
+      data: {
+        matched: false,
+        searching: false,
+        error: 'client_update_required',
+        message: 'Se requiere actualizar el juego a la versión actual para jugar partidas Ranked.',
+      },
+      error: null,
+    } as any)
+
+    const res = await SupabaseService.enterMatchmaking('ranked')
+    expect(res.matched).toBe(false)
+    expect(res.error).toBe('client_update_required')
+  })
 })

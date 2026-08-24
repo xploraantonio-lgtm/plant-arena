@@ -19,7 +19,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 // ─────────────────────────────────────────────────────────────────────────────
 import { createRng } from '../engine/rng'
 import { TICK_MS, MAX_TICKS_PER_FRAME, msToTicks } from '../engine/time'
-import { stepTick, createBattleState, type GameState } from '../engine/simulate'
+import { stepTick, createBattleState, type GameState, type EngineVersion } from '../engine/simulate'
 import { MARGEN_DE_RED_TICS } from '../engine/pvp'
 import {
   huellaDeLaPartida,
@@ -112,6 +112,7 @@ export function useGameEngine() {
     rng: createRng(1),
     entityCounter: 0,
     skySunSeq: 0,
+    engineVersion: 'auth-v2',
     pending: [],
     timers: { lastSkySun: 0, lastP2PassiveSun: 0, lastEnemySpawn: 0, waveStart: 0 },
     status: 'ready',
@@ -136,6 +137,8 @@ export function useGameEngine() {
       score: 0,
     },
   })
+
+  const engineVersionRef = useRef<EngineVersion>('auth-v2')
 
   // ── Puente entre el reloj real y los tics ─────────────────────────────────
   // Estas dos son las ÚNICAS que tocan el reloj de pared, y sólo para saber
@@ -415,10 +418,12 @@ export function useGameEngine() {
      */
     mazos?: { mio: unknown; rival: unknown } | null,
     isAsyncMatch?: boolean,
-    initialAsyncIntents?: unknown
+    initialAsyncIntents?: unknown,
+    engineVersion: EngineVersion = 'auth-v2'
   ) => {
     sessionGenerationRef.current += 1
-    stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500))
+    engineVersionRef.current = engineVersion
+    stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500), engineVersion)
 
     ancoraMsRef.current = ancoraMs ?? null
     soyP1Ref.current = soyP1 === undefined ? null : soyP1
@@ -555,6 +560,7 @@ export function useGameEngine() {
       rng: createRng(1),
       entityCounter: 0,
       skySunSeq: 0,
+      engineVersion: 'auth-v2',
       // En práctica el cartel dura 4 s.
       pending: [{ atTick: msToTicks(4000), kind: 'clear_wave_banner' }],
       timers: { lastSkySun: 0, lastP2PassiveSun: 0, lastEnemySpawn: 0, waveStart: 0 },
@@ -712,7 +718,8 @@ export function useGameEngine() {
         asyncOpponentDeckRef.current,
         asyncOpponentActionsBufferRef.current,
         accionesP1AceptadasRef.current,
-        viejo.tick
+        viejo.tick,
+        engineVersionRef.current
       )
 
       if (!rebuildRes.ok) {
@@ -740,7 +747,8 @@ export function useGameEngine() {
       semillaRef.current,
       registroRef.current,
       viejo.tick,
-      soyP1 ?? true
+      soyP1 ?? true,
+      engineVersionRef.current
     )
     // Los soles y los enfriamientos son sólo tuyos y no salen del registro: si se
     // rehicieran, perderías los soles que ya habías recogido pulsando.

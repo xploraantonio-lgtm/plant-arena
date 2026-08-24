@@ -15,6 +15,7 @@ import {
   createBattleState,
   stepTick,
   type GameState,
+  type EngineVersion,
 } from './simulate.ts'
 import { MARGEN_DE_RED_TICS } from './pvp.ts'
 import { TOPE_DE_PARTIDA_MS } from './balance.ts'
@@ -28,7 +29,6 @@ import {
 } from '../utils/gameConstants.ts'
 
 const TOPE_DE_SEGURIDAD = msToTicks(TOPE_DE_PARTIDA_MS) + 600
-const ENGINE_AUTORITATIVO = 'auth-v1'
 const MAX_CATCHUP_TICKS = msToTicks(5000)
 const ESTADISTICAS_VALIDAS = new Set<PlantStatKey>([
   'hp',
@@ -37,6 +37,10 @@ const ESTADISTICAS_VALIDAS = new Set<PlantStatKey>([
   'moveSpeed',
   'cooldown',
 ])
+
+export function resolverEngineVersion(versionRaw: unknown): EngineVersion {
+  return versionRaw === 'auth-v1' ? 'auth-v1' : 'auth-v2'
+}
 
 export interface JugadaGrabada {
   /** Identificador global de match_actions; sirve para auditoría y desempate. */
@@ -281,8 +285,9 @@ export function construirRepeticion(datos: DatosDeRepeticion, desde: 1 | 2 = 1):
   const ultimoTic = jugadas.reduce((m, j) => Math.max(m, j.tick), 0)
 
   function estadoInicial(): GameState {
-    const estado = createBattleState(datos.seed, false, true)
-    const estricto = datos.engineVersion === ENGINE_AUTORITATIVO
+    const engineVersion = resolverEngineVersion(datos.engineVersion)
+    const estado = createBattleState(datos.seed, false, true, undefined, engineVersion)
+    const estricto = datos.engineVersion === 'auth-v1' || datos.engineVersion === 'auth-v2'
 
     for (const j of jugadas) {
       if (j.kind === 'plant' && j.plantId && j.lane !== null) {
@@ -391,7 +396,7 @@ function validarYAplicarIntencion(
   vistaP2: GameState,
   ilegales: AccionIlegal[]
 ): void {
-  const estricto = datos.engineVersion === ENGINE_AUTORITATIVO
+  const estricto = datos.engineVersion === 'auth-v1' || datos.engineVersion === 'auth-v2'
   const emitido = issuedTickDe(j)
   const propia = j.de === 1 ? vistaP1 : vistaP2
   const otra = j.de === 1 ? vistaP2 : vistaP1
@@ -543,8 +548,33 @@ export function recalcularGanadorAutoritativo(
   datos: DatosDeRepeticion,
   topeTics = TOPE_DE_SEGURIDAD
 ): ResultadoAutoritativo {
-  const vistaP1 = createBattleState(datos.seed, false, true)
-  const vistaP2 = createBattleState(datos.seed, false, true)
+  if (datos.engineVersion !== 'auth-v1' && datos.engineVersion !== 'auth-v2') {
+    return {
+      ganador: null,
+      tics: 0,
+      baseP1: 600,
+      baseP2: 600,
+      baseP1VistaP2: 600,
+      baseP2VistaP2: 600,
+      consistente: false,
+      motivo: 'no_result',
+      ilegales: [
+        {
+          id: -1,
+          seq: -1,
+          de: 1,
+          tick: 0,
+          issuedTick: 0,
+          kind: 'engine',
+          razon: 'version_de_motor_no_soportada',
+        },
+      ],
+    }
+  }
+
+  const engineVersion = resolverEngineVersion(datos.engineVersion)
+  const vistaP1 = createBattleState(datos.seed, false, true, undefined, engineVersion)
+  const vistaP2 = createBattleState(datos.seed, false, true, undefined, engineVersion)
   const jugadas = ordenarJugadas(datos.jugadas)
   const ilegales: AccionIlegal[] = []
   let i = 0

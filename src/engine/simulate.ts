@@ -209,17 +209,21 @@ export function crearPlantaPropia(
  *                 jugador con nivelPorElo(), para que el relleno se parezca a
  *                 alguien de su nivel. En PvP no se usa: el bot no juega.
  */
+export type EngineVersion = 'auth-v1' | 'auth-v2'
+
 export function createBattleState(
   seed: number,
   isPracticeMode = false,
   isPvpMode = false,
-  nivelBot: NivelDelBot = NIVEL_POR_DEFECTO
+  nivelBot: NivelDelBot = NIVEL_POR_DEFECTO,
+  engineVersion: EngineVersion = 'auth-v2'
 ): GameState {
   return {
     tick: 0,
     rng: createRng(seed),
     entityCounter: 0,
     skySunSeq: 0,
+    engineVersion,
     // El cartel de la primera oleada se oculta a los 3 s (4 en práctica). Antes lo
     // hacía un setTimeout tras el arranque; ahora es un tic concreto.
     pending: [{ atTick: msToTicks(isPracticeMode ? 4000 : 3000), kind: 'clear_wave_banner' }],
@@ -365,6 +369,8 @@ export interface GameState {
   entityCounter: number
   /** Secuencia monotónica exclusiva para identificadores de soles del cielo. */
   skySunSeq: number
+  /** Versión del protocolo del motor ('auth-v1' legacy entityCounter o 'auth-v2' determinista). */
+  engineVersion: EngineVersion
   /**
    * Cola de acciones aplazadas. Se recorre entera cada tic; nunca tiene más de
    * un puñado de elementos.
@@ -664,16 +670,17 @@ function procesarLado(state: GameState, lado: Lado, dt: number, sonar: SonarFn):
         // ============================================================
 
         for (let i = 0; i < cuantos; i++) {
+          const contador = state.entityCounter++
           const variacionX = nextFloat(state.rng)
 
           if (lado.equipo === 'p1') {
+            const sunId =
+              state.engineVersion === 'auth-v1'
+                ? entityId('sun-flower', state.tick, contador)
+                : crearSunflowerSunId(planta.lane, planta.col, state.tick, i)
+
             state.suns.push({
-              id: crearSunflowerSunId(
-                planta.lane,
-                planta.col,
-                state.tick,
-                i
-              ),
+              id: sunId,
               x: planta.x + (variacionX * 6 - 3),
               y: 20 + planta.lane * 20 + 5,
               targetY: 20 + planta.lane * 20 + 10,
@@ -1297,9 +1304,15 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   // 3. SKY SUN GENERATION (Every 6s)
   if (state.tick - state.timers.lastSkySun > msToTicks(SOL_DEL_CIELO_MS)) {
     state.timers.lastSkySun = state.tick
+    const contador = state.entityCounter++
     const seq = state.skySunSeq++
+    const sunId =
+      state.engineVersion === 'auth-v1'
+        ? entityId('sun-sky', state.tick, contador)
+        : crearSkySunId(state.tick, seq)
+
     state.suns.push({
-      id: crearSkySunId(state.tick, seq),
+      id: sunId,
       x: BASE_LEFT_END_X + nextFloat(state.rng) * FIELD_WIDTH_PCT,
       y: -5,
       targetY: 25 + nextFloat(state.rng) * 50,

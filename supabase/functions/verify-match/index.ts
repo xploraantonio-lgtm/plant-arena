@@ -116,9 +116,12 @@ function aDatos(room: RoomRow, rows: ActionRow[]): DatosDeRepeticion {
   }
 }
 
-function payloadAuditoria(resultado: ReturnType<typeof recalcularGanadorAutoritativo>) {
+function payloadAuditoria(
+  resultado: ReturnType<typeof recalcularGanadorAutoritativo>,
+  engineVersion = 'auth-v2'
+) {
   return {
-    engineVersion: 'auth-v1',
+    engineVersion,
     winnerSide: resultado.ganador,
     ticks: resultado.tics,
     reason: resultado.motivo,
@@ -279,7 +282,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (room.engine_version !== 'auth-v1') {
+    if (room.engine_version !== 'auth-v1' && room.engine_version !== 'auth-v2') {
       return json({ ok: false, error: 'legacy_room_not_verifiable' }, 409)
     }
 
@@ -316,7 +319,7 @@ Deno.serve(async (req) => {
       // 1. Validaciones estructurales previas de la sala
       if (room.player1_id === null || room.player2_id !== null) {
         const auditStructural = {
-          engineVersion: 'auth-v1',
+          engineVersion: room.engine_version,
           isAsyncMatch: true,
           winnerSide: null,
           reason: 'invalid_async_room_structure',
@@ -386,7 +389,7 @@ Deno.serve(async (req) => {
 
       if (planData.async_opponent_id !== room.async_opponent_id) {
         const auditSnapshotMismatch = {
-          engineVersion: 'auth-v1',
+          engineVersion: room.engine_version,
           isAsyncMatch: true,
           winnerSide: null,
           reason: 'ASYNC_SNAPSHOT_MISMATCH',
@@ -412,7 +415,7 @@ Deno.serve(async (req) => {
       const p2DeckVal = validarMazoAsyncRanked(room.async_deck_snapshot)
       if (!p1DeckVal.ok || !p2DeckVal.ok) {
         const auditDeckInvalid = {
-          engineVersion: 'auth-v1',
+          engineVersion: room.engine_version,
           isAsyncMatch: true,
           winnerSide: null,
           reason: !p1DeckVal.ok ? p1DeckVal.reason : p2DeckVal.reason,
@@ -444,7 +447,9 @@ Deno.serve(async (req) => {
         room.p1_deck,
         room.async_deck_snapshot,
         normalizarAccionesDbParaSimulacion(acciones),
-        asyncActionsSnapshot
+        asyncActionsSnapshot,
+        undefined,
+        room.engine_version === 'auth-v1' ? 'auth-v1' : 'auth-v2'
       )
 
       const ticDecisionAsync = resAsync.p1Ilegal ? 0 : resAsync.tics
@@ -505,7 +510,9 @@ Deno.serve(async (req) => {
         room.p1_deck,
         room.async_deck_snapshot,
         normalizarAccionesDbParaSimulacion(acciones),
-        asyncActionsSnapshot
+        asyncActionsSnapshot,
+        undefined,
+        room.engine_version === 'auth-v1' ? 'auth-v1' : 'auth-v2'
       )
       serverTick = ticServidor(room.started_at ?? room.created_at)
 
@@ -530,7 +537,7 @@ Deno.serve(async (req) => {
       // NUNCA liquidar ni quitar ELO: marcar como failed para revisión manual.
       if (resAsync.ganador !== 1 && resAsync.ganador !== 2) {
         const auditAsyncFailed = {
-          engineVersion: 'auth-v1',
+          engineVersion: room.engine_version,
           isAsyncMatch: true,
           winnerSide: null,
           ticks: resAsync.tics,
@@ -566,7 +573,7 @@ Deno.serve(async (req) => {
 
       const winnerSide: 1 | 2 = resAsync.ganador
       const auditAsync = {
-        engineVersion: 'auth-v1',
+        engineVersion: room.engine_version,
         isAsyncMatch: true,
         winnerSide,
         ticks: resAsync.tics,
@@ -712,7 +719,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const audit = payloadAuditoria(resultado)
+    const audit = payloadAuditoria(resultado, room.engine_version)
 
     if (resultado.ganador === 1 || resultado.ganador === 2) {
       const winnerId = resultado.ganador === 1 ? room.player1_id : room.player2_id

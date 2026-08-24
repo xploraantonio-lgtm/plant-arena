@@ -473,6 +473,7 @@ export const SupabaseService = {
         p_bet: opts.betGems ?? 0,
         p_use_ticket: opts.useTicket ?? false,
         p_room_code: opts.roomCode ?? null,
+        p_engine_version: 'auth-v2',
       })
       if (error) {
         logError('enterMatchmaking', error)
@@ -1383,46 +1384,8 @@ export const SupabaseService = {
   },
 
   // ---------------------------------------------------------------------------
-  // REALTIME MATCHMAKING
+  // REALTIME MATCHMAKING LISTENER (READ-ONLY)
   // ---------------------------------------------------------------------------
-  async enterMatchmakingQueue(
-    userId: string,
-    mode: 'ranked' | 'friendly' | 'colosseum' | 'tournament',
-    userElo: number,
-    extra?: { tournamentId?: string; colosseumBet?: number; roomCode?: string }
-  ): Promise<string | null> {
-    if (!isSupabaseConfigured()) return null
-    try {
-      const { data, error } = await (supabase.from('matchmaking_queue') as any)
-        .insert({
-          user_id: userId,
-          mode,
-          user_elo: userElo,
-          tournament_id: extra?.tournamentId || null,
-          colosseum_bet: extra?.colosseumBet || null,
-          room_code: extra?.roomCode || null,
-          status: 'searching',
-        })
-        .select('id')
-        .maybeSingle()
-      if (error || !data) return null
-      return data.id as string
-    } catch {
-      return null
-    }
-  },
-
-  async leaveMatchmakingQueue(queueId: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false
-    try {
-      const { error } = await (supabase.from('matchmaking_queue') as any)
-        .update({ status: 'cancelled' })
-        .eq('id', queueId)
-      return !error
-    } catch {
-      return false
-    }
-  },
 
   listenForMatch(queueId: string, onMatched: (roomId: string) => void): () => void {
     if (!isSupabaseConfigured()) return () => {}
