@@ -68,10 +68,10 @@ export function sanitizeLocalStorage(): void {
       )
 
       const starterCopies = {
-        sunflower: 1,
-        peashooter: 1,
-        wallnut: 1,
-        chomper: 1,
+        sunflower: 0,
+        peashooter: 0,
+        wallnut: 0,
+        chomper: 0,
         repeater: 0,
         garlic: 0,
         bonkchoy: 0,

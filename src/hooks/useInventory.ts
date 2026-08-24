@@ -51,10 +51,10 @@ const DEFAULT_TOKENS = 0
 const DEFAULT_GOLD = 0
 
 const DEFAULT_PLANT_COPIES: Record<PlantId, number> = {
-  sunflower: 1,
-  peashooter: 1,
-  wallnut: 1,
-  chomper: 1, // Cactus
+  sunflower: 0,
+  peashooter: 0,
+  wallnut: 0,
+  chomper: 0,
   repeater: 0,
   garlic: 0,
   bonkchoy: 0,
@@ -66,6 +66,52 @@ const DEFAULT_PLANT_COPIES: Record<PlantId, number> = {
   iceberglettuce: 0,
   aloe: 0,
   melonpult: 0,
+}
+
+/**
+ * Normaliza y valida autoritativamente el mapa de copias devuelto por el servidor (my_inventory).
+ *
+ * - Si `rawCopies` es `null` o `undefined`, se interpreta legítimamente como que el usuario
+ *   no posee copias excedentes y se devuelve un mapa completo de ceros para las 15 plantas.
+ * - Si `rawCopies` no es un objeto plano (ej. string, array, number), lanza Error por violación de contrato.
+ * - Para cada planta presente, valida estrictamente que el valor sea un entero >= 0.
+ *   Cualquier valor NaN, flotante, negativo o corrupto lanza Error y NO se oculta con fallbacks permisivos.
+ * - Las plantas ausentes en `rawCopies` adoptan legítimamente 0 copias.
+ */
+export function parseServerPlantCopies(rawCopies: unknown): Record<PlantId, number> {
+  const baseCopies: Record<PlantId, number> = ALL_15_PLANTS.reduce(
+    (acc, id) => {
+      acc[id] = 0
+      return acc
+    },
+    {} as Record<PlantId, number>
+  )
+
+  if (rawCopies === null || rawCopies === undefined) {
+    return baseCopies
+  }
+
+  if (typeof rawCopies !== 'object' || Array.isArray(rawCopies)) {
+    throw new Error(
+      `[useInventory] Formato de copias inválido devuelto por el servidor: ${JSON.stringify(rawCopies)}`
+    )
+  }
+
+  for (const [id, count] of Object.entries(rawCopies as Record<string, unknown>)) {
+    if (!ALL_15_PLANTS.includes(id as PlantId)) {
+      continue
+    }
+    if (typeof count !== 'number' && typeof count !== 'string') {
+      throw new Error(`[useInventory] Tipo de dato corrupto para copias de ${id}: ${typeof count}`)
+    }
+    const n = Number(count)
+    if (!Number.isInteger(n) || n < 0) {
+      throw new Error(`[useInventory] Valor de copias inválido para ${id}: ${count}`)
+    }
+    baseCopies[id as PlantId] = n
+  }
+
+  return baseCopies
 }
 
 const DEFAULT_PLANT_LEVELS: Record<PlantId, number> = {
@@ -797,7 +843,8 @@ export function useInventory() {
       }))
     )
 
-    setPlantCopies(inv.copies as Record<PlantId, number>)
+    const baseCopies = parseServerPlantCopies(inv.copies)
+    setPlantCopies(baseCopies)
     setUnlockedPlants((inv.unlocked || []) as PlantId[])
 
     // El instanceId del sobre ES el id de la fila en player_packs: es lo que

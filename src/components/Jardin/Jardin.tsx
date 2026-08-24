@@ -556,7 +556,7 @@ export default function Jardin({
               const { instanceId, plantId, level, statRolls, isUnlocked } = card
               const config = PLANT_CONFIGS[plantId]
               const inDeck = deckInstanceIds.includes(instanceId)
-              const copies = plantCopies[plantId] || (isUnlocked ? 1 : 0)
+              const copies = plantCopies[plantId] || 0
               const isLegendary = plantId === 'threepeater' || plantId === 'iceberglettuce'
               const maxLvl = isLegendary ? 3 : 5
               const groupedBuffs = groupRolls(statRolls)

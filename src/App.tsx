@@ -136,6 +136,7 @@ function App() {
     claimPassReward,
     awardVictoryPack,
     startUnlockingSlot,
+    fastUnlockSlot,
     openSlotPack,
     deductUserTokens,
     addUserTokens,
@@ -765,6 +766,7 @@ function App() {
               setScreen('landing')
             }}
             onStartSlotUnlock={startUnlockingSlot}
+            onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}
             onDeductTokens={deductUserTokens}
           />

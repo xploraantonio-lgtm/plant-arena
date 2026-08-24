@@ -14,7 +14,11 @@ import ranking from '../../assets/ico/Ranking.png'
 import clan from '../../assets/ico/clan.png'
 import ajustes from '../../assets/ico/ajustes.png'
 import { soundManager } from '../../utils/audioManager'
-import { getRemainingTimeString, type FreePackSlot } from '../../utils/freePackManager'
+import {
+  getRemainingTimeString,
+  calculateInstantUnlockGoldCost,
+  type FreePackSlot,
+} from '../../utils/freePackManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import { BATTLE_PASS_LEVELS } from '../../utils/battlePassManager'
 import { SeasonManager } from '../../utils/seasonManager'
@@ -62,6 +66,7 @@ interface MainMenuProps {
   isAdmin?: boolean
   onSignOut?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
+  onFastUnlockSlot?: (slotId: number) => Promise<{ success: boolean; goldSpent?: number; error?: string }>
   onOpenSlotPack?: (slotId: number) => void
   // onAddTokens se eliminó al dejar el formulario de recarga como maqueta:
   // era la vía por la que ProfileModal se sumaba saldo sin cobrar nada.
@@ -96,6 +101,7 @@ export default function MainMenu({
   isAdmin = false,
   onSignOut,
   onStartSlotUnlock,
+  onFastUnlockSlot,
   onOpenSlotPack,
   onDeductTokens,
 }: MainMenuProps) {
@@ -107,6 +113,35 @@ export default function MainMenu({
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [, setTicker] = useState<number>(0)
   const [activeAlert, setActiveAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
+  const [slotToAccelerate, setSlotToAccelerate] = useState<FreePackSlot | null>(null)
+  const [isAccelerating, setIsAccelerating] = useState<boolean>(false)
+
+  const handleConfirmAccelerate = async () => {
+    if (!slotToAccelerate || !onFastUnlockSlot || isAccelerating) return
+    setIsAccelerating(true)
+    try {
+      const res = await onFastUnlockSlot(slotToAccelerate.slotId)
+      setSlotToAccelerate(null)
+      if (!res.success) {
+        setActiveAlert({
+          title: 'ORO INSUFICIENTE',
+          message: res.error || 'No se pudo acelerar el sobre',
+          icon: '⚠️',
+        })
+      } else {
+        soundManager.playSound('victory', 0.8)
+      }
+    } catch (err: any) {
+      setSlotToAccelerate(null)
+      setActiveAlert({
+        title: 'ERROR AL ACELERAR',
+        message: err?.message || 'Error inesperado al acelerar el sobre',
+        icon: '⚠️',
+      })
+    } finally {
+      setIsAccelerating(false)
+    }
+  }
 
   const handlePlayClick = () => {
     soundManager.playSound('click', 0.5)
@@ -349,6 +384,11 @@ export default function MainMenu({
                   } else {
                     soundManager.playSound('click', 0.5)
                   }
+                } else if (slot.status === 'unlocking') {
+                  if (onFastUnlockSlot) {
+                    soundManager.playSound('click', 0.5)
+                    setSlotToAccelerate(slot)
+                  }
                 } else if (slot.status === 'ready' && onOpenSlotPack) {
                   onOpenSlotPack(slot.slotId)
                 }
@@ -386,7 +426,7 @@ export default function MainMenu({
                     ⏱️ {remainingText}
                   </span>
                   <span className="chest-slot__btn-hint chest-slot__btn-hint--unlocking">
-                    ⏳ EN PROCESO
+                    ⚡ ACELERAR
                   </span>
                 </div>
               )}
@@ -469,6 +509,42 @@ export default function MainMenu({
             >
               ENTENDIDO
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMACIÓN ACELERAR SOBRE CON ORO */}
+      {slotToAccelerate && (
+        <div
+          className="main-menu-dialog-backdrop"
+          onClick={() => {
+            if (!isAccelerating) setSlotToAccelerate(null)
+          }}
+        >
+          <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
+            <div className="main-menu-dialog-icon">⚡</div>
+            <h3 className="main-menu-dialog-title">DESBLOQUEAR AL INSTANTE</h3>
+            <p className="main-menu-dialog-msg">
+              {`¿Deseas desbloquear este sobre al instante por ${calculateInstantUnlockGoldCost(slotToAccelerate)} de Oro?`}
+            </p>
+            <div className="main-menu-dialog-actions">
+              <button
+                type="button"
+                className="main-menu-dialog-btn main-menu-dialog-btn--cancel"
+                disabled={isAccelerating}
+                onClick={() => setSlotToAccelerate(null)}
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                className="main-menu-dialog-btn main-menu-dialog-btn--confirm"
+                disabled={isAccelerating}
+                onClick={handleConfirmAccelerate}
+              >
+                {isAccelerating ? 'PROCESANDO...' : 'ACELERAR'}
+              </button>
+            </div>
           </div>
         </div>
       )}
