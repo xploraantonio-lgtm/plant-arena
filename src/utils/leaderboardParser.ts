@@ -14,7 +14,7 @@
  * - ranked_draws: obligatorio, entero >= 0.
  * - ranked_games: obligatorio, entero >= 0, DEBE coincidir exactamente con wins + losses + draws.
  * - ranked_win_rate: obligatorio, finito 0..100 autoritativo del servidor.
- * - avatar_id: string real del servidor o null (sin avatar_url inventado).
+ * - avatar_id: obligatorio en la vista (null o string no vacío; undefined/vacío/número -> error).
  */
 
 export interface ParsedLeaderboardRow {
@@ -121,11 +121,23 @@ export function parseLeaderboardRow(raw: unknown): ParsedLeaderboardRow {
   // Formato para mostrar: '66.7%' o '0%' o '100%'
   const formattedWr = `${numWr}%`
 
-  // 10. avatar_id: campo opcional del servidor (string no vacío o null).
-  const avatarId =
-    typeof row.avatar_id === 'string' && row.avatar_id.trim().length > 0
-      ? row.avatar_id.trim()
-      : null
+  // 10. avatar_id: campo obligatorio del contrato de la vista (null o string no vacío).
+  // PROHIBIDO convertir undefined, "", whitespace, number u objects en null.
+  if (row.avatar_id === undefined) {
+    throw new Error('Contrato roto en leaderboard: avatar_id es indefinido o ausente')
+  }
+  let avatarId: string | null = null
+  if (row.avatar_id === null) {
+    avatarId = null
+  } else if (typeof row.avatar_id === 'string') {
+    const trimmed = row.avatar_id.trim()
+    if (trimmed.length === 0) {
+      throw new Error('Contrato roto en leaderboard: avatar_id no puede ser una cadena vacía')
+    }
+    avatarId = trimmed
+  } else {
+    throw new Error(`Contrato roto en leaderboard: avatar_id de tipo inválido (${typeof row.avatar_id})`)
+  }
 
   return {
     id,
@@ -140,4 +152,22 @@ export function parseLeaderboardRow(raw: unknown): ParsedLeaderboardRow {
     raw_win_rate: numWr,
     avatar_id: avatarId,
   }
+}
+
+/**
+ * Determina unívocamente si una fila de leaderboard corresponde al usuario actual autenticado.
+ *
+ * Exige coincidencia estricta de ID. Prohibido deducir identidad por nombres genéricos o incompletos.
+ */
+export function isCurrentLeaderboardUser(
+  rowId: string,
+  currentUserId?: string | null
+): boolean {
+  if (!currentUserId || typeof currentUserId !== 'string' || currentUserId.trim().length === 0) {
+    return false
+  }
+  if (!rowId || typeof rowId !== 'string' || rowId.trim().length === 0) {
+    return false
+  }
+  return rowId.trim() === currentUserId.trim()
 }

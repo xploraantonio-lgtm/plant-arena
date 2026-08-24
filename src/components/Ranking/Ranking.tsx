@@ -3,7 +3,7 @@ import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { SupabaseService } from '../../services/supabaseService'
-import { UserManager } from '../../utils/userManager'
+import { isCurrentLeaderboardUser } from '../../utils/leaderboardParser'
 import './Ranking.css'
 
 import type { Database } from '../../types/database.types'
@@ -96,7 +96,6 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
 
   const loadLeaderboard = useCallback(() => {
     const myId = userProfile?.id
-    const myUsername = (userProfile?.username || UserManager.getProfile().name || 'Guerrero').trim().toLowerCase()
 
     setIsLoadingLeaderboard(true)
     setLeaderboardError(null)
@@ -105,10 +104,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
       .then((profiles) => {
         const mapped: LeaderboardUser[] = profiles.map((p) => {
           const arena = getArenaForElo(p.elo_rating)
-          const isMe = Boolean(
-            (myId && p.id === myId) ||
-            (p.username.trim().toLowerCase() === myUsername)
-          )
+          const isMe = isCurrentLeaderboardUser(p.id, myId)
 
           return {
             rank: p.rank_position,
@@ -143,11 +139,11 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
     } else {
       setUserRank(null)
     }
-  }, [userProfile?.id, userProfile?.username])
+  }, [userProfile?.id])
 
   useEffect(() => {
     let mounted = true
-    const myUsername = (userProfile?.username || UserManager.getProfile().name || 'Guerrero').trim().toLowerCase()
+    const myUsername = (userProfile?.username ?? '').trim().toLowerCase()
 
     loadLeaderboard()
 
@@ -158,7 +154,11 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
       setIsLoadingReferrals(false)
       if (refData?.ranking && refData.ranking.length > 0) {
         const mapped: ReferralLeaderboardUser[] = refData.ranking.map((r) => {
-          const isMe = Boolean(r.nombre && r.nombre.trim().toLowerCase() === myUsername)
+          const isMe = Boolean(
+            myUsername &&
+            r.nombre &&
+            r.nombre.trim().toLowerCase() === myUsername
+          )
           return {
             rank: r.puesto,
             username: r.nombre || 'Jugador',
@@ -179,7 +179,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
     return () => {
       mounted = false
     }
-  }, [loadLeaderboard, userProfile, userElo])
+  }, [loadLeaderboard, userProfile?.username, userElo])
 
   const leaderboardData = realLeaderboard
 
@@ -698,7 +698,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                         <div className="my-rank-user">
                           <strong className={hasVipPass ? 'vip-gold-text' : ''}>
                             {hasVipPass && '👑 '}
-                            {userProfile?.username || UserManager.getProfile().name || 'Guerrero'}
+                            {userProfile?.username?.trim() || '—'}
                           </strong>
                           <span className="user-self-badge">TÚ</span>
                         </div>
