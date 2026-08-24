@@ -1307,6 +1307,112 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.settle_verified_match_authoritative(UUID, UUID, JSONB) FROM anon, authenticated, PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.settle_verified_match_authoritative(UUID, UUID, JSONB) TO service_role;
 
+-- Actualizar settle_verified_match
+CREATE OR REPLACE FUNCTION public.settle_verified_match(
+  p_room_id UUID,
+  p_winner_id UUID,
+  p_payload JSONB DEFAULT '{}'::JSONB
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_room RECORD;
+  v_result JSONB;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Sólo service_role';
+  END IF;
+
+  SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada'; END IF;
+  IF v_room.engine_version NOT IN ('auth-v1', 'auth-v2') THEN RAISE EXCEPTION 'Sala no autoritativa'; END IF;
+
+  IF v_room.settled_at IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'success', TRUE,
+      'status', 'ya_liquidada',
+      'winner', v_room.server_winner_id
+    );
+  END IF;
+
+  IF p_winner_id NOT IN (v_room.player1_id, v_room.player2_id) THEN
+    RAISE EXCEPTION 'Ganador inválido';
+  END IF;
+  IF v_room.verification_status <> 'verifying' THEN
+    RAISE EXCEPTION 'La sala no está en verificación';
+  END IF;
+
+  v_result := public._settle_room(p_room_id, p_winner_id);
+
+  UPDATE public.game_rooms
+     SET verification_status = 'verified',
+         verified_at = NOW(),
+         server_winner_id = p_winner_id,
+         verification_note = 'server_verified',
+         verification_payload = COALESCE(p_payload, '{}'::JSONB)
+   WHERE id = p_room_id;
+
+  RETURN v_result || jsonb_build_object(
+    'authoritative', TRUE,
+    'verificationStatus', 'verified'
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.settle_verified_match(UUID, UUID, JSONB) FROM anon, authenticated, PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.settle_verified_match(UUID, UUID, JSONB) TO service_role;
+
+-- Actualizar settle_verified_draw
+CREATE OR REPLACE FUNCTION public.settle_verified_draw(
+  p_room_id UUID,
+  p_payload JSONB DEFAULT '{}'::JSONB
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_room RECORD;
+  v_result JSONB;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Sólo service_role';
+  END IF;
+
+  SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada'; END IF;
+  IF v_room.engine_version NOT IN ('auth-v1', 'auth-v2') THEN RAISE EXCEPTION 'Sala no autoritativa'; END IF;
+
+  IF v_room.settled_at IS NOT NULL THEN
+    RETURN jsonb_build_object('success', TRUE, 'status', 'ya_liquidada');
+  END IF;
+
+  IF v_room.verification_status <> 'verifying' THEN
+    RAISE EXCEPTION 'La sala no está en verificación';
+  END IF;
+
+  v_result := public._settle_room(p_room_id, NULL);
+
+  UPDATE public.game_rooms
+     SET verification_status = 'verified',
+         verified_at = NOW(),
+         server_winner_id = NULL,
+         verification_note = 'server_verified_draw',
+         verification_payload = COALESCE(p_payload, '{}'::JSONB)
+   WHERE id = p_room_id;
+
+  RETURN v_result || jsonb_build_object(
+    'authoritative', TRUE,
+    'verificationStatus', 'verified'
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.settle_verified_draw(UUID, JSONB) FROM anon, authenticated, PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.settle_verified_draw(UUID, JSONB) TO service_role;
+
 -- Actualizar cancel_match_authoritative
 CREATE OR REPLACE FUNCTION public.cancel_match_authoritative(
   p_room_id UUID,
