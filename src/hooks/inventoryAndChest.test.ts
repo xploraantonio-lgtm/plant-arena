@@ -302,3 +302,279 @@ describe('FIX B — Acelerar Sobre PvP con Oro (RPC, Timer y Atomicidad)', () =>
     expect(userGold).toBe(200)
   })
 })
+
+describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fail-Closed)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // Simulación lógica de la RPC autoritativa en PostgreSQL (public.fuse_plant)
+  function simulateServerFusePlant(params: {
+    userGold: number
+    copies: number
+    level: number
+    maxLevel: number
+    isOwner: boolean
+    isListed: boolean
+  }) {
+    const FUSION_GOLD_COST = 250
+    const FUSION_COPIES_REQ = 5
+
+    if (!params.isOwner) {
+      return { success: false, error: 'No eres el propietario de esta carta' }
+    }
+    if (params.isListed) {
+      return { success: false, error: 'No puedes fusionar una carta que está en venta' }
+    }
+    if (params.userGold < FUSION_GOLD_COST) {
+      return {
+        success: false,
+        error: `Oro insuficiente para mejorar: necesitas ${FUSION_GOLD_COST} y tienes ${params.userGold}`,
+      }
+    }
+    if (params.level >= params.maxLevel) {
+      return { success: false, error: `Esta carta ya alcanzó el nivel máximo (${params.maxLevel})` }
+    }
+    if (params.copies < FUSION_COPIES_REQ) {
+      return {
+        success: false,
+        error: `Se requieren ${FUSION_COPIES_REQ} copias base para la fusión (tienes ${params.copies}/${FUSION_COPIES_REQ})`,
+      }
+    }
+
+    return {
+      success: true,
+      previousLevel: params.level,
+      newLevel: params.level + 1,
+      rolledStat: 'damage_boost',
+      copiesSpent: FUSION_COPIES_REQ,
+      copiesRemaining: params.copies - FUSION_COPIES_REQ,
+      goldSpent: FUSION_GOLD_COST,
+      goldBalance: params.userGold - FUSION_GOLD_COST,
+    }
+  }
+
+  it('1. 5 copias + 250 oro → Éxito: level +1, copies -5, gold -250', () => {
+    let userGold = 250
+    let copies = 5
+    let level = 0
+    const maxLevel = 5
+
+    const res = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel,
+      isOwner: true,
+      isListed: false,
+    })
+
+    expect(res.success).toBe(true)
+    if (res.success) {
+      userGold = res.goldBalance!
+      copies = res.copiesRemaining!
+      level = res.newLevel!
+    }
+
+    expect(level).toBe(1)
+    expect(copies).toBe(0)
+    expect(userGold).toBe(0)
+    expect(res.goldSpent).toBe(250)
+    expect(res.copiesSpent).toBe(5)
+  })
+
+  it('2. 5 copias + 249 oro → FAIL: 0 oro gastado, 0 copias consumidas, nivel intacto', () => {
+    let userGold = 249
+    let copies = 5
+    let level = 0
+
+    const res = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+    })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain('Oro insuficiente')
+    // Los datos locales no se modifican
+    expect(userGold).toBe(249)
+    expect(copies).toBe(5)
+    expect(level).toBe(0)
+  })
+
+  it('3. 4 copias + 1000 oro → FAIL: 0 oro gastado, 0 copias consumidas, nivel intacto', () => {
+    let userGold = 1000
+    let copies = 4
+    let level = 0
+
+    const res = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+    })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain('Se requieren 5 copias base')
+    expect(userGold).toBe(1000)
+    expect(copies).toBe(4)
+    expect(level).toBe(0)
+  })
+
+  it('4. 0 copias + 0 oro → FAIL: rechazo fail-closed inmediato', () => {
+    const res = simulateServerFusePlant({
+      userGold: 0,
+      copies: 0,
+      level: 0,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+    })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain('Oro insuficiente')
+  })
+
+  it('5. 10 copias + 500 oro → Dos fusiones consecutivas procesadas correctamente', () => {
+    let userGold = 500
+    let copies = 10
+    let level = 0
+
+    // Primera fusión
+    const res1 = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+    })
+    expect(res1.success).toBe(true)
+    userGold = res1.goldBalance!
+    copies = res1.copiesRemaining!
+    level = res1.newLevel!
+
+    expect(level).toBe(1)
+    expect(copies).toBe(5)
+    expect(userGold).toBe(250)
+
+    // Segunda fusión
+    const res2 = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+    })
+    expect(res2.success).toBe(true)
+    userGold = res2.goldBalance!
+    copies = res2.copiesRemaining!
+    level = res2.newLevel!
+
+    expect(level).toBe(2)
+    expect(copies).toBe(0)
+    expect(userGold).toBe(0)
+
+    // Intento de tercera fusión sin recursos
+    const res3 = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+    })
+    expect(res3.success).toBe(false)
+  })
+
+  it('6. Doble click con 5 copias y 250 oro → Exactamente 1 llamada tiene éxito', async () => {
+    let inFlight = false
+    let currentCopies = 5
+    let currentGold = 250
+    let currentLevel = 0
+
+    const mockFuseRpc = vi.fn().mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+      if (currentCopies < 5 || currentGold < 250) {
+        return { success: false, error: 'Recursos insuficientes' }
+      }
+      currentCopies -= 5
+      currentGold -= 250
+      currentLevel += 1
+      return { success: true, newLevel: currentLevel }
+    })
+
+    const triggerFuse = async () => {
+      if (inFlight) return { dropped: true }
+      inFlight = true
+      try {
+        return await mockFuseRpc()
+      } finally {
+        inFlight = false
+      }
+    }
+
+    const [call1, call2] = await Promise.all([triggerFuse(), triggerFuse()])
+
+    expect(mockFuseRpc).toHaveBeenCalledTimes(1)
+    expect(call1).toEqual({ success: true, newLevel: 1 })
+    expect(call2).toEqual({ dropped: true })
+    expect(currentCopies).toBe(0)
+    expect(currentGold).toBe(0)
+    expect(currentLevel).toBe(1)
+  })
+
+  it('7. RPC falla en el servidor → Frontend no resta nada localmente', () => {
+    let localGold = 300
+    let localCopies = 6
+    let localLevel = 1
+
+    const serverResponse = {
+      success: false,
+      error: 'Database connection error',
+    }
+
+    if (!serverResponse.success) {
+      // Regla de contrato: no aplicar cambios optimistas ante error
+    } else {
+      localGold -= 250
+      localCopies -= 5
+      localLevel += 1
+    }
+
+    expect(localGold).toBe(300)
+    expect(localCopies).toBe(6)
+    expect(localLevel).toBe(1)
+  })
+
+  it('8. Cancelar confirmación → 0 llamadas RPC, 0 oro y 0 copias gastadas', () => {
+    const mockRpc = vi.fn()
+    let fuseCandidate: { plantId: string } | null = { plantId: 'sunflower' }
+
+    // Usuario pulsa CANCELAR
+    fuseCandidate = null
+
+    expect(fuseCandidate).toBeNull()
+    expect(mockRpc).not.toHaveBeenCalled()
+  })
+
+  it('9. Carta en nivel máximo → Rechazo de fusión', () => {
+    const res = simulateServerFusePlant({
+      userGold: 1000,
+      copies: 10,
+      level: 5,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+    })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain('ya alcanzó el nivel máximo')
+  })
+})

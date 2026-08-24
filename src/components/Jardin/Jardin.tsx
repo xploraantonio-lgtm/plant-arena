@@ -67,6 +67,9 @@ interface JardinProps {
   onRewardsChanged?: () => Promise<void> | void
 }
 
+const FUSION_GOLD_COST = 250
+const FUSION_COPIES_REQ = 5
+
 export default function Jardin({
   activeDeck,
   unlockedPlants,
@@ -96,6 +99,48 @@ export default function Jardin({
     newLevel: number
     rolledStat: PlantStatKey
   } | null>(null)
+  const [fuseCandidate, setFuseCandidate] = useState<{
+    plantId: PlantId
+    instanceId: string
+    level: number
+    name: string
+    icon: string
+  } | null>(null)
+  const [isFusing, setIsFusing] = useState(false)
+  const [fuseAlert, setFuseAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
+
+  const handleConfirmFuse = async () => {
+    if (!fuseCandidate || !onFusePlant || isFusing) return
+    setIsFusing(true)
+    try {
+      soundManager.playSound('plantation', 0.9)
+      const candidate = fuseCandidate
+      const res = await onFusePlant(candidate.plantId, candidate.instanceId)
+      setFuseCandidate(null)
+      if (res && res.success && res.newLevel && res.rolledStat) {
+        setUpgradeModal({
+          plantId: candidate.plantId,
+          newLevel: res.newLevel,
+          rolledStat: res.rolledStat,
+        })
+      } else if (res && !res.success && res.error) {
+        setFuseAlert({
+          title: 'NO SE PUDO MEJORAR',
+          message: res.error,
+          icon: '⚠️',
+        })
+      }
+    } catch (err: any) {
+      setFuseCandidate(null)
+      setFuseAlert({
+        title: 'ERROR AL MEJORAR',
+        message: err?.message || 'Error inesperado al mejorar la planta',
+        icon: '⚠️',
+      })
+    } finally {
+      setIsFusing(false)
+    }
+  }
 
   const [openQuantities, setOpenQuantities] = useState<Record<string, number>>({})
 
@@ -560,7 +605,9 @@ export default function Jardin({
               const isLegendary = plantId === 'threepeater' || plantId === 'iceberglettuce'
               const maxLvl = isLegendary ? 3 : 5
               const groupedBuffs = groupRolls(statRolls)
-              const canFuse = isUnlocked && copies >= 5 && level < maxLvl
+              const isMaxLevel = level >= maxLvl
+              const hasCopies = copies >= FUSION_COPIES_REQ
+              const hasGold = (userGold ?? 0) >= FUSION_GOLD_COST
 
               return (
                 <div
@@ -640,31 +687,42 @@ export default function Jardin({
 
                   {isUnlocked && (
                     <div className="jardin-card-copies-tag">
-                      COPIAS: {copies}/5 {level >= maxLvl ? '(MÁX)' : ''}
+                      COPIAS: {copies}/{FUSION_COPIES_REQ} · 🪙 {FUSION_GOLD_COST} {isMaxLevel ? '(MÁX)' : ''}
                     </div>
                   )}
 
-                  {canFuse && (
-                    <button
-                      type="button"
-                      className="jardin-fuse-btn"
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        if (onFusePlant) {
-                          soundManager.playSound('plantation', 0.9)
-                          const res = await onFusePlant(plantId, instanceId)
-                          if (res && res.success && res.newLevel && res.rolledStat) {
-                            setUpgradeModal({
+                  {isUnlocked && !isMaxLevel && (
+                    <>
+                      {hasCopies && hasGold && (
+                        <button
+                          type="button"
+                          className="jardin-fuse-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setFuseCandidate({
                               plantId,
-                              newLevel: res.newLevel,
-                              rolledStat: res.rolledStat,
+                              instanceId,
+                              level,
+                              name: config.name,
+                              icon: config.icon,
                             })
-                          }
-                        }
-                      }}
-                    >
-                      🔥 FUSIONAR (5/5) ➔ LVL {level + 1}
-                    </button>
+                          }}
+                        >
+                          🔥 MEJORAR (5/5 + 250🪙) ➔ LVL {level + 1}
+                        </button>
+                      )}
+                      {hasCopies && !hasGold && (
+                        <button
+                          type="button"
+                          className="jardin-fuse-btn jardin-fuse-btn--disabled-gold"
+                          disabled
+                          onClick={(e) => e.stopPropagation()}
+                          title="Oro insuficiente para mejorar (requiere 250 Oro)"
+                        >
+                          ⚠️ ORO INSUFICIENTE (250🪙)
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               )
@@ -672,6 +730,77 @@ export default function Jardin({
           </div>
         </div>
       </div>
+
+      {/* CONFIRMACIÓN DE FUSIÓN / MEJORA */}
+      {fuseCandidate && (
+        <div
+          className="jardin-upgrade-modal-overlay"
+          onClick={() => {
+            if (!isFusing) setFuseCandidate(null)
+          }}
+        >
+          <div className="jardin-upgrade-modal-card jardin-fuse-confirm-card" onClick={(e) => e.stopPropagation()}>
+            <div className="jardin-upgrade-modal-sparkle">✨ ⬆️ ✨</div>
+            <h3 className="jardin-upgrade-modal-title">¿Deseas mejorar esta planta?</h3>
+
+            <div className="jardin-fuse-confirm-plant">
+              <img src={fuseCandidate.icon} alt={fuseCandidate.name} className="jardin-fuse-confirm-img" />
+              <span className="jardin-fuse-confirm-name">{fuseCandidate.name}</span>
+              <span className="jardin-fuse-confirm-level">
+                Nivel {fuseCandidate.level} ➔ Nivel {fuseCandidate.level + 1}
+              </span>
+            </div>
+
+            <div className="jardin-fuse-confirm-reqs">
+              <div className="jardin-fuse-req-item">
+                <span className="jardin-fuse-req-icon">🧩</span>
+                <span className="jardin-fuse-req-text">5 copias</span>
+              </div>
+              <div className="jardin-fuse-req-item">
+                <span className="jardin-fuse-req-icon">🪙</span>
+                <span className="jardin-fuse-req-text">250 Oro</span>
+              </div>
+            </div>
+
+            <div className="jardin-fuse-confirm-actions">
+              <button
+                type="button"
+                className="jardin-upgrade-modal-btn jardin-fuse-btn-cancel"
+                disabled={isFusing}
+                onClick={() => setFuseCandidate(null)}
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                className="jardin-upgrade-modal-btn jardin-fuse-btn-confirm"
+                disabled={isFusing}
+                onClick={handleConfirmFuse}
+              >
+                {isFusing ? 'MEJORANDO...' : 'MEJORAR'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DIÁLOGO DE ERROR / AVISO */}
+      {fuseAlert && (
+        <div className="jardin-upgrade-modal-overlay" onClick={() => setFuseAlert(null)}>
+          <div className="jardin-upgrade-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="jardin-upgrade-modal-sparkle">{fuseAlert.icon}</div>
+            <h3 className="jardin-upgrade-modal-title">{fuseAlert.title}</h3>
+            <p className="jardin-upgrade-modal-desc">{fuseAlert.message}</p>
+            <button
+              type="button"
+              className="jardin-upgrade-modal-btn"
+              onClick={() => setFuseAlert(null)}
+            >
+              ENTENDIDO
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* UPGRADE CELEBRATION MODAL */}
       {upgradeModal && (

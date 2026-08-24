@@ -935,21 +935,40 @@ export function useInventory() {
     return { drops, colosseumTicket: Boolean(res.colosseumTicket) }
   }
 
-  /** Fusiona en el servidor: 5 copias → +1 nivel + stat al azar. */
+  /** Fusiona en el servidor: 5 copias + 250 oro → +1 nivel + stat al azar. */
   const fusePlantOnServer = async (
     instanceId: string
-  ): Promise<{ success: boolean; newLevel?: number; rolledStat?: PlantStatKey; rolledStatLabel?: string; error?: string }> => {
+  ): Promise<{
+    success: boolean
+    plantId?: string
+    previousLevel?: number
+    newLevel?: number
+    rolledStat?: PlantStatKey
+    rolledStatLabel?: string
+    copiesSpent?: number
+    copiesRemaining?: number
+    goldSpent?: number
+    goldBalance?: number
+    error?: string
+  }> => {
     const res = await SupabaseService.fusePlant(instanceId)
     if (!res.success) return { success: false, error: res.error }
 
-    await refreshInventory()
+    // Refrescar inventario (instancias + copias) y saldo de oro desde PostgreSQL
+    await refreshFromServer()
 
     const stat = res.rolledStat as PlantStatKey | undefined
     return {
       success: true,
+      plantId: res.plantId,
+      previousLevel: res.previousLevel,
       newLevel: res.newLevel,
       rolledStat: stat,
       rolledStatLabel: stat ? STAT_LABELS[stat]?.suffix : undefined,
+      copiesSpent: res.copiesSpent,
+      copiesRemaining: res.copiesRemaining ?? res.copiesLeft,
+      goldSpent: res.goldSpent,
+      goldBalance: res.goldBalance,
     }
   }
 

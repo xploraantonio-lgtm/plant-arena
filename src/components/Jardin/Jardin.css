@@ -1031,11 +1031,106 @@
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.5);
 }
 
-.jardin-upgrade-modal-btn:hover {
+.jardin-upgrade-modal-btn:hover:not(:disabled) {
   transform: scale(1.05);
   filter: brightness(1.1);
 }
 
-.jardin-upgrade-modal-btn:active {
+.jardin-upgrade-modal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.jardin-upgrade-modal-btn:active:not(:disabled) {
   transform: scale(0.96);
+}
+
+.jardin-fuse-btn--disabled-gold {
+  background: linear-gradient(180deg, #475569 0%, #334155 100%) !important;
+  border: 1px solid #64748b !important;
+  color: #f87171 !important;
+  box-shadow: none !important;
+  animation: none !important;
+  cursor: not-allowed !important;
+}
+
+.jardin-fuse-confirm-card {
+  border-color: #f59e0b !important;
+}
+
+.jardin-fuse-confirm-plant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.jardin-fuse-confirm-img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+  margin-bottom: 4px;
+}
+
+.jardin-fuse-confirm-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: #f8fafc;
+}
+
+.jardin-fuse-confirm-level {
+  font-size: 12px;
+  font-weight: 800;
+  color: #86efac;
+  margin-top: 2px;
+}
+
+.jardin-fuse-confirm-reqs {
+  display: flex;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1.5px solid #fbbf24;
+  border-radius: 12px;
+  padding: 10px 20px;
+  margin-bottom: 18px;
+  width: 100%;
+  box-sizing: border-box;
+  justify-content: center;
+}
+
+.jardin-fuse-req-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jardin-fuse-req-icon {
+  font-size: 18px;
+}
+
+.jardin-fuse-req-text {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fde047;
+}
+
+.jardin-fuse-confirm-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.jardin-fuse-btn-cancel {
+  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+  border: 1.5px solid #94a3b8;
+  box-shadow: 0 4px 12px rgba(71, 85, 105, 0.4);
+}
+
+.jardin-fuse-btn-confirm {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border: 1.5px solid #fde047;
+  color: #000;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5);
 }

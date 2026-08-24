@@ -2049,13 +2049,19 @@ export const SupabaseService = {
     }
   },
 
-  /** Fusiona: 5 copias → +1 nivel + una stat elegible al azar. La stat la
+  /** Fusiona: 5 copias + 250 oro → +1 nivel + una stat elegible al azar. La stat la
    *  sortea el servidor entre las que admite esa planta concreta. */
   async fusePlant(instanceId: string): Promise<{
     success: boolean
+    plantId?: string
+    previousLevel?: number
     newLevel?: number
     rolledStat?: string
+    copiesSpent?: number
+    copiesRemaining?: number
     copiesLeft?: number
+    goldSpent?: number
+    goldBalance?: number
     error?: string
   }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
