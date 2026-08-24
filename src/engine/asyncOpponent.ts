@@ -38,6 +38,23 @@ import {
   getScaledPlantConfig,
 } from '../utils/gameConstants.ts'
 
+import {
+  decidirAccionEstrategica,
+  crearEstadoMentalEstrategico,
+  obtenerPerfilEstrategico,
+  type StrategicStyle,
+  type StrategicProfile,
+  type StrategicMentalState,
+  type StrategicTelemetryEntry,
+} from './strategicAsyncBot.ts'
+
+export type {
+  StrategicStyle,
+  StrategicProfile,
+  StrategicMentalState,
+  StrategicTelemetryEntry,
+}
+
 export const TOPE_DE_SEGURIDAD_ASYNC = msToTicks(TOPE_DE_PARTIDA_MS) + 600
 export const RETRY_INTERVAL_TICKS = 6
 export const MAX_RETRY_WINDOW_TICKS = 90
@@ -72,6 +89,82 @@ export interface AsyncOpponentIntent {
   col?: number | null
 }
 
+export interface AsyncDecision {
+  kind: 'plant' | 'dig' | 'wait'
+  plantId?: PlantId
+  slot?: number
+  lane?: number
+  col?: number
+  utility?: number
+  reason?: string
+}
+
+export interface AsyncOpponentPolicy {
+  readonly mode: 'replay' | 'strategic'
+  decide(
+    state: GameState,
+    controller: AsyncOpponentController
+  ): AsyncDecision | null
+}
+
+export class ReplayPolicy implements AsyncOpponentPolicy {
+  readonly mode = 'replay' as const
+
+  decide(state: GameState, controller: AsyncOpponentController): AsyncDecision | null {
+    if (
+      controller.nextIntentIndex < controller.intents.length &&
+      controller.intents[controller.nextIntentIndex].issuedTick <= state.tick
+    ) {
+      const intent = controller.intents[controller.nextIntentIndex]
+      controller.nextIntentIndex += 1
+      return {
+        kind: intent.kind,
+        plantId: intent.plantId ?? undefined,
+        slot: intent.slot ?? undefined,
+        lane: intent.lane ?? undefined,
+        col: intent.col ?? undefined,
+      }
+    }
+    return null
+  }
+}
+
+export class StrategicPolicy implements AsyncOpponentPolicy {
+  readonly mode = 'strategic' as const
+
+  decide(state: GameState, controller: AsyncOpponentController): AsyncDecision | null {
+    if (!controller.strategicState) return null
+
+    const { decision, telemetryEntry } = decidirAccionEstrategica(
+      state,
+      controller.deck,
+      controller.slotCooldowns,
+      controller.sunBank,
+      controller.strategicState
+    )
+
+    if (telemetryEntry) {
+      if (!controller.telemetry) controller.telemetry = []
+      controller.telemetry.push(telemetryEntry)
+      if (controller.telemetry.length > 100) {
+        controller.telemetry.shift()
+      }
+    }
+
+    if (!decision) return null
+
+    return {
+      kind: decision.kind,
+      plantId: decision.plantId,
+      slot: decision.slot,
+      lane: decision.lane,
+      col: decision.col,
+      utility: decision.utility,
+      reason: decision.reason,
+    }
+  }
+}
+
 export interface AsyncOpponentController {
   deck: CartaDeMazo[]
   intents: AsyncOpponentIntent[]
@@ -91,6 +184,9 @@ export interface AsyncOpponentController {
     intentionsExecuted: number
     intentionsDropped: number
   }
+  policy?: AsyncOpponentPolicy
+  strategicState?: StrategicMentalState | null
+  telemetry?: StrategicTelemetryEntry[]
 }
 
 /**
@@ -163,6 +259,7 @@ export function createAsyncOpponentControllerFromValidated(
       intentionsExecuted: 0,
       intentionsDropped: 0,
     },
+    policy: new ReplayPolicy(),
   }
 }
 
@@ -190,6 +287,46 @@ export function createAsyncOpponentController(
       intentionsExecuted: 0,
       intentionsDropped: 0,
     },
+    policy: new ReplayPolicy(),
+  }
+}
+
+export interface CreateStrategicOpponentOptions {
+  style?: StrategicStyle
+  profile?: StrategicProfile
+  roomSeed?: number
+  botSeed?: number
+}
+
+/**
+ * Crea un nuevo controlador para el Rival Estratégico V1 (Utility AI Determinista).
+ */
+export function createStrategicOpponentController(
+  deck: CartaDeMazo[],
+  options: CreateStrategicOpponentOptions = {}
+): AsyncOpponentController {
+  const style = options.style ?? 'balanced'
+  const profile = options.profile ?? obtenerPerfilEstrategico(style)
+  const seed = (options.roomSeed ?? 12345) + (options.botSeed ?? 777)
+  const strategicState = crearEstadoMentalEstrategico(seed, profile)
+  const policy = new StrategicPolicy()
+
+  return {
+    deck,
+    intents: [],
+    nextIntentIndex: 0,
+    slotCooldowns: {},
+    pendingRetry: null,
+    sunBank: INITIAL_SUN,
+    lastSkySunTick: -msToTicks(3500),
+    stats: {
+      intentionsTotal: 0,
+      intentionsExecuted: 0,
+      intentionsDropped: 0,
+    },
+    policy,
+    strategicState,
+    telemetry: [],
   }
 }
 
@@ -319,75 +456,174 @@ export function stepAsyncOpponent(
     }
   }
 
-  // ── 3. PROCESAR NUEVAS INTENCIONES DEL TICK ────────────────────────────────
-  while (
-    controller.nextIntentIndex < controller.intents.length &&
-    controller.intents[controller.nextIntentIndex].issuedTick <= state.tick
-  ) {
-    const intent = controller.intents[controller.nextIntentIndex]
-    controller.nextIntentIndex += 1
-
-    if (intent.kind === 'dig') {
-      // Excavación: comprobar si existe planta estática propia en (lane, col)
-      if (
-        intent.lane !== null &&
-        intent.lane !== undefined &&
-        intent.col !== null &&
-        intent.col !== undefined &&
-        Number.isInteger(intent.lane) &&
-        Number.isInteger(intent.col)
-      ) {
-        const lane = intent.lane
-        const col = intent.col
-        if (casillaOcupadaP2(state, lane, col)) {
-          state.pending.push({
-            atTick: state.tick + MARGEN_DE_RED_TICS,
-            kind: 'rival_dig',
-            lane,
-            col,
-          })
-          controller.stats.intentionsExecuted += 1
-        } else {
-          controller.stats.intentionsDropped += 1
-        }
-      } else {
-        controller.stats.intentionsDropped += 1
+  // ── 4. PROCESAR DECISIONES DE LA POLÍTICA O INTENCIONES DIRECTAS ──────────
+  if (controller.policy) {
+    if (controller.policy.mode === 'replay') {
+      while (true) {
+        const decision = controller.policy.decide(state, controller)
+        if (!decision) break
+        ejecutarDecisionAsync(controller, state, decision)
       }
-      continue
+    } else {
+      const decision = controller.policy.decide(state, controller)
+      if (decision) {
+        ejecutarDecisionAsync(controller, state, decision)
+      }
     }
+  } else {
+    while (
+      controller.nextIntentIndex < controller.intents.length &&
+      controller.intents[controller.nextIntentIndex].issuedTick <= state.tick
+    ) {
+      const intent = controller.intents[controller.nextIntentIndex]
+      controller.nextIntentIndex += 1
+      ejecutarIntentDirecto(controller, state, intent)
+    }
+  }
+}
 
-    if (intent.kind === 'plant') {
-      if (
-        !intent.plantId ||
-        intent.lane === null ||
-        intent.lane === undefined ||
-        !Number.isInteger(intent.lane) ||
-        intent.lane < 0 ||
-        intent.lane > 2
-      ) {
-        controller.stats.intentionsDropped += 1
-        continue
-      }
+function ejecutarDecisionAsync(
+  controller: AsyncOpponentController,
+  state: GameState,
+  decision: AsyncDecision
+): void {
+  if (decision.kind === 'wait') {
+    return
+  }
 
-      const carta = resolverCartaRival(controller.deck, intent.plantId, intent.slot)
-      if (!carta) {
-        // Carta no existe en mazo snapshot -> descarte inmediato
-        controller.stats.intentionsDropped += 1
-        continue
-      }
-
-      const ejecutada = intentarEjecutarPlant(controller, state, intent, carta)
-      if (ejecutada) {
+  if (decision.kind === 'dig') {
+    if (
+      decision.lane !== null &&
+      decision.lane !== undefined &&
+      decision.col !== null &&
+      decision.col !== undefined &&
+      Number.isInteger(decision.lane) &&
+      Number.isInteger(decision.col)
+    ) {
+      const lane = decision.lane
+      const col = decision.col
+      if (casillaOcupadaP2(state, lane, col)) {
+        state.pending.push({
+          atTick: state.tick + MARGEN_DE_RED_TICS,
+          kind: 'rival_dig',
+          lane,
+          col,
+        })
         controller.stats.intentionsExecuted += 1
       } else {
-        // Iniciar retry determinista si no hay otro retry activo o reemplazarlo
-        controller.pendingRetry = {
-          intent,
-          carta,
-          attempts: 1,
-          nextRetryTick: state.tick + RETRY_INTERVAL_TICKS,
-          expireTick: intent.issuedTick + MAX_RETRY_WINDOW_TICKS,
-        }
+        controller.stats.intentionsDropped += 1
+      }
+    } else {
+      controller.stats.intentionsDropped += 1
+    }
+    return
+  }
+
+  if (decision.kind === 'plant') {
+    if (
+      !decision.plantId ||
+      decision.lane === null ||
+      decision.lane === undefined ||
+      !Number.isInteger(decision.lane) ||
+      decision.lane < 0 ||
+      decision.lane > 2
+    ) {
+      controller.stats.intentionsDropped += 1
+      return
+    }
+
+    const carta = resolverCartaRival(controller.deck, decision.plantId, decision.slot)
+    if (!carta) {
+      controller.stats.intentionsDropped += 1
+      return
+    }
+
+    const intent: AsyncOpponentIntent = {
+      issuedTick: state.tick,
+      kind: 'plant',
+      plantId: decision.plantId,
+      slot: decision.slot,
+      lane: decision.lane,
+      col: decision.col,
+    }
+
+    const ejecutada = intentarEjecutarPlant(controller, state, intent, carta)
+    if (ejecutada) {
+      controller.stats.intentionsExecuted += 1
+    } else {
+      controller.pendingRetry = {
+        intent,
+        carta,
+        attempts: 1,
+        nextRetryTick: state.tick + RETRY_INTERVAL_TICKS,
+        expireTick: state.tick + MAX_RETRY_WINDOW_TICKS,
+      }
+    }
+  }
+}
+
+function ejecutarIntentDirecto(
+  controller: AsyncOpponentController,
+  state: GameState,
+  intent: AsyncOpponentIntent
+): void {
+  if (intent.kind === 'dig') {
+    if (
+      intent.lane !== null &&
+      intent.lane !== undefined &&
+      intent.col !== null &&
+      intent.col !== undefined &&
+      Number.isInteger(intent.lane) &&
+      Number.isInteger(intent.col)
+    ) {
+      const lane = intent.lane
+      const col = intent.col
+      if (casillaOcupadaP2(state, lane, col)) {
+        state.pending.push({
+          atTick: state.tick + MARGEN_DE_RED_TICS,
+          kind: 'rival_dig',
+          lane,
+          col,
+        })
+        controller.stats.intentionsExecuted += 1
+      } else {
+        controller.stats.intentionsDropped += 1
+      }
+    } else {
+      controller.stats.intentionsDropped += 1
+    }
+    return
+  }
+
+  if (intent.kind === 'plant') {
+    if (
+      !intent.plantId ||
+      intent.lane === null ||
+      intent.lane === undefined ||
+      !Number.isInteger(intent.lane) ||
+      intent.lane < 0 ||
+      intent.lane > 2
+    ) {
+      controller.stats.intentionsDropped += 1
+      return
+    }
+
+    const carta = resolverCartaRival(controller.deck, intent.plantId, intent.slot)
+    if (!carta) {
+      controller.stats.intentionsDropped += 1
+      return
+    }
+
+    const ejecutada = intentarEjecutarPlant(controller, state, intent, carta)
+    if (ejecutada) {
+      controller.stats.intentionsExecuted += 1
+    } else {
+      controller.pendingRetry = {
+        intent,
+        carta,
+        attempts: 1,
+        nextRetryTick: state.tick + RETRY_INTERVAL_TICKS,
+        expireTick: intent.issuedTick + MAX_RETRY_WINDOW_TICKS,
       }
     }
   }
@@ -567,7 +803,11 @@ export interface RunAsyncTimelineOptions {
   p1Deck: unknown
   asyncDeck: unknown
   p1Actions: AccionP1Simulacion[] | any[]
-  asyncActions: unknown
+  asyncActions?: unknown
+  asyncOpponentMode?: 'replay' | 'strategic'
+  strategicStyle?: StrategicStyle
+  strategicProfile?: StrategicProfile
+  botSeed?: number
   untilTick?: number
   maxTicks?: number
   validateP1?: boolean
@@ -600,6 +840,10 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     asyncDeck,
     p1Actions,
     asyncActions,
+    asyncOpponentMode = 'replay',
+    strategicStyle,
+    strategicProfile,
+    botSeed,
     untilTick,
     maxTicks = TOPE_DE_SEGURIDAD_ASYNC,
     validateP1 = false,
@@ -607,6 +851,8 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     stopOnGameOver = true,
     engineVersion = 'auth-v2',
   } = options
+
+  const isStrategicMode = asyncOpponentMode === 'strategic'
 
   let mazoP1: CartaDeMazo[] = []
   let mazoP2: CartaDeMazo[] = []
@@ -660,23 +906,25 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     }
     mazoP2 = valDeckP2.deck
 
-    // 3. Validar plan P2 (asyncActions: obligatorio array, sin campos faltantes, sin fallbacks)
-    const valIntents = validarYNormalizarIntencionesAsyncRanked(asyncActions)
-    if (!valIntents.ok) {
-      return {
-        ok: false,
-        reason: valIntents.reason,
-        inconsistencySeq: valIntents.seq,
-        inconsistencyTick: valIntents.issuedTick,
-        details: valIntents.details,
-        state: createBattleState(seed, false, true, undefined, engineVersion),
-        controller: createAsyncOpponentControllerFromValidated(mazoP2, []),
-        p1Ilegal: false,
-        motivo: 'no_result',
-        winner: null,
+    // 3. Validar plan P2 (sólo obligatorio en modo replay)
+    if (!isStrategicMode) {
+      const valIntents = validarYNormalizarIntencionesAsyncRanked(asyncActions)
+      if (!valIntents.ok) {
+        return {
+          ok: false,
+          reason: valIntents.reason,
+          inconsistencySeq: valIntents.seq,
+          inconsistencyTick: valIntents.issuedTick,
+          details: valIntents.details,
+          state: createBattleState(seed, false, true, undefined, engineVersion),
+          controller: createAsyncOpponentControllerFromValidated(mazoP2, []),
+          p1Ilegal: false,
+          motivo: 'no_result',
+          winner: null,
+        }
       }
+      intencionesP2 = valIntents.intenciones
     }
-    intencionesP2 = valIntents.intenciones
 
     // 4. Validar acciones P1 (p1Actions: obligatorio array, sin campos faltantes, sin fallbacks)
     const validacionP1 = validarYNormalizarAccionesP1Ranked(p1Actions)
@@ -688,7 +936,14 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         inconsistencyTick: validacionP1.issuedTick,
         details: validacionP1.details,
         state: createBattleState(seed, false, true, undefined, engineVersion),
-        controller: createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2),
+        controller: isStrategicMode
+          ? createStrategicOpponentController(mazoP2, {
+              style: strategicStyle,
+              profile: strategicProfile,
+              roomSeed: seed,
+              botSeed,
+            })
+          : createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2),
         p1Ilegal: true,
         motivo: 'no_result',
         winner: null,
@@ -698,15 +953,31 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
 
     // 5. Inicialización estricta de State y Controller únicamente tras validar todo
     state = createBattleState(seed, false, true, undefined, engineVersion)
-    controller = createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2)
+    controller = isStrategicMode
+      ? createStrategicOpponentController(mazoP2, {
+          style: strategicStyle,
+          profile: strategicProfile,
+          roomSeed: seed,
+          botSeed,
+        })
+      : createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2)
   } else {
     // RUTA PERMISIVA LEGACY (solo para compatibilidad fuera de Ranked)
     state = createBattleState(seed, false, true, undefined, engineVersion)
     mazoP1 = leerMazo(p1Deck) ?? []
     mazoP2 = leerMazo(asyncDeck) ?? []
-    intencionesP2 = normalizarIntencionesLegacy(asyncActions) as AsyncOpponentIntentRankedEstricta[]
+    if (isStrategicMode) {
+      controller = createStrategicOpponentController(mazoP2, {
+        style: strategicStyle,
+        profile: strategicProfile,
+        roomSeed: seed,
+        botSeed,
+      })
+    } else {
+      intencionesP2 = normalizarIntencionesLegacy(asyncActions) as AsyncOpponentIntentRankedEstricta[]
+      controller = createAsyncOpponentController(mazoP2, intencionesP2)
+    }
     ordenadasP1 = normalizarAccionesP1Legacy(p1Actions) as AccionP1RankedEstricta[]
-    controller = createAsyncOpponentController(mazoP2, intencionesP2)
   }
 
   let p1Index = 0
