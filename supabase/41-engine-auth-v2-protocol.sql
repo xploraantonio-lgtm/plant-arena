@@ -768,6 +768,7 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.capture_ranked_async_opponents_from_room(UUID) FROM anon, authenticated, PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.capture_ranked_async_opponents_from_room(UUID) TO service_role;
 
 -- ── 9. ACTUALIZAR CLAIM_RANKED_ASYNC_OPPONENT CON GATE ESTRICTO Y SOPORTE V1/V2 ─
 CREATE OR REPLACE FUNCTION public.claim_ranked_async_opponent()
