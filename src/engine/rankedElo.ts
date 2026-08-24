@@ -27,6 +27,25 @@ export function calcularRankedEloDelta(
 }
 
 /**
+ * Aplica el piso de ELO (0) al rating resultante tras un delta.
+ *
+ * Contrato de Piso ELO:
+ * - El sistema ELO es estrictamente suma cero entre jugadores (deltaP1 + deltaP2 = 0)
+ *   en todas las condiciones normales.
+ * - La única excepción al balance global ocurre cuando un jugador con rating bajo
+ *   sufre una derrota cuyo delta negativo lo llevaría por debajo de 0. En tal caso,
+ *   su rating final queda acotado en 0 (GREATEST(0, rating + delta)), mientras que
+ *   el ganador recibe su incremento estándar completo.
+ *
+ * @param ratingBefore Rating antes de la partida
+ * @param delta Cambio calculado por calcularRankedEloDelta
+ * @returns Rating final acotado al piso de 0
+ */
+export function aplicarPisoElo(ratingBefore: number, delta: number): number {
+  return Math.max(0, Math.floor(ratingBefore) + Math.round(delta))
+}
+
+/**
  * Interfaz con el desglose autoritativo de liquidación ELO devuelto por el servidor.
  */
 export interface DetalleLiquidacionElo {

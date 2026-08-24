@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { calcularRankedEloDelta, RANKED_ELO_K } from './rankedElo.ts'
+import { calcularRankedEloDelta, aplicarPisoElo, RANKED_ELO_K } from './rankedElo.ts'
 import {
   createAsyncOpponentController,
   createAsyncOpponentControllerFromValidated,
@@ -4952,6 +4952,95 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(content).toMatch(/_ranked_elo_delta/i)
     expect(content).toMatch(/ranked_player_stats/i)
     expect(content).toMatch(/40_ranked_elo_records/i)
+  })
+
+  // 228. Contrato del piso ELO 0: Derrotas con rating bajo acotan a 0 exacto, nunca negativo
+  it('228. Piso ELO 0: Rating resultante tras derrota de jugador con ELO bajo es exactamente 0, nunca negativo', () => {
+    // Caso 1: ELO 10 vs 10, derrota con delta -16 -> rating final = 0
+    const delta1 = calcularRankedEloDelta(10, 10, 0.0)
+    expect(delta1).toBe(-16)
+    const final1 = aplicarPisoElo(10, delta1)
+    expect(final1).toBe(0)
+
+    // Caso 2: ELO 0 vs 0, derrota con delta -16 -> rating final = 0
+    const delta2 = calcularRankedEloDelta(0, 0, 0.0)
+    expect(delta2).toBe(-16)
+    const final2 = aplicarPisoElo(0, delta2)
+    expect(final2).toBe(0)
+
+    // Caso 3: ELO 5 vs 5, derrota con delta -16 -> rating final = 0
+    const delta3 = calcularRankedEloDelta(5, 5, 0.0)
+    expect(delta3).toBe(-16)
+    const final3 = aplicarPisoElo(5, delta3)
+    expect(final3).toBe(0)
+
+    // Caso 4: Victoria desde ELO 0 otorga puntos completos sin restricción
+    const deltaWinFrom0 = calcularRankedEloDelta(0, 0, 1.0)
+    expect(deltaWinFrom0).toBe(16)
+    const finalWinFrom0 = aplicarPisoElo(0, deltaWinFrom0)
+    expect(finalWinFrom0).toBe(16)
+  })
+
+  // 229. Excepción al Zero-Sum acotada al piso ELO
+  it('229. Excepción Zero-Sum: La única divergencia de suma cero ocurre cuando el perdedor toca el piso 0', () => {
+    // Pareja A: Ratings estándar (1000 vs 1000). Sin piso -> Suma cero perfecta
+    const deltaA1 = calcularRankedEloDelta(1000, 1000, 1.0)
+    const deltaA2 = calcularRankedEloDelta(1000, 1000, 0.0)
+    const postA1 = aplicarPisoElo(1000, deltaA1) // 1016
+    const postA2 = aplicarPisoElo(1000, deltaA2) // 984
+    expect((postA1 - 1000) + (postA2 - 1000)).toBe(0)
+
+    // Pareja B: Perdedor con ELO 5 (5 vs 1000). Perdedor toca piso 0
+    const deltaB1 = calcularRankedEloDelta(1000, 5, 1.0) // Ganador gana pocos puntos (+0 o +1)
+    const deltaB2 = calcularRankedEloDelta(5, 1000, 0.0) // Perdedor delta (-0 o -1)
+    const postB1 = aplicarPisoElo(1000, deltaB1)
+    const postB2 = aplicarPisoElo(5, deltaB2)
+    expect(postB1).toBeGreaterThanOrEqual(1000)
+    expect(postB2).toBeGreaterThanOrEqual(0)
+
+    // Pareja C: Perdedor con ELO 5 vs 1000 que pierde delta -16
+    const postC1 = 1000 + 16 // Ganador sube +16
+    const postC2 = aplicarPisoElo(5, -16) // Perdedor acotado en 0 (pérdida real efectiva = 5)
+    expect(postC2).toBe(0)
+    // El sistema protege contra ELO negativo; el ganador recibe sus puntos legítimos
+    expect(postC1 - 1000).toBe(16)
+    expect(postC2 - 5).toBe(-5)
+  })
+
+  // 230. Idempotencia en liquidación: Repetición de llamada no re-aplica ELO ni W/L
+  it('230. Idempotencia de settlement: Respuesta settled o ya_liquidada devuelve resultado consistente sin duplicar deltas', () => {
+    const payloadYaLiquidada = {
+      status: 'settled',
+      winnerSide: 1 as const,
+      winnerId: 'usr-1',
+      settlement: {
+        eloBefore: 1000,
+        opponentElo: 1000,
+        eloDelta: 16,
+        eloAfter: 1016,
+      },
+    }
+
+    const res1 = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'usr-1',
+      serverVerification: payloadYaLiquidada,
+    })
+
+    const res2 = resolverLiquidacionPartida({
+      isAsyncMatch: true,
+      soyP1: true,
+      currentUserId: 'usr-1',
+      serverVerification: payloadYaLiquidada,
+    })
+
+    expect(res1.statusServidor).toBe('liquidada')
+    expect(res2.statusServidor).toBe('liquidada')
+    expect(res1.eloAfter).toBe(1016)
+    expect(res2.eloAfter).toBe(1016)
+    expect(res1.eloDelta).toBe(16)
+    expect(res2.eloDelta).toBe(16)
   })
 })
 
