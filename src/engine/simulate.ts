@@ -211,6 +211,11 @@ export function crearPlantaPropia(
  */
 export type EngineVersion = 'auth-v1' | 'auth-v2'
 
+export function parseEngineVersion(raw: unknown): EngineVersion | null {
+  if (raw === 'auth-v1' || raw === 'auth-v2') return raw
+  return null
+}
+
 export function createBattleState(
   seed: number,
   isPracticeMode = false,

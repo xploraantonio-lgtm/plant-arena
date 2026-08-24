@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import type { PlantId, ColosseumMatchConfig } from '../../types/game'
+import type { PlantId, ColosseumMatchConfig, EngineVersion } from '../../types/game'
+import { parseEngineVersion } from '../../types/game'
 import { TournamentManager, type ActiveTournamentSession } from '../../utils/tournamentManager'
 import { useGameEngine } from '../../hooks/useGameEngine'
 import { useAuth } from '../../hooks/useAuth'
@@ -156,7 +157,7 @@ interface BattlefieldProps {
    */
   mazosDeLaSala?: { mio: unknown; rival: unknown } | null
   isAsyncMatch?: boolean
-  engineVersion?: string
+  engineVersion?: EngineVersion | null
   onServerEloUpdated?: (newElo: number) => void
 }
 
@@ -178,7 +179,7 @@ export default function Battlefield({
   soyP1 = true,
   mazosDeLaSala = null,
   isAsyncMatch = false,
-  engineVersion = 'auth-v2',
+  engineVersion = null,
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
@@ -298,10 +299,17 @@ export default function Battlefield({
         if (!reloj || typeof reloj.ancoraMs !== 'number' || !Number.isFinite(reloj.ancoraMs)) {
           throw new Error('Reloj autoritativo incompleto o inválido.')
         }
+
+        const validEngine = parseEngineVersion(engineVersion)
+        if (!validEngine) {
+          setClockSyncStatus('error')
+          setClockSyncError('No se pudo validar la versión de esta partida. Actualiza el juego e inténtalo nuevamente.')
+          return
+        }
+
         startedGensRef.current.add(attemptGen)
         setClockSyncStatus('synced')
-        const resolvedEngine = engineVersion === 'auth-v1' ? 'auth-v1' : 'auth-v2'
-        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, undefined, resolvedEngine)
+        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, undefined, validEngine)
       })
       .catch((err: any) => {
         if (matchClockGenRef.current !== attemptGen) {

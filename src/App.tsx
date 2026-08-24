@@ -30,6 +30,7 @@ import AdminPanel from './components/Admin/AdminPanel'
 import { UserManager } from './utils/userManager'
 import { useVersionDelJuego } from './hooks/useVersionDelJuego'
 import UpdateModal from './components/UpdateModal/UpdateModal'
+import { parseEngineVersion, type EngineVersion } from './types/game'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -278,7 +279,7 @@ function App() {
   const { estado: estadoCola, encontrada, buscar, cancelar } = useMatchmaking()
   const [modoBuscando, setModoBuscando] = useState<ModoPartida>('ranked')
   const [salaId, setSalaId] = useState<string | null>(null)
-  const [engineVersionSala, setEngineVersionSala] = useState<string>('auth-v2')
+  const [engineVersionSala, setEngineVersionSala] = useState<EngineVersion | null>(null)
   const [semillaPartida, setSemillaPartida] = useState<number | undefined>(undefined)
   const [rivalId, setRivalId] = useState<string | null>(null)
   /** La partida cuya repetición se está viendo. */
@@ -317,6 +318,7 @@ function App() {
           id: basica.id,
           mode: basica.mode,
           seed: basica.seed,
+          engineVersion: parseEngineVersion(basica.engine_version),
           iAm: (basica.player1_id === user?.id ? 'p1' : 'p2') as 'p1' | 'p2',
           player1: { id: basica.player1_id, username: null },
           player2: { id: basica.player2_id ?? '00000000-0000-0000-0000-000000000000', username: basica.async_display_name ?? null },
@@ -330,8 +332,20 @@ function App() {
         setScreen('menu')
         return
       }
+
+      const versionValidada = parseEngineVersion(sala.engineVersion)
+      if (!versionValidada) {
+        setScreen('menu')
+        setActiveAppAlert({
+          title: 'Versión no válida',
+          message: 'No se pudo validar la versión de esta partida. Actualiza el juego e inténtalo nuevamente.',
+          icon: '⚠️',
+        })
+        return
+      }
+
       setSalaId(sala.id)
-      setEngineVersionSala((sala as any).engineVersion ?? (sala as any).engine_version ?? 'auth-v2')
+      setEngineVersionSala(versionValidada)
       setSemillaPartida(Number(sala.seed))
       const soyP1 = sala.iAm === 'p1'
       setSoyJugador1(soyP1)
@@ -345,7 +359,7 @@ function App() {
         mio: soyP1 ? sala.p1Deck : sala.p2Deck,
         rival: soyP1 ? sala.p2Deck : sala.p1Deck,
       })
-      setPartidaAsincrona(Boolean((sala as any).isAsyncMatch))
+      setPartidaAsincrona(Boolean(sala.isAsyncMatch))
       setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
       setPracticePlantId(null)
       setScreen('battle')

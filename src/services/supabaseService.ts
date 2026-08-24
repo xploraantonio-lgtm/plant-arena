@@ -4,6 +4,7 @@ import type { FreePackSlot } from '../utils/freePackManager'
 import type { DatosDeRepeticion } from '../engine/replay'
 import { parseLeaderboardRow, type ParsedLeaderboardRow } from '../utils/leaderboardParser'
 import { validateMatchClock } from '../utils/matchClock'
+import type { EngineVersion } from '../types/game'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -752,6 +753,7 @@ export const SupabaseService = {
     isAsyncMatch?: boolean
     asyncActionsSnapshot?: unknown
     asyncDeckSnapshot?: unknown
+    engineVersion?: EngineVersion | null
   } | null> {
     if (!isSupabaseConfigured()) return null
     try {
@@ -1093,6 +1095,7 @@ export const SupabaseService = {
     p2_deck: unknown
     colosseum_bet: number
     status: string
+    engine_version?: string | null
     is_async_match?: boolean
     async_opponent_id?: string | null
     async_display_name?: string | null
@@ -1104,7 +1107,7 @@ export const SupabaseService = {
     try {
       const { data, error } = await supabase
         .from('game_rooms')
-        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status, is_async_match, async_opponent_id, async_display_name, async_avatar_id, async_rating_snapshot, async_deck_snapshot')
+        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status, engine_version, is_async_match, async_opponent_id, async_display_name, async_avatar_id, async_rating_snapshot, async_deck_snapshot')
         .eq('id', roomId)
         .single()
       if (error) {

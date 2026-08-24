@@ -1391,6 +1391,83 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.submit_match_action(UUID, INTEGER, INTEGER, INTEGER, TEXT, TEXT, INTEGER, INTEGER, INTEGER, TEXT) FROM anon, PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.submit_match_action(UUID, INTEGER, INTEGER, INTEGER, TEXT, TEXT, INTEGER, INTEGER, INTEGER, TEXT) TO authenticated;
 
+-- ── 10.1 ACTUALIZAR GAME_ROOM_INFO PARA EXPONER ENGINE_VERSION ─────────────
+CREATE OR REPLACE FUNCTION public.game_room_info(p_room_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_uid  UUID := auth.uid();
+  v_room RECORD;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
+
+  SELECT r.*,
+         p1.username AS p1_nombre, p1.avatar_id AS p1_avatar, p1.elo_rating AS p1_elo,
+         p2.username AS p2_nombre, p2.avatar_id AS p2_avatar, p2.elo_rating AS p2_elo
+    INTO v_room
+    FROM public.game_rooms r
+    LEFT JOIN public.profiles p1 ON p1.id = r.player1_id
+    LEFT JOIN public.profiles p2 ON p2.id = r.player2_id
+   WHERE r.id = p_room_id;
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada'; END IF;
+
+  -- Comprobación de pertenencia segura con soporte para player2_id nulo en async
+  IF v_room.is_async_match THEN
+    IF v_uid <> v_room.player1_id THEN
+      RAISE EXCEPTION 'No participas en esta partida';
+    END IF;
+  ELSE
+    IF v_uid NOT IN (v_room.player1_id, v_room.player2_id) THEN
+      RAISE EXCEPTION 'No participas en esta partida';
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'id',           v_room.id,
+    'mode',         v_room.mode,
+    'seed',         v_room.seed,
+    'status',       v_room.status,
+    'engineVersion', v_room.engine_version,
+    'colosseumBet', v_room.colosseum_bet,
+    'p1Deck',       v_room.p1_deck,
+    'p2Deck',       CASE WHEN v_room.is_async_match THEN v_room.async_deck_snapshot ELSE v_room.p2_deck END,
+    'player1',      jsonb_build_object(
+                      'id', v_room.player1_id,
+                      'username', v_room.p1_nombre,
+                      'avatarId', v_room.p1_avatar,
+                      'elo', v_room.p1_elo
+                    ),
+    'player2',      CASE
+                      WHEN v_room.is_async_match THEN
+                        jsonb_build_object(
+                          'id', COALESCE(v_room.async_opponent_id, '00000000-0000-0000-0000-000000000000'::UUID),
+                          'username', v_room.async_display_name,
+                          'avatarId', v_room.async_avatar_id,
+                          'elo', v_room.async_rating_snapshot
+                        )
+                      ELSE
+                        jsonb_build_object(
+                          'id', v_room.player2_id,
+                          'username', v_room.p2_nombre,
+                          'avatarId', v_room.p2_avatar,
+                          'elo', v_room.p2_elo
+                        )
+                    END,
+    'iAm',          CASE WHEN v_uid = v_room.player1_id THEN 'p1' ELSE 'p2' END,
+    'isAsyncMatch', COALESCE(v_room.is_async_match, FALSE),
+    'startedAt',    v_room.started_at,
+    'serverNow',    NOW()
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.game_room_info(UUID) FROM anon, PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.game_room_info(UUID) TO authenticated;
+
 -- ── 11. REGISTRO DE AUDITORÍA ───────────────────────────────────────────────
 INSERT INTO public._migration_audit (fase, detalle, ejecutado_en)
 VALUES (

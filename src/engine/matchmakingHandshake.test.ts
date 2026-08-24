@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { recalcularGanadorAutoritativo, type DatosDeRepeticion } from './replay'
+import { recalcularGanadorAutoritativo, resolverEngineVersion, type DatosDeRepeticion } from './replay'
+import { parseEngineVersion } from './simulate'
 
 /**
  * Simulador puro y determinista de las reglas de matchmaking server-side
@@ -429,5 +430,75 @@ describe('MIGRACIÓN 41 — Universal Server-Side Handshake, Direct Mutation Rev
     const res = recalcularGanadorAutoritativo(datosIncompatibles)
     expect(res.ilegales.length).toBe(1)
     expect(res.ilegales[0].razon).toBe('version_de_motor_no_soportada')
+  })
+
+  // 17. parseEngineVersion: parser estricto sin fallbacks
+  it('17. parseEngineVersion valida estrictamente auth-v1 y auth-v2, y rechaza todo lo demás', () => {
+    expect(parseEngineVersion('auth-v1')).toBe('auth-v1')
+    expect(parseEngineVersion('auth-v2')).toBe('auth-v2')
+    expect(parseEngineVersion('legacy-v1')).toBeNull()
+    expect(parseEngineVersion('auth-v3')).toBeNull()
+    expect(parseEngineVersion('')).toBeNull()
+    expect(parseEngineVersion(null)).toBeNull()
+    expect(parseEngineVersion(undefined)).toBeNull()
+    expect(parseEngineVersion(123)).toBeNull()
+    expect(parseEngineVersion({})).toBeNull()
+  })
+
+  // 18. resolverEngineVersion: fail-closed si no es válido
+  it('18. resolverEngineVersion lanza excepción y no convierte valores desconocidos a auth-v2', () => {
+    expect(resolverEngineVersion('auth-v1')).toBe('auth-v1')
+    expect(resolverEngineVersion('auth-v2')).toBe('auth-v2')
+    expect(() => resolverEngineVersion('legacy-v1')).toThrowError(/Versión de motor no soportada/)
+    expect(() => resolverEngineVersion('auth-v3')).toThrowError(/Versión de motor no soportada/)
+    expect(() => resolverEngineVersion(null)).toThrowError(/Versión de motor no soportada/)
+    expect(() => resolverEngineVersion(undefined)).toThrowError(/Versión de motor no soportada/)
+  })
+
+  // 19. Simulación de inicio de partida en Battlefield: 0 inicios ante versión inválida
+  it('19. Battlefield / App: Inicia partida únicamente con auth-v1 o auth-v2, 0 inicios con versión inválida', () => {
+    let startedCalls = 0
+    let lastEngineUsed: string | null = null
+
+    function simularInicioPartida(engineVersion: unknown): { started: boolean; error?: string } {
+      const valid = parseEngineVersion(engineVersion)
+      if (!valid) {
+        return {
+          started: false,
+          error: 'No se pudo validar la versión de esta partida. Actualiza el juego e inténtalo nuevamente.',
+        }
+      }
+      startedCalls += 1
+      lastEngineUsed = valid
+      return { started: true }
+    }
+
+    // Caso A: auth-v1 -> inicia
+    const resA = simularInicioPartida('auth-v1')
+    expect(resA.started).toBe(true)
+    expect(lastEngineUsed).toBe('auth-v1')
+    expect(startedCalls).toBe(1)
+
+    // Caso B: auth-v2 -> inicia
+    const resB = simularInicioPartida('auth-v2')
+    expect(resB.started).toBe(true)
+    expect(lastEngineUsed).toBe('auth-v2')
+    expect(startedCalls).toBe(2)
+
+    // Caso C: legacy-v1 -> 0 inicios
+    const resC = simularInicioPartida('legacy-v1')
+    expect(resC.started).toBe(false)
+    expect(resC.error).toMatch(/No se pudo validar la versión de esta partida/)
+    expect(startedCalls).toBe(2)
+
+    // Caso D: null / undefined -> 0 inicios
+    const resD = simularInicioPartida(null)
+    expect(resD.started).toBe(false)
+    expect(startedCalls).toBe(2)
+
+    // Caso E: auth-v3 -> 0 inicios
+    const resE = simularInicioPartida('auth-v3')
+    expect(resE.started).toBe(false)
+    expect(startedCalls).toBe(2)
   })
 })

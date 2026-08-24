@@ -203,4 +203,5 @@ export interface ColosseumLeaderboardEntry {
   isUser?: boolean
 }
 
-
+export type { EngineVersion } from '../engine/simulate'
+export { parseEngineVersion } from '../engine/simulate'

@@ -26,17 +26,33 @@ function partidaGrabada(): DatosDeRepeticion {
     roomId: 'sala-de-prueba',
     mode: 'ranked',
     seed: 31337,
+    engineVersion: 'auth-v1',
     jugadaEn: '2026-08-20T00:00:00Z',
-    jugador1: { nombre: 'Ana', avatar: 'peashooter' },
-    jugador2: { nombre: 'Beto', avatar: 'sunflower' },
+    jugador1: {
+      nombre: 'Ana',
+      avatar: 'peashooter',
+      mazo: [
+        { plantId: 'sunflower', slot: 0, level: 0, statRolls: [] },
+        { plantId: 'peashooter', slot: 1, level: 0, statRolls: [] },
+        { plantId: 'chomper', slot: 2, level: 0, statRolls: [] },
+      ],
+    },
+    jugador2: {
+      nombre: 'Beto',
+      avatar: 'sunflower',
+      mazo: [
+        { plantId: 'sunflower', slot: 0, level: 0, statRolls: [] },
+        { plantId: 'wallnut', slot: 1, level: 0, statRolls: [] },
+      ],
+    },
     ganador: null,
     yoSoy: 1,
     jugadas: [
-      { de: 1, tick: 40,  kind: 'plant', plantId: 'sunflower',  lane: 0, col: 1 },
-      { de: 2, tick: 60,  kind: 'plant', plantId: 'sunflower',  lane: 1, col: 1 },
-      { de: 1, tick: 200, kind: 'plant', plantId: 'peashooter', lane: 1, col: 2 },
-      { de: 2, tick: 260, kind: 'plant', plantId: 'wallnut',    lane: 1, col: 3 },
-      { de: 1, tick: 400, kind: 'plant', plantId: 'chomper',    lane: 2, col: 0 },
+      { de: 1, tick: 40,  kind: 'plant', plantId: 'sunflower',  slot: 0, lane: 0, col: 1 },
+      { de: 2, tick: 60,  kind: 'plant', plantId: 'sunflower',  slot: 0, lane: 1, col: 1 },
+      { de: 1, tick: 200, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 1, col: 2 },
+      { de: 2, tick: 260, kind: 'plant', plantId: 'wallnut',    slot: 1, lane: 1, col: 3 },
+      { de: 1, tick: 400, kind: 'plant', plantId: 'chomper',    slot: 2, lane: 2, col: 0 },
     ],
   }
 }
@@ -55,7 +71,7 @@ describe('reproducir da exactamente la misma partida', () => {
     // Ésta es LA comprobación. Se juega la partida como se jugó —las de Ana en su
     // lado, las de Beto espejadas— y se compara con la reproducción del registro.
     // Si no coincidieran, el servidor no podría recalcular quién ganó.
-    const enVivo = createBattleState(31337, false, true)
+    const enVivo = createBattleState(31337, false, true, undefined, 'auth-v1')
     const datos = partidaGrabada()
     for (const j of datos.jugadas) {
       if (j.de === 1) {
@@ -164,9 +180,24 @@ describe('la repetición llega hasta el final de la partida', () => {
     roomId: 'r1',
     mode: 'ranked',
     seed: 4242,
+    engineVersion: 'auth-v1',
     jugadaEn: '2026-01-01T00:00:00Z',
-    jugador1: { nombre: 'Ana', avatar: null },
-    jugador2: { nombre: 'Beto', avatar: null },
+    jugador1: {
+      nombre: 'Ana',
+      avatar: null,
+      mazo: [
+        { plantId: 'sunflower', slot: 0, level: 0, statRolls: [] },
+        { plantId: 'peashooter', slot: 1, level: 0, statRolls: [] },
+      ],
+    },
+    jugador2: {
+      nombre: 'Beto',
+      avatar: null,
+      mazo: [
+        { plantId: 'sunflower', slot: 0, level: 0, statRolls: [] },
+        { plantId: 'peashooter', slot: 1, level: 0, statRolls: [] },
+      ],
+    },
     ganador: null,
     yoSoy: 1,
     jugadas,
@@ -176,7 +207,7 @@ describe('la repetición llega hasta el final de la partida', () => {
     // Una sola jugada al segundo 3 y nada más. Antes: la repetición duraba 13
     // segundos. Ahora tiene que llegar hasta donde la partida se decide.
     const rep = construirRepeticion(
-      datosCon([{ de: 1, tick: 90, kind: 'plant', plantId: 'sunflower', lane: 0, col: 2 }])
+      datosCon([{ de: 1, tick: 90, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 2 }])
     )
 
     expect(rep.ultimoTic).toBe(90)
@@ -188,9 +219,9 @@ describe('la repetición llega hasta el final de la partida', () => {
   it('sabe cómo acabó', () => {
     const rep = construirRepeticion(
       datosCon([
-        { de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', lane: 0, col: 2 },
-        { de: 1, tick: 60, kind: 'plant', plantId: 'peashooter', lane: 1, col: 2 },
-        { de: 1, tick: 90, kind: 'plant', plantId: 'peashooter', lane: 2, col: 2 },
+        { de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 2 },
+        { de: 1, tick: 60, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 1, col: 2 },
+        { de: 1, tick: 90, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 2, col: 2 },
       ])
     )
     // Ana plantó y Beto no: gana Ana, y la repetición lo sabe antes de empezar
@@ -200,7 +231,7 @@ describe('la repetición llega hasta el final de la partida', () => {
 
   it('avanzando hasta el final se llega al mismo resultado', () => {
     const rep = construirRepeticion(
-      datosCon([{ de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', lane: 0, col: 2 }])
+      datosCon([{ de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 2 }])
     )
     while (rep.avanzar()) { /* hasta que acabe */ }
 
@@ -211,8 +242,8 @@ describe('la repetición llega hasta el final de la partida', () => {
 
   it('mirada desde el otro lado, el resultado es el contrario', () => {
     const jugadas: JugadaGrabada[] = [
-      { de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', lane: 0, col: 2 },
-      { de: 1, tick: 60, kind: 'plant', plantId: 'peashooter', lane: 1, col: 2 },
+      { de: 1, tick: 30, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 2 },
+      { de: 1, tick: 60, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 1, col: 2 },
     ]
     const deAna = construirRepeticion(datosCon(jugadas), 1)
     const deBeto = construirRepeticion(datosCon(jugadas), 2)

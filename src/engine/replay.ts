@@ -14,6 +14,7 @@
 import {
   createBattleState,
   stepTick,
+  parseEngineVersion,
   type GameState,
   type EngineVersion,
 } from './simulate.ts'
@@ -39,7 +40,11 @@ const ESTADISTICAS_VALIDAS = new Set<PlantStatKey>([
 ])
 
 export function resolverEngineVersion(versionRaw: unknown): EngineVersion {
-  return versionRaw === 'auth-v1' ? 'auth-v1' : 'auth-v2'
+  const parsed = parseEngineVersion(versionRaw)
+  if (!parsed) {
+    throw new Error(`Versión de motor no soportada: ${String(versionRaw)}`)
+  }
+  return parsed
 }
 
 export interface JugadaGrabada {
