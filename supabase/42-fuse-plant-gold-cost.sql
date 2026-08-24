@@ -1,17 +1,17 @@
 -- =============================================================================
 -- PLANT ARENA · MIGRACIÓN 42
--- FUSIÓN DE CARTAS CON COSTO FIJO DE 250 ORO
+-- FUSIÓN DE CARTAS CON COSTO FIJO DE 250 ORO Y 5 COPIAS
 -- =============================================================================
 --
 -- 1. Actualiza public.fuse_plant(p_instance_id UUID) para exigir atómicamente:
 --      - 5 copias base de la planta (public.plant_copies)
 --      - 250 de oro (public.profiles.gold_balance)
 -- 2. Bloqueo en orden consistente: profiles -> plant_instances -> plant_copies.
--- 3. Validaciones fail-closed: auth, propietario, no en venta, nivel < max_level,
---    copias >= 5, oro >= 250.
+-- 3. Validaciones fail-closed: auth, propietario, no en venta, catálogo,
+--    eligible_stats no nulo/vacío, nivel < max_level, copias >= 5, oro >= 250.
 -- 4. Mutación atómica dentro de la misma transacción (gold - 250, copies - 5, level + 1).
 -- 5. Respuesta JSON enriquecida para el cliente.
--- 6. Registro de auditoría en public._migration_audit.
+-- 6. Registro de auditoría canónico en public._migration_audit (fase, detalle, ejecutado_en).
 --
 -- =============================================================================
 
@@ -49,12 +49,16 @@ BEGIN
     RAISE EXCEPTION 'No puedes fusionar una carta que está en venta';
   END IF;
 
-  -- 3. Catálogo de la planta y nivel máximo
+  -- 3. Catálogo de la planta, nivel máximo y estadísticas elegibles
   SELECT * INTO v_cat FROM public.plant_catalog WHERE plant_id = v_inst.plant_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Planta desconocida: %', v_inst.plant_id; END IF;
 
   IF v_inst.level >= v_cat.max_level THEN
     RAISE EXCEPTION 'Esta carta ya alcanzó el nivel máximo (%)', v_cat.max_level;
+  END IF;
+
+  IF v_cat.eligible_stats IS NULL OR array_length(v_cat.eligible_stats, 1) IS NULL OR array_length(v_cat.eligible_stats, 1) < 1 THEN
+    RAISE EXCEPTION 'La planta % no tiene estadísticas elegibles configuradas', v_inst.plant_id;
   END IF;
 
   -- 4. Bloqueo transaccional de las copias de la planta
@@ -103,8 +107,14 @@ $function$;
 REVOKE ALL ON FUNCTION public.fuse_plant(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fuse_plant(UUID) TO authenticated;
 
--- Registro en auditoría de migraciones
-INSERT INTO public._migration_audit (migration_number, name, applied_at, details)
-VALUES (42, 'fuse-plant-gold-cost', NOW(), '{"fusion_cost_gold": 250, "copies_required": 5}'::jsonb)
-ON CONFLICT (migration_number) DO UPDATE
-SET applied_at = NOW(), details = EXCLUDED.details;
+-- Registro canónico de auditoría en _migration_audit
+INSERT INTO public._migration_audit (fase, detalle, ejecutado_en)
+VALUES (
+  '42_fuse_plant_gold_cost',
+  jsonb_build_object(
+    'fusion_cost_gold', 250,
+    'copies_required', 5,
+    'descripcion', 'Fusión autoritativa con costo fijo de 250 de oro y 5 copias'
+  ),
+  NOW()
+);

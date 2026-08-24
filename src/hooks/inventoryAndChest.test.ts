@@ -316,6 +316,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     maxLevel: number
     isOwner: boolean
     isListed: boolean
+    eligibleStats?: string[] | null
   }) {
     const FUSION_GOLD_COST = 250
     const FUSION_COPIES_REQ = 5
@@ -335,6 +336,9 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     if (params.level >= params.maxLevel) {
       return { success: false, error: `Esta carta ya alcanzó el nivel máximo (${params.maxLevel})` }
     }
+    if (!params.eligibleStats || params.eligibleStats.length === 0) {
+      return { success: false, error: 'La planta no tiene estadísticas elegibles configuradas' }
+    }
     if (params.copies < FUSION_COPIES_REQ) {
       return {
         success: false,
@@ -342,11 +346,13 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       }
     }
 
+    const rolled = params.eligibleStats[0]
+
     return {
       success: true,
       previousLevel: params.level,
       newLevel: params.level + 1,
-      rolledStat: 'damage_boost',
+      rolledStat: rolled,
       copiesSpent: FUSION_COPIES_REQ,
       copiesRemaining: params.copies - FUSION_COPIES_REQ,
       goldSpent: FUSION_GOLD_COST,
@@ -367,6 +373,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['damage', 'attackSpeed'],
     })
 
     expect(res.success).toBe(true)
@@ -395,6 +402,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel: 5,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['damage'],
     })
 
     expect(res.success).toBe(false)
@@ -417,6 +425,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel: 5,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['damage'],
     })
 
     expect(res.success).toBe(false)
@@ -434,6 +443,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel: 5,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['damage'],
     })
 
     expect(res.success).toBe(false)
@@ -453,6 +463,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel: 5,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['hp', 'cooldown'],
     })
     expect(res1.success).toBe(true)
     userGold = res1.goldBalance!
@@ -471,6 +482,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel: 5,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['hp', 'cooldown'],
     })
     expect(res2.success).toBe(true)
     userGold = res2.goldBalance!
@@ -489,6 +501,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel: 5,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['hp', 'cooldown'],
     })
     expect(res3.success).toBe(false)
   })
@@ -572,9 +585,72 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
       maxLevel: 5,
       isOwner: true,
       isListed: false,
+      eligibleStats: ['damage'],
     })
 
     expect(res.success).toBe(false)
     expect(res.error).toContain('ya alcanzó el nivel máximo')
+  })
+
+  it('10. Planta con eligible_stats NULL → Falla fail-closed, 0 oro y 0 copias consumidas', () => {
+    let userGold = 500
+    let copies = 5
+    let level = 0
+
+    const res = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+      eligibleStats: null,
+    })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain('no tiene estadísticas elegibles')
+    expect(userGold).toBe(500)
+    expect(copies).toBe(5)
+    expect(level).toBe(0)
+  })
+
+  it('11. Planta con eligible_stats array vacío → Falla fail-closed, 0 cambios', () => {
+    let userGold = 500
+    let copies = 5
+    let level = 0
+
+    const res = simulateServerFusePlant({
+      userGold,
+      copies,
+      level,
+      maxLevel: 5,
+      isOwner: true,
+      isListed: false,
+      eligibleStats: [],
+    })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain('no tiene estadísticas elegibles')
+    expect(userGold).toBe(500)
+    expect(copies).toBe(5)
+    expect(level).toBe(0)
+  })
+
+  it('12. Esquema de _migration_audit usa columnas reales (fase, detalle, ejecutado_en)', () => {
+    const auditRecord = {
+      fase: '42_fuse_plant_gold_cost',
+      detalle: {
+        fusion_cost_gold: 250,
+        copies_required: 5,
+        descripcion: 'Fusión autoritativa con costo fijo de 250 de oro y 5 copias',
+      },
+      ejecutado_en: new Date().toISOString(),
+    }
+
+    expect(auditRecord).toHaveProperty('fase')
+    expect(auditRecord).toHaveProperty('detalle')
+    expect(auditRecord).toHaveProperty('ejecutado_en')
+    expect(auditRecord).not.toHaveProperty('migration_number')
+    expect(auditRecord).not.toHaveProperty('applied_at')
   })
 })

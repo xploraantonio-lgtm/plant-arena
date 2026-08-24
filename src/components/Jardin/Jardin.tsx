@@ -117,7 +117,14 @@ export default function Jardin({
       const candidate = fuseCandidate
       const res = await onFusePlant(candidate.plantId, candidate.instanceId)
       setFuseCandidate(null)
-      if (res && res.success && res.newLevel && res.rolledStat) {
+      if (
+        res?.success === true &&
+        typeof res.newLevel === 'number' &&
+        Number.isInteger(res.newLevel) &&
+        res.newLevel > 0 &&
+        typeof res.rolledStat === 'string' &&
+        res.rolledStat.length > 0
+      ) {
         setUpgradeModal({
           plantId: candidate.plantId,
           newLevel: res.newLevel,
