@@ -95,7 +95,7 @@ export function validarAccionP1RankedEstricta(
   const rawIssuedTick =
     typeof a.issuedTick === 'number' && Number.isInteger(a.issuedTick) && a.issuedTick >= 0
       ? a.issuedTick
-      : undefined
+      : (typeof a.issued_tick === 'number' && Number.isInteger(a.issued_tick) && a.issued_tick >= 0 ? a.issued_tick : undefined)
 
   // 1. Validación de seq (obligatorio, entero >= 0)
   if (a.seq === undefined || a.seq === null) {
@@ -117,18 +117,19 @@ export function validarAccionP1RankedEstricta(
   const seq = a.seq
 
   // 2. Validación de issuedTick (obligatorio, entero >= 0)
-  if (a.issuedTick === undefined || a.issuedTick === null) {
+  const valIssuedTick = a.issuedTick !== undefined && a.issuedTick !== null ? a.issuedTick : a.issued_tick
+  if (valIssuedTick === undefined || valIssuedTick === null) {
     return { ok: false, reason: 'MISSING_ISSUED_TICK', seq, details: 'issuedTick es obligatorio en Ranked Async' }
   }
-  if (typeof a.issuedTick !== 'number' || !Number.isInteger(a.issuedTick) || a.issuedTick < 0) {
+  if (typeof valIssuedTick !== 'number' || !Number.isInteger(valIssuedTick) || valIssuedTick < 0) {
     return {
       ok: false,
       reason: 'INVALID_ISSUED_TICK',
       seq,
-      details: `issuedTick debe ser un entero no negativo, recibido: ${String(a.issuedTick)}`,
+      details: `issuedTick debe ser un entero no negativo, recibido: ${String(valIssuedTick)}`,
     }
   }
-  const issuedTick = a.issuedTick
+  const issuedTick = valIssuedTick
 
   // 3. Validación de tick (obligatorio, entero >= 0, sin fallback)
   if (a.tick === undefined || a.tick === null) {
@@ -183,7 +184,8 @@ export function validarAccionP1RankedEstricta(
 
   // 6. Validación por kind
   if (kind === 'collect') {
-    if (typeof a.targetId !== 'string' || a.targetId.trim().length === 0) {
+    const targetIdVal = typeof a.targetId === 'string' ? a.targetId : (typeof a.target_id === 'string' ? a.target_id : undefined)
+    if (!targetIdVal || targetIdVal.trim().length === 0) {
       return {
         ok: false,
         reason: 'MISSING_TARGET_ID',
@@ -199,7 +201,7 @@ export function validarAccionP1RankedEstricta(
         tick,
         issuedTick,
         kind: 'collect',
-        targetId: a.targetId.trim(),
+        targetId: targetIdVal.trim(),
       },
     }
   }
@@ -220,7 +222,7 @@ export function validarAccionP1RankedEstricta(
         reason: 'INVALID_DIG_DATA',
         seq,
         issuedTick,
-        details: `Coordenadas de dig inválidas: lane=${String(a.lane)}, col=${String(a.col)}`,
+        details: `lane (${String(a.lane)}) o col (${String(a.col)}) fuera de rango para dig`,
       }
     }
     return {
@@ -237,14 +239,14 @@ export function validarAccionP1RankedEstricta(
   }
 
   if (kind === 'plant') {
-    const plantId = typeof a.plantId === 'string' ? a.plantId : null
-    if (!esPlantId(plantId)) {
+    const plantIdVal = (typeof a.plantId === 'string' ? a.plantId : (typeof a.plant_id === 'string' ? a.plant_id : null))
+    if (!esPlantId(plantIdVal)) {
       return {
         ok: false,
         reason: 'INVALID_PLANT_DATA',
         seq,
         issuedTick,
-        details: `plantId desconocido o ausente: ${String(plantId)}`,
+        details: `plantId desconocido o ausente: ${String(plantIdVal)}`,
       }
     }
     if (typeof a.slot !== 'number' || !Number.isInteger(a.slot) || a.slot < 0 || a.slot >= DECK_SIZE) {
@@ -275,10 +277,10 @@ export function validarAccionP1RankedEstricta(
       }
     }
 
-    // Validación estricta de statRolls (sin filtrado silencioso de datos corruptos)
     let statRolls: PlantStatKey[] | undefined = undefined
-    if (a.statRolls !== undefined && a.statRolls !== null) {
-      if (!Array.isArray(a.statRolls)) {
+    const statRollsVal = a.statRolls !== undefined && a.statRolls !== null ? a.statRolls : a.stat_rolls
+    if (statRollsVal !== undefined && statRollsVal !== null) {
+      if (!Array.isArray(statRollsVal)) {
         return {
           ok: false,
           reason: 'INVALID_PLANT_DATA',
@@ -287,7 +289,7 @@ export function validarAccionP1RankedEstricta(
           details: 'statRolls debe ser un array',
         }
       }
-      for (const r of a.statRolls) {
+      for (const r of statRollsVal) {
         if (typeof r !== 'string' || !ESTADISTICAS_VALIDAS.has(r as PlantStatKey)) {
           return {
             ok: false,
@@ -298,12 +300,11 @@ export function validarAccionP1RankedEstricta(
           }
         }
       }
-      if (a.statRolls.length > 0) {
-        statRolls = a.statRolls as PlantStatKey[]
+      if (statRollsVal.length > 0) {
+        statRolls = statRollsVal as PlantStatKey[]
       }
     }
 
-    // Validación estricta de level (sin coerción silenciosa)
     let level: number | undefined = undefined
     if (a.level !== undefined && a.level !== null) {
       if (typeof a.level !== 'number' || !Number.isInteger(a.level) || a.level < 0) {
@@ -327,7 +328,7 @@ export function validarAccionP1RankedEstricta(
         tick,
         issuedTick,
         kind: 'plant',
-        plantId,
+        plantId: plantIdVal,
         slot: a.slot,
         lane: a.lane,
         col: a.col,

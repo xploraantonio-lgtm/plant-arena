@@ -434,6 +434,19 @@ Deno.serve(async (req) => {
 
       const asyncActionsSnapshot = planData.actions_snapshot
 
+      const aAccionesP1 = (rows: ActionRow[]) =>
+        rows.map((a) => ({
+          seq: a.seq,
+          tick: a.tick,
+          issuedTick: a.issued_tick,
+          kind: a.kind,
+          plantId: (a.plant_id ?? undefined) as any,
+          lane: a.lane ?? undefined,
+          col: a.col ?? undefined,
+          slot: a.slot ?? undefined,
+          targetId: a.target_id ?? undefined,
+        }))
+
       let acciones = await cargarAcciones()
       const inicio = room.started_at ?? room.created_at
       let serverTick = ticServidor(inicio)
@@ -442,7 +455,7 @@ Deno.serve(async (req) => {
         room.seed,
         room.p1_deck,
         room.async_deck_snapshot,
-        acciones,
+        aAccionesP1(acciones),
         asyncActionsSnapshot
       )
 
@@ -503,7 +516,7 @@ Deno.serve(async (req) => {
         room.seed,
         room.p1_deck,
         room.async_deck_snapshot,
-        acciones,
+        aAccionesP1(acciones),
         asyncActionsSnapshot
       )
       serverTick = ticServidor(room.started_at ?? room.created_at)
