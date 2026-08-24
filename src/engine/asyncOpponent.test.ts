@@ -41,6 +41,7 @@ import {
   validarYNormalizarAccionesP1Ranked,
   validarIntencionAsyncRankedEstricta,
   validarYNormalizarIntencionesAsyncRanked,
+  normalizarAccionesDbParaSimulacion,
 } from './asyncP1History.ts'
 import type { CartaDeMazo } from './mazoDeLaSala.ts'
 import { createBattleState, stepTick } from './simulate.ts'
@@ -4573,7 +4574,198 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const valBad = validarMazoAsyncRanked(mazoInvalido)
     expect(valBad.ok).toBe(false)
   })
+
+  // 215. Doble dialecto prohibido: validarAccionP1RankedEstricta sólo acepta camelCase estricto
+  it('215. Doble dialecto prohibido: validarAccionP1RankedEstricta sólo acepta camelCase y rechaza aliases snake_case', () => {
+    // A. Acción canónica camelCase -> válida
+    const canonica = {
+      seq: 1,
+      issuedTick: 100,
+      tick: 106,
+      kind: 'plant',
+      plantId: 'peashooter',
+      lane: 0,
+      col: 0,
+      slot: 1,
+    }
+    const valCanonica = validarAccionP1RankedEstricta(canonica)
+    expect(valCanonica.ok).toBe(true)
+
+    // B. Acción sólo snake_case (issued_tick) -> MISSING_ISSUED_TICK
+    const snakeIssuedTick = {
+      seq: 1,
+      issued_tick: 100,
+      tick: 106,
+      kind: 'plant',
+      plantId: 'peashooter',
+      lane: 0,
+      col: 0,
+      slot: 1,
+    }
+    const valSnakeIssued = validarAccionP1RankedEstricta(snakeIssuedTick)
+    expect(valSnakeIssued.ok).toBe(false)
+    if (!valSnakeIssued.ok) {
+      expect(valSnakeIssued.reason).toBe('MISSING_ISSUED_TICK')
+    }
+
+    // C. COLLECT con sólo target_id -> MISSING_TARGET_ID
+    const collectSnakeTarget = {
+      seq: 2,
+      issuedTick: 100,
+      tick: 100,
+      kind: 'collect',
+      target_id: 'sun-sky-100-0',
+    }
+    const valCollectSnake = validarAccionP1RankedEstricta(collectSnakeTarget)
+    expect(valCollectSnake.ok).toBe(false)
+    if (!valCollectSnake.ok) {
+      expect(valCollectSnake.reason).toBe('MISSING_TARGET_ID')
+    }
+
+    // D. PLANT con sólo plant_id -> INVALID_PLANT_DATA
+    const plantSnakePlantId = {
+      seq: 3,
+      issuedTick: 100,
+      tick: 106,
+      kind: 'plant',
+      plant_id: 'peashooter',
+      lane: 0,
+      col: 0,
+      slot: 1,
+    }
+    const valPlantSnake = validarAccionP1RankedEstricta(plantSnakePlantId)
+    expect(valPlantSnake.ok).toBe(false)
+    if (!valPlantSnake.ok) {
+      expect(valPlantSnake.reason).toBe('INVALID_PLANT_DATA')
+    }
+
+    // E. PLANT con stat_rolls snake_case -> se valida pero statRolls interno queda undefined
+    const plantSnakeStatRolls = {
+      seq: 4,
+      issuedTick: 100,
+      tick: 106,
+      kind: 'plant',
+      plantId: 'peashooter',
+      lane: 0,
+      col: 0,
+      slot: 1,
+      stat_rolls: ['cooldown'],
+    }
+    const valStatRolls = validarAccionP1RankedEstricta(plantSnakeStatRolls)
+    expect(valStatRolls.ok).toBe(true)
+    if (valStatRolls.ok) {
+      expect(valStatRolls.accion.statRolls).toBeUndefined()
+    }
+  })
+
+  // 216. Test de frontera DB: normalizarAccionesDbParaSimulacion transforma Postgres snake_case a camelCase estricto
+  it('216. Frontera DB: normalizarAccionesDbParaSimulacion adapta filas Postgres para el validador estricto', () => {
+    const rawDbRows = [
+      {
+        id: 101,
+        user_id: 'usr-1',
+        seq: 1,
+        tick: 76,
+        issued_tick: 76,
+        kind: 'collect',
+        plant_id: null,
+        lane: null,
+        col: null,
+        slot: null,
+        target_id: 'sun-sky-76-0',
+      },
+      {
+        id: 102,
+        user_id: 'usr-1',
+        seq: 2,
+        tick: 266,
+        issued_tick: 260,
+        kind: 'plant',
+        plant_id: 'sunflower',
+        lane: 0,
+        col: 0,
+        slot: 0,
+        target_id: null,
+      },
+      {
+        id: 103,
+        user_id: 'usr-1',
+        seq: 3,
+        tick: 756,
+        issued_tick: 750,
+        kind: 'dig',
+        plant_id: null,
+        lane: 0,
+        col: 0,
+        slot: null,
+        target_id: null,
+      },
+    ]
+
+    const adaptadas = normalizarAccionesDbParaSimulacion(rawDbRows)
+    expect(adaptadas.length).toBe(3)
+
+    for (const adaptada of adaptadas) {
+      const val = validarAccionP1RankedEstricta(adaptada)
+      expect(val.ok).toBe(true)
+    }
+
+    const colVal = validarAccionP1RankedEstricta(adaptadas[0])
+    expect(colVal.ok && colVal.accion.kind === 'collect' && colVal.accion.targetId).toBe('sun-sky-76-0')
+
+    const plantVal = validarAccionP1RankedEstricta(adaptadas[1])
+    expect(plantVal.ok && plantVal.accion.kind === 'plant' && plantVal.accion.plantId).toBe('sunflower')
+
+    const digVal = validarAccionP1RankedEstricta(adaptadas[2])
+    expect(digVal.ok && digVal.accion.kind === 'dig' && digVal.accion.lane === 0 && digVal.accion.col === 0).toBe(true)
+  })
+
+  // 217. Test de Conflicto de Representación: El validador ignora cualquier clave snake_case residual
+  it('217. Conflicto de representación: Si coexisten issuedTick e issued_tick, el valor autoritativo es issuedTick', () => {
+    const mixto = {
+      seq: 1,
+      issuedTick: 100,
+      issued_tick: 200,
+      tick: 106,
+      kind: 'plant',
+      plantId: 'peashooter',
+      lane: 0,
+      col: 0,
+      slot: 1,
+    }
+    const val = validarAccionP1RankedEstricta(mixto)
+    expect(val.ok).toBe(true)
+    if (val.ok) {
+      expect(val.accion.issuedTick).toBe(100)
+    }
+  })
+
+  // 218. Auditoría Estática: asyncP1History.ts contiene CERO referencias a aliases snake_case
+  it('218. Auditoría estática: asyncP1History.ts no lee issued_tick, plant_id, target_id ni stat_rolls en validadores', () => {
+    const historyPath = join(process.cwd(), 'src', 'engine', 'asyncP1History.ts')
+    const historyContent = readFileSync(historyPath, 'utf8')
+
+    // Extraer el cuerpo de validarAccionP1RankedEstricta y validarIntencionAsyncRankedEstricta
+    const matchAccion = historyContent.match(/export function validarAccionP1RankedEstricta[\s\S]*?^}/m)
+    expect(matchAccion).toBeDefined()
+    const accionBody = matchAccion ? matchAccion[0] : ''
+
+    expect(accionBody).not.toMatch(/issued_tick/)
+    expect(accionBody).not.toMatch(/plant_id/)
+    expect(accionBody).not.toMatch(/target_id/)
+    expect(accionBody).not.toMatch(/stat_rolls/)
+
+    const matchIntencion = historyContent.match(/export function validarIntencionAsyncRankedEstricta[\s\S]*?^}/m)
+    expect(matchIntencion).toBeDefined()
+    const intencionBody = matchIntencion ? matchIntencion[0] : ''
+
+    expect(intencionBody).not.toMatch(/issued_tick/)
+    expect(intencionBody).not.toMatch(/plant_id/)
+    expect(intencionBody).not.toMatch(/target_id/)
+    expect(intencionBody).not.toMatch(/stat_rolls/)
+  })
 })
+
 
 
 

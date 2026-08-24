@@ -95,7 +95,7 @@ export function validarAccionP1RankedEstricta(
   const rawIssuedTick =
     typeof a.issuedTick === 'number' && Number.isInteger(a.issuedTick) && a.issuedTick >= 0
       ? a.issuedTick
-      : (typeof a.issued_tick === 'number' && Number.isInteger(a.issued_tick) && a.issued_tick >= 0 ? a.issued_tick : undefined)
+      : undefined
 
   // 1. Validación de seq (obligatorio, entero >= 0)
   if (a.seq === undefined || a.seq === null) {
@@ -117,19 +117,18 @@ export function validarAccionP1RankedEstricta(
   const seq = a.seq
 
   // 2. Validación de issuedTick (obligatorio, entero >= 0)
-  const valIssuedTick = a.issuedTick !== undefined && a.issuedTick !== null ? a.issuedTick : a.issued_tick
-  if (valIssuedTick === undefined || valIssuedTick === null) {
+  if (a.issuedTick === undefined || a.issuedTick === null) {
     return { ok: false, reason: 'MISSING_ISSUED_TICK', seq, details: 'issuedTick es obligatorio en Ranked Async' }
   }
-  if (typeof valIssuedTick !== 'number' || !Number.isInteger(valIssuedTick) || valIssuedTick < 0) {
+  if (typeof a.issuedTick !== 'number' || !Number.isInteger(a.issuedTick) || a.issuedTick < 0) {
     return {
       ok: false,
       reason: 'INVALID_ISSUED_TICK',
       seq,
-      details: `issuedTick debe ser un entero no negativo, recibido: ${String(valIssuedTick)}`,
+      details: `issuedTick debe ser un entero no negativo, recibido: ${String(a.issuedTick)}`,
     }
   }
-  const issuedTick = valIssuedTick
+  const issuedTick = a.issuedTick
 
   // 3. Validación de tick (obligatorio, entero >= 0, sin fallback)
   if (a.tick === undefined || a.tick === null) {
@@ -184,8 +183,7 @@ export function validarAccionP1RankedEstricta(
 
   // 6. Validación por kind
   if (kind === 'collect') {
-    const targetIdVal = typeof a.targetId === 'string' ? a.targetId : (typeof a.target_id === 'string' ? a.target_id : undefined)
-    if (!targetIdVal || targetIdVal.trim().length === 0) {
+    if (typeof a.targetId !== 'string' || a.targetId.trim().length === 0) {
       return {
         ok: false,
         reason: 'MISSING_TARGET_ID',
@@ -201,7 +199,7 @@ export function validarAccionP1RankedEstricta(
         tick,
         issuedTick,
         kind: 'collect',
-        targetId: targetIdVal.trim(),
+        targetId: a.targetId.trim(),
       },
     }
   }
@@ -239,14 +237,14 @@ export function validarAccionP1RankedEstricta(
   }
 
   if (kind === 'plant') {
-    const plantIdVal = (typeof a.plantId === 'string' ? a.plantId : (typeof a.plant_id === 'string' ? a.plant_id : null))
-    if (!esPlantId(plantIdVal)) {
+    const plantId = typeof a.plantId === 'string' ? a.plantId : null
+    if (!esPlantId(plantId)) {
       return {
         ok: false,
         reason: 'INVALID_PLANT_DATA',
         seq,
         issuedTick,
-        details: `plantId desconocido o ausente: ${String(plantIdVal)}`,
+        details: `plantId desconocido o ausente: ${String(a.plantId)}`,
       }
     }
     if (typeof a.slot !== 'number' || !Number.isInteger(a.slot) || a.slot < 0 || a.slot >= DECK_SIZE) {
@@ -278,9 +276,8 @@ export function validarAccionP1RankedEstricta(
     }
 
     let statRolls: PlantStatKey[] | undefined = undefined
-    const statRollsVal = a.statRolls !== undefined && a.statRolls !== null ? a.statRolls : a.stat_rolls
-    if (statRollsVal !== undefined && statRollsVal !== null) {
-      if (!Array.isArray(statRollsVal)) {
+    if (a.statRolls !== undefined && a.statRolls !== null) {
+      if (!Array.isArray(a.statRolls)) {
         return {
           ok: false,
           reason: 'INVALID_PLANT_DATA',
@@ -289,7 +286,7 @@ export function validarAccionP1RankedEstricta(
           details: 'statRolls debe ser un array',
         }
       }
-      for (const r of statRollsVal) {
+      for (const r of a.statRolls) {
         if (typeof r !== 'string' || !ESTADISTICAS_VALIDAS.has(r as PlantStatKey)) {
           return {
             ok: false,
@@ -300,8 +297,8 @@ export function validarAccionP1RankedEstricta(
           }
         }
       }
-      if (statRollsVal.length > 0) {
-        statRolls = statRollsVal as PlantStatKey[]
+      if (a.statRolls.length > 0) {
+        statRolls = a.statRolls as PlantStatKey[]
       }
     }
 
@@ -328,7 +325,7 @@ export function validarAccionP1RankedEstricta(
         tick,
         issuedTick,
         kind: 'plant',
-        plantId: plantIdVal,
+        plantId,
         slot: a.slot,
         lane: a.lane,
         col: a.col,
@@ -552,7 +549,7 @@ export function validarIntencionAsyncRankedEstricta(
   const rawIssuedTick =
     typeof a.issuedTick === 'number' && Number.isInteger(a.issuedTick) && a.issuedTick >= 0
       ? a.issuedTick
-      : (typeof a.issued_tick === 'number' && Number.isInteger(a.issued_tick) && a.issued_tick >= 0 ? a.issued_tick : undefined)
+      : undefined
 
   // 1. seq
   if (a.seq === undefined || a.seq === null) {
@@ -564,10 +561,13 @@ export function validarIntencionAsyncRankedEstricta(
   const seq = a.seq
 
   // 2. issuedTick
-  if (rawIssuedTick === undefined) {
+  if (a.issuedTick === undefined || a.issuedTick === null) {
     return { ok: false, reason: 'MISSING_ISSUED_TICK', seq, details: 'issuedTick es obligatorio en intención P2' }
   }
-  const issuedTick = rawIssuedTick
+  if (typeof a.issuedTick !== 'number' || !Number.isInteger(a.issuedTick) || a.issuedTick < 0) {
+    return { ok: false, reason: 'INVALID_ISSUED_TICK', seq, details: `issuedTick P2 inválido: ${String(a.issuedTick)}` }
+  }
+  const issuedTick = a.issuedTick
 
   // 3. tick
   if (a.tick === undefined || a.tick === null) {
@@ -618,9 +618,9 @@ export function validarIntencionAsyncRankedEstricta(
   }
 
   // plant
-  const plantId = (typeof a.plantId === 'string' ? a.plantId : (typeof a.plant_id === 'string' ? a.plant_id : null)) as PlantId | null
+  const plantId = (typeof a.plantId === 'string' ? a.plantId : null) as PlantId | null
   if (!esPlantId(plantId)) {
-    return { ok: false, reason: 'INVALID_PLANT_DATA', seq, issuedTick, details: `plantId P2 inválido: ${String(plantId)}` }
+    return { ok: false, reason: 'INVALID_PLANT_DATA', seq, issuedTick, details: `plantId P2 inválido: ${String(a.plantId)}` }
   }
 
   let slot: number | undefined = undefined
@@ -952,4 +952,31 @@ export function incorporarLoteIntencionesP2(
     requiresRebuild,
     requiresReconcilingPending,
   }
+}
+
+/**
+ * Adapter explícito de frontera DB para transformar registros snake_case de Postgres
+ * al formato canónico camelCase que espera el validador estricto y el simulador autoritativo.
+ *
+ * Transforma exclusivamente nombres de propiedades sin forzar ni fingir validez semántica.
+ */
+export function normalizarAccionesDbParaSimulacion(rows: unknown): unknown[] {
+  if (!Array.isArray(rows)) return []
+  return rows.map((raw) => {
+    if (!raw || typeof raw !== 'object') return raw
+    const a = raw as Record<string, unknown>
+    return {
+      seq: a.seq,
+      tick: a.tick,
+      issuedTick: a.issued_tick !== undefined ? a.issued_tick : a.issuedTick,
+      kind: a.kind,
+      plantId: a.plant_id !== undefined ? a.plant_id : a.plantId,
+      lane: a.lane,
+      col: a.col,
+      slot: a.slot,
+      targetId: a.target_id !== undefined ? a.target_id : a.targetId,
+      statRolls: a.stat_rolls !== undefined ? a.stat_rolls : a.statRolls,
+      level: a.level,
+    }
+  })
 }
