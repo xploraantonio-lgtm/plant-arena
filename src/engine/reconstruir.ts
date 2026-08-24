@@ -189,8 +189,9 @@ export function conservarLoLocal(nuevo: GameState, viejo: GameState): GameState 
     enemyPlantsDefeated: nuevo.stats.enemyPlantsDefeated,
     score: viejo.stats.sunsCollected * 50 + nuevo.stats.enemyPlantsDefeated * 100,
   }
-  // Los soles que hay ahora mismo en el campo también son tuyos y están sin
-  // pulsar: si se reconstruyeran, los que ya habías cobrado volverían a caer.
-  nuevo.suns = viejo.suns
+  // Conservamos únicamente los soles de la simulación canónica (nuevo) que NO hayan sido
+  // recogidos previamente en la sesión local (es decir, los que aún siguen en viejo.suns).
+  const idsViejos = new Set(viejo.suns.map((s) => s.id))
+  nuevo.suns = nuevo.suns.filter((s) => idsViejos.has(s.id))
   return nuevo
 }

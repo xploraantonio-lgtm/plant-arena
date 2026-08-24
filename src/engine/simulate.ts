@@ -21,6 +21,7 @@
 //   modificar el estado que recibe. determinism.test.ts lo comprueba.
 // ─────────────────────────────────────────────────────────────────────────────
 import { createRng, nextFloat, nextInt, chance, entityId, type Rng } from './rng.ts'
+import { crearSkySunId, crearSunflowerSunId } from './sunId.ts'
 import { TICK_SECONDS, msToTicks } from './time.ts'
 import {
   SOL_DEL_CIELO_MS,
@@ -218,6 +219,7 @@ export function createBattleState(
     tick: 0,
     rng: createRng(seed),
     entityCounter: 0,
+    skySunSeq: 0,
     // El cartel de la primera oleada se oculta a los 3 s (4 en práctica). Antes lo
     // hacía un setTimeout tras el arranque; ahora es un tic concreto.
     pending: [{ atTick: msToTicks(isPracticeMode ? 4000 : 3000), kind: 'clear_wave_banner' }],
@@ -361,6 +363,8 @@ export interface GameState {
   rng: Rng
   /** Contador para los identificadores de entidad, en lugar de Date.now(). */
   entityCounter: number
+  /** Secuencia monotónica exclusiva para identificadores de soles del cielo. */
+  skySunSeq: number
   /**
    * Cola de acciones aplazadas. Se recorre entera cada tic; nunca tiene más de
    * un puñado de elementos.
@@ -660,15 +664,15 @@ function procesarLado(state: GameState, lado: Lado, dt: number, sonar: SonarFn):
         // ============================================================
 
         for (let i = 0; i < cuantos; i++) {
-          const contador = state.entityCounter++
           const variacionX = nextFloat(state.rng)
 
           if (lado.equipo === 'p1') {
             state.suns.push({
-              id: entityId(
-                'sun-flower',
+              id: crearSunflowerSunId(
+                planta.lane,
+                planta.col,
                 state.tick,
-                contador
+                i
               ),
               x: planta.x + (variacionX * 6 - 3),
               y: 20 + planta.lane * 20 + 5,
@@ -1293,8 +1297,9 @@ export function stepTick(state: GameState, sonar: SonarFn): void {
   // 3. SKY SUN GENERATION (Every 6s)
   if (state.tick - state.timers.lastSkySun > msToTicks(SOL_DEL_CIELO_MS)) {
     state.timers.lastSkySun = state.tick
+    const seq = state.skySunSeq++
     state.suns.push({
-      id: entityId('sun-sky', state.tick, state.entityCounter++),
+      id: crearSkySunId(state.tick, seq),
       x: BASE_LEFT_END_X + nextFloat(state.rng) * FIELD_WIDTH_PCT,
       y: -5,
       targetY: 25 + nextFloat(state.rng) * 50,
@@ -1474,3 +1479,5 @@ export function decidirPorPuntos(state: GameState): 'victory' | 'defeat' {
   // corresponde a un empate — y es un caso que en la práctica no se ve.
   return 'defeat'
 }
+
+export { crearSkySunId, crearSunflowerSunId, crearSunId } from './sunId.ts'

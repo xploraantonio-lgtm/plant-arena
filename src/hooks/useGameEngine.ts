@@ -111,6 +111,7 @@ export function useGameEngine() {
     // jugadores: es lo que hace que ambos simulen la misma partida.
     rng: createRng(1),
     entityCounter: 0,
+    skySunSeq: 0,
     pending: [],
     timers: { lastSkySun: 0, lastP2PassiveSun: 0, lastEnemySpawn: 0, waveStart: 0 },
     status: 'ready',
@@ -553,6 +554,7 @@ export function useGameEngine() {
       tick: 0,
       rng: createRng(1),
       entityCounter: 0,
+      skySunSeq: 0,
       // En práctica el cartel dura 4 s.
       pending: [{ atTick: msToTicks(4000), kind: 'clear_wave_banner' }],
       timers: { lastSkySun: 0, lastP2PassiveSun: 0, lastEnemySpawn: 0, waveStart: 0 },

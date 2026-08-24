@@ -1530,7 +1530,7 @@ export default function Battlefield({
 
                 {resultadoServidor?.status === 'revision_servidor' && (
                   <p className="resultado-servidor__disputa">
-                    ⚠️ Empate Tecnico No se modificó el ELO.
+                    ⚠️ Empate Técnico, no se modificó el ELO.
                   </p>
                 )}
 
@@ -1567,6 +1567,7 @@ export default function Battlefield({
                 )}
 
                 {!esperandoConfirmacionServidor &&
+                  resultadoServidor?.status !== 'revision_servidor' &&
                   resultadoServidor?.error && (
                     <p className="resultado-servidor__disputa">
                       {resultadoServidor.error}
