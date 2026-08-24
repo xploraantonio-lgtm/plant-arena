@@ -805,6 +805,7 @@ DECLARE
   v_uid            UUID := auth.uid();
   v_queue          RECORD;
   v_matched_q      RECORD;
+  v_existing_is_async BOOLEAN;
   v_waited         INTEGER;
   v_human_room     UUID;
   v_player_elo     INTEGER := 1000;
@@ -837,17 +838,29 @@ BEGIN
    FOR UPDATE;
 
   IF NOT FOUND THEN
-    -- Si ya fue emparejado en paralelo mientras entraba la llamada
+    -- Si ya fue emparejado en paralelo mientras entraba la llamada (o en un reintento)
     SELECT * INTO v_matched_q
       FROM public.matchmaking_queue
      WHERE user_id = v_uid AND status = 'matched'
      ORDER BY created_at DESC LIMIT 1;
 
     IF FOUND AND v_matched_q.matched_room_id IS NOT NULL THEN
+      SELECT is_async_match
+        INTO v_existing_is_async
+        FROM public.game_rooms
+       WHERE id = v_matched_q.matched_room_id;
+
+      IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+          'matched', FALSE,
+          'error', 'matched_room_missing'
+        );
+      END IF;
+
       RETURN jsonb_build_object(
         'matched', TRUE,
         'roomId', v_matched_q.matched_room_id,
-        'isAsyncMatch', FALSE
+        'isAsyncMatch', v_existing_is_async
       );
     END IF;
 

@@ -4396,20 +4396,24 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const mig36Path = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
     const hotfix37Path = join(process.cwd(), 'supabase', '37-fix-rival-semilla-active-deck.sql')
     const hotfix38Path = join(process.cwd(), 'supabase', '38-fix-rival-semilla-matchmaking-queue.sql')
+    const hotfix39Path = join(process.cwd(), 'supabase', '39-fix-rival-semilla-claim-race.sql')
 
     const mig36Content = readFileSync(mig36Path, 'utf8')
     const hotfix37Content = readFileSync(hotfix37Path, 'utf8')
     const hotfix38Content = readFileSync(hotfix38Path, 'utf8')
+    const hotfix39Content = readFileSync(hotfix39Path, 'utf8')
 
     // Todos deben invocar public._active_deck(v_uid)
     expect(mig36Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
     expect(hotfix37Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
     expect(hotfix38Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
+    expect(hotfix39Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
 
     // No deben invocar _active_deck_for
     expect(mig36Content).not.toMatch(/public\._active_deck_for/i)
     expect(hotfix37Content).not.toMatch(/public\._active_deck_for/i)
     expect(hotfix38Content).not.toMatch(/public\._active_deck_for/i)
+    expect(hotfix39Content).not.toMatch(/public\._active_deck_for/i)
   })
 
   // 212. Auditoría estática: Contrato de cola en claim_ranked_async_opponent no contiene matched_at
@@ -4417,21 +4421,102 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const mig36Path = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
     const hotfix37Path = join(process.cwd(), 'supabase', '37-fix-rival-semilla-active-deck.sql')
     const hotfix38Path = join(process.cwd(), 'supabase', '38-fix-rival-semilla-matchmaking-queue.sql')
+    const hotfix39Path = join(process.cwd(), 'supabase', '39-fix-rival-semilla-claim-race.sql')
 
     const mig36Content = readFileSync(mig36Path, 'utf8')
     const hotfix37Content = readFileSync(hotfix37Path, 'utf8')
     const hotfix38Content = readFileSync(hotfix38Path, 'utf8')
+    const hotfix39Content = readFileSync(hotfix39Path, 'utf8')
 
     // Ninguno debe contener matched_at
     expect(mig36Content).not.toMatch(/matched_at/i)
     expect(hotfix37Content).not.toMatch(/matched_at/i)
     expect(hotfix38Content).not.toMatch(/matched_at/i)
+    expect(hotfix39Content).not.toMatch(/matched_at/i)
 
     // Todos deben contener el UPDATE correcto
     const expectedUpdate = /UPDATE\s+public\.matchmaking_queue\s+SET\s+status\s*=\s*'matched',\s*matched_room_id\s*=\s*v_new_room_id\s+WHERE\s+id\s*=\s*v_queue\.id;/i
     expect(mig36Content).toMatch(expectedUpdate)
     expect(hotfix37Content).toMatch(expectedUpdate)
     expect(hotfix38Content).toMatch(expectedUpdate)
+    expect(hotfix39Content).toMatch(expectedUpdate)
+  })
+
+  // 213. Auditoría estática: claim_ranked_async_opponent resuelve isAsyncMatch desde game_rooms y maneja fail-closed
+  it('213. Auditoría estática: claim_ranked_async_opponent resuelve isAsyncMatch desde game_rooms.is_async_match en reintentos', () => {
+    const mig36Path = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const hotfix37Path = join(process.cwd(), 'supabase', '37-fix-rival-semilla-active-deck.sql')
+    const hotfix38Path = join(process.cwd(), 'supabase', '38-fix-rival-semilla-matchmaking-queue.sql')
+    const hotfix39Path = join(process.cwd(), 'supabase', '39-fix-rival-semilla-claim-race.sql')
+
+    const mig36Content = readFileSync(mig36Path, 'utf8')
+    const hotfix37Content = readFileSync(hotfix37Path, 'utf8')
+    const hotfix38Content = readFileSync(hotfix38Path, 'utf8')
+    const hotfix39Content = readFileSync(hotfix39Path, 'utf8')
+
+    const files = [mig36Content, hotfix37Content, hotfix38Content, hotfix39Content]
+
+    for (const sql of files) {
+      // Debe declarar v_existing_is_async
+      expect(sql).toMatch(/v_existing_is_async\s+BOOLEAN;/i)
+      // Debe consultar game_rooms.is_async_match
+      expect(sql).toMatch(/SELECT\s+is_async_match\s+INTO\s+v_existing_is_async\s+FROM\s+public\.game_rooms\s+WHERE\s+id\s*=\s*v_matched_q\.matched_room_id;/i)
+      // Debe manejar error matched_room_missing si la sala no existe
+      expect(sql).toMatch(/'error',\s*'matched_room_missing'/i)
+      // Debe devolver isAsyncMatch = v_existing_is_async
+      expect(sql).toMatch(/'isAsyncMatch',\s*v_existing_is_async/i)
+      // No debe contener fallback hardcodeado 'isAsyncMatch', FALSE en la rama v_matched_q
+      expect(sql).not.toMatch(/IF\s+FOUND\s+AND\s+v_matched_q\.matched_room_id\s+IS\s+NOT\s+NULL\s+THEN[^;]*?'isAsyncMatch',\s*FALSE/i)
+    }
+  })
+
+  // 214. Lógica de Reintento: Helper conceptual para resolver reintento de sala asíncrona existente
+  it('214. Lógica de Reintento: Resuelve isAsyncMatch: true cuando la sala existente es asíncrona', () => {
+    function resolverReintentoCola(
+      matchedQueue: { matched_room_id: string } | null,
+      gameRoomsTable: Record<string, { is_async_match: boolean }>
+    ) {
+      if (!matchedQueue || !matchedQueue.matched_room_id) {
+        return { matched: false, error: 'no_en_cola' }
+      }
+      const room = gameRoomsTable[matchedQueue.matched_room_id]
+      if (!room) {
+        return { matched: false, error: 'matched_room_missing' }
+      }
+      return {
+        matched: true,
+        roomId: matchedQueue.matched_room_id,
+        isAsyncMatch: room.is_async_match,
+      }
+    }
+
+    const mockRooms = {
+      'room-async-123': { is_async_match: true },
+      'room-human-456': { is_async_match: false },
+    }
+
+    // Caso A: Reintento sobre sala asíncrona
+    const resAsync = resolverReintentoCola({ matched_room_id: 'room-async-123' }, mockRooms)
+    expect(resAsync).toEqual({
+      matched: true,
+      roomId: 'room-async-123',
+      isAsyncMatch: true,
+    })
+
+    // Caso B: Reintento sobre sala humana
+    const resHuman = resolverReintentoCola({ matched_room_id: 'room-human-456' }, mockRooms)
+    expect(resHuman).toEqual({
+      matched: true,
+      roomId: 'room-human-456',
+      isAsyncMatch: false,
+    })
+
+    // Caso C: Reintento sobre sala huérfana (fail closed)
+    const resOrphan = resolverReintentoCola({ matched_room_id: 'room-orphan-999' }, mockRooms)
+    expect(resOrphan).toEqual({
+      matched: false,
+      error: 'matched_room_missing',
+    })
   })
 
   // 211. Contrato de Mazo: _active_deck produce estructura validable por _validate_ranked_async_deck

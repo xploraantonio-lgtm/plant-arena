@@ -1,12 +1,15 @@
 -- =============================================================================
--- PLANTS ARENA — HOTFIX 38
--- Corrección de columna en claim_ranked_async_opponent
+-- PLANTS ARENA — HOTFIX 39
+-- Corrección de detección de isAsyncMatch en reintentos/carreras de claim_ranked_async_opponent
 --
--- REQUIERE: 36-rival-semilla-ranked.sql, 37-fix-rival-semilla-active-deck.sql
+-- REQUIERE: 36-rival-semilla-ranked.sql, 37-fix-rival-semilla-active-deck.sql, 38-fix-rival-semilla-matchmaking-queue.sql
 --
 -- OBJETIVO:
---   Sustituir la sentencia UPDATE a matchmaking_queue dentro de claim_ranked_async_opponent
---   para usar exclusivamente las columnas reales (status, matched_room_id).
+--   En caso de que el usuario ya tenga una fila con status='matched' (por una
+--   invocación paralela, retry de red o emparejamiento humano previo), consultar
+--   canónicamente public.game_rooms.is_async_match para devolver el valor real
+--   en lugar de asumir erróneamente FALSE. Si la sala no existe en game_rooms,
+--   hacer fail-closed devolviendo error 'matched_room_missing'.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.claim_ranked_async_opponent()
@@ -315,10 +318,10 @@ GRANT  EXECUTE ON FUNCTION public.claim_ranked_async_opponent() TO authenticated
 -- REGISTRO DE AUDITORÍA
 -- -----------------------------------------------------------------------------
 INSERT INTO public._migration_audit(fase, detalle)
-VALUES ('38_fix_rival_semilla_matchmaking_queue', jsonb_build_object(
-  'descripcion', 'Corrige UPDATE de matchmaking_queue en claim_ranked_async_opponent',
-  'causa', 'La cola productiva usa status + matched_room_id',
-  'afecta', 'claim Rival Semilla',
+VALUES ('39_fix_rival_semilla_claim_race', jsonb_build_object(
+  'descripcion', 'Corrige deteccion de isAsyncMatch en claim_ranked_async_opponent para reintentos y carreras concurrentes',
+  'causa', 'No se puede asumir isAsyncMatch=false en cola matched; se consulta game_rooms.is_async_match',
+  'afecta', 'claim Rival Semilla retry / race',
   'sin_cambios_elo', true,
   'sin_cambios_schema', true,
   'aplicada_en', NOW()
