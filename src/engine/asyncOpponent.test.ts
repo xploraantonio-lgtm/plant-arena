@@ -5064,6 +5064,43 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     // 5. Lock determinista por UUID para prevenir deadlocks
     expect(sqlContent).toMatch(/IF\s+v_room\.player1_id\s+<\s+v_room\.player2_id\s+THEN/i)
   })
+
+  // 232. Compatibilidad DDL de leaderboard: CREATE OR REPLACE VIEW preserva exactamente las 8 columnas históricas como prefijo ordinal
+  it('232. Compatibilidad DDL leaderboard: CREATE OR REPLACE VIEW mantiene intacto el prefijo de 8 columnas existentes y no usa DROP VIEW CASCADE', () => {
+    const sqlPath = join(process.cwd(), 'supabase', '40-ranked-elo-records.sql')
+    const sqlContent = readFileSync(sqlPath, 'utf8')
+
+    // 1. No debe usar DROP VIEW CASCADE
+    expect(sqlContent).not.toMatch(/DROP\s+VIEW[\s\S]*?CASCADE/i)
+    expect(sqlContent).toMatch(/CREATE\s+OR\s+REPLACE\s+VIEW\s+public\.leaderboard\s+AS/i)
+
+    // 2. Debe mantener las 8 columnas históricas en las primeras 8 posiciones del SELECT
+    const expectedPrefix = [
+      'p.id',
+      'p.username',
+      'p.avatar_id',
+      'p.country',
+      'p.elo_rating',
+      'p.colosseum_current_streak',
+      'p.colosseum_max_streak',
+      'p.created_at',
+    ]
+
+    const viewMatch = sqlContent.match(/CREATE\s+OR\s+REPLACE\s+VIEW\s+public\.leaderboard\s+AS\s+SELECT([\s\S]*?)FROM\s+public\.profiles/i)
+    expect(viewMatch).toBeDefined()
+    const selectClause = viewMatch ? viewMatch[1] : ''
+
+    for (const col of expectedPrefix) {
+      expect(selectClause).toContain(col)
+    }
+
+    // 3. Verificar que colosseum_current_streak antecede a ranked_wins
+    const colosseumPos = selectClause.indexOf('p.colosseum_current_streak')
+    const rankedWinsPos = selectClause.indexOf('ranked_wins')
+    expect(colosseumPos).toBeGreaterThan(-1)
+    expect(rankedWinsPos).toBeGreaterThan(-1)
+    expect(colosseumPos).toBeLessThan(rankedWinsPos)
+  })
 })
 
 

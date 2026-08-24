@@ -740,6 +740,9 @@ SELECT
     p.avatar_id,
     p.country,
     p.elo_rating,
+    p.colosseum_current_streak,
+    p.colosseum_max_streak,
+    p.created_at,
     COALESCE(s.wins, 0)::BIGINT AS ranked_wins,
     COALESCE(s.losses, 0)::BIGINT AS ranked_losses,
     COALESCE(s.draws, 0)::BIGINT AS ranked_draws,
@@ -754,10 +757,7 @@ SELECT
         COALESCE(s.wins, 0) DESC,
         p.created_at ASC,
         p.id ASC
-    )::BIGINT AS rank_position,
-    p.colosseum_current_streak,
-    p.colosseum_max_streak,
-    p.created_at
+    )::BIGINT AS rank_position
 FROM public.profiles p
 LEFT JOIN public.ranked_player_stats s ON s.user_id = p.id
 WHERE NOT COALESCE(p.exclude_from_ranking, false);
