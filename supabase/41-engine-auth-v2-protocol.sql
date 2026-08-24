@@ -861,7 +861,7 @@ BEGIN
   END IF;
 
   -- 2. Prioridad humana absoluta: intentar emparejar con humano primero
-  v_human_room := public._match_waiting_user(v_queue.id);
+  v_human_room := public._try_match(v_uid);
   IF v_human_room IS NOT NULL THEN
     RETURN jsonb_build_object(
       'matched', TRUE,
