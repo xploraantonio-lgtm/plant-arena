@@ -4395,17 +4395,43 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
   it('210. Auditoría estática: claim_ranked_async_opponent invoca public._active_deck(v_uid)', () => {
     const mig36Path = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
     const hotfix37Path = join(process.cwd(), 'supabase', '37-fix-rival-semilla-active-deck.sql')
+    const hotfix38Path = join(process.cwd(), 'supabase', '38-fix-rival-semilla-matchmaking-queue.sql')
 
     const mig36Content = readFileSync(mig36Path, 'utf8')
     const hotfix37Content = readFileSync(hotfix37Path, 'utf8')
+    const hotfix38Content = readFileSync(hotfix38Path, 'utf8')
 
-    // Ambos deben invocar public._active_deck(v_uid)
+    // Todos deben invocar public._active_deck(v_uid)
     expect(mig36Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
     expect(hotfix37Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
+    expect(hotfix38Content).toMatch(/v_player_deck\s*:=\s*public\._active_deck\(v_uid\);/i)
 
     // No deben invocar _active_deck_for
     expect(mig36Content).not.toMatch(/public\._active_deck_for/i)
     expect(hotfix37Content).not.toMatch(/public\._active_deck_for/i)
+    expect(hotfix38Content).not.toMatch(/public\._active_deck_for/i)
+  })
+
+  // 212. Auditoría estática: Contrato de cola en claim_ranked_async_opponent no contiene matched_at
+  it('212. Auditoría estática: claim_ranked_async_opponent respeta el esquema de matchmaking_queue (sin matched_at)', () => {
+    const mig36Path = join(process.cwd(), 'supabase', '36-rival-semilla-ranked.sql')
+    const hotfix37Path = join(process.cwd(), 'supabase', '37-fix-rival-semilla-active-deck.sql')
+    const hotfix38Path = join(process.cwd(), 'supabase', '38-fix-rival-semilla-matchmaking-queue.sql')
+
+    const mig36Content = readFileSync(mig36Path, 'utf8')
+    const hotfix37Content = readFileSync(hotfix37Path, 'utf8')
+    const hotfix38Content = readFileSync(hotfix38Path, 'utf8')
+
+    // Ninguno debe contener matched_at
+    expect(mig36Content).not.toMatch(/matched_at/i)
+    expect(hotfix37Content).not.toMatch(/matched_at/i)
+    expect(hotfix38Content).not.toMatch(/matched_at/i)
+
+    // Todos deben contener el UPDATE correcto
+    const expectedUpdate = /UPDATE\s+public\.matchmaking_queue\s+SET\s+status\s*=\s*'matched',\s*matched_room_id\s*=\s*v_new_room_id\s+WHERE\s+id\s*=\s*v_queue\.id;/i
+    expect(mig36Content).toMatch(expectedUpdate)
+    expect(hotfix37Content).toMatch(expectedUpdate)
+    expect(hotfix38Content).toMatch(expectedUpdate)
   })
 
   // 211. Contrato de Mazo: _active_deck produce estructura validable por _validate_ranked_async_deck

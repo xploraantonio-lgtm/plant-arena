@@ -1,12 +1,12 @@
 -- =============================================================================
--- PLANTS ARENA — HOTFIX 37
--- Corrección de llamada a _active_deck en claim_ranked_async_opponent
+-- PLANTS ARENA — HOTFIX 38
+-- Corrección de columna en claim_ranked_async_opponent
 --
--- REQUIERE: 36-rival-semilla-ranked.sql
+-- REQUIERE: 36-rival-semilla-ranked.sql, 37-fix-rival-semilla-active-deck.sql
 --
 -- OBJETIVO:
---   Sustituir la llamada errónea por la función
---   real y existente public._active_deck(v_uid) dentro de claim_ranked_async_opponent.
+--   Sustituir la sentencia UPDATE a matchmaking_queue dentro de claim_ranked_async_opponent
+--   para usar exclusivamente las columnas reales (status, matched_room_id).
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.claim_ranked_async_opponent()
@@ -302,10 +302,11 @@ GRANT  EXECUTE ON FUNCTION public.claim_ranked_async_opponent() TO authenticated
 -- REGISTRO DE AUDITORÍA
 -- -----------------------------------------------------------------------------
 INSERT INTO public._migration_audit(fase, detalle)
-VALUES ('37_fix_rival_semilla_active_deck', jsonb_build_object(
-  'descripcion', 'Corrige claim_ranked_async_opponent para usar public._active_deck(UUID)',
-  'causa', '_active_deck_for no existe',
+VALUES ('38_fix_rival_semilla_matchmaking_queue', jsonb_build_object(
+  'descripcion', 'Corrige UPDATE de matchmaking_queue en claim_ranked_async_opponent',
+  'causa', 'La cola productiva usa status + matched_room_id',
   'afecta', 'claim Rival Semilla',
   'sin_cambios_elo', true,
+  'sin_cambios_schema', true,
   'aplicada_en', NOW()
 )) ON CONFLICT DO NOTHING;

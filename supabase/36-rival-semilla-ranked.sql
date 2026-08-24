@@ -1070,8 +1070,7 @@ BEGIN
 
   UPDATE public.matchmaking_queue
      SET status = 'matched',
-         matched_room_id = v_new_room_id,
-         matched_at = NOW()
+         matched_room_id = v_new_room_id
    WHERE id = v_queue.id;
 
   RETURN jsonb_build_object(
