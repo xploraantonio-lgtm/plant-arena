@@ -59,6 +59,8 @@ ALTER TABLE public.ranked_async_opponents
   CHECK (source_engine_version IN ('auth-v1', 'auth-v2'));
 
 -- ── 4. ACTUALIZAR ENTER_MATCHMAKING CON HANDSHAKE ESTRICTO EN TODOS LOS MODOS ─
+DROP FUNCTION IF EXISTS public.enter_matchmaking(TEXT, NUMERIC, BOOLEAN, TEXT);
+
 CREATE OR REPLACE FUNCTION public.enter_matchmaking(
   p_mode           TEXT,
   p_bet            NUMERIC DEFAULT 0,
