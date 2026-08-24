@@ -442,9 +442,13 @@ export function obtenerPerfilEstrategico(style: StrategicStyle = 'balanced'): St
   return STRATEGIC_PROFILES[style] ?? STRATEGIC_PROFILES.balanced
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 4. ESTADO MENTAL SERIALIZABLE DEL BOT
-// ─────────────────────────────────────────────────────────────────────────────
+export type WaitReason =
+  | 'WAIT_RESERVE'
+  | 'WAIT_NO_SUN'
+  | 'WAIT_COOLDOWN'
+  | 'WAIT_NO_POSITION'
+  | 'WAIT_LOW_UTILITY'
+  | 'WAIT_REACTION'
 
 export interface CandidateAction {
   kind: 'plant' | 'dig' | 'wait'
@@ -453,6 +457,7 @@ export interface CandidateAction {
   lane?: number
   col?: number
   utility: number
+  waitReason?: WaitReason
   breakdown?: {
     defense: number
     attack: number
@@ -469,16 +474,46 @@ export interface StrategicTelemetryEntry {
   mode: StrategicMode
   chosenAction: CandidateAction
   score: number
+  waitReason?: WaitReason
   topCandidates: Array<{
     kind: string
     plantId?: PlantId
     lane?: number
     col?: number
     utility: number
+    waitReason?: WaitReason
   }>
   laneThreats: [number, number, number]
   laneOpportunities: [number, number, number]
   sunBank: number
+}
+
+export interface StrategicMentalMetrics {
+  decisionCycles: number
+  actionsExecuted: number
+  waitChosen: number
+  waitReasons: Record<WaitReason, number>
+  noLegalCandidates: number
+  insufficientSunCycles: number
+  cooldownBlockedCycles: number
+  ticksAbove2xReserve: number
+  ticksAbove3xReserve: number
+  maxTicksWithoutDecision: number
+  maxTicksWithoutAction: number
+  totalTicksBetweenActions: number
+  actionIntervalCount: number
+  peakSunBank: number
+  totalSunSpent: number
+  totalSunCredited: number
+  actionsByQuarter: [number, number, number, number]
+  offensivePlantsPlaced: number
+  defensivePlantsPlaced: number
+  economyPlantsPlaced: number
+  lanesUsed: number[]
+  firstAttackTick?: number
+  firstBaseDamageTick?: number
+  enemyPlantsKilled: number
+  baseDamageDealt: number
 }
 
 export interface StrategicMentalState {
@@ -486,9 +521,19 @@ export interface StrategicMentalState {
   profile: StrategicProfile
   lastLookTick: number
   lastDecisionTick: number
+  lastActionTick: number
   nextDecisionTick: number
   consecutiveWaits: number
   lastPerception: StrategicPerception | null
+  lastSnapshot: {
+    sunBank: number
+    enemyPlantsCount: number
+    ownPlantsCount: number
+    maxThreatLane: number
+    ownHp: number
+    enemyHp: number
+  }
+  metrics: StrategicMentalMetrics
 }
 
 export function crearEstadoMentalEstrategico(
@@ -502,9 +547,50 @@ export function crearEstadoMentalEstrategico(
     profile,
     lastLookTick: -9999,
     lastDecisionTick: -9999,
+    lastActionTick: 0,
     nextDecisionTick: 0,
     consecutiveWaits: 0,
     lastPerception: null,
+    lastSnapshot: {
+      sunBank: 0,
+      enemyPlantsCount: 0,
+      ownPlantsCount: 0,
+      maxThreatLane: 0,
+      ownHp: INITIAL_BASE_HP,
+      enemyHp: INITIAL_BASE_HP,
+    },
+    metrics: {
+      decisionCycles: 0,
+      actionsExecuted: 0,
+      waitChosen: 0,
+      waitReasons: {
+        WAIT_RESERVE: 0,
+        WAIT_NO_SUN: 0,
+        WAIT_COOLDOWN: 0,
+        WAIT_NO_POSITION: 0,
+        WAIT_LOW_UTILITY: 0,
+        WAIT_REACTION: 0,
+      },
+      noLegalCandidates: 0,
+      insufficientSunCycles: 0,
+      cooldownBlockedCycles: 0,
+      ticksAbove2xReserve: 0,
+      ticksAbove3xReserve: 0,
+      maxTicksWithoutDecision: 0,
+      maxTicksWithoutAction: 0,
+      totalTicksBetweenActions: 0,
+      actionIntervalCount: 0,
+      peakSunBank: 0,
+      totalSunSpent: 0,
+      totalSunCredited: 0,
+      actionsByQuarter: [0, 0, 0, 0],
+      offensivePlantsPlaced: 0,
+      defensivePlantsPlaced: 0,
+      economyPlantsPlaced: 0,
+      lanesUsed: [],
+      enemyPlantsKilled: 0,
+      baseDamageDealt: 0,
+    },
   }
 }
 
@@ -780,11 +866,11 @@ export function percibirTablero(
     mode = 'EMERGENCY_DEFEND'
   } else if (maxThreat >= 50) {
     mode = 'DEFEND'
-  } else if (enemyHpRatio <= 0.35 || (maxOpportunity >= 65 && sunBank >= 125)) {
+  } else if (enemyHpRatio <= 0.45 || (maxOpportunity >= 60 && totalOwnProducers >= 1 && maxThreat < 40)) {
     mode = 'PRESSURE'
   } else if (totalOwnProducers < profile.targetProducers && maxThreat < 35 && state.tick < msToTicks(75000)) {
     mode = 'ECONOMY'
-  } else if (maxOpportunity >= 45 && maxThreat < 40) {
+  } else if (maxOpportunity >= 40 && maxThreat < 40) {
     mode = 'ATTACK'
   } else {
     mode = 'RECOVER'
@@ -861,23 +947,78 @@ export function generarAccionesCandidatas(
   const candidates: CandidateAction[] = []
   const reserveSun = calcularReservaSoles(perception, profile)
 
-  // ── A) CANDIDATO: WAIT ───────────────────────────────────────────────────
-  // Esperar tiene valor intrínseco si no tenemos suficiente sol, o si conviene
-  // ahorrar para una carta clave de mayor impacto.
-  let waitUtility = 15
-  if (perception.sunBank < reserveSun) {
-    waitUtility += 25
+  // ── A) ANÁLISIS DE CARTAS DISPONIBLES Y RAZÓN DE WAIT ───────────────────
+  let minCardCost = 999
+  let affordableCount = 0
+  let readyAffordableCount = 0
+  let hasValidPlacement = false
+
+  for (let slotIndex = 0; slotIndex < deck.length; slotIndex++) {
+    const carta = deck[slotIndex]
+    const plantId = carta.plantId as PlantId
+    const statRolls = rollsValidos(carta.statRolls)
+    const config = getScaledPlantConfig(plantId, statRolls)
+    if (!config) continue
+
+    if (config.cost < minCardCost) minCardCost = config.cost
+    const slot = carta.slot ?? slotIndex
+    const enCooldown = (slotCooldowns[slot] || 0) > state.tick
+    const puedePagar = perception.sunBank >= config.cost
+
+    if (puedePagar) {
+      affordableCount += 1
+      if (!enCooldown) {
+        readyAffordableCount += 1
+        const tactical = getTacticalProfile(plantId)
+        if (tactical.isWalking) {
+          hasValidPlacement = true
+        } else {
+          for (let lane = 0; lane < 3; lane++) {
+            for (let c = 0; c < P1_COLUMNS; c++) {
+              if (esCasillaLibreP2(state, lane, c)) {
+                hasValidPlacement = true
+                break
+              }
+            }
+            if (hasValidPlacement) break
+          }
+        }
+      }
+    }
   }
-  if (perception.mode === 'RECOVER' || perception.mode === 'ECONOMY') {
-    waitUtility += 10
+
+  // Determinar razón explícita y utility dinámica de WAIT
+  let waitReason: WaitReason
+  let waitUtility = 5 // Base baja para no competir con jugadas válidas
+
+  if (perception.sunBank < minCardCost) {
+    waitReason = 'WAIT_NO_SUN'
+    waitUtility = 5
+  } else if (affordableCount > 0 && readyAffordableCount === 0) {
+    waitReason = 'WAIT_COOLDOWN'
+    waitUtility = 8
+  } else if (readyAffordableCount > 0 && !hasValidPlacement) {
+    waitReason = 'WAIT_NO_POSITION'
+    waitUtility = 5
+  } else if (perception.sunBank < reserveSun && perception.mode !== 'EMERGENCY_DEFEND') {
+    waitReason = 'WAIT_RESERVE'
+    waitUtility = 12
+  } else {
+    waitReason = 'WAIT_LOW_UTILITY'
+    waitUtility = 4
   }
-  if (perception.mode === 'EMERGENCY_DEFEND') {
-    waitUtility -= 30 // Prohibido esperar ocioso en emergencia si hay cartas
+
+  // Penalización severa a WAIT si se acumulan soles sin gastar
+  if (perception.sunBank >= 2 * reserveSun && readyAffordableCount > 0 && hasValidPlacement) {
+    const exceso = perception.sunBank - reserveSun
+    waitUtility = Math.max(0, waitUtility - Math.min(30, exceso * 0.15))
   }
+
   candidates.push({
     kind: 'wait',
     utility: Math.max(0, waitUtility),
-    reason: 'Ahorro / espera estratégica',
+    waitReason,
+    reason: `Espera: ${waitReason}`,
   })
 
   // ── B) CANDIDATOS: PLANT PARA CADA CARTA DEL MAZO ────────────────────────
@@ -1046,9 +1187,16 @@ export function calcularUtilidadPlanta(params: {
 
     attackScore = (baseAtk + laneEval.attackOpportunityScore * 0.65 + (100 - laneEval.threatScore) * 0.2) * profile.aggression
 
-    // Bono si el carril enemigo está vacío
+    // Bono si el carril enemigo está vacío o si es un carril no fortificado (Flanqueo)
     if (laneEval.enemyDefendersCount === 0 && laneEval.enemyAttackersCount === 0) {
-      attackScore += 20 * profile.opportunism
+      attackScore += 25 * profile.opportunism
+    } else if (laneEval.enemyDefendersCount === 0) {
+      attackScore += 15 * profile.opportunism
+    }
+
+    // Bono de remate de base enemiga si está muy debilitada
+    if (perception.enemyBaseHp <= 300) {
+      attackScore += 45 * profile.aggression
     }
 
     // Bono en modo PRESSURE / ATTACK
@@ -1076,9 +1224,9 @@ export function calcularUtilidadPlanta(params: {
       economyScore = -20 // Superó límite de productores
     }
 
-    // En emergencia o gran amenaza, plantar girasoles pierde prioridad drásticamente
-    if (perception.mode === 'EMERGENCY_DEFEND' || perception.maxThreat >= 70) {
-      economyScore -= 60
+    // En emergencia, gran amenaza o remate final, plantar girasoles pierde prioridad
+    if (perception.mode === 'EMERGENCY_DEFEND' || perception.maxThreat >= 70 || perception.enemyBaseHp <= 300) {
+      economyScore -= 70
     } else if (laneEval.threatScore >= 45) {
       economyScore -= 30
     }
@@ -1126,8 +1274,10 @@ export function calcularUtilidadPlanta(params: {
   }
 
   // ── 6. SOBREINVERSIÓN POR CARRIL ───────────────────────────────────────────
-  if (tactical.isTank && laneEval.ownDefendersCount >= 2) {
-    overinvestmentPenalty += 40 // No poner 3 nueces en el mismo carril
+  if (tactical.isTank && laneEval.ownDefendersCount >= 1 && laneEval.threatScore < 25) {
+    overinvestmentPenalty += 35 // No saturar de muros si no hay amenaza
+  } else if (tactical.isTank && laneEval.ownDefendersCount >= 2) {
+    overinvestmentPenalty += 45
   }
   if (tactical.isProducer && laneEval.ownProducersCount >= 2) {
     overinvestmentPenalty += 25 // No saturar un carril de girasoles
@@ -1185,7 +1335,7 @@ export function seleccionarAccionDeterminista(
   rng: Rng
 ): CandidateAction {
   if (candidates.length === 0) {
-    return { kind: 'wait', utility: 0, reason: 'Sin candidatos' }
+    return { kind: 'wait', utility: 0, waitReason: 'WAIT_LOW_UTILITY', reason: 'Sin candidatos' }
   }
 
   const bestScore = candidates[0].utility
@@ -1236,13 +1386,63 @@ export function decidirAccionEstrategica(
 } {
   const profile = mentalState.profile
   const tick = state.tick
+  const metrics = mentalState.metrics
 
-  // Cadencia humana: evaluar sólo si se cumplió el tiempo de decisión
+  // Actualizar métricas continuas
+  const reserveSun = profile.baseReserveSun
+  if (sunBank >= 3 * reserveSun) metrics.ticksAbove3xReserve += 1
+  else if (sunBank >= 2 * reserveSun) metrics.ticksAbove2xReserve += 1
+  if (sunBank > metrics.peakSunBank) metrics.peakSunBank = sunBank
+
   const perception = percibirTablero(state, sunBank, profile)
   mentalState.lastPerception = perception
 
-  if (tick < mentalState.nextDecisionTick) {
+  // Detección de Eventos Deterministas Relevantes para Reevaluación
+  const minReactionTicks = Math.max(4, msToTicks(profile.reactionMs * 0.25)) // ~120-150ms delay
+  let eventTrigger = false
+  const prev = mentalState.lastSnapshot
+
+  if (prev) {
+    // 1. Soles acumulados alcanzaron el coste de una carta que antes no se podía pagar
+    const hadAffordable = deck.some((c) => (getScaledPlantConfig(c.plantId as PlantId)?.cost ?? 999) <= prev.sunBank)
+    const nowAffordable = deck.some((c) => (getScaledPlantConfig(c.plantId as PlantId)?.cost ?? 999) <= sunBank)
+    if (!hadAffordable && nowAffordable) eventTrigger = true
+
+    // 2. Apareció nueva amenaza enemiga
+    if (state.plants.length > prev.enemyPlantsCount) eventTrigger = true
+
+    // 3. Murió una planta (propia o enemiga)
+    if (state.plants.length < prev.enemyPlantsCount || state.enemyPlants.length < prev.ownPlantsCount) eventTrigger = true
+
+    // 4. Base propia recibió daño
+    if (state.p2BaseHp < prev.ownHp) eventTrigger = true
+
+    // 5. Cambio en el carril más amenazado con amenaza real
+    if (perception.maxThreatLane !== prev.maxThreatLane && perception.maxThreat > 30) eventTrigger = true
+  }
+
+  // Actualizar snapshot
+  mentalState.lastSnapshot = {
+    sunBank,
+    enemyPlantsCount: state.plants.length,
+    ownPlantsCount: state.enemyPlants.length,
+    maxThreatLane: perception.maxThreatLane,
+    ownHp: state.p2BaseHp,
+    enemyHp: state.p1BaseHp,
+  }
+
+  // Comprobar si le toca decidir (por timer o por evento determinista)
+  const isTimeForNormalDecision = tick >= mentalState.nextDecisionTick
+  const isEventDrivenDecision = eventTrigger && tick >= mentalState.lastDecisionTick + minReactionTicks
+
+  if (!isTimeForNormalDecision && !isEventDrivenDecision) {
     return { decision: null, perception }
+  }
+
+  metrics.decisionCycles += 1
+  const ticksSinceLastDecision = mentalState.lastDecisionTick > 0 ? tick - mentalState.lastDecisionTick : 0
+  if (ticksSinceLastDecision > metrics.maxTicksWithoutDecision) {
+    metrics.maxTicksWithoutDecision = ticksSinceLastDecision
   }
 
   // Generar candidatos
@@ -1256,19 +1456,72 @@ export function decidirAccionEstrategica(
 
   const chosen = seleccionarAccionDeterminista(candidates, profile, mentalState.rng)
 
-  // Programar siguiente momento de decisión con irregularidad humana
-  const factor = 1 - profile.irregularity / 2 + nextFloat(mentalState.rng) * profile.irregularity * 1.5
+  // Programar siguiente momento de decisión
+  const factor = 1 - profile.irregularity / 2 + nextFloat(mentalState.rng) * profile.irregularity * 1.2
   let waitMs = profile.reactionMs * factor
-  if (chance(mentalState.rng, 0.15)) {
-    waitMs *= 1.8 // Duda humana ocasional
+  if (chance(mentalState.rng, 0.12)) {
+    waitMs *= 1.5 // Duda humana ocasional
   }
-  mentalState.nextDecisionTick = tick + msToTicks(waitMs)
+
+  let nextTick = tick + Math.max(minReactionTicks, msToTicks(waitMs))
+
+  // Si la mejor acción fue bloqueada por cooldown, programar revisión justo al terminar el cooldown
+  let earliestRelevantCooldown = Infinity
+  for (const c of deck) {
+    const cost = getScaledPlantConfig(c.plantId as PlantId)?.cost ?? 999
+    if (sunBank >= cost) {
+      const slot = c.slot ?? 0
+      const cd = slotCooldowns[slot] || 0
+      if (cd > tick && cd < earliestRelevantCooldown) {
+        earliestRelevantCooldown = cd
+      }
+    }
+  }
+  if (earliestRelevantCooldown !== Infinity && earliestRelevantCooldown + minReactionTicks < nextTick) {
+    nextTick = earliestRelevantCooldown + minReactionTicks
+  }
+
+  mentalState.nextDecisionTick = nextTick
   mentalState.lastDecisionTick = tick
 
+  // Actualizar métricas según la acción elegida
   if (chosen.kind === 'wait') {
+    metrics.waitChosen += 1
+    const r = chosen.waitReason ?? 'WAIT_LOW_UTILITY'
+    metrics.waitReasons[r] = (metrics.waitReasons[r] || 0) + 1
+    if (r === 'WAIT_NO_SUN') metrics.insufficientSunCycles += 1
+    if (r === 'WAIT_COOLDOWN') metrics.cooldownBlockedCycles += 1
     mentalState.consecutiveWaits += 1
   } else {
+    metrics.actionsExecuted += 1
     mentalState.consecutiveWaits = 0
+
+    // Registrar intervalo de acción
+    if (mentalState.lastActionTick > 0) {
+      const interval = tick - mentalState.lastActionTick
+      if (interval > metrics.maxTicksWithoutAction) metrics.maxTicksWithoutAction = interval
+      metrics.totalTicksBetweenActions += interval
+      metrics.actionIntervalCount += 1
+    }
+    mentalState.lastActionTick = tick
+
+    // Registrar cuarto temporal (asumiendo partida típica de hasta 120s ~ 3600 tics)
+    const quarter = Math.min(3, Math.floor((tick / msToTicks(120000)) * 4))
+    metrics.actionsByQuarter[quarter] += 1
+
+    if (chosen.lane !== undefined && !metrics.lanesUsed.includes(chosen.lane)) {
+      metrics.lanesUsed.push(chosen.lane)
+    }
+
+    if (chosen.plantId) {
+      const tactical = getTacticalProfile(chosen.plantId)
+      if (tactical.isProducer) metrics.economyPlantsPlaced += 1
+      else if (tactical.isTank || tactical.isTrap || tactical.isFreezer) metrics.defensivePlantsPlaced += 1
+      else if (tactical.isWalking || tactical.role === 'ranged_attack' || tactical.isLaneClear) {
+        metrics.offensivePlantsPlaced += 1
+        if (metrics.firstAttackTick === undefined) metrics.firstAttackTick = tick
+      }
+    }
   }
 
   const telemetryEntry: StrategicTelemetryEntry = {
@@ -1276,12 +1529,14 @@ export function decidirAccionEstrategica(
     mode: perception.mode,
     chosenAction: chosen,
     score: chosen.utility,
+    waitReason: chosen.waitReason,
     topCandidates: candidates.slice(0, 4).map((c) => ({
       kind: c.kind,
       plantId: c.plantId,
       lane: c.lane,
       col: c.col,
       utility: c.utility,
+      waitReason: c.waitReason,
     })),
     laneThreats: [perception.lanes[0].threatScore, perception.lanes[1].threatScore, perception.lanes[2].threatScore],
     laneOpportunities: [
@@ -1298,3 +1553,4 @@ export function decidirAccionEstrategica(
     telemetryEntry,
   }
 }
+

@@ -417,6 +417,9 @@ export function stepAsyncOpponent(
   if (state.tick >= primerSolP2Tick && (state.tick - primerSolP2Tick) % msToTicks(SOL_DEL_CIELO_MS) === 0) {
     controller.sunBank += SUN_VALUE
     state.p2SunBank = controller.sunBank
+    if (controller.strategicState) {
+      controller.strategicState.metrics.totalSunCredited += SUN_VALUE
+    }
   }
 
   // B) Girasoles de P2: acreditan soles deterministas tras su ciclo
@@ -429,6 +432,9 @@ export function stepAsyncOpponent(
         const valor = (esDoble ? SOLES_POR_CICLO_GIRASOL_DOBLE : SOLES_POR_CICLO_GIRASOL) * SUN_VALUE
         controller.sunBank += valor
         state.p2SunBank = controller.sunBank
+        if (controller.strategicState) {
+          controller.strategicState.metrics.totalSunCredited += valor
+        }
       }
     }
   }
@@ -471,7 +477,7 @@ export function stepAsyncOpponent(
       }
     }
   } else {
-    while (
+    while(
       controller.nextIntentIndex < controller.intents.length &&
       controller.intents[controller.nextIntentIndex].issuedTick <= state.tick
     ) {
@@ -670,6 +676,10 @@ function intentarEjecutarPlant(
   controller.sunBank -= config.cost
   state.p2SunBank = controller.sunBank
   controller.slotCooldowns[slot] = state.tick + msToTicks(config.cooldownMs)
+
+  if (controller.strategicState) {
+    controller.strategicState.metrics.totalSunSpent += config.cost
+  }
 
   state.pending.push({
     atTick: state.tick + MARGEN_DE_RED_TICS,
