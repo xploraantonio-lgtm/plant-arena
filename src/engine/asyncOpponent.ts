@@ -43,6 +43,7 @@ import {
   crearEstadoMentalEstrategico,
   obtenerPerfilEstrategico,
   type StrategicStyle,
+  type StrategicDifficulty,
   type StrategicProfile,
   type StrategicMentalState,
   type StrategicTelemetryEntry,
@@ -50,6 +51,7 @@ import {
 
 export type {
   StrategicStyle,
+  StrategicDifficulty,
   StrategicProfile,
   StrategicMentalState,
   StrategicTelemetryEntry,
@@ -293,6 +295,7 @@ export function createAsyncOpponentController(
 
 export interface CreateStrategicOpponentOptions {
   style?: StrategicStyle
+  difficulty?: StrategicDifficulty
   profile?: StrategicProfile
   roomSeed?: number
   botSeed?: number
@@ -306,7 +309,8 @@ export function createStrategicOpponentController(
   options: CreateStrategicOpponentOptions = {}
 ): AsyncOpponentController {
   const style = options.style ?? 'balanced'
-  const profile = options.profile ?? obtenerPerfilEstrategico(style)
+  const difficulty = options.difficulty ?? 'hard'
+  const profile = options.profile ?? obtenerPerfilEstrategico(style, difficulty)
   const seed = (options.roomSeed ?? 12345) + (options.botSeed ?? 777)
   const strategicState = crearEstadoMentalEstrategico(seed, profile)
   const policy = new StrategicPolicy()
@@ -816,6 +820,7 @@ export interface RunAsyncTimelineOptions {
   asyncActions?: unknown
   asyncOpponentMode?: 'replay' | 'strategic'
   strategicStyle?: StrategicStyle
+  strategicDifficulty?: StrategicDifficulty
   strategicProfile?: StrategicProfile
   botSeed?: number
   untilTick?: number
@@ -852,6 +857,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     asyncActions,
     asyncOpponentMode = 'replay',
     strategicStyle,
+    strategicDifficulty,
     strategicProfile,
     botSeed,
     untilTick,
@@ -949,6 +955,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         controller: isStrategicMode
           ? createStrategicOpponentController(mazoP2, {
               style: strategicStyle,
+              difficulty: strategicDifficulty,
               profile: strategicProfile,
               roomSeed: seed,
               botSeed,
@@ -966,6 +973,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     controller = isStrategicMode
       ? createStrategicOpponentController(mazoP2, {
           style: strategicStyle,
+          difficulty: strategicDifficulty,
           profile: strategicProfile,
           roomSeed: seed,
           botSeed,
@@ -979,6 +987,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     if (isStrategicMode) {
       controller = createStrategicOpponentController(mazoP2, {
         style: strategicStyle,
+        difficulty: strategicDifficulty,
         profile: strategicProfile,
         roomSeed: seed,
         botSeed,

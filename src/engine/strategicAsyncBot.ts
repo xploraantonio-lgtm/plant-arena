@@ -309,6 +309,7 @@ export interface LaneEvaluation {
   ownPressure: number
   enemyAttackersCount: number
   enemyDefendersCount: number
+  enemyProducersCount: number
   ownAttackersCount: number
   ownDefendersCount: number
   ownProducersCount: number
@@ -342,6 +343,7 @@ export interface StrategicPerception {
   maxOpportunityLane: number
   maxOpportunity: number
   totalOwnProducers: number
+  totalEnemyProducers: number
   mode: StrategicMode
 }
 
@@ -356,8 +358,39 @@ export type StrategicStyle =
   | 'economic'
   | 'opportunistic'
 
+export type StrategicDifficulty = 'normal' | 'hard' | 'elite'
+
+export interface DifficultyConfig {
+  reactionMultiplier: number
+  badPlayMargin: number
+  irregularity: number
+  evalDepthSharpness: number
+}
+
+export const DIFFICULTY_CONFIGS: Record<StrategicDifficulty, DifficultyConfig> = {
+  normal: {
+    reactionMultiplier: 1.25, // Mayor delay humano (~625-875ms)
+    badPlayMargin: 0.18,      // Mayor tolerancia a alternativas viables
+    irregularity: 0.45,       // Mayor dispersión
+    evalDepthSharpness: 0.9,
+  },
+  hard: {
+    reactionMultiplier: 1.0,  // Reacción competitiva (~500-600ms)
+    badPlayMargin: 0.06,      // Margen de error humano reducido
+    irregularity: 0.30,       // Alta consistencia
+    evalDepthSharpness: 1.0,
+  },
+  elite: {
+    reactionMultiplier: 0.70, // Reacción rápida de élite (~350-450ms)
+    badPlayMargin: 0.02,      // Selección óptima casi pura
+    irregularity: 0.15,       // Disciplina máxima
+    evalDepthSharpness: 1.15,
+  },
+}
+
 export interface StrategicProfile {
   style: StrategicStyle
+  difficulty?: StrategicDifficulty
   aggression: number // 0..1
   defense: number // 0..1
   economy: number // 0..1
@@ -373,10 +406,10 @@ export interface StrategicProfile {
 export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
   balanced: {
     style: 'balanced',
-    aggression: 0.55,
+    aggression: 0.6,
     defense: 0.6,
-    economy: 0.55,
-    opportunism: 0.55,
+    economy: 0.6,
+    opportunism: 0.6,
     reactionMs: 600,
     baseReserveSun: 50,
     irregularity: 0.4,
@@ -386,10 +419,10 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
   },
   aggressive: {
     style: 'aggressive',
-    aggression: 0.9,
-    defense: 0.35,
-    economy: 0.35,
-    opportunism: 0.8,
+    aggression: 0.95,
+    defense: 0.30,
+    economy: 0.30,
+    opportunism: 0.85,
     reactionMs: 500,
     baseReserveSun: 25,
     irregularity: 0.35,
@@ -399,10 +432,10 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
   },
   defensive: {
     style: 'defensive',
-    aggression: 0.3,
-    defense: 0.9,
-    economy: 0.65,
-    opportunism: 0.35,
+    aggression: 0.25,
+    defense: 0.95,
+    economy: 0.70,
+    opportunism: 0.30,
     reactionMs: 600,
     baseReserveSun: 75,
     irregularity: 0.4,
@@ -412,23 +445,23 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
   },
   economic: {
     style: 'economic',
-    aggression: 0.35,
-    defense: 0.55,
-    economy: 0.95,
-    opportunism: 0.4,
+    aggression: 0.30,
+    defense: 0.50,
+    economy: 0.98,
+    opportunism: 0.35,
     reactionMs: 700,
     baseReserveSun: 50,
     irregularity: 0.45,
     badPlayMargin: 0.08,
-    targetProducers: 3,
-    maxProducers: 5,
+    targetProducers: 4,
+    maxProducers: 6,
   },
   opportunistic: {
     style: 'opportunistic',
-    aggression: 0.75,
-    defense: 0.45,
+    aggression: 0.80,
+    defense: 0.40,
     economy: 0.45,
-    opportunism: 0.95,
+    opportunism: 0.98,
     reactionMs: 550,
     baseReserveSun: 35,
     irregularity: 0.4,
@@ -438,8 +471,20 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
   },
 }
 
-export function obtenerPerfilEstrategico(style: StrategicStyle = 'balanced'): StrategicProfile {
-  return STRATEGIC_PROFILES[style] ?? STRATEGIC_PROFILES.balanced
+export function obtenerPerfilEstrategico(
+  style: StrategicStyle = 'balanced',
+  difficulty: StrategicDifficulty = 'hard'
+): StrategicProfile {
+  const base = STRATEGIC_PROFILES[style] ?? STRATEGIC_PROFILES.balanced
+  const diff = DIFFICULTY_CONFIGS[difficulty] ?? DIFFICULTY_CONFIGS.hard
+
+  return {
+    ...base,
+    difficulty,
+    reactionMs: Math.round(base.reactionMs * diff.reactionMultiplier),
+    badPlayMargin: diff.badPlayMargin,
+    irregularity: diff.irregularity,
+  }
 }
 
 export type WaitReason =
@@ -611,6 +656,7 @@ export function evaluarCarril(
 ): LaneEvaluation {
   let enemyAttackersCount = 0
   let enemyDefendersCount = 0
+  let enemyProducersCount = 0
   let ownAttackersCount = 0
   let ownDefendersCount = 0
   let ownProducersCount = 0
@@ -627,6 +673,9 @@ export function evaluarCarril(
     enemyHpTotal += p.hp
 
     const t = getTacticalProfile(p.plantId)
+    if (t.isProducer) {
+      enemyProducersCount += 1
+    }
     if (t.isTank || p.hp > 800) {
       enemyDefendersCount += 1
     }
@@ -725,6 +774,7 @@ export function evaluarCarril(
     ownPressure,
     enemyAttackersCount,
     enemyDefendersCount,
+    enemyProducersCount,
     ownAttackersCount,
     ownDefendersCount,
     ownProducersCount,
@@ -844,6 +894,7 @@ export function percibirTablero(
   let maxOpportunity = -1
   let maxOpportunityLane = 0
   let totalOwnProducers = 0
+  let totalEnemyProducers = 0
 
   for (let l = 0; l < 3; l++) {
     if (lanes[l].threatScore > maxThreat) {
@@ -855,6 +906,7 @@ export function percibirTablero(
       maxOpportunityLane = l
     }
     totalOwnProducers += lanes[l].ownProducersCount
+    totalEnemyProducers += lanes[l].enemyProducersCount
   }
 
   // Clasificación del Modo Estratégico Global Centralizado
@@ -887,6 +939,7 @@ export function percibirTablero(
     maxOpportunityLane,
     maxOpportunity,
     totalOwnProducers,
+    totalEnemyProducers,
     mode,
   }
 }
@@ -1190,6 +1243,10 @@ export function calcularUtilidadPlanta(params: {
     // Bono si el carril enemigo está vacío o si es un carril no fortificado (Flanqueo)
     if (laneEval.enemyDefendersCount === 0 && laneEval.enemyAttackersCount === 0) {
       attackScore += 25 * profile.opportunism
+      // Castigo a rival que invierte en economía sin proteger este carril
+      if (perception.totalEnemyProducers >= 2) {
+        attackScore += 20 * profile.opportunism
+      }
     } else if (laneEval.enemyDefendersCount === 0) {
       attackScore += 15 * profile.opportunism
     }
@@ -1204,6 +1261,11 @@ export function calcularUtilidadPlanta(params: {
       attackScore += 30 * profile.aggression
     } else if (perception.mode === 'ATTACK') {
       attackScore += 15 * profile.aggression
+    }
+
+    // En recuperación o tras recibir daño, priorizar prudencia si otro carril arde
+    if (perception.ownBaseHp < INITIAL_BASE_HP && perception.maxThreat >= 40 && laneEval.threatScore < perception.maxThreat) {
+      attackScore -= 15
     }
 
     // Penalización leve si el carril propio está a punto de colapsar
