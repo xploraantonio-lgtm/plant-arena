@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import GameFrame from './components/GameFrame/GameFrame'
 import RotateOverlay from './components/RotateOverlay/RotateOverlay'
 import MainMenu from './components/MainMenu/MainMenu'
@@ -373,10 +373,28 @@ function App() {
     return () => { cancelado = true }
   }, [encontrada, user?.id])
 
+  const limpiarEstadoPartida = useCallback(() => {
+    setSalaId(null)
+    setSemillaPartida(undefined)
+    setRivalId(null)
+    setNombresEnPartida(null)
+    setMazosDeLaSala(null)
+    setPartidaAsincrona(false)
+    setEngineVersionSala(null)
+    setCustomArenaBg(undefined)
+    setTournamentOpponent(null)
+    setPracticePlantId(null)
+  }, [])
+
+  const handleRegresarAlMenu = useCallback(() => {
+    limpiarEstadoPartida()
+    setScreen('menu')
+  }, [limpiarEstadoPartida])
+
   /** Cancelar la búsqueda y volver al menú. */
   const salirDeLaCola = async () => {
     await cancelar()
-    setScreen('menu')
+    handleRegresarAlMenu()
   }
 
   const handleGoToGame = () => {
@@ -848,7 +866,7 @@ function App() {
         )}
         {screen === 'battle' && (
           <Battlefield
-            onBackToMenu={() => setScreen('menu')}
+            onBackToMenu={handleRegresarAlMenu}
             onBackToCollection={() => setScreen('collection')}
             onBattleComplete={handleBattleComplete}
             onSurrender={handleSurrender}

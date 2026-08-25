@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SupabaseService } from '../services/supabaseService'
+import { RANKED_MATCHMAKING_TIMEOUT_SECONDS } from '../utils/gameConstants'
 
 /**
  * LA COLA DE EMPAREJAMIENTO
@@ -8,7 +9,7 @@ import { SupabaseService } from '../services/supabaseService'
  * importa: no manda el mazo (lo lee el servidor de plant_instances), no elige la
  * semilla (la genera el servidor) y no decide con quién juega.
  *
- * En Ranked: busca rival humano real durante 0-60 segundos. Si pasan >= 60 s
+ * En Ranked: busca rival humano real durante 0-30 segundos. Si pasan >= 30 s
  * sin rival humano, el servidor comprueba de nuevo la prioridad humana y, si
  * no hay humano, selecciona un Rival Semilla determinista con nueva sala.
  */
@@ -121,8 +122,8 @@ export function useMatchmaking() {
 
     const segundosEsperados = r.waitedSeconds ?? 0
 
-    // En Ranked: si ya pasaron >= 60 segundos, solicitar automáticamente Rival Semilla
-    if (modoRef.current === 'ranked' && segundosEsperados >= 60 && !claimingRef.current) {
+    // En Ranked: si ya pasaron >= 30 segundos, solicitar automáticamente Rival Semilla
+    if (modoRef.current === 'ranked' && segundosEsperados >= RANKED_MATCHMAKING_TIMEOUT_SECONDS && !claimingRef.current) {
       claimingRef.current = true
       try {
         const claimRes = await SupabaseService.claimRankedAsyncOpponent()

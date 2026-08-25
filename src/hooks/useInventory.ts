@@ -559,24 +559,9 @@ export function useInventory() {
 
   useEffect(() => {
     localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(freePackSlots))
-    if (currentUserIdRef.current) {
-      // El servidor valida el temporizador y devuelve el estado autoritativo.
-      // Si rechaza algo (intento de abrir antes de hora), adoptamos lo que él
-      // dice: el reloj del navegador deja de decidir cuándo hay premio.
-      SupabaseService.syncPackSlots(freePackSlots).then(({ slots, rejected }) => {
-        if (rejected.length > 0) {
-          console.warn('[packSlots] el servidor rechazó cambios:', rejected)
-        }
-        if (slots && slots.length > 0) {
-          setFreePackSlots((prev) =>
-            JSON.stringify(prev) === JSON.stringify(slots) ? prev : slots
-          )
-        }
-      })
-    }
   }, [freePackSlots])
 
-  // Check timers periodically
+  // Check timers periodically against absolute server unlockStartedAt timestamp
   useEffect(() => {
     const timer = setInterval(() => {
       setFreePackSlots((prev) => {
@@ -617,8 +602,10 @@ export function useInventory() {
     }
 
     // Adoptar los cofres tal como quedaron en el servidor.
-    const { slots } = await SupabaseService.syncPackSlots(freePackSlots)
-    if (slots && slots.length > 0) setFreePackSlots(slots)
+    if (currentUserIdRef.current) {
+      const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+      if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
+    }
 
     return {
       awarded: true,
@@ -634,9 +621,20 @@ export function useInventory() {
       return { success: false, error: '⚠️ Solo puedes desbloquear 1 sobre a la vez.' }
     }
 
-    setFreePackSlots((prev) =>
-      prev.map((s) => (s.slotId === slotId ? { ...s, status: 'unlocking', unlockStartedAt: Date.now() } : s))
+    const nextSlots = freePackSlots.map((s) =>
+      s.slotId === slotId ? { ...s, status: 'unlocking' as const, unlockStartedAt: Date.now() } : s
     )
+    setFreePackSlots(nextSlots)
+    localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(nextSlots))
+
+    if (currentUserIdRef.current) {
+      void SupabaseService.syncPackSlots(nextSlots).then(({ slots }) => {
+        if (slots && slots.length > 0) {
+          setFreePackSlots(slots)
+          localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(slots))
+        }
+      })
+    }
     return { success: true }
   }
 
@@ -980,8 +978,10 @@ export function useInventory() {
     if (!res.success || !res.plantId) return null
 
     await refreshFromServer()
-    const { slots } = await SupabaseService.syncPackSlots(freePackSlots)
-    if (slots && slots.length > 0) setFreePackSlots(slots)
+    if (currentUserIdRef.current) {
+      const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+      if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
+    }
 
     return {
       plantId: res.plantId as PlantId,
@@ -999,8 +999,10 @@ export function useInventory() {
     if (!res.success) return { success: false, error: res.error }
 
     await refreshBalance()
-    const { slots } = await SupabaseService.syncPackSlots(freePackSlots)
-    if (slots && slots.length > 0) setFreePackSlots(slots)
+    if (currentUserIdRef.current) {
+      const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+      if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
+    }
 
     return { success: true, goldSpent: res.goldSpent }
   }

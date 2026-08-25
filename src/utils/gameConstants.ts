@@ -285,6 +285,7 @@ export const ENEMY_PLANT_CONFIGS: Record<EnemyPlantType, EnemyPlantConfig> = {
 export const INITIAL_SUN = 0
 export const INITIAL_BASE_HP = 600
 export const SUN_VALUE = 25
+export const RANKED_MATCHMAKING_TIMEOUT_SECONDS = 30
 
 export const LANES_CONFIG = [
   { id: 0, topPct: 20, heightPct: 19.33 },
