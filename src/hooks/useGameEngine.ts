@@ -39,11 +39,18 @@ import {
 } from '../engine/mazoDeLaSala'
 import {
   createAsyncOpponentControllerFromValidated,
+  createStrategicOpponentController,
   stepAsyncOpponent,
   reconstruirPartidaAsync,
   debeCongelarMotorRankedAsync,
   type AsyncOpponentController,
 } from '../engine/asyncOpponent'
+import {
+  type StrategicPlaytestConfig,
+  type StrategicPlaytestLog,
+  detectarAnomaliasDePartida,
+} from '../engine/strategicPlaytest'
+import { savePlaytestLog } from '../utils/strategicPlaytestStorage'
 import {
   validarMazoAsyncRanked,
   validarYNormalizarIntencionesAsyncRanked,
@@ -241,6 +248,10 @@ export function useGameEngine() {
     issuedTick?: number
     details?: string
   } | null>(null)
+
+  const strategicPlaytestConfigRef = useRef<StrategicPlaytestConfig | null>(null)
+  const playtestLogCompiledRef = useRef<boolean>(false)
+  const [currentPlaytestLog, setCurrentPlaytestLog] = useState<StrategicPlaytestLog | null>(null)
 
   const marcarInconsistenciaRanked = useCallback(
     (inconsistencia: {
@@ -595,6 +606,52 @@ export function useGameEngine() {
     forceRender()
 
   }, [forceRender])
+
+  // Start strategic playtest match (HARD difficulty against StrategicPolicy)
+  const startStrategicPlaytestGame = useCallback(
+    (config: StrategicPlaytestConfig, miMazo?: unknown) => {
+      sessionGenerationRef.current += 1
+      engineVersionRef.current = 'auth-v2'
+      strategicPlaytestConfigRef.current = config
+      playtestLogCompiledRef.current = false
+      setCurrentPlaytestLog(null)
+
+      stateRef.current = createBattleState(config.seed, false, true, undefined, 'auth-v2')
+      ancoraMsRef.current = null
+      soyP1Ref.current = true
+      mazoMioRef.current = leerMazo(miMazo)
+      mazoDelRivalRef.current = config.botDeck
+      isAsyncMatchRef.current = true
+      asyncOpponentDeckRef.current = config.botDeck
+      asyncOpponentActionsBufferRef.current = []
+
+      asyncOpponentRef.current = createStrategicOpponentController(config.botDeck, {
+        style: config.style,
+        difficulty: 'hard',
+        roomSeed: config.seed,
+      })
+
+      huellasPendientesRef.current = []
+      semillaRef.current = config.seed
+      registroRef.current = []
+      accionesP1PendingRef.current = []
+      accionesP1AceptadasRef.current = []
+      reconciliationStateRef.current = 'healthy'
+      setReconciliationState('healthy')
+      rankedAsyncInconsistencyRef.current = null
+      setRankedAsyncInconsistency(null)
+      numeroDeJugadaRef.current = 0
+      reconstruccionesRef.current = 0
+      rehacerDesdeRef.current = null
+      costeDeMisJugadasRef.current = new Map()
+      lastFrameMsRef.current = performance.now()
+      accumulatorMsRef.current = 0
+
+      soundManager.playBgm('battle')
+      forceRender()
+    },
+    [forceRender]
+  )
 
   const prepararRecogidaSol = useCallback((sunId: string): number | null => {
     const state = stateRef.current
@@ -1412,6 +1469,56 @@ export function useGameEngine() {
         // tests puedan ejecutarlo igual.
         stepTick(state, reproducirSonido)
 
+        // Compilar log de playtest estratégico si la partida ha finalizado
+        if (
+          (state.status !== 'playing' || state.tick >= 3600) &&
+          strategicPlaytestConfigRef.current &&
+          !playtestLogCompiledRef.current
+        ) {
+          playtestLogCompiledRef.current = true
+          const config = strategicPlaytestConfigRef.current
+          const controller = asyncOpponentRef.current
+          const telemetry = controller?.telemetry || []
+          const metrics = controller?.strategicState?.metrics
+
+          const currentStatus = state.status as string
+          const winner: 'player' | 'bot' | 'draw' = currentStatus === 'victory' ? 'player' : currentStatus === 'defeat' ? 'bot' : 'draw'
+          const durationSeconds = Math.round(state.tick / 30)
+
+          const log: StrategicPlaytestLog = {
+            matchId: `playtest_${Date.now()}_${config.seed}`,
+            timestamp: Date.now(),
+            seed: config.seed,
+            style: config.style,
+            difficulty: 'hard',
+            botDeckKey: config.deckKey,
+            botDeck: config.botDeck,
+            playerDeck: mazoMioRef.current || [],
+            winner,
+            durationSeconds,
+            durationTicks: state.tick,
+            p1BaseHpEnd: state.p1BaseHp,
+            p2BaseHpEnd: state.p2BaseHp,
+            p1DamageDealt: Math.max(0, INITIAL_BASE_HP - state.p2BaseHp),
+            p2DamageDealt: Math.max(0, INITIAL_BASE_HP - state.p1BaseHp),
+            botPlantsPlaced: metrics?.actionsExecuted ?? controller?.stats.intentionsExecuted ?? 0,
+            botSunCredited: controller?.sunBank ?? 0,
+            botSunSpent: 0,
+            botFinalSunBank: controller?.sunBank ?? 0,
+            lanesUsed: [0, 0, 0],
+            waitReasons: (metrics?.waitReasons as Record<string, number>) ?? {},
+            stalemateDetections: metrics?.stalemateEvents ?? 0,
+            tacticalMistakes: metrics?.tacticalMistakes ?? 0,
+            reactionBlockedTicks: metrics?.reactionBlockedTicks ?? 0,
+            telemetryHistory: telemetry,
+            anomaliesDetected: [],
+          }
+
+          log.anomaliesDetected = detectarAnomaliasDePartida(log)
+          savePlaytestLog(log)
+          setCurrentPlaytestLog(log)
+        }
+
         // La huella se toma AQUÍ, dentro del bucle, porque es el único sitio que
         // ve todos los tics. Comprobarlo fuera —después del fotograma— se salta
         // los controles cada vez que un fotograma avanza más de un tic, y eso pasa
@@ -1559,6 +1666,9 @@ export function useGameEngine() {
     stats: state.stats,
     startGame,
     startPracticeGame,
+    startStrategicPlaytestGame,
+    currentPlaytestLog,
+    clearCurrentPlaytestLog: () => setCurrentPlaytestLog(null),
     surrenderGame,
     prepararRecogidaSol,
     confirmarRecogidaSol,

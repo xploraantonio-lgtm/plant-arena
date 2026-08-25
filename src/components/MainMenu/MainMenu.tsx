@@ -63,6 +63,7 @@ interface MainMenuProps {
   onOpenMarketplace?: () => void
   onOpenLanding?: () => void
   onOpenAdmin?: () => void
+  onOpenStrategicPlaytest?: () => void
   isAdmin?: boolean
   onSignOut?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
@@ -98,6 +99,7 @@ export default function MainMenu({
   onOpenClan,
   onOpenLanding,
   onOpenAdmin,
+  onOpenStrategicPlaytest,
   isAdmin = false,
   onSignOut,
   onStartSlotUnlock,
@@ -570,6 +572,7 @@ export default function MainMenu({
         onSelectColosseum={() => setIsColosseumModalOpen(true)}
         onSelectTournament={() => setIsTournamentModalOpen(true)}
         onSelectFriendly={onPlayFriendly}
+        onSelectStrategicPlaytest={onOpenStrategicPlaytest}
       />
 
       {/* COLOSSEUM MODAL */}

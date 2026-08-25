@@ -31,6 +31,8 @@ import { UserManager } from './utils/userManager'
 import { useVersionDelJuego } from './hooks/useVersionDelJuego'
 import UpdateModal from './components/UpdateModal/UpdateModal'
 import { parseEngineVersion, type EngineVersion } from './types/game'
+import { StrategicPlaytestLauncherModal } from './components/StrategicPlaytest/StrategicPlaytestLauncherModal'
+import type { StrategicPlaytestConfig } from './engine/strategicPlaytest'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -269,9 +271,11 @@ function App() {
     }
   }, [loading, user])
 
-  const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum' | 'tournament'>('ranked')
+  const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum' | 'tournament' | 'strategic_test'>('ranked')
   const [colosseumConfig, setColosseumConfig] = useState<import('./types/game').ColosseumMatchConfig | null>(null)
   const [tournamentOpponent, setTournamentOpponent] = useState<{ name: string; tournamentId: string } | null>(null)
+  const [isStrategicPlaytestModalOpen, setIsStrategicPlaytestModalOpen] = useState<boolean>(false)
+  const [strategicPlaytestConfig, setStrategicPlaytestConfig] = useState<StrategicPlaytestConfig | null>(null)
 
   // ── EMPAREJAMIENTO ────────────────────────────────────────────────────────
   // La sala la crea el servidor (migración 17) y trae la semilla, que es lo que
@@ -572,6 +576,23 @@ function App() {
     setScreen('battle')
   }
 
+  const handleStartStrategicPlaytest = (config: StrategicPlaytestConfig) => {
+    setBattleMatchMode('strategic_test')
+    setStrategicPlaytestConfig(config)
+    setColosseumConfig(null)
+    setTournamentOpponent(null)
+    setPracticePlantId(null)
+    setCustomArenaBg(undefined)
+    setSalaId(null)
+    setRivalId(null)
+    setSemillaPartida(config.seed)
+    setNombresEnPartida({ mio: 'TÚ (P1)', rival: `RIVAL ESTRATÉGICO (${config.style.toUpperCase()})` })
+    setPartidaAsincrona(true)
+    setEngineVersionSala('auth-v2')
+    setScreen('battle')
+    setIsStrategicPlaytestModalOpen(false)
+  }
+
   const handleOpenCollection = () => {
     setScreen('collection')
   }
@@ -760,6 +781,7 @@ function App() {
             onOpenMarketplace={() => setScreen('market')}
             onOpenLanding={handleGoToLanding}
             onOpenAdmin={() => setIsAdminPanelOpen(true)}
+            onOpenStrategicPlaytest={() => setIsStrategicPlaytestModalOpen(true)}
             isAdmin={isAdmin}
             onSignOut={async () => {
               await signOut()
@@ -827,6 +849,8 @@ function App() {
             matchMode={battleMatchMode}
             colosseumConfig={colosseumConfig}
             tournamentOpponent={tournamentOpponent}
+            strategicPlaytestConfig={strategicPlaytestConfig}
+            onPlayAgainPlaytest={() => setIsStrategicPlaytestModalOpen(true)}
             /* Con sala, la partida es real: misma semilla para los dos y el
                resultado lo liquida el servidor. Sin sala es contra el bot local. */
             roomId={salaId}
@@ -1102,6 +1126,13 @@ function App() {
         <AdminPanel
           isOpen={isAdminPanelOpen}
           onClose={() => setIsAdminPanelOpen(false)}
+        />
+
+        {/* Strategic Playtest Launcher Modal (HARD AI Evaluation Protocol) */}
+        <StrategicPlaytestLauncherModal
+          isOpen={isStrategicPlaytestModalOpen}
+          onClose={() => setIsStrategicPlaytestModalOpen(false)}
+          onStartPlaytest={handleStartStrategicPlaytest}
         />
       </GameFrame>
       <RotateOverlay />

@@ -31,6 +31,8 @@ import { TICK_MS } from '../../engine/time'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import { resolverLiquidacionPartida } from '../../engine/asyncOpponent'
+import { StrategicPlaytestPostMatch } from '../StrategicPlaytest/StrategicPlaytestPostMatch'
+import type { StrategicPlaytestConfig } from '../../engine/strategicPlaytest'
 import './Battlefield.css'
 
 /** Un segundo antes de que el sol se recoja solo: momento de avisar. */
@@ -108,10 +110,12 @@ interface BattlefieldProps {
   activeDeck?: PlantId[]
   userElo?: number
   customBgImage?: string
-  matchMode?: 'ranked' | 'colosseum' | 'tournament'
+  matchMode?: 'ranked' | 'colosseum' | 'tournament' | 'strategic_test'
   colosseumConfig?: ColosseumMatchConfig | null
   tournamentOpponent?: { name: string; tournamentId: string } | null
   onColosseumComplete?: (won: boolean) => { payoutGems: number; newStreak: number; newMaxStreak: number; isNewRecord: boolean }
+  strategicPlaytestConfig?: StrategicPlaytestConfig | null
+  onPlayAgainPlaytest?: () => void
   /**
    * La sala de la partida, si es contra otro jugador de verdad.
    *
@@ -183,6 +187,8 @@ export default function Battlefield({
   colosseumConfig,
   tournamentOpponent,
   onColosseumComplete,
+  strategicPlaytestConfig = null,
+  onPlayAgainPlaytest,
 }: BattlefieldProps) {
   const {
     tick,
@@ -208,6 +214,8 @@ export default function Battlefield({
     stats,
     startGame,
     startPracticeGame,
+    startStrategicPlaytestGame,
+    currentPlaytestLog,
     surrenderGame,
     prepararRecogidaSol,
     confirmarRecogidaSol,
@@ -895,6 +903,8 @@ export default function Battlefield({
       if (practicePlantId in PLANT_CONFIGS) {
         setSelectedCard(practicePlantId as PlantId)
       }
+    } else if (matchMode === 'strategic_test' && strategicPlaytestConfig) {
+      startStrategicPlaytestGame(strategicPlaytestConfig, activeDeck)
     } else if (gameStatus === 'ready') {
       hasHandledEndRef.current = false
 
@@ -907,7 +917,7 @@ export default function Battlefield({
         startGame(seed, false, undefined, userElo)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, setSelectedCard, gameStatus, userElo, syncAndStartMatchClock])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, startStrategicPlaytestGame, setSelectedCard, gameStatus, userElo, syncAndStartMatchClock, matchMode, strategicPlaytestConfig, activeDeck])
 
   /**
    * LA HUELLA DEL TABLERO
@@ -1489,7 +1499,7 @@ export default function Battlefield({
       )}
 
       {/* Victory / Defeat Modal */}
-      {(gameStatus === 'victory' || gameStatus === 'defeat') && (
+      {matchMode !== 'strategic_test' && (gameStatus === 'victory' || gameStatus === 'defeat') && (
         <div
           className="game-overlay"
           onClick={(e) => e.stopPropagation()}
@@ -1756,8 +1766,19 @@ export default function Battlefield({
               </>
             )}
           </div>
-
         </div>
+      )}
+
+      {/* Strategic Playtest Post-Match Evaluation Modal */}
+      {matchMode === 'strategic_test' && currentPlaytestLog && (
+        <StrategicPlaytestPostMatch
+          log={currentPlaytestLog}
+          onPlayAgain={() => {
+            if (onPlayAgainPlaytest) onPlayAgainPlaytest()
+            else if (onBackToMenu) onBackToMenu()
+          }}
+          onBackToMenu={() => onBackToMenu && onBackToMenu()}
+        />
       )}
 
       {/* Bottom Right Utility Controls & Surrender */}

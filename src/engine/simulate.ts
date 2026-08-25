@@ -966,7 +966,7 @@ function moverProyectiles(state: GameState, dt: number, sonar: SonarFn): void {
   state.projectiles = siguientes
 }
 
-export function stepTick(state: GameState, sonar: SonarFn): void {
+export function stepTick(state: GameState, sonar: SonarFn = () => {}): void {
   state.tick += 1
 
   // Duración fija de un tic en segundos. Sustituye al dt variable: es el

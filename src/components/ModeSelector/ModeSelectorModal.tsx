@@ -25,6 +25,7 @@ interface ModeSelectorModalProps {
   onSelectRanked: () => void
   onSelectColosseum: () => void
   onSelectTournament?: () => void
+  onSelectStrategicPlaytest?: () => void
   /**
    * Entra a un duelo amistoso.
    *
@@ -51,6 +52,7 @@ export default function ModeSelectorModal({
   onSelectColosseum,
   onSelectTournament,
   onSelectFriendly,
+  onSelectStrategicPlaytest,
   apuestaMaximaAmistoso = 100,
 }: ModeSelectorModalProps) {
   const [subModal, setSubModal] = useState<'none' | 'friendly'>('none')
@@ -224,6 +226,70 @@ export default function ModeSelectorModal({
                 </button>
               </div>
             </div>
+
+            {onSelectStrategicPlaytest && (
+              <div
+                style={{
+                  marginTop: '1.25rem',
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1.5px dashed #38bdf8',
+                  borderRadius: '12px',
+                  padding: '0.85rem 1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(56, 189, 248, 0.1)',
+                }}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  handleClose()
+                  onSelectStrategicPlaytest()
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  <span style={{ fontSize: '1.8rem' }}>🔬</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                      <strong style={{ color: '#38bdf8', fontSize: '0.95rem' }}>RIVAL ESTRATÉGICO V1 (HARD)</strong>
+                      <span
+                        style={{
+                          background: '#38bdf8',
+                          color: '#0f172a',
+                          fontSize: '0.65rem',
+                          fontWeight: 800,
+                          padding: '0.15rem 0.4rem',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        PLAYTEST
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                      Entorno de evaluación científica: 15 partidas contra Utility AI en dificultad HARD. Cero impacto en ELO.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  style={{
+                    background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '0.55rem 1rem',
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                  }}
+                >
+                  🧪 ENTRAR AL PLAYTEST
+                </button>
+              </div>
+            )}
           </>
         ) : (
           /* ── VISTA DEDICADA: DUELO AMISTOSO ────────────────────────────── */
