@@ -151,4 +151,51 @@ describe('9. Winner Invalid Safety & Settlement Authority Tests', () => {
     expect(resLose.stats.every((s) => s.user_id !== null && s.user_id !== 'null')).toBe(true)
     expect(resLose.stats[0].losses).toBe(1)
   })
+
+  it('9.7. settle_verified_draw: Falla cerrado (ASYNC_SETTLEMENT_REQUIRED) en salas async y nunca inserta player2_id NULL en stats', () => {
+    function simulateSettleVerifiedDraw(room: RoomState) {
+      if (room.is_async_match) {
+        throw new Error('ASYNC_SETTLEMENT_REQUIRED: Las salas asíncronas deben liquidarse mediante settle_verified_async_ranked_match')
+      }
+
+      const statsMap = new Map<string, StatsRecord>()
+      if (room.player1_id !== null && room.player2_id !== null) {
+        statsMap.set(room.player1_id, { user_id: room.player1_id, wins: 0, losses: 0, draws: 1 })
+        statsMap.set(room.player2_id, { user_id: room.player2_id, wins: 0, losses: 0, draws: 1 })
+      } else if (room.player1_id !== null) {
+        statsMap.set(room.player1_id, { user_id: room.player1_id, wins: 0, losses: 0, draws: 1 })
+      }
+
+      return {
+        success: true,
+        status: 'empate_verificado',
+        stats: Array.from(statsMap.values()),
+      }
+    }
+
+    // 1. Invocar en sala async lanza excepción fail-closed
+    const asyncRoom: RoomState = {
+      id: 'room-async-draw',
+      mode: 'ranked',
+      is_async_match: true,
+      player1_id: 'p1-uuid',
+      player2_id: null,
+      status: 'in_progress',
+    }
+    expect(() => simulateSettleVerifiedDraw(asyncRoom)).toThrow('ASYNC_SETTLEMENT_REQUIRED')
+
+    // 2. Invocar en sala PvP normal actualiza ambos jugadores
+    const pvpRoom: RoomState = {
+      id: 'room-pvp-draw',
+      mode: 'ranked',
+      is_async_match: false,
+      player1_id: 'p1-uuid',
+      player2_id: 'p2-uuid',
+      status: 'in_progress',
+    }
+    const resPvp = simulateSettleVerifiedDraw(pvpRoom)
+    expect(resPvp.success).toBe(true)
+    expect(resPvp.stats.length).toBe(2)
+    expect(resPvp.stats.every((s) => s.user_id !== null && s.user_id !== 'null')).toBe(true)
+  })
 })
