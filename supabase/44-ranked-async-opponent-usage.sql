@@ -29,6 +29,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'chk_ranked_async_opponents_usage_count'
+      AND conrelid = 'public.ranked_async_opponents'::regclass
   ) THEN
     ALTER TABLE public.ranked_async_opponents
       ADD CONSTRAINT chk_ranked_async_opponents_usage_count

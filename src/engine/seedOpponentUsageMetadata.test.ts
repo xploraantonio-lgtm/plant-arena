@@ -18,6 +18,7 @@ describe('10. Seed Opponent Usage Metadata & Concurrency Tests (Migration 44)', 
     expect(migration44Sql).toMatch(/ALTER TABLE public\.ranked_async_opponents\s+ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;/i)
     expect(migration44Sql).toMatch(/CHECK\s*\(\s*usage_count\s*>=\s*0\s*\)/i)
     expect(migration44Sql).toContain('chk_ranked_async_opponents_usage_count')
+    expect(migration44Sql).toContain("conrelid = 'public.ranked_async_opponents'::regclass")
   })
 
   it('10.2. SQL Audit: Ledger usa exclusivamente (fase, detalle, ejecutado_en)', () => {
