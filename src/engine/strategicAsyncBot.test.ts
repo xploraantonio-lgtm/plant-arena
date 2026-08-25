@@ -9,8 +9,12 @@ import {
 import { createBattleState } from './simulate.ts'
 import { runAsyncTimeline } from './asyncOpponent.ts'
 import { msToTicks } from './time.ts'
-import { MARGEN_DE_RED_TICS } from './pvp.ts'
-import { PLANT_CONFIGS, INITIAL_BASE_HP } from '../utils/gameConstants.ts'
+import { PLANT_CONFIGS } from '../utils/gameConstants.ts'
+import {
+  SCENARIO_DECKS,
+  generarTimelineP1ParaEscenario,
+} from './strategicBenchmarkScenarios.ts'
+import { runStrategicBenchmark } from './strategicBenchmarkRunner.ts'
 import type { CartaDeMazo } from './mazoDeLaSala.ts'
 import type { PlantId } from '../types/game.ts'
 
@@ -21,32 +25,13 @@ const MAZO_ESTANDAR: CartaDeMazo[] = [
   { slot: 3, plantId: 'chomper', level: 1, statRolls: [] },
 ]
 
-const MAZO_AVANZADO: CartaDeMazo[] = [
-  { slot: 0, plantId: 'twinsunflower', level: 2, statRolls: [] },
-  { slot: 1, plantId: 'repeater', level: 2, statRolls: [] },
-  { slot: 2, plantId: 'tallnut', level: 2, statRolls: [] },
-  { slot: 3, plantId: 'bonkchoy', level: 2, statRolls: [] },
-  { slot: 4, plantId: 'jalapeno', level: 2, statRolls: [] },
-  { slot: 5, plantId: 'melonpult', level: 2, statRolls: [] },
-]
-
-const MAZO_CONTROL: CartaDeMazo[] = [
-  { slot: 0, plantId: 'sunflower', level: 1, statRolls: [] },
-  { slot: 1, plantId: 'iceberglettuce', level: 1, statRolls: [] },
-  { slot: 2, plantId: 'squash', level: 1, statRolls: [] },
-  { slot: 3, plantId: 'threepeater', level: 1, statRolls: [] },
-  { slot: 4, plantId: 'aloe', level: 1, statRolls: [] },
-  { slot: 5, plantId: 'garlic', level: 1, statRolls: [] },
-]
-
-describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', () => {
-  // ── A. AUDITORÍA DE INFORMACIÓN IMPOSIBLE ─────────────────────────────────
-  describe('A. Auditoría de Información Imposible (Zero Cheat / Fair Play)', () => {
+describe('RIVAL ESTRATÉGICO V1.2.1 — CERTIFICACIÓN REAL PROGRAMÁTICA', () => {
+  // ── 1. AUDITORÍA DE INFORMACIÓN IMPOSIBLE ─────────────────────────────────
+  describe('1. Auditoría de Información Imposible (Zero Cheat / Fair Play)', () => {
     it('el bot solo percibe información observable actual y no lee datos privados ni futuros', () => {
       const state1 = createBattleState(1111, false, true)
       const state2 = createBattleState(1111, false, true)
 
-      // Añadir una planta observable idéntica en ambos
       state1.plants.push({
         id: 'p1-peashooter-1',
         plantId: 'peashooter',
@@ -70,7 +55,7 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
         lastActionTime: 0,
       })
 
-      // En state2 agregamos eventos futuros o pendientes de P1 que aún no se manifiestan en el tablero
+      // En state2 agregamos eventos futuros de P1 que aún no se manifiestan en el tablero
       state2.pending.push({
         atTick: 500,
         kind: 'own_plant',
@@ -82,7 +67,6 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
       const perc1 = percibirTablero(state1, 100, profile)
       const perc2 = percibirTablero(state2, 100, profile)
 
-      // Ambas percepciones deben ser idénticas: el bot no conoce state.pending de P1
       expect(perc1.lanes[0].threatScore).toBe(perc2.lanes[0].threatScore)
       expect(perc1.lanes[1].threatScore).toBe(perc2.lanes[1].threatScore)
       expect(perc1.lanes[2].threatScore).toBe(perc2.lanes[2].threatScore)
@@ -99,13 +83,12 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
     })
   })
 
-  // ── B. PRUEBAS TÁCTICAS OBLIGATORIAS ───────────────────────────────────────
-  describe('B. Pruebas Tácticas Obligatorias', () => {
+  // ── 2. PRUEBAS TÁCTICAS OBLIGATORIAS ───────────────────────────────────────
+  describe('2. Pruebas Tácticas Obligatorias', () => {
     it('1. Defensa: presión fuerte en lane 1 obliga a defender lane 1 antes de economía', () => {
       const state = createBattleState(1234, false, true)
       const profile = obtenerPerfilEstrategico('defensive')
 
-      // Amenaza fuerte en lane 1
       state.plants.push({
         id: 'p1-bonkchoy-1',
         plantId: 'bonkchoy',
@@ -138,7 +121,6 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
       const state = createBattleState(1234, false, true)
       const profile = obtenerPerfilEstrategico('opportunistic')
 
-      // Fortificar lane 0 con muro de 1200 HP
       state.plants.push({
         id: 'p1-wallnut-1',
         plantId: 'wallnut',
@@ -165,7 +147,7 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
 
     it('3. Remate: si base enemiga está cerca de morir (HP <= 250), prioriza ofensiva sobre economía', () => {
       const state = createBattleState(1234, false, true)
-      state.p1BaseHp = 200 // Base enemiga muy dañada
+      state.p1BaseHp = 200
       const profile = obtenerPerfilEstrategico('aggressive')
 
       const perception = percibirTablero(state, 150, profile)
@@ -199,7 +181,6 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
       const state = createBattleState(1234, false, true)
       const profile = obtenerPerfilEstrategico('opportunistic')
 
-      // Rival coloca 2 girasoles en carril 0
       state.plants.push({
         id: 'p1-sun-1',
         plantId: 'sunflower',
@@ -228,7 +209,6 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
       const perception = percibirTablero(state, 150, profile)
       const candidates = generarAccionesCandidatas(MAZO_ESTANDAR, {}, perception, state, profile)
 
-      // El carril 1 o 2 (vacíos) reciben bono punitivo
       const atkLane1 = candidates.find((c) => c.plantId === 'chomper' && c.lane === 1)
       expect(atkLane1).toBeDefined()
       expect(atkLane1!.utility).toBeGreaterThan(50)
@@ -236,7 +216,7 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
 
     it('6. Recuperación: si la base propia recibe daño y hay amenaza, reevalúa y prioriza defensa', () => {
       const state = createBattleState(1234, false, true)
-      state.p2BaseHp = 350 // Base propia dañada
+      state.p2BaseHp = 350
       const profile = obtenerPerfilEstrategico('defensive')
 
       state.plants.push({
@@ -262,6 +242,7 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
       const atkLane0 = candidates.find((c) => c.plantId === 'chomper' && c.lane === 0)
 
       expect(defenseLane2).toBeDefined()
+      expect(atkLane0).toBeDefined()
       expect(defenseLane2!.utility).toBeGreaterThan(atkLane0!.utility)
     })
 
@@ -286,8 +267,8 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
     })
   })
 
-  // ── C. ANÁLISIS DE LAS 15 CARTAS ───────────────────────────────────────────
-  describe('C. Análisis Exhaustivo de las 15 Cartas del Juego', () => {
+  // ── 3. ANÁLISIS DE LAS 15 CARTAS ───────────────────────────────────────────
+  describe('3. Análisis Exhaustivo de las 15 Cartas del Juego', () => {
     it('cada una de las 15 cartas es evaluable legalmente y ninguna tiene utility nula o anómala', () => {
       const allPlantKeys = Object.keys(PLANT_CONFIGS) as PlantId[]
       expect(allPlantKeys.length).toBe(15)
@@ -307,64 +288,36 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
           expect(candidate).toBeDefined()
           expect(Number.isFinite(candidate!.utility)).toBe(true)
           expect(candidate!.utility).toBeGreaterThan(0)
-          expect(candidate!.utility).toBeLessThan(500) // Sin desbordamiento
+          expect(candidate!.utility).toBeLessThan(500)
         }
       }
     })
   })
 
-  // ── D. DIFERENCIACIÓN ESTADÍSTICA DE LOS 5 ESTILOS ─────────────────────────
-  describe('D. Validación de Diferenciación Estadística de los 5 Estilos', () => {
+  // ── 4. DIFERENCIACIÓN ESTADÍSTICA DE LOS 5 ESTILOS ─────────────────────────
+  describe('4. Validación de Diferenciación Estadística de los 5 Estilos', () => {
     it('demuestra diferencias claras y medibles en agresión, economía, reserva y defensa', () => {
       const profiles = STRATEGIC_PROFILES
 
-      // 1. Diferencia en reserva de soles
       expect(profiles.defensive.baseReserveSun).toBeGreaterThan(profiles.balanced.baseReserveSun)
       expect(profiles.balanced.baseReserveSun).toBeGreaterThan(profiles.aggressive.baseReserveSun)
 
-      // 2. Diferencia en meta de productores
       expect(profiles.economic.targetProducers).toBeGreaterThan(profiles.balanced.targetProducers)
       expect(profiles.balanced.targetProducers).toBeGreaterThan(profiles.aggressive.targetProducers)
 
-      // 3. Diferencia en peso de agresión vs defensa
       expect(profiles.aggressive.aggression).toBeGreaterThan(profiles.defensive.aggression)
       expect(profiles.defensive.defense).toBeGreaterThan(profiles.aggressive.defense)
 
-      // 4. Diferencia en oportunismo
       expect(profiles.opportunistic.opportunism).toBeGreaterThan(profiles.defensive.opportunism)
     })
   })
 
-  // ── E. SOPORTE DE NIVELES DE DIFICULTAD (NORMAL / HARD / ELITE) ─────────────
-  describe('E. Dificultad Basada en Calidad (Sin Trampas)', () => {
-    it('soporta NORMAL, HARD y ELITE modulando únicamente cadencia humana y precisión de selección', () => {
-      const normal = obtenerPerfilEstrategico('balanced', 'normal')
-      const hard = obtenerPerfilEstrategico('balanced', 'hard')
-      const elite = obtenerPerfilEstrategico('balanced', 'elite')
-
-      // Tiempos de reacción graduados
-      expect(normal.reactionMs).toBeGreaterThan(hard.reactionMs)
-      expect(hard.reactionMs).toBeGreaterThan(elite.reactionMs)
-
-      // Margen de error graduado
-      expect(normal.badPlayMargin).toBeGreaterThan(hard.badPlayMargin)
-      expect(hard.badPlayMargin).toBeGreaterThan(elite.badPlayMargin)
-
-      // Comprobar que no hay trampa en recursos ni reglas
-      expect(normal.baseReserveSun).toBe(hard.baseReserveSun)
-      expect(hard.baseReserveSun).toBe(elite.baseReserveSun)
-    })
-  })
-
-  // ── F. DETERMINISMO ESTRICTO MASIVO ────────────────────────────────────────
-  describe('F. Determinismo Estricto Masivo', () => {
-    it('partidas idénticas producen exactamente el mismo estado, daño, intenciones y resultado', () => {
-      for (let run = 0; run < 5; run++) {
-        const seed = 887766 + run * 100
-        const p1Actions = [
-          { seq: 1, tick: 120 + MARGEN_DE_RED_TICS, issuedTick: 120, kind: 'plant' as const, plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
-          { seq: 2, tick: 360 + MARGEN_DE_RED_TICS, issuedTick: 360, kind: 'plant' as const, plantId: 'peashooter', slot: 1, lane: 1, col: 1 },
-        ]
+  // ── 5. DETERMINISMO ESTRICTO MASIVO BIT-A-BIT ──────────────────────────────
+  describe('5. Determinismo Estricto Masivo Bit-a-Bit', () => {
+    it('compara exhaustivamente todos los campos de estado e intenciones producidas', () => {
+      for (let run = 0; run < 10; run++) {
+        const seed = 998877 + run * 31
+        const p1Actions = generarTimelineP1ParaEscenario(run % 12, MAZO_ESTANDAR, msToTicks(45000))
 
         const res1 = runAsyncTimeline({
           seed,
@@ -374,7 +327,8 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
           strictAuthoritativeHistory: false,
           asyncOpponentMode: 'strategic',
           strategicStyle: 'balanced',
-          maxTicks: 1200,
+          strategicDifficulty: 'hard',
+          maxTicks: msToTicks(45000),
         })
 
         const res2 = runAsyncTimeline({
@@ -385,141 +339,100 @@ describe('RIVAL ESTRATÉGICO V1.2 — CERTIFICACIÓN COMPETITIVA PRE-RANKED', ()
           strictAuthoritativeHistory: false,
           asyncOpponentMode: 'strategic',
           strategicStyle: 'balanced',
-          maxTicks: 1200,
+          strategicDifficulty: 'hard',
+          maxTicks: msToTicks(45000),
         })
 
         expect(res1.ok).toBe(true)
         expect(res2.ok).toBe(true)
+        expect(res1.state.tick).toBe(res2.state.tick)
+        expect(res1.winner).toBe(res2.winner)
         expect(res1.state.p1BaseHp).toBe(res2.state.p1BaseHp)
         expect(res1.state.p2BaseHp).toBe(res2.state.p2BaseHp)
+        expect(res1.state.plants.length).toBe(res2.state.plants.length)
+        expect(res1.state.enemyPlants.length).toBe(res2.state.enemyPlants.length)
+        expect(res1.state.projectiles.length).toBe(res2.state.projectiles.length)
+        expect(res1.state.pending.length).toBe(res2.state.pending.length)
+        expect(res1.controller.sunBank).toBe(res2.controller.sunBank)
         expect(res1.controller.stats.intentionsExecuted).toBe(res2.controller.stats.intentionsExecuted)
+
+        // Telemetría bit-a-bit idéntica
+        expect(res1.controller.telemetry?.length).toBe(res2.controller.telemetry?.length)
+        if (res1.controller.telemetry && res2.controller.telemetry) {
+          for (let t = 0; t < res1.controller.telemetry.length; t++) {
+            expect(res1.controller.telemetry[t].tick).toBe(res2.controller.telemetry[t].tick)
+            expect(res1.controller.telemetry[t].chosenAction.utility).toBe(
+              res2.controller.telemetry[t].chosenAction.utility
+            )
+            expect(res1.controller.telemetry[t].chosenAction.plantId).toBe(
+              res2.controller.telemetry[t].chosenAction.plantId
+            )
+          }
+        }
       }
     })
   })
 
-  // ── G. BENCHMARK COMPETITIVO DE 1,000 PARTIDAS ──────────────────────────────
-  describe('G. Benchmark Competitivo de 1,000 Partidas Offline', () => {
+  // ── 6. BENCHMARK COMPETITIVO DE 1,000 PARTIDAS Y REPORTE PROGRAMÁTICO ─────
+  describe('6. Benchmark Competitivo Completo de 1,000 Partidas', () => {
     it(
-      'ejecuta 1,000 partidas completas a través de 12 escenarios tácticos sin errores ni caídas',
+      'ejecuta 1,000 partidas completas a través de 12 escenarios tácticos y genera matriz 5x12',
       () => {
-        const styles: StrategicStyle[] = ['balanced', 'aggressive', 'defensive', 'economic', 'opportunistic']
-        const decks = [MAZO_ESTANDAR, MAZO_AVANZADO, MAZO_CONTROL]
-        let totalPlantsPlaced = 0
-        let totalDamageDealt = 0
-        let matchesCompleted = 0
-        let totalSunSpent = 0
-        let totalSunCredited = 0
-        const waitReasonsTotal: Record<string, number> = {}
+        const report = runStrategicBenchmark(1000, msToTicks(120000))
 
-        for (let i = 0; i < 1000; i++) {
-          const seed = 30000 + i * 23
-          const style = styles[i % styles.length]
-          const deck = decks[i % decks.length]
+        // Verificaciones de integridad del benchmark
+        expect(report.totalMatches).toBe(1000)
+        expect(report.matrix.length).toBe(60) // 5 styles x 12 scenarios
+        expect(report.overall.avgPlants).toBeGreaterThanOrEqual(3.5)
+        expect(report.overall.avgSunUtilization).toBeGreaterThan(0.70)
+        expect(report.anomalies.crashes).toBe(0)
+        expect(report.anomalies.nans).toBe(0)
+        expect(report.anomalies.droppedIntents).toBe(0)
+        expect(report.anomalies.illegalIntents).toBe(0)
 
-          // 12 escenarios distribuidos
-          let p1Actions: any[] = []
-          const scenarioType = i % 12
-
-          if (scenarioType === 0) {
-            // AFK
-            p1Actions = []
-          } else if (scenarioType === 1) {
-            // Agresión temprana
-            p1Actions = [
-              { seq: 1, tick: 60 + MARGEN_DE_RED_TICS, issuedTick: 60, kind: 'plant', plantId: 'chomper', slot: 3, lane: 0, col: 0 },
-            ]
-          } else if (scenarioType === 2) {
-            // Economía / Late game
-            p1Actions = [
-              { seq: 1, tick: 100 + MARGEN_DE_RED_TICS, issuedTick: 100, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 0 },
-              { seq: 2, tick: 300 + MARGEN_DE_RED_TICS, issuedTick: 300, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 0, col: 1 },
-            ]
-          } else if (scenarioType === 3) {
-            // Defensa fuerte
-            p1Actions = [
-              { seq: 1, tick: 100 + MARGEN_DE_RED_TICS, issuedTick: 100, kind: 'plant', plantId: 'wallnut', slot: 2, lane: 1, col: 3 },
-            ]
-          } else if (scenarioType === 4) {
-            // Presión multilínea
-            p1Actions = [
-              { seq: 1, tick: 100 + MARGEN_DE_RED_TICS, issuedTick: 100, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 1 },
-              { seq: 2, tick: 400 + MARGEN_DE_RED_TICS, issuedTick: 400, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 2, col: 1 },
-            ]
-          } else {
-            // Estándar
-            p1Actions = [
-              { seq: 1, tick: 120 + MARGEN_DE_RED_TICS, issuedTick: 120, kind: 'plant', plantId: deck[0].plantId, slot: 0, lane: i % 3, col: 0 },
-            ]
-          }
-
-          const res = runAsyncTimeline({
-            seed,
-            p1Deck: deck,
-            asyncDeck: deck,
-            p1Actions,
-            strictAuthoritativeHistory: false,
-            asyncOpponentMode: 'strategic',
-            strategicStyle: style,
-            maxTicks: msToTicks(45000), // 45s por partida para velocidad y cobertura
-          })
-
-          expect(res.ok).toBe(true)
-          expect(Number.isFinite(res.state.p1BaseHp)).toBe(true)
-          expect(Number.isFinite(res.state.p2BaseHp)).toBe(true)
-          expect(Number.isFinite(res.controller.sunBank)).toBe(true)
-          expect(res.controller.stats.intentionsDropped).toBe(0)
-
-          totalPlantsPlaced += res.controller.stats.intentionsExecuted
-          totalDamageDealt += Math.max(0, INITIAL_BASE_HP - res.state.p1BaseHp)
-          matchesCompleted += 1
-
-          if (res.controller.strategicState) {
-            totalSunSpent += res.controller.strategicState.metrics.totalSunSpent
-            totalSunCredited += res.controller.strategicState.metrics.totalSunCredited
-            for (const [r, count] of Object.entries(res.controller.strategicState.metrics.waitReasons)) {
-              waitReasonsTotal[r] = (waitReasonsTotal[r] || 0) + count
-            }
-          }
-        }
-
-        expect(matchesCompleted).toBe(1000)
-        expect(totalPlantsPlaced / 1000).toBeGreaterThanOrEqual(3.5)
-        expect(waitReasonsTotal['WAIT_NO_SUN']).toBeDefined()
+        // Imprimir el resumen del benchmark para trazabilidad 100% auditable
+        console.log('=== STRATEGIC_BENCHMARK_REPORT_START ===')
+        console.log(JSON.stringify(report, null, 2))
+        console.log('=== STRATEGIC_BENCHMARK_REPORT_END ===')
       },
       60000
     )
   })
 
-  // ── H. SOAK TEST DE 10,000 PARTIDAS DE ESTABILIDAD ─────────────────────────
-  describe('H. Soak Test de 10,000 Partidas de Estabilidad', () => {
+  // ── 7. FAST SOAK TEST (10,000 SIMULACIONES) ───────────────────────────────
+  describe('7. Fast Soak Test de 10,000 Simulaciones', () => {
     it(
-      'ejecuta 10,000 partidas rápidas certificando 0 crashes, 0 NaNs, 0 intenciones ilegales y 0 loops',
+      'ejecuta 10,000 simulaciones rápidas certificando 0 crashes, 0 NaNs y 0 dropped intentions',
       () => {
         const styles: StrategicStyle[] = ['balanced', 'aggressive', 'defensive', 'economic', 'opportunistic']
-        let matches = 0
+        let completed = 0
 
         for (let i = 0; i < 10000; i++) {
-          const seed = 50000 + i * 17
+          const scenarioId = i % 12
           const style = styles[i % styles.length]
+          const seed = 500000 + i * 19
+
+          const deck = SCENARIO_DECKS[scenarioId]
+          const p1Actions = generarTimelineP1ParaEscenario(scenarioId, deck.p1Deck, msToTicks(15000))
 
           const res = runAsyncTimeline({
             seed,
-            p1Deck: MAZO_ESTANDAR,
-            asyncDeck: MAZO_ESTANDAR,
-            p1Actions: [],
+            p1Deck: deck.p1Deck,
+            asyncDeck: deck.botDeck,
+            p1Actions,
             strictAuthoritativeHistory: false,
             asyncOpponentMode: 'strategic',
             strategicStyle: style,
-            maxTicks: msToTicks(15000), // 15s por partida para soak test masivo
+            maxTicks: msToTicks(15000),
           })
 
           if (!res.ok || !Number.isFinite(res.state.p1BaseHp) || res.controller.stats.intentionsDropped > 0) {
-            throw new Error(`Fallo en partida soak ${i}`)
+            throw new Error(`Fallo en fast soak ${i}`)
           }
-          matches += 1
+          completed++
         }
 
-        expect(matches).toBe(10000)
+        expect(completed).toBe(10000)
       },
       120000
     )

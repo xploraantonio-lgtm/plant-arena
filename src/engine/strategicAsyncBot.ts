@@ -1057,12 +1057,19 @@ export function generarAccionesCandidatas(
     waitReason = 'WAIT_RESERVE'
     waitUtility = 12
   } else {
-    waitReason = 'WAIT_LOW_UTILITY'
-    waitUtility = 4
+    // Ahorro táctico hacia carta pesada de late game si el tablero es seguro y hay economía
+    const heavyCard = deck.find((c) => c.plantId === 'melonpult' || c.plantId === 'threepeater')
+    if (heavyCard && perception.totalOwnProducers >= 1 && perception.maxThreat < 25 && perception.sunBank < 375) {
+      waitReason = 'WAIT_RESERVE'
+      waitUtility = 70 * Math.max(0.6, profile.economy)
+    } else {
+      waitReason = 'WAIT_LOW_UTILITY'
+      waitUtility = 4
+    }
   }
 
   // Penalización severa a WAIT si se acumulan soles sin gastar
-  if (perception.sunBank >= 2 * reserveSun && readyAffordableCount > 0 && hasValidPlacement) {
+  if (perception.sunBank >= 2 * reserveSun && readyAffordableCount > 0 && hasValidPlacement && waitReason !== 'WAIT_RESERVE') {
     const exceso = perception.sunBank - reserveSun
     waitUtility = Math.max(0, waitUtility - Math.min(30, exceso * 0.15))
   }
@@ -1189,6 +1196,7 @@ export function calcularUtilidadPlanta(params: {
   reserveSun: number
 }): { total: number; breakdown: CandidateAction['breakdown']; reason: string } {
   const {
+    plantId,
     tactical,
     configCost,
     lane,
@@ -1208,7 +1216,7 @@ export function calcularUtilidadPlanta(params: {
   let reason = ''
 
   // ── 1. DEFENSA ─────────────────────────────────────────────────────────────
-  if (tactical.isTank || tactical.isTrap || tactical.isLaneClear || tactical.isFreezer) {
+  if (tactical.isTank || tactical.isTrap || tactical.isLaneClear || tactical.isFreezer || tactical.isHealer) {
     if (tactical.isLaneClear) {
       // Jalapeño: explosión de carril. Gran valor si hay muchos atacantes o amenaza crítica
       defenseScore = (laneEval.enemyAttackersCount * 30 + laneEval.threatScore * 0.7) * profile.defense
@@ -1216,11 +1224,15 @@ export function calcularUtilidadPlanta(params: {
         defenseScore += 35
       }
     } else if (tactical.isFreezer) {
-      // Lechuga helada: coste 0, excelente para congelar en emergencia
-      defenseScore = (25 + laneEval.threatScore * 0.5) * profile.defense
+      // Lechuga helada: coste 0, excelente para congelar en emergencia o frenar avance
+      defenseScore = (35 + laneEval.threatScore * 0.6) * profile.defense
+      if (laneEval.threatScore > 10) defenseScore += 20
     } else if (tactical.isTrap) {
       // Papa mina: útil si hay atacantes caminando hacia nosotros con anticipación
       defenseScore = (30 + laneEval.threatScore * 0.6) * profile.defense
+    } else if (tactical.isHealer) {
+      // Aloe: curación y sostenimiento si el carril está disputado
+      defenseScore = (15 + (laneEval.threatScore > 15 ? 25 : 0)) * profile.defense
     } else if (tactical.isTank) {
       // Nuez / Nuez alta: tanque defensivo
       defenseScore = (35 + laneEval.threatScore * 0.85) * profile.defense
@@ -1236,9 +1248,27 @@ export function calcularUtilidadPlanta(params: {
 
   // ── 2. ATAQUE & OFENSIVA ───────────────────────────────────────────────────
   if (tactical.isWalking || tactical.role === 'ranged_attack') {
-    const baseAtk = tactical.isWalking ? 40 : 35
+    let baseAtk = tactical.isWalking ? 42 : 36
+    if (plantId === 'melonpult') baseAtk = 92
+    else if (plantId === 'threepeater') baseAtk = 80
+    else if (plantId === 'repeater') baseAtk = 55
 
     attackScore = (baseAtk + laneEval.attackOpportunityScore * 0.65 + (100 - laneEval.threatScore) * 0.2) * profile.aggression
+
+    // Bono si es Threepeater en carril central (cobertura a los 3 carriles)
+    if (plantId === 'threepeater' && lane === 1) {
+      attackScore += 25 * profile.opportunism
+    }
+
+    // Bono si es Melonpult ante enemigos acumulados
+    if (plantId === 'melonpult' && (laneEval.enemyAttackersCount >= 1 || perception.sunBank >= 300)) {
+      attackScore += 30 * profile.aggression
+    }
+
+    // Bono si es caminante melee
+    if (tactical.isWalking) {
+      attackScore += 15 * profile.aggression
+    }
 
     // Bono si el carril enemigo está vacío o si es un carril no fortificado (Flanqueo)
     if (laneEval.enemyDefendersCount === 0 && laneEval.enemyAttackersCount === 0) {
@@ -1319,8 +1349,8 @@ export function calcularUtilidadPlanta(params: {
 
   // Sinergia de soporte (Aloe)
   if (tactical.isHealer) {
-    if (laneEval.ownDefendersCount > 0 && laneEval.ownHpTotal > 500) {
-      synergyScore += 30
+    if (laneEval.ownDefendersCount > 0 && laneEval.threatScore > 20) {
+      synergyScore += 20
     } else {
       synergyScore -= 10
     }
@@ -1331,8 +1361,9 @@ export function calcularUtilidadPlanta(params: {
   if (sunAfterCost < 0) {
     costRiskPenalty += 999 // Ilegal
   } else if (sunAfterCost < reserveSun && perception.mode !== 'EMERGENCY_DEFEND') {
-    // Gastar por debajo de la reserva tiene penalización proporcional
-    costRiskPenalty += ((reserveSun - sunAfterCost) / 25) * 8
+    // Para cartas de gran calibre (Melonpult, Threepeater), si hay suficiente sol para pagarlas, no sobrepenalizar
+    const factor = (plantId === 'melonpult' || plantId === 'threepeater') ? 2.5 : 8
+    costRiskPenalty += ((reserveSun - sunAfterCost) / 25) * factor
   }
 
   // ── 6. SOBREINVERSIÓN POR CARRIL ───────────────────────────────────────────
