@@ -3,17 +3,17 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 describe('1. Matchmaking 30s Server-Authoritative (shop_config.mm_ranked_ghost_after_seconds)', () => {
-  const migration42Path = path.resolve(__dirname, '../../supabase/42-hotfix-ranked-matchmaking-and-stats.sql')
-  const migration42Sql = fs.readFileSync(migration42Path, 'utf-8')
+  const migration43Path = path.resolve(__dirname, '../../supabase/43-ranked-ux-matchmaking-stats-hotfix.sql')
+  const migration43Sql = fs.readFileSync(migration43Path, 'utf-8')
 
   it('1.1. SQL Audit: claim_ranked_async_opponent lee shop_config.mm_ranked_ghost_after_seconds con fallback 30s', () => {
     // Debe consultar shop_config
-    expect(migration42Sql).toContain('mm_ranked_ghost_after_seconds')
-    expect(migration42Sql).toMatch(/SELECT\s+COALESCE\(MAX\(CASE\s+WHEN\s+key\s*=\s*'mm_ranked_ghost_after_seconds'\s+THEN\s+value::INTEGER\s+END\),\s*30\)/i)
+    expect(migration43Sql).toContain('mm_ranked_ghost_after_seconds')
+    expect(migration43Sql).toMatch(/SELECT\s+COALESCE\(MAX\(CASE\s+WHEN\s+key\s*=\s*'mm_ranked_ghost_after_seconds'\s+THEN\s+value::INTEGER\s+END\),\s*30\)/i)
     
     // No debe existir 'IF v_waited < 60' ni '60 - v_waited'
-    expect(migration42Sql).not.toContain('v_waited < 60')
-    expect(migration42Sql).not.toContain('60 - v_waited')
+    expect(migration43Sql).not.toContain('v_waited < 60')
+    expect(migration43Sql).not.toContain('60 - v_waited')
   })
 
   it('1.2. Frontera física exacta: 29s devuelve tiempo_insuficiente; 30s permite claim', () => {

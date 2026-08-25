@@ -1,5 +1,5 @@
 -- =============================================================================
--- MIGRACIÓN 42: HOTFIX MATCHMAKING 30S Y GUARD DE RANKED_PLAYER_STATS USER_ID
+-- MIGRACIÓN 43: CIERRE SEGURO RANKED UX / MATCHMAKING / STATS
 -- =============================================================================
 -- OBJETIVOS:
 -- 1. Unificar el timeout de matchmaking Ranked asíncrono para que tanto
@@ -7,16 +7,28 @@
 --    misma clave canónica: shop_config.mm_ranked_ghost_after_seconds (default 30s).
 --    Eliminar todo hardcodeo de 60s.
 --
--- 2. Corregir la causa raíz del error:
---    "null value in column user_id of relation ranked_player_stats violates not-null constraint"
---    en _settle_room, _settle_room_draw y settle_verified_draw.
---    Proteger todas las inserciones a ranked_player_stats para P2 con:
---    IF v_room.player2_id IS NOT NULL THEN ... END IF;
+-- 2. Eliminar inferencia peligrosa de winnerSide y prohibir que _settle_room
+--    actúe como segunda autoridad en salas asíncronas.
+--    Salas con is_async_match = TRUE lanzan ASYNC_SETTLEMENT_REQUIRED, forzando
+--    que la liquidación proceda exclusivamente por settle_verified_async_ranked_match().
+--
+-- 3. Eliminar ramas ELSE genéricas cuando player2_id es NULL en _settle_room.
+--    Validar explícitamente p_winner_id IN (player1_id, player2_id).
+--
+-- 4. Blindar todas las inserciones de W/L a ranked_player_stats para player2_id
+--    con IF v_room.player2_id IS NOT NULL THEN ... END IF;
+--
+-- 5. Registrar la ejecución en _migration_audit con fase '43_ranked_ux_matchmaking_stats_hotfix'.
 -- =============================================================================
 
 BEGIN;
 
--- ── 1. ACTUALIZAR CLAIM_RANKED_ASYNC_OPPONENT (CANÓNICO 30S / SHOP_CONFIG) ───
+-- ── 1. CONFIGURACIÓN CANÓNICA DE TIMEOUT EN SHOP_CONFIG ──────────────────────
+INSERT INTO public.shop_config (key, value)
+VALUES ('mm_ranked_ghost_after_seconds', '30')
+ON CONFLICT (key) DO UPDATE SET value = '30';
+
+-- ── 2. ACTUALIZAR CLAIM_RANKED_ASYNC_OPPONENT (CANÓNICO 30S / SHOP_CONFIG) ───
 CREATE OR REPLACE FUNCTION public.claim_ranked_async_opponent()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -253,7 +265,7 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.claim_ranked_async_opponent() FROM anon, PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.claim_ranked_async_opponent() TO authenticated, service_role;
 
--- ── 2. ACTUALIZAR _SETTLE_ROOM CON GUARD DE PLAYER2_ID IS NOT NULL ───────────
+-- ── 3. ACTUALIZAR _SETTLE_ROOM (EXCLUSIVO PVP HUMANO, SIN AUTORIDAD ASYNC) ──
 CREATE OR REPLACE FUNCTION public._settle_room(p_room_id UUID, p_winner_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -277,17 +289,18 @@ BEGIN
   SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada: %', p_room_id; END IF;
 
-  -- Si es una partida asíncrona, delegar en su liquidador autoritativo específico
+  -- ── REGLA DE AUTORIDAD ÚNICA: RECHAZAR SALAS ASÍNCRONAS EN _SETTLE_ROOM ─────
   IF v_room.is_async_match = TRUE THEN
-    RETURN public.settle_verified_async_ranked_match(
-      p_room_id,
-      CASE WHEN p_winner_id = v_room.player1_id THEN 1::SMALLINT ELSE 2::SMALLINT END,
-      '{}'::JSONB
-    );
+    RAISE EXCEPTION 'ASYNC_SETTLEMENT_REQUIRED: Las salas asíncronas deben liquidarse mediante settle_verified_async_ranked_match';
   END IF;
 
   IF v_room.status IN ('p1_won', 'p2_won', 'draw', 'abandoned', 'cancelled') THEN
     RETURN jsonb_build_object('success', TRUE, 'status', 'ya_liquidada', 'winner', v_room.server_winner_id);
+  END IF;
+
+  -- ── VALIDACIÓN EXPLÍCITA DE GANADOR ─────────────────────────────────────────
+  IF p_winner_id IS NOT NULL AND p_winner_id NOT IN (v_room.player1_id, v_room.player2_id) THEN
+    RAISE EXCEPTION 'Ganador inválido para la sala: %', p_winner_id;
   END IF;
 
   -- ── COLISEO ────────────────────────────────────────────────────────────────
@@ -296,6 +309,10 @@ BEGIN
       UPDATE public.colosseum_escrow SET status = 'refunded' WHERE room_id = p_room_id AND status = 'held';
       UPDATE public.game_rooms SET status = 'draw', settled_at = NOW() WHERE id = p_room_id;
       RETURN jsonb_build_object('success', TRUE, 'status', 'empate', 'refunded', TRUE);
+    END IF;
+
+    IF v_room.player2_id IS NULL THEN
+      RAISE EXCEPTION 'Sala Coliseo inválida: player2_id es nulo';
     END IF;
 
     v_perdedor := CASE WHEN p_winner_id = v_room.player1_id THEN v_room.player2_id ELSE v_room.player1_id END;
@@ -363,22 +380,7 @@ BEGIN
   -- ── RANKED HUMANO (Fórmula ELO canónica simétrica K=32 + W/L Records) ───────
   IF v_room.mode = 'ranked' THEN
     IF v_room.player2_id IS NULL THEN
-      -- Salvaguarda: si player2_id es null, liquidar sólo para P1
-      SELECT elo_rating INTO v_elo_p1_before FROM public.profiles WHERE id = v_room.player1_id FOR UPDATE;
-      v_elo_p1_after := v_elo_p1_before;
-
-      IF p_winner_id = v_room.player1_id THEN
-        INSERT INTO public.ranked_player_stats (user_id, wins, losses, draws, updated_at)
-        VALUES (v_room.player1_id, 1, 0, 0, NOW())
-        ON CONFLICT (user_id) DO UPDATE SET wins = ranked_player_stats.wins + 1, updated_at = NOW();
-      END IF;
-
-      UPDATE public.game_rooms
-         SET status = CASE WHEN p_winner_id = player1_id THEN 'p1_won' ELSE 'p2_won' END,
-             settled_at = NOW()
-       WHERE id = p_room_id;
-
-      RETURN jsonb_build_object('success', TRUE, 'status', 'liquidada', 'winner', p_winner_id);
+      RAISE EXCEPTION 'Sala Ranked PvP inválida: player2_id es nulo';
     END IF;
 
     -- Bloquear perfiles en orden determinista por UUID para prevenir deadlocks
@@ -404,7 +406,7 @@ BEGIN
         VALUES (v_room.player2_id, 0, 1, 0, NOW())
         ON CONFLICT (user_id) DO UPDATE SET losses = ranked_player_stats.losses + 1, updated_at = NOW();
       END IF;
-    ELSE
+    ELSIF p_winner_id = v_room.player2_id THEN
       v_delta_p2 := public._ranked_elo_delta(v_elo_p2_before, v_elo_p1_before, 1.0);
       v_delta_p1 := -v_delta_p2;
 
@@ -418,6 +420,8 @@ BEGIN
       INSERT INTO public.ranked_player_stats (user_id, wins, losses, draws, updated_at)
       VALUES (v_room.player1_id, 0, 1, 0, NOW())
       ON CONFLICT (user_id) DO UPDATE SET losses = ranked_player_stats.losses + 1, updated_at = NOW();
+    ELSE
+      RAISE EXCEPTION 'Ganador no reconocido para liquidación Ranked: %', p_winner_id;
     END IF;
 
     v_elo_p1_after := GREATEST(0, v_elo_p1_before + v_delta_p1);
@@ -473,7 +477,7 @@ $$;
 REVOKE EXECUTE ON FUNCTION public._settle_room(UUID, UUID) FROM anon, authenticated, PUBLIC;
 GRANT  EXECUTE ON FUNCTION public._settle_room(UUID, UUID) TO service_role;
 
--- ── 3. ACTUALIZAR SETTLE_VERIFIED_DRAW CON GUARD DE PLAYER2_ID ────────────────
+-- ── 4. ACTUALIZAR SETTLE_VERIFIED_DRAW CON GUARD DE PLAYER2_ID ────────────────
 CREATE OR REPLACE FUNCTION public.settle_verified_draw(
   p_room_id UUID,
   p_payload JSONB DEFAULT '{}'::JSONB
@@ -499,6 +503,10 @@ BEGIN
   SELECT * INTO v_room FROM public.game_rooms WHERE id = p_room_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Sala no encontrada'; END IF;
   IF v_room.engine_version NOT IN ('auth-v1', 'auth-v2') THEN RAISE EXCEPTION 'Sala no autoritativa'; END IF;
+
+  IF v_room.is_async_match = TRUE THEN
+    RAISE EXCEPTION 'ASYNC_SETTLEMENT_REQUIRED: Las salas asíncronas deben liquidarse mediante settle_verified_async_ranked_match';
+  END IF;
 
   IF v_room.settled_at IS NOT NULL THEN
     RETURN jsonb_build_object('success', TRUE, 'status', 'ya_liquidada');
@@ -565,5 +573,15 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.settle_verified_draw(UUID, JSONB) FROM anon, authenticated, PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.settle_verified_draw(UUID, JSONB) TO service_role;
+
+-- ── 5. REGISTRAR EN AUDITORÍA DE MIGRACIONES ────────────────────────────────
+INSERT INTO public._migration_audit (fase, detalles)
+VALUES (
+  '43_ranked_ux_matchmaking_stats_hotfix',
+  jsonb_build_object(
+    'descripcion', 'Matchmaking 30s server-authoritative desde shop_config, eliminacion de inferencia winnerSide, _settle_room exclusivo PvP, y guards NOT NULL en ranked_player_stats',
+    'timestamp', NOW()
+  )
+);
 
 COMMIT;
