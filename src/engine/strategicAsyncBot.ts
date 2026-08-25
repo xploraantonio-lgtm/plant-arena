@@ -345,6 +345,8 @@ export interface StrategicPerception {
   totalOwnProducers: number
   totalEnemyProducers: number
   mode: StrategicMode
+  isStalemate?: boolean
+  stalemateLane?: number | null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -538,6 +540,11 @@ export interface StrategicMentalMetrics {
   actionsExecuted: number
   waitChosen: number
   waitReasons: Record<WaitReason, number>
+  reactionBlockedTicks: number
+  stalemateEvents: number
+  tacticalMistakes: number
+  totalEvaluatedUtility: number
+  totalChosenUtility: number
   noLegalCandidates: number
   insufficientSunCycles: number
   cooldownBlockedCycles: number
@@ -570,6 +577,7 @@ export interface StrategicMentalState {
   nextDecisionTick: number
   consecutiveWaits: number
   lastPerception: StrategicPerception | null
+  damageProgressWindow: { tick: number; enemyBaseHp: number }[]
   lastSnapshot: {
     sunBank: number
     enemyPlantsCount: number
@@ -596,6 +604,7 @@ export function crearEstadoMentalEstrategico(
     nextDecisionTick: 0,
     consecutiveWaits: 0,
     lastPerception: null,
+    damageProgressWindow: [],
     lastSnapshot: {
       sunBank: 0,
       enemyPlantsCount: 0,
@@ -616,6 +625,11 @@ export function crearEstadoMentalEstrategico(
         WAIT_LOW_UTILITY: 0,
         WAIT_REACTION: 0,
       },
+      reactionBlockedTicks: 0,
+      stalemateEvents: 0,
+      tacticalMistakes: 0,
+      totalEvaluatedUtility: 0,
+      totalChosenUtility: 0,
       noLegalCandidates: 0,
       insufficientSunCycles: 0,
       cooldownBlockedCycles: 0,
@@ -1225,8 +1239,12 @@ export function calcularUtilidadPlanta(params: {
       }
     } else if (tactical.isFreezer) {
       // Lechuga helada: coste 0, excelente para congelar en emergencia o frenar avance
-      defenseScore = (35 + laneEval.threatScore * 0.6) * profile.defense
-      if (laneEval.threatScore > 10) defenseScore += 20
+      if (laneEval.threatScore <= 5 && laneEval.enemyAttackersCount === 0) {
+        defenseScore = 5 // Anti-spam de coste 0 si no hay peligro real
+      } else {
+        defenseScore = (35 + laneEval.threatScore * 0.6) * profile.defense
+        if (laneEval.threatScore > 10) defenseScore += 20
+      }
     } else if (tactical.isTrap) {
       // Papa mina: útil si hay atacantes caminando hacia nosotros con anticipación
       defenseScore = (30 + laneEval.threatScore * 0.6) * profile.defense
@@ -1243,6 +1261,11 @@ export function calcularUtilidadPlanta(params: {
 
     if (perception.mode === 'EMERGENCY_DEFEND' && laneEval.threatScore === perception.maxThreat) {
       defenseScore *= 1.4
+    }
+
+    // Rompedor de estancamiento (Jalapeño): destruir muros densos en carril bloqueado
+    if (tactical.isLaneClear && perception.isStalemate && (lane === perception.stalemateLane || laneEval.enemyHpTotal > 500)) {
+      defenseScore += 65 * profile.aggression
     }
   }
 
@@ -1263,6 +1286,11 @@ export function calcularUtilidadPlanta(params: {
     // Bono si es Melonpult ante enemigos acumulados
     if (plantId === 'melonpult' && (laneEval.enemyAttackersCount >= 1 || perception.sunBank >= 300)) {
       attackScore += 30 * profile.aggression
+    }
+
+    // Stalemate Flanking: si el carril principal está estancado, buscar flanqueo en carriles abiertos
+    if (perception.isStalemate && laneEval.enemyDefendersCount === 0) {
+      attackScore += 55 * profile.opportunism
     }
 
     // Bono si es caminante melee
@@ -1371,6 +1399,10 @@ export function calcularUtilidadPlanta(params: {
     overinvestmentPenalty += 35 // No saturar de muros si no hay amenaza
   } else if (tactical.isTank && laneEval.ownDefendersCount >= 2) {
     overinvestmentPenalty += 45
+  }
+  // En situación de estancamiento, prohibir apilar muros adicionales si ya hay uno
+  if (tactical.isTank && perception.isStalemate && laneEval.ownDefendersCount >= 1) {
+    overinvestmentPenalty += 55
   }
   if (tactical.isProducer && laneEval.ownProducersCount >= 2) {
     overinvestmentPenalty += 25 // No saturar un carril de girasoles
@@ -1488,6 +1520,37 @@ export function decidirAccionEstrategica(
   if (sunBank > metrics.peakSunBank) metrics.peakSunBank = sunBank
 
   const perception = percibirTablero(state, sunBank, profile)
+
+  // ── Detección de Estancamiento Táctico (Window de 15 segundos = 450 ticks) ────
+  const windowTicks = msToTicks(15000)
+  mentalState.damageProgressWindow.push({ tick, enemyBaseHp: state.p1BaseHp })
+  mentalState.damageProgressWindow = mentalState.damageProgressWindow.filter((w) => tick - w.tick <= windowTicks)
+
+  let isStalemate = false
+  let stalemateLane: number | null = null
+
+  if (tick > msToTicks(25000) && mentalState.damageProgressWindow.length >= 8) {
+    const oldest = mentalState.damageProgressWindow[0]
+    const hpDiff = oldest.enemyBaseHp - state.p1BaseHp
+
+    // Si durante 15s no disminuye la vida de la base enemiga y el bot tiene presencia en el campo:
+    if (hpDiff <= 0 && state.enemyPlants.length >= 2) {
+      for (let l = 0; l < 3; l++) {
+        if (perception.lanes[l].enemyDefendersCount > 0 && perception.lanes[l].enemyHpTotal >= 400) {
+          isStalemate = true
+          stalemateLane = l
+          break
+        }
+      }
+    }
+  }
+
+  if (isStalemate) {
+    perception.isStalemate = true
+    perception.stalemateLane = stalemateLane
+    metrics.stalemateEvents += 1
+  }
+
   mentalState.lastPerception = perception
 
   // Detección de Eventos Deterministas Relevantes para Reevaluación
@@ -1529,6 +1592,7 @@ export function decidirAccionEstrategica(
   const isEventDrivenDecision = eventTrigger && tick >= mentalState.lastDecisionTick + minReactionTicks
 
   if (!isTimeForNormalDecision && !isEventDrivenDecision) {
+    metrics.reactionBlockedTicks += 1
     return { decision: null, perception }
   }
 
@@ -1548,6 +1612,15 @@ export function decidirAccionEstrategica(
   )
 
   const chosen = seleccionarAccionDeterminista(candidates, profile, mentalState.rng)
+
+  // Medir calidad de decisión y errores tácticos
+  const bestUtility = candidates.length > 0 ? candidates[0].utility : 0
+  const chosenUtility = chosen.utility
+  metrics.totalEvaluatedUtility += bestUtility
+  metrics.totalChosenUtility += chosenUtility
+  if (bestUtility > 10 && chosenUtility < bestUtility * 0.8) {
+    metrics.tacticalMistakes += 1
+  }
 
   // Programar siguiente momento de decisión
   const factor = 1 - profile.irregularity / 2 + nextFloat(mentalState.rng) * profile.irregularity * 1.2

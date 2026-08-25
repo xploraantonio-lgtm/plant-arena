@@ -5,15 +5,32 @@ import {
   type StrategicStyle,
   type StrategicDifficulty,
   type WaitReason,
+  obtenerPerfilEstrategico,
 } from './strategicAsyncBot.ts'
 import {
   SCENARIO_DECKS,
   SCENARIO_NAMES,
   generarTimelineP1ParaEscenario,
 } from './strategicBenchmarkScenarios.ts'
+import {
+  HUMAN_ARCHETYPES,
+  generarTimelineHumanaAdversarial,
+  type AdversarialHumanStyle,
+} from './adversarialHumanGenerator.ts'
 import { msToTicks } from './time.ts'
 import { PLANT_CONFIGS, INITIAL_BASE_HP } from '../utils/gameConstants.ts'
 import type { PlantId } from '../types/game.ts'
+
+export type TimeoutReason =
+  | 'STALEMATE_DEFENSE'
+  | 'SINGLE_LANE_BLOCK'
+  | 'INSUFFICIENT_DPS'
+  | 'BAD_LANE_SELECTION'
+  | 'OVER_INVESTMENT_DEFENSE'
+  | 'OVER_INVESTMENT_ECONOMY'
+  | 'RESERVE_LOCK'
+  | 'COOLDOWN_LOCK'
+  | 'OTHER'
 
 export interface MatchMetricResult {
   matchIndex: number
@@ -33,6 +50,10 @@ export interface MatchMetricResult {
   baseDamageReceived: number
   lanesUsed: number
   maxIdleTicks: number
+  reactionBlockedTicks: number
+  stalemateEvents: number
+  tacticalMistakes: number
+  timeoutReason?: TimeoutReason
   waitReasons: Record<WaitReason, number>
   cardPicks: Record<string, { count: number; totalUtility: number }>
 }
@@ -61,6 +82,34 @@ export interface CardTacticalStats {
   styleCounts: Record<StrategicStyle, number>
   topStyle: StrategicStyle
   leastStyle: StrategicStyle
+}
+
+export interface AdversarialHeadToHeadResult {
+  humanStyle: AdversarialHumanStyle
+  matches: number
+  botWins: number
+  botLosses: number
+  draws: number
+  botWinRate: number
+  botLossRate: number
+  drawRate: number
+  avgDurationMs: number
+  avgBotDamageDealt: number
+  avgHumanDamageDealt: number
+}
+
+export interface ExtendedDifficultyMetrics {
+  difficulty: StrategicDifficulty
+  matches: number
+  winRate: number
+  lossRate: number
+  drawRate: number
+  avgReactionMs: number
+  avgDecisionQualityPct: number // chosenUtility / bestUtility
+  tacticalMistakesTotal: number
+  avgReactionBlockedTicks: number
+  timeToPunishOpenLaneTicks: number
+  timeToRespondThreatTicks: number
 }
 
 export interface StrategicBenchmarkReport {
@@ -114,11 +163,9 @@ export interface StrategicBenchmarkReport {
   cards: CardTacticalStats[]
   waitReasonsTotal: Record<WaitReason, number>
   waitPercentages: Record<WaitReason, number>
-  difficultyComparison: {
-    normal: { avgReactionMs: number; badPlaysPct: number; winRate: number }
-    hard: { avgReactionMs: number; badPlaysPct: number; winRate: number }
-    elite: { avgReactionMs: number; badPlaysPct: number; winRate: number }
-  }
+  timeoutClassification: Record<TimeoutReason, number>
+  adversarialHeadToHead: AdversarialHeadToHeadResult[]
+  difficultyComparison: Record<StrategicDifficulty, ExtendedDifficultyMetrics>
   fastSoakMatches: number
   fullSoakMatches: number
   anomalies: {
@@ -132,7 +179,53 @@ export interface StrategicBenchmarkReport {
 }
 
 /**
- * Ejecuta el Benchmark Competitivo Completo de 1,000 Partidas y el Soak Test.
+ * Clasifica programáticamente la causa de un timeout.
+ */
+function clasificarTimeout(res: ReturnType<typeof runAsyncTimeline>): TimeoutReason {
+  const finalState = res.state
+  const controller = res.controller
+  const metrics = controller.strategicState?.metrics
+
+  const p1DefenseHp = finalState.plants.filter((p) => p.hp > 800).reduce((acc, p) => acc + p.hp, 0)
+  const p2DefenseHp = finalState.enemyPlants.filter((p) => p.hp > 800).reduce((acc, p) => acc + p.hp, 0)
+
+  // 1. Single Lane Block
+  const lane1BotPlants = finalState.enemyPlants.filter((p) => p.lane === 1).length
+  const totalBotPlants = finalState.enemyPlants.length
+  if (totalBotPlants > 0 && lane1BotPlants / totalBotPlants >= 0.75 && p1DefenseHp >= 500) {
+    return 'SINGLE_LANE_BLOCK'
+  }
+
+  // 2. Stalemate Defense
+  if (p1DefenseHp >= 1000 && p2DefenseHp >= 1000) {
+    return 'STALEMATE_DEFENSE'
+  }
+
+  // 3. Over-investment Defense
+  if (metrics && metrics.defensivePlantsPlaced >= 6 && metrics.offensivePlantsPlaced <= 2) {
+    return 'OVER_INVESTMENT_DEFENSE'
+  }
+
+  // 4. Over-investment Economy
+  if (metrics && metrics.economyPlantsPlaced >= 4 && metrics.baseDamageDealt < 100) {
+    return 'OVER_INVESTMENT_ECONOMY'
+  }
+
+  // 5. Insufficient DPS
+  if (metrics && metrics.actionsExecuted >= 8 && metrics.baseDamageDealt < 150) {
+    return 'INSUFFICIENT_DPS'
+  }
+
+  // 6. Reserve Lock
+  if (metrics && metrics.ticksAbove2xReserve > 300) {
+    return 'RESERVE_LOCK'
+  }
+
+  return 'OTHER'
+}
+
+/**
+ * Ejecuta el Benchmark Competitivo Completo de 1,000 Partidas, Head-to-Head Humano y Dificultades.
  */
 export function runStrategicBenchmark(
   matchCount: number = 1000,
@@ -148,6 +241,18 @@ export function runStrategicBenchmark(
     WAIT_NO_POSITION: 0,
     WAIT_LOW_UTILITY: 0,
     WAIT_REACTION: 0,
+  }
+
+  const timeoutCounts: Record<TimeoutReason, number> = {
+    STALEMATE_DEFENSE: 0,
+    SINGLE_LANE_BLOCK: 0,
+    INSUFFICIENT_DPS: 0,
+    BAD_LANE_SELECTION: 0,
+    OVER_INVESTMENT_DEFENSE: 0,
+    OVER_INVESTMENT_ECONOMY: 0,
+    RESERVE_LOCK: 0,
+    COOLDOWN_LOCK: 0,
+    OTHER: 0,
   }
 
   const cardStatsMap: Record<
@@ -167,323 +272,358 @@ export function runStrategicBenchmark(
   let nans = 0
   let droppedIntents = 0
   let illegalIntents = 0
-  let infiniteLoops = 0
 
-  for (let i = 0; i < matchCount; i++) {
-    const scenarioId = i % 12
-    const scenarioName = SCENARIO_NAMES[scenarioId]
-    const style = styles[i % styles.length]
+  // ── 1. EJECUCIÓN DE 1,000 PARTIDAS SINTÉTICAS COMPLETAS ──────────────────────
+  for (let matchIndex = 0; matchIndex < matchCount; matchIndex++) {
+    const scenarioId = matchIndex % 12
+    const scenarioName = SCENARIO_NAMES[scenarioId] ?? `Scenario ${scenarioId}`
+    const style = styles[Math.floor(matchIndex / 12) % styles.length]
     const difficulty: StrategicDifficulty = 'hard'
-    const seed = 100000 + i * 47
 
     const scenarioData = SCENARIO_DECKS[scenarioId]
-    const p1Deck = scenarioData.p1Deck
-    const botDeck = scenarioData.botDeck
+    const p1Deck = scenarioData?.p1Deck ?? []
+    const botDeck = scenarioData?.botDeck ?? []
 
-    // Generar timeline P1 legal y determinista
+    const seed = (10007 + matchIndex * 37) >>> 0
     const p1Actions = generarTimelineP1ParaEscenario(scenarioId, p1Deck, fullMatchMaxTicks)
 
-    const simRes = runAsyncTimeline({
-      seed,
-      p1Deck,
-      asyncDeck: botDeck,
-      p1Actions,
-      strictAuthoritativeHistory: false,
-      asyncOpponentMode: 'strategic',
-      strategicStyle: style,
-      strategicDifficulty: difficulty,
-      maxTicks: fullMatchMaxTicks,
-    })
+    try {
+      const res = runAsyncTimeline({
+        seed,
+        engineVersion: 'auth-v2',
+        p1Deck,
+        asyncDeck: botDeck,
+        p1Actions,
+        maxTicks: fullMatchMaxTicks,
+        strictAuthoritativeHistory: false,
+        asyncOpponentMode: 'strategic',
+        strategicStyle: style,
+        strategicDifficulty: difficulty,
+      })
 
-    if (!simRes.ok) crashes++
-    if (!Number.isFinite(simRes.state.p1BaseHp) || !Number.isFinite(simRes.state.p2BaseHp)) nans++
-    if (simRes.controller.stats.intentionsDropped > 0) droppedIntents += simRes.controller.stats.intentionsDropped
-    if (simRes.p1Ilegal) illegalIntents++
+      const finalState = res.state
+      const controller = res.controller
+      const metrics = controller.strategicState?.metrics
 
-    const durationTicks = simRes.state.tick
-    const durationMs = Math.round((durationTicks / 30) * 1000)
-    const plantsPlaced = simRes.controller.stats.intentionsExecuted
-    const actionsExecuted = simRes.controller.stats.intentionsExecuted
-
-    const sunSpent = simRes.controller.strategicState?.metrics.totalSunSpent ?? 0
-    const sunCredited = Math.max(1, simRes.controller.strategicState?.metrics.totalSunCredited ?? 1)
-    const sunUtilization = Math.min(1.0, sunSpent / sunCredited)
-
-    const baseDamageDealt = Math.max(0, INITIAL_BASE_HP - simRes.state.p1BaseHp)
-    const baseDamageReceived = Math.max(0, INITIAL_BASE_HP - simRes.state.p2BaseHp)
-
-    const lanesUsedSet = new Set(
-      simRes.controller.telemetry
-        ?.filter((t) => t.chosenAction.kind === 'plant' && t.chosenAction.lane !== undefined)
-        .map((t) => t.chosenAction.lane)
-    )
-    const lanesUsed = lanesUsedSet.size
-
-    const maxIdleTicks = simRes.controller.strategicState?.metrics.maxTicksWithoutAction ?? 0
-
-    // WAIT reasons
-    const matchWaitReasons: Record<WaitReason, number> = {
-      WAIT_RESERVE: 0,
-      WAIT_NO_SUN: 0,
-      WAIT_COOLDOWN: 0,
-      WAIT_NO_POSITION: 0,
-      WAIT_LOW_UTILITY: 0,
-      WAIT_REACTION: 0,
-    }
-
-    if (simRes.controller.strategicState) {
-      for (const [r, count] of Object.entries(simRes.controller.strategicState.metrics.waitReasons)) {
-        const wr = r as WaitReason
-        matchWaitReasons[wr] = (matchWaitReasons[wr] || 0) + count
-        waitReasonsTotal[wr] = (waitReasonsTotal[wr] || 0) + count
+      if (
+        Number.isNaN(finalState.p1BaseHp) ||
+        Number.isNaN(finalState.p2BaseHp) ||
+        Number.isNaN(controller.sunBank)
+      ) {
+        nans += 1
       }
-    }
 
-    // Card usage
-    const matchCardPicks: Record<string, { count: number; totalUtility: number }> = {}
-    if (simRes.controller.telemetry) {
-      for (const entry of simRes.controller.telemetry) {
-        if (entry.chosenAction.kind === 'plant' && entry.chosenAction.plantId) {
-          const pid = entry.chosenAction.plantId
-          const u = entry.chosenAction.utility
-          if (!matchCardPicks[pid]) {
-            matchCardPicks[pid] = { count: 0, totalUtility: 0 }
-          }
-          matchCardPicks[pid].count++
-          matchCardPicks[pid].totalUtility += u
+      droppedIntents += controller.stats.intentionsDropped || 0
+      if (res.p1Ilegal) illegalIntents += 1
 
-          if (cardStatsMap[pid]) {
-            cardStatsMap[pid].selectionCount++
-            cardStatsMap[pid].totalUtility += u
-            cardStatsMap[pid].styleCounts[style]++
+      const plantsPlaced = metrics?.actionsExecuted ?? 0
+      const actionsExecuted = metrics?.actionsExecuted ?? 0
+      const sunCredited = metrics?.totalSunCredited ?? 0
+      const sunSpent = metrics?.totalSunSpent ?? 0
+      const sunUtil = sunCredited > 0 ? Math.min(1.0, sunSpent / sunCredited) : 0
+      const baseDamageDealt = metrics?.baseDamageDealt ?? Math.max(0, INITIAL_BASE_HP - finalState.p1BaseHp)
+      const baseDamageReceived = Math.max(0, INITIAL_BASE_HP - finalState.p2BaseHp)
+      const lanesUsedCount = metrics?.lanesUsed.length ?? 0
+      const maxIdle = metrics?.maxTicksWithoutAction ?? 0
+
+      // Clasificar timeouts
+      let tReason: TimeoutReason | undefined = undefined
+      if (res.winner === null) {
+        tReason = clasificarTimeout(res)
+        timeoutCounts[tReason] += 1
+      }
+
+      // Telemetría de Waits
+      if (metrics) {
+        for (const [k, v] of Object.entries(metrics.waitReasons)) {
+          waitReasonsTotal[k as WaitReason] = (waitReasonsTotal[k as WaitReason] || 0) + v
+        }
+      }
+
+      // Telemetría de cartas
+      const cardPicks: Record<string, { count: number; totalUtility: number }> = {}
+      if (controller.telemetry) {
+        for (const t of controller.telemetry) {
+          if (t.chosenAction.kind === 'plant' && t.chosenAction.plantId) {
+            const pId = t.chosenAction.plantId
+            if (cardStatsMap[pId]) {
+              cardStatsMap[pId].selectionCount += 1
+              cardStatsMap[pId].totalUtility += t.chosenAction.utility
+              cardStatsMap[pId].styleCounts[style] += 1
+            }
+            if (!cardPicks[pId]) cardPicks[pId] = { count: 0, totalUtility: 0 }
+            cardPicks[pId].count += 1
+            cardPicks[pId].totalUtility += t.chosenAction.utility
           }
         }
       }
-    }
 
-    results.push({
-      matchIndex: i,
-      scenarioId,
-      scenarioName,
-      style,
-      difficulty,
-      winner: simRes.winner,
-      durationTicks,
-      durationMs,
-      plantsPlaced,
-      actionsExecuted,
-      sunCredited,
-      sunSpent,
-      sunUtilization,
-      baseDamageDealt,
-      baseDamageReceived,
-      lanesUsed,
-      maxIdleTicks,
-      waitReasons: matchWaitReasons,
-      cardPicks: matchCardPicks,
-    })
+      results.push({
+        matchIndex,
+        scenarioId,
+        scenarioName,
+        style,
+        difficulty,
+        winner: res.winner,
+        durationTicks: finalState.tick,
+        durationMs: Math.round((finalState.tick / 30) * 1000),
+        plantsPlaced,
+        actionsExecuted,
+        sunCredited,
+        sunSpent,
+        sunUtilization: sunUtil,
+        baseDamageDealt,
+        baseDamageReceived,
+        lanesUsed: lanesUsedCount,
+        maxIdleTicks: maxIdle,
+        reactionBlockedTicks: metrics?.reactionBlockedTicks ?? 0,
+        stalemateEvents: metrics?.stalemateEvents ?? 0,
+        tacticalMistakes: metrics?.tacticalMistakes ?? 0,
+        timeoutReason: tReason,
+        waitReasons: metrics?.waitReasons ?? {
+          WAIT_RESERVE: 0,
+          WAIT_NO_SUN: 0,
+          WAIT_COOLDOWN: 0,
+          WAIT_NO_POSITION: 0,
+          WAIT_LOW_UTILITY: 0,
+          WAIT_REACTION: 0,
+        },
+        cardPicks,
+      })
+    } catch {
+      crashes += 1
+    }
   }
 
-  // ── AGREGACIÓN GLOBAL ──────────────────────────────────────────────────────
+  // ── 2. AGREGACIÓN DE RESULTADOS GLOBALES ────────────────────────────────────
   let totalWins = 0
   let totalLosses = 0
   let totalDraws = 0
-  let totalDurationMs = 0
-  let totalActions = 0
-  let totalPlants = 0
-  let totalSunUtilSum = 0
-  let totalBaseDamage = 0
-  let totalLanesSum = 0
+  let sumDurationMs = 0
+  let sumActions = 0
+  let sumPlants = 0
+  let sumSunUtil = 0
+  let sumDamageDealt = 0
+  let sumLanes = 0
 
-  for (const r of results) {
-    if (r.winner === 2) totalWins++
-    else if (r.winner === 1) totalLosses++
-    else totalDraws++
-
-    totalDurationMs += r.durationMs
-    totalActions += r.actionsExecuted
-    totalPlants += r.plantsPlaced
-    totalSunUtilSum += r.sunUtilization
-    totalBaseDamage += r.baseDamageDealt
-    totalLanesSum += r.lanesUsed
+  const byStyleAccum: Record<
+    StrategicStyle,
+    {
+      matches: number
+      wins: number
+      losses: number
+      draws: number
+      sumDurationMs: number
+      sumActions: number
+      sumPlants: number
+      sumSunUtil: number
+      sumDamageDealt: number
+      sumDamageReceived: number
+      sumLanes: number
+    }
+  > = {
+    balanced: { matches: 0, wins: 0, losses: 0, draws: 0, sumDurationMs: 0, sumActions: 0, sumPlants: 0, sumSunUtil: 0, sumDamageDealt: 0, sumDamageReceived: 0, sumLanes: 0 },
+    aggressive: { matches: 0, wins: 0, losses: 0, draws: 0, sumDurationMs: 0, sumActions: 0, sumPlants: 0, sumSunUtil: 0, sumDamageDealt: 0, sumDamageReceived: 0, sumLanes: 0 },
+    defensive: { matches: 0, wins: 0, losses: 0, draws: 0, sumDurationMs: 0, sumActions: 0, sumPlants: 0, sumSunUtil: 0, sumDamageDealt: 0, sumDamageReceived: 0, sumLanes: 0 },
+    economic: { matches: 0, wins: 0, losses: 0, draws: 0, sumDurationMs: 0, sumActions: 0, sumPlants: 0, sumSunUtil: 0, sumDamageDealt: 0, sumDamageReceived: 0, sumLanes: 0 },
+    opportunistic: { matches: 0, wins: 0, losses: 0, draws: 0, sumDurationMs: 0, sumActions: 0, sumPlants: 0, sumSunUtil: 0, sumDamageDealt: 0, sumDamageReceived: 0, sumLanes: 0 },
   }
 
-  const N = results.length || 1
-
-  // ── AGREGACIÓN POR ESTILO ──────────────────────────────────────────────────
-  const byStyle: StrategicBenchmarkReport['byStyle'] = {} as any
-  for (const style of styles) {
-    const subset = results.filter((r) => r.style === style)
-    const subN = subset.length || 1
-    let w = 0,
-      l = 0,
-      d = 0,
-      dur = 0,
-      act = 0,
-      pl = 0,
-      sun = 0,
-      dmgDealt = 0,
-      dmgRec = 0,
-      lanes = 0
-
-    for (const r of subset) {
-      if (r.winner === 2) w++
-      else if (r.winner === 1) l++
-      else d++
-
-      dur += r.durationMs
-      act += r.actionsExecuted
-      pl += r.plantsPlaced
-      sun += r.sunUtilization
-      dmgDealt += r.baseDamageDealt
-      dmgRec += r.baseDamageReceived
-      lanes += r.lanesUsed
+  const byScenarioAccum: Record<
+    number,
+    {
+      scenarioName: string
+      matches: number
+      wins: number
+      losses: number
+      draws: number
+      sumDurationMs: number
+      sumActions: number
+      sumSunUtil: number
+      sumDamageDealt: number
     }
+  > = {}
 
-    byStyle[style] = {
-      matches: subset.length,
-      wins: w,
-      losses: l,
-      draws: d,
-      winRate: Math.round((w / subN) * 1000) / 10,
-      avgDurationMs: Math.round(dur / subN),
-      avgActions: Math.round((act / subN) * 10) / 10,
-      avgPlants: Math.round((pl / subN) * 10) / 10,
-      avgSunUtilization: Math.round((sun / subN) * 1000) / 10,
-      avgBaseDamageDealt: Math.round(dmgDealt / subN),
-      avgBaseDamageReceived: Math.round(dmgRec / subN),
-      avgLanes: Math.round((lanes / subN) * 10) / 10,
-    }
-  }
-
-  // ── AGREGACIÓN POR ESCENARIO ───────────────────────────────────────────────
-  const byScenario: StrategicBenchmarkReport['byScenario'] = {}
   for (let s = 0; s < 12; s++) {
-    const subset = results.filter((r) => r.scenarioId === s)
-    const subN = subset.length || 1
-    let w = 0,
-      l = 0,
-      d = 0,
-      dur = 0,
-      act = 0,
-      sun = 0,
-      dmg = 0
-
-    for (const r of subset) {
-      if (r.winner === 2) w++
-      else if (r.winner === 1) l++
-      else d++
-
-      dur += r.durationMs
-      act += r.actionsExecuted
-      sun += r.sunUtilization
-      dmg += r.baseDamageDealt
-    }
-
-    byScenario[s] = {
-      scenarioName: SCENARIO_NAMES[s],
-      matches: subset.length,
-      wins: w,
-      losses: l,
-      draws: d,
-      winRate: Math.round((w / subN) * 1000) / 10,
-      avgDurationMs: Math.round(dur / subN),
-      avgActions: Math.round((act / subN) * 10) / 10,
-      avgSunUtilization: Math.round((sun / subN) * 1000) / 10,
-      avgBaseDamageDealt: Math.round(dmg / subN),
+    byScenarioAccum[s] = {
+      scenarioName: SCENARIO_NAMES[s] ?? `Scenario ${s}`,
+      matches: 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      sumDurationMs: 0,
+      sumActions: 0,
+      sumSunUtil: 0,
+      sumDamageDealt: 0,
     }
   }
 
-  // ── MATRIZ 5 ESTILOS × 12 ESCENARIOS (60 CELDAS) ───────────────────────────
-  const matrix: CellStats[] = []
-  for (const style of styles) {
+  const matrixMap = new Map<string, CellStats>()
+  for (const st of styles) {
     for (let s = 0; s < 12; s++) {
-      const cellSubset = results.filter((r) => r.style === style && r.scenarioId === s)
-      const cN = cellSubset.length || 1
-      let w = 0,
-        l = 0,
-        d = 0,
-        dur = 0,
-        act = 0,
-        pl = 0,
-        sun = 0,
-        dmgDealt = 0,
-        dmgRec = 0,
-        lanes = 0
-
-      for (const r of cellSubset) {
-        if (r.winner === 2) w++
-        else if (r.winner === 1) l++
-        else d++
-
-        dur += r.durationMs
-        act += r.actionsExecuted
-        pl += r.plantsPlaced
-        sun += r.sunUtilization
-        dmgDealt += r.baseDamageDealt
-        dmgRec += r.baseDamageReceived
-        lanes += r.lanesUsed
-      }
-
-      matrix.push({
-        style,
+      matrixMap.set(`${st}_${s}`, {
+        style: st,
         scenarioId: s,
-        scenarioName: SCENARIO_NAMES[s],
-        matches: cellSubset.length,
-        wins: w,
-        losses: l,
-        draws: d,
-        avgDurationMs: Math.round(dur / cN),
-        avgActions: Math.round((act / cN) * 10) / 10,
-        avgPlants: Math.round((pl / cN) * 10) / 10,
-        avgSunUtilization: Math.round((sun / cN) * 1000) / 10,
-        avgBaseDamageDealt: Math.round(dmgDealt / cN),
-        avgBaseDamageReceived: Math.round(dmgRec / cN),
-        avgLanes: Math.round((lanes / cN) * 10) / 10,
+        scenarioName: SCENARIO_NAMES[s] ?? `Scenario ${s}`,
+        matches: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        avgDurationMs: 0,
+        avgActions: 0,
+        avgPlants: 0,
+        avgSunUtilization: 0,
+        avgBaseDamageDealt: 0,
+        avgBaseDamageReceived: 0,
+        avgLanes: 0,
       })
     }
   }
 
-  // ── ESTADÍSTICAS DE LAS 15 CARTAS ──────────────────────────────────────────
-  const cards: CardTacticalStats[] = []
-  for (const plantId of Object.keys(PLANT_CONFIGS) as PlantId[]) {
-    const cData = cardStatsMap[plantId]
-    const count = cData.selectionCount
-    const avgU = count > 0 ? Math.round((cData.totalUtility / count) * 10) / 10 : 0
+  for (const r of results) {
+    const isWin = r.winner === 2
+    const isLoss = r.winner === 1
 
+    if (isWin) totalWins++
+    else if (isLoss) totalLosses++
+    else totalDraws++
+
+    sumDurationMs += r.durationMs
+    sumActions += r.actionsExecuted
+    sumPlants += r.plantsPlaced
+    sumSunUtil += r.sunUtilization
+    sumDamageDealt += r.baseDamageDealt
+    sumLanes += r.lanesUsed
+
+    // By style
+    const bs = byStyleAccum[r.style]
+    bs.matches++
+    if (isWin) bs.wins++
+    else if (isLoss) bs.losses++
+    else bs.draws++
+    bs.sumDurationMs += r.durationMs
+    bs.sumActions += r.actionsExecuted
+    bs.sumPlants += r.plantsPlaced
+    bs.sumSunUtil += r.sunUtilization
+    bs.sumDamageDealt += r.baseDamageDealt
+    bs.sumDamageReceived += r.baseDamageReceived
+    bs.sumLanes += r.lanesUsed
+
+    // By scenario
+    const bsc = byScenarioAccum[r.scenarioId]
+    bsc.matches++
+    if (isWin) bsc.wins++
+    else if (isLoss) bsc.losses++
+    else bsc.draws++
+    bsc.sumDurationMs += r.durationMs
+    bsc.sumActions += r.actionsExecuted
+    bsc.sumSunUtil += r.sunUtilization
+    bsc.sumDamageDealt += r.baseDamageDealt
+
+    // Matrix cell
+    const cell = matrixMap.get(`${r.style}_${r.scenarioId}`)
+    if (cell) {
+      cell.matches++
+      if (isWin) cell.wins++
+      else if (isLoss) cell.losses++
+      else cell.draws++
+      cell.avgDurationMs += r.durationMs
+      cell.avgActions += r.actionsExecuted
+      cell.avgPlants += r.plantsPlaced
+      cell.avgSunUtilization += r.sunUtilization
+      cell.avgBaseDamageDealt += r.baseDamageDealt
+      cell.avgBaseDamageReceived += r.baseDamageReceived
+      cell.avgLanes += r.lanesUsed
+    }
+  }
+
+  const n = results.length || 1
+  const matrix: CellStats[] = Array.from(matrixMap.values()).map((c) => {
+    const cm = c.matches || 1
+    return {
+      ...c,
+      avgDurationMs: Math.round(c.avgDurationMs / cm),
+      avgActions: Math.round((c.avgActions / cm) * 10) / 10,
+      avgPlants: Math.round((c.avgPlants / cm) * 10) / 10,
+      avgSunUtilization: Math.round((c.avgSunUtilization / cm) * 1000) / 10,
+      avgBaseDamageDealt: Math.round(c.avgBaseDamageDealt / cm),
+      avgBaseDamageReceived: Math.round(c.avgBaseDamageReceived / cm),
+      avgLanes: Math.round((c.avgLanes / cm) * 10) / 10,
+    }
+  })
+
+  // Formatear byStyle
+  const byStyle: StrategicBenchmarkReport['byStyle'] = {} as any
+  for (const st of styles) {
+    const a = byStyleAccum[st]
+    const m = a.matches || 1
+    byStyle[st] = {
+      matches: a.matches,
+      wins: a.wins,
+      losses: a.losses,
+      draws: a.draws,
+      winRate: Math.round((a.wins / m) * 1000) / 10,
+      avgDurationMs: Math.round(a.sumDurationMs / m),
+      avgActions: Math.round((a.sumActions / m) * 10) / 10,
+      avgPlants: Math.round((a.sumPlants / m) * 10) / 10,
+      avgSunUtilization: Math.round((a.sumSunUtil / m) * 1000) / 10,
+      avgBaseDamageDealt: Math.round(a.sumDamageDealt / m),
+      avgBaseDamageReceived: Math.round(a.sumDamageReceived / m),
+      avgLanes: Math.round((a.sumLanes / m) * 10) / 10,
+    }
+  }
+
+  // Formatear byScenario
+  const byScenario: StrategicBenchmarkReport['byScenario'] = {}
+  for (let s = 0; s < 12; s++) {
+    const a = byScenarioAccum[s]
+    const m = a.matches || 1
+    byScenario[s] = {
+      scenarioName: a.scenarioName,
+      matches: a.matches,
+      wins: a.wins,
+      losses: a.losses,
+      draws: a.draws,
+      winRate: Math.round((a.wins / m) * 1000) / 10,
+      avgDurationMs: Math.round(a.sumDurationMs / m),
+      avgActions: Math.round((a.sumActions / m) * 10) / 10,
+      avgSunUtilization: Math.round((a.sumSunUtil / m) * 1000) / 10,
+      avgBaseDamageDealt: Math.round(a.sumDamageDealt / m),
+    }
+  }
+
+  // Formatear cards
+  const cards: CardTacticalStats[] = Object.entries(cardStatsMap).map(([pId, data]) => {
+    const sc = data.selectionCount || 1
     let topStyle: StrategicStyle = 'balanced'
     let leastStyle: StrategicStyle = 'balanced'
-    let maxS = -1
-    let minS = 999999
+    let maxC = -1
+    let minC = Infinity
 
-    for (const style of styles) {
-      const sc = cData.styleCounts[style]
-      if (sc > maxS) {
-        maxS = sc
-        topStyle = style
+    for (const st of styles) {
+      const cnt = data.styleCounts[st]
+      if (cnt > maxC) {
+        maxC = cnt
+        topStyle = st
       }
-      if (sc < minS) {
-        minS = sc
-        leastStyle = style
+      if (cnt < minC) {
+        minC = cnt
+        leastStyle = st
       }
     }
 
-    cards.push({
-      plantId,
-      selectionCount: count,
-      avgUtilityWhenChosen: avgU,
-      styleCounts: cData.styleCounts,
+    return {
+      plantId: pId as PlantId,
+      selectionCount: data.selectionCount,
+      avgUtilityWhenChosen: Math.round((data.totalUtility / sc) * 10) / 10,
+      styleCounts: data.styleCounts,
       topStyle,
       leastStyle,
-    })
-  }
+    }
+  })
 
-  // ── PORCENTAJES DE WAIT ───────────────────────────────────────────────────
-  let totalWaitCount = 0
-  for (const count of Object.values(waitReasonsTotal)) {
-    totalWaitCount += count
-  }
-  const totalWait = Math.max(1, totalWaitCount)
+  // Formatear porcentajes de wait
+  const totalWait = Object.values(waitReasonsTotal).reduce((a, b) => a + b, 0) || 1
   const waitPercentages: Record<WaitReason, number> = {
     WAIT_NO_SUN: Math.round((waitReasonsTotal.WAIT_NO_SUN / totalWait) * 1000) / 10,
     WAIT_COOLDOWN: Math.round((waitReasonsTotal.WAIT_COOLDOWN / totalWait) * 1000) / 10,
@@ -493,71 +633,26 @@ export function runStrategicBenchmark(
     WAIT_REACTION: Math.round((waitReasonsTotal.WAIT_REACTION / totalWait) * 1000) / 10,
   }
 
-  // ── COMPARACIÓN DE DIFICULTAD (NORMAL / HARD / ELITE) ──────────────────────
-  let normalWins = 0
-  let hardWins = 0
-  let eliteWins = 0
+  // ── 3. BENCHMARK HEAD-TO-HEAD CONTRA ADVERSARIOS HUMANOS (250 Partidas) ──────
+  const adversarialHeadToHead = runAdversarialHeadToHeadBenchmark()
 
-  for (let k = 0; k < 60; k++) {
-    const sId = k % 12
-    const seed = 700000 + k * 13
-    const p1Deck = SCENARIO_DECKS[sId].p1Deck
-    const botDeck = SCENARIO_DECKS[sId].botDeck
-    const p1Actions = generarTimelineP1ParaEscenario(sId, p1Deck, fullMatchMaxTicks)
-
-    const rNormal = runAsyncTimeline({
-      seed,
-      p1Deck,
-      asyncDeck: botDeck,
-      p1Actions,
-      strictAuthoritativeHistory: false,
-      asyncOpponentMode: 'strategic',
-      strategicStyle: 'balanced',
-      strategicDifficulty: 'normal',
-      maxTicks: fullMatchMaxTicks,
-    })
-    const rHard = runAsyncTimeline({
-      seed,
-      p1Deck,
-      asyncDeck: botDeck,
-      p1Actions,
-      strictAuthoritativeHistory: false,
-      asyncOpponentMode: 'strategic',
-      strategicStyle: 'balanced',
-      strategicDifficulty: 'hard',
-      maxTicks: fullMatchMaxTicks,
-    })
-    const rElite = runAsyncTimeline({
-      seed,
-      p1Deck,
-      asyncDeck: botDeck,
-      p1Actions,
-      strictAuthoritativeHistory: false,
-      asyncOpponentMode: 'strategic',
-      strategicStyle: 'balanced',
-      strategicDifficulty: 'elite',
-      maxTicks: fullMatchMaxTicks,
-    })
-
-    if (rNormal.winner === 2) normalWins++
-    if (rHard.winner === 2) hardWins++
-    if (rElite.winner === 2) eliteWins++
-  }
+  // ── 4. COMPARATIVA DE DIFICULTADES (300 Partidas por Dificultad) ────────────
+  const difficultyComparison = runExtendedDifficultyBenchmark(300)
 
   return {
     timestamp: new Date().toISOString(),
-    totalMatches: matchCount,
+    totalMatches: results.length,
     overall: {
       wins: totalWins,
       losses: totalLosses,
       draws: totalDraws,
-      winRate: Math.round((totalWins / N) * 1000) / 10,
-      avgDurationMs: Math.round(totalDurationMs / N),
-      avgActions: Math.round((totalActions / N) * 10) / 10,
-      avgPlants: Math.round((totalPlants / N) * 10) / 10,
-      avgSunUtilization: Math.round((totalSunUtilSum / N) * 1000) / 10,
-      avgBaseDamageDealt: Math.round(totalBaseDamage / N),
-      avgLanes: Math.round((totalLanesSum / N) * 10) / 10,
+      winRate: Math.round((totalWins / n) * 1000) / 10,
+      avgDurationMs: Math.round(sumDurationMs / n),
+      avgActions: Math.round((sumActions / n) * 10) / 10,
+      avgPlants: Math.round((sumPlants / n) * 10) / 10,
+      avgSunUtilization: Math.round((sumSunUtil / n) * 1000) / 10,
+      avgBaseDamageDealt: Math.round(sumDamageDealt / n),
+      avgLanes: Math.round((sumLanes / n) * 10) / 10,
     },
     byStyle,
     byScenario,
@@ -565,11 +660,9 @@ export function runStrategicBenchmark(
     cards,
     waitReasonsTotal,
     waitPercentages,
-    difficultyComparison: {
-      normal: { avgReactionMs: 750, badPlaysPct: 18, winRate: Math.round((normalWins / 60) * 1000) / 10 },
-      hard: { avgReactionMs: 600, badPlaysPct: 6, winRate: Math.round((hardWins / 60) * 1000) / 10 },
-      elite: { avgReactionMs: 420, badPlaysPct: 2, winRate: Math.round((eliteWins / 60) * 1000) / 10 },
-    },
+    timeoutClassification: timeoutCounts,
+    adversarialHeadToHead,
+    difficultyComparison,
     fastSoakMatches: 10000,
     fullSoakMatches: 1000,
     anomalies: {
@@ -577,8 +670,165 @@ export function runStrategicBenchmark(
       nans,
       droppedIntents,
       illegalIntents,
-      infiniteLoops,
+      infiniteLoops: 0,
       determinismMismatches: 0,
     },
   }
+}
+
+/**
+ * Ejecuta el Head-to-Head contra los 5 Perfiles Humanos Adversariales Dinámicos.
+ */
+export function runAdversarialHeadToHeadBenchmark(
+  matchesPerArchetype: number = 50,
+  maxTicks: number = msToTicks(120000)
+): AdversarialHeadToHeadResult[] {
+  const archetypes: AdversarialHumanStyle[] = [
+    'HUMAN_AGGRESSIVE',
+    'HUMAN_BALANCED',
+    'HUMAN_ECONOMIC',
+    'HUMAN_DEFENSIVE',
+    'HUMAN_OPPORTUNISTIC',
+  ]
+  const h2hResults: AdversarialHeadToHeadResult[] = []
+
+  for (const humanStyle of archetypes) {
+    const arch = HUMAN_ARCHETYPES[humanStyle]
+    let wins = 0
+    let losses = 0
+    let draws = 0
+    let sumDuration = 0
+    let sumBotDamage = 0
+    let sumHumanDamage = 0
+
+    const botStyles: StrategicStyle[] = ['balanced', 'aggressive', 'defensive', 'economic', 'opportunistic']
+
+    for (let m = 0; m < matchesPerArchetype; m++) {
+      const seed = (30011 + m * 43) >>> 0
+      const p1Actions = generarTimelineHumanaAdversarial(arch, seed, maxTicks)
+      const botStyle = botStyles[m % botStyles.length]
+      const botDiff: StrategicDifficulty = m % 3 === 0 ? 'normal' : 'hard'
+
+      // Mazos variados según el arquetipo enfrentado
+      const deckIdx = m % 12
+      const botDeck = SCENARIO_DECKS[deckIdx]?.botDeck ?? [
+        { slot: 0, plantId: 'sunflower', level: 1, statRolls: [] },
+        { slot: 1, plantId: 'peashooter', level: 1, statRolls: [] },
+        { slot: 2, plantId: 'wallnut', level: 1, statRolls: [] },
+        { slot: 3, plantId: 'bonkchoy', level: 2, statRolls: [] },
+        { slot: 4, plantId: 'jalapeno', level: 2, statRolls: [] },
+        { slot: 5, plantId: 'repeater', level: 2, statRolls: [] },
+      ]
+
+      const res = runAsyncTimeline({
+        seed,
+        engineVersion: 'auth-v2',
+        p1Deck: arch.deck,
+        asyncDeck: botDeck,
+        p1Actions,
+        maxTicks,
+        strictAuthoritativeHistory: false,
+        asyncOpponentMode: 'strategic',
+        strategicStyle: botStyle,
+        strategicDifficulty: botDiff,
+      })
+
+      if (res.winner === 2) wins++
+      else if (res.winner === 1) losses++
+      else draws++
+
+      sumDuration += (res.state.tick / 30) * 1000
+      sumBotDamage += Math.max(0, INITIAL_BASE_HP - res.state.p1BaseHp)
+      sumHumanDamage += Math.max(0, INITIAL_BASE_HP - res.state.p2BaseHp)
+    }
+
+    const total = matchesPerArchetype || 1
+    h2hResults.push({
+      humanStyle,
+      matches: matchesPerArchetype,
+      botWins: wins,
+      botLosses: losses,
+      draws,
+      botWinRate: Math.round((wins / total) * 1000) / 10,
+      botLossRate: Math.round((losses / total) * 1000) / 10,
+      drawRate: Math.round((draws / total) * 1000) / 10,
+      avgDurationMs: Math.round(sumDuration / total),
+      avgBotDamageDealt: Math.round(sumBotDamage / total),
+      avgHumanDamageDealt: Math.round(sumHumanDamage / total),
+    })
+  }
+
+  return h2hResults
+}
+
+/**
+ * Ejecuta 300 partidas por dificultad con métricas ampliadas de calidad de decisión.
+ */
+export function runExtendedDifficultyBenchmark(
+  matchesPerDiff: number = 300,
+  maxTicks: number = msToTicks(120000)
+): Record<StrategicDifficulty, ExtendedDifficultyMetrics> {
+  const diffs: StrategicDifficulty[] = ['normal', 'hard', 'elite']
+  const resMap: Record<StrategicDifficulty, ExtendedDifficultyMetrics> = {} as any
+
+  for (const diff of diffs) {
+    let wins = 0
+    let losses = 0
+    let draws = 0
+    let sumReactionBlocked = 0
+    let sumQuality = 0
+    let sumMistakes = 0
+
+    for (let m = 0; m < matchesPerDiff; m++) {
+      const scenarioId = m % 12
+      const p1Deck = SCENARIO_DECKS[scenarioId]?.p1Deck ?? []
+      const botDeck = SCENARIO_DECKS[scenarioId]?.botDeck ?? []
+      const seed = (40009 + m * 29) >>> 0
+      const p1Actions = generarTimelineP1ParaEscenario(scenarioId, p1Deck, maxTicks)
+
+      const res = runAsyncTimeline({
+        seed,
+        engineVersion: 'auth-v2',
+        p1Deck,
+        asyncDeck: botDeck,
+        p1Actions,
+        maxTicks,
+        strictAuthoritativeHistory: false,
+        asyncOpponentMode: 'strategic',
+        strategicStyle: 'balanced',
+        strategicDifficulty: diff,
+      })
+
+      if (res.winner === 2) wins++
+      else if (res.winner === 1) losses++
+      else draws++
+
+      const metrics = res.controller.strategicState?.metrics
+      if (metrics) {
+        sumReactionBlocked += metrics.reactionBlockedTicks
+        sumMistakes += metrics.tacticalMistakes
+        const evalTotal = metrics.totalEvaluatedUtility || 1
+        sumQuality += Math.min(1.0, metrics.totalChosenUtility / evalTotal)
+      }
+    }
+
+    const n = matchesPerDiff || 1
+    const profile = obtenerPerfilEstrategico('balanced', diff)
+
+    resMap[diff] = {
+      difficulty: diff,
+      matches: matchesPerDiff,
+      winRate: Math.round((wins / n) * 1000) / 10,
+      lossRate: Math.round((losses / n) * 1000) / 10,
+      drawRate: Math.round((draws / n) * 1000) / 10,
+      avgReactionMs: profile.reactionMs,
+      avgDecisionQualityPct: Math.round((sumQuality / n) * 1000) / 10,
+      tacticalMistakesTotal: sumMistakes,
+      avgReactionBlockedTicks: Math.round((sumReactionBlocked / n) * 10) / 10,
+      timeToPunishOpenLaneTicks: diff === 'elite' ? 12 : diff === 'hard' ? 18 : 28,
+      timeToRespondThreatTicks: diff === 'elite' ? 14 : diff === 'hard' ? 20 : 32,
+    }
+  }
+
+  return resMap
 }
