@@ -8,12 +8,12 @@
 -- 1. VERIFICAR QUE LA FASE 43 ESTÁ REGISTRADA EXACTAMENTE UNA VEZ
 SELECT
   fase,
-  detalles->>'descripcion' AS descripcion,
-  detalles->>'timestamp' AS audit_timestamp,
+  detalle->>'descripcion' AS descripcion,
+  ejecutado_en AS audit_timestamp,
   CASE WHEN COUNT(*) = 1 THEN 'OK (Registrada)' ELSE 'FAIL (Fase no encontrada o duplicada)' END AS audit_status
 FROM public._migration_audit
 WHERE fase = '43_ranked_ux_matchmaking_stats_hotfix'
-GROUP BY fase, detalles;
+GROUP BY fase, detalle, ejecutado_en;
 
 -- 2. VERIFICAR VALOR DE CONFIGURACIÓN CANÓNICA DE GHOST EN SHOP_CONFIG
 SELECT

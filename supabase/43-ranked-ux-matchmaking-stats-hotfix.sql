@@ -575,13 +575,13 @@ REVOKE EXECUTE ON FUNCTION public.settle_verified_draw(UUID, JSONB) FROM anon, a
 GRANT  EXECUTE ON FUNCTION public.settle_verified_draw(UUID, JSONB) TO service_role;
 
 -- ── 5. REGISTRAR EN AUDITORÍA DE MIGRACIONES ────────────────────────────────
-INSERT INTO public._migration_audit (fase, detalles)
+INSERT INTO public._migration_audit (fase, detalle, ejecutado_en)
 VALUES (
   '43_ranked_ux_matchmaking_stats_hotfix',
   jsonb_build_object(
-    'descripcion', 'Matchmaking 30s server-authoritative desde shop_config, eliminacion de inferencia winnerSide, _settle_room exclusivo PvP, y guards NOT NULL en ranked_player_stats',
-    'timestamp', NOW()
-  )
+    'descripcion', 'Matchmaking 30s server-authoritative desde shop_config, eliminacion de inferencia winnerSide, _settle_room exclusivo PvP, y guards NOT NULL en ranked_player_stats'
+  ),
+  NOW()
 );
 
 COMMIT;
