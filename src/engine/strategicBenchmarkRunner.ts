@@ -18,7 +18,13 @@ import {
   type AdversarialHumanStyle,
 } from './adversarialHumanGenerator.ts'
 import { msToTicks } from './time.ts'
-import { PLANT_CONFIGS, INITIAL_BASE_HP } from '../utils/gameConstants.ts'
+import {
+  PLANT_CONFIGS,
+  INITIAL_BASE_HP,
+  INITIAL_SUN,
+  SUN_VALUE,
+  getScaledPlantConfig,
+} from '../utils/gameConstants.ts'
 import type { PlantId } from '../types/game.ts'
 
 export type TimeoutReason =
@@ -96,6 +102,11 @@ export interface AdversarialHeadToHeadResult {
   avgDurationMs: number
   avgBotDamageDealt: number
   avgHumanDamageDealt: number
+  illegalP1: number
+  illegalP2: number
+  totalCollectCount: number
+  avgP1SunUtilization: number
+  avgP2SunUtilization: number
 }
 
 export interface ExtendedDifficultyMetrics {
@@ -700,12 +711,16 @@ export function runAdversarialHeadToHeadBenchmark(
     let sumDuration = 0
     let sumBotDamage = 0
     let sumHumanDamage = 0
+    let illegalP1Count = 0
+    let illegalP2Count = 0
+    let totalCollects = 0
+    let sumP1SunUtil = 0
+    let sumP2SunUtil = 0
 
     const botStyles: StrategicStyle[] = ['balanced', 'aggressive', 'defensive', 'economic', 'opportunistic']
 
     for (let m = 0; m < matchesPerArchetype; m++) {
       const seed = (30011 + m * 43) >>> 0
-      const p1Actions = generarTimelineHumanaAdversarial(arch, seed, maxTicks)
       const botStyle = botStyles[m % botStyles.length]
       const botDiff: StrategicDifficulty = m % 3 === 0 ? 'normal' : 'hard'
 
@@ -719,6 +734,10 @@ export function runAdversarialHeadToHeadBenchmark(
         { slot: 4, plantId: 'jalapeno', level: 2, statRolls: [] },
         { slot: 5, plantId: 'repeater', level: 2, statRolls: [] },
       ]
+
+      const p1Actions = generarTimelineHumanaAdversarial(arch, seed, maxTicks, botStyle, botDiff, botDeck)
+      const collectsInMatch = p1Actions.filter((a) => a.kind === 'collect').length
+      totalCollects += collectsInMatch
 
       const res = runAsyncTimeline({
         seed,
@@ -736,6 +755,21 @@ export function runAdversarialHeadToHeadBenchmark(
       if (res.winner === 2) wins++
       else if (res.winner === 1) losses++
       else draws++
+
+      if (res.p1Ilegal) illegalP1Count++
+      if (res.controller.stats.intentionsDropped > 0) illegalP2Count++
+
+      const metricsP2 = res.controller.strategicState?.metrics
+      const p2SunSpent = metricsP2?.totalSunSpent ?? 0
+      const p2SunCredited = metricsP2?.totalSunCredited ?? 1
+      sumP2SunUtil += p2SunCredited > 0 ? Math.min(100, Math.round((p2SunSpent / p2SunCredited) * 100)) : 0
+
+      // Calcular utilización de sol P1
+      const p1SunSpent = p1Actions
+        .filter((a) => a.kind === 'plant' && a.plantId)
+        .reduce((acc, a) => acc + (getScaledPlantConfig(a.plantId as PlantId)?.cost ?? 0), 0)
+      const p1SunTotal = INITIAL_SUN + collectsInMatch * SUN_VALUE
+      sumP1SunUtil += p1SunTotal > 0 ? Math.min(100, Math.round((p1SunSpent / p1SunTotal) * 100)) : 0
 
       sumDuration += (res.state.tick / 30) * 1000
       sumBotDamage += Math.max(0, INITIAL_BASE_HP - res.state.p1BaseHp)
@@ -755,6 +789,11 @@ export function runAdversarialHeadToHeadBenchmark(
       avgDurationMs: Math.round(sumDuration / total),
       avgBotDamageDealt: Math.round(sumBotDamage / total),
       avgHumanDamageDealt: Math.round(sumHumanDamage / total),
+      illegalP1: illegalP1Count,
+      illegalP2: illegalP2Count,
+      totalCollectCount: totalCollects,
+      avgP1SunUtilization: Math.round((sumP1SunUtil / total) * 10) / 10,
+      avgP2SunUtilization: Math.round((sumP2SunUtil / total) * 10) / 10,
     })
   }
 

@@ -1,9 +1,9 @@
 import type { CartaDeMazo } from './mazoDeLaSala.ts'
 import type { AccionP1Simulacion } from './asyncOpponent.ts'
+import type { GameState } from './simulate.ts'
 import type { PlantId } from '../types/game.ts'
 import {
   SUN_VALUE,
-  INITIAL_SUN,
   P1_COLUMNS,
   getScaledPlantConfig,
 } from '../utils/gameConstants.ts'
@@ -16,12 +16,23 @@ import {
 } from './balance.ts'
 import { msToTicks } from './time.ts'
 import { MARGEN_DE_RED_TICS } from './pvp.ts'
-import { getTacticalProfile } from './strategicAsyncBot.ts'
+import { createRng, nextInt, type Rng } from './rng.ts'
+import {
+  getTacticalProfile,
+  obtenerPerfilEstrategico,
+  type StrategicStyle,
+  type StrategicDifficulty,
+} from './strategicAsyncBot.ts'
 import {
   generarTimelineP1ParaEscenario,
   SCENARIO_DECKS,
   SCENARIO_NAMES,
 } from './strategicBenchmarkScenarios.ts'
+import { createBattleState, stepTick } from './simulate.ts'
+import {
+  createStrategicOpponentController,
+  stepAsyncOpponent,
+} from './asyncOpponent.ts'
 
 export type AdversarialHumanStyle =
   | 'HUMAN_AGGRESSIVE'
@@ -235,121 +246,228 @@ export const HUMAN_ARCHETYPES: Record<AdversarialHumanStyle, HumanDeckArchetype>
 }
 
 /**
- * Genera una timeline dinámica, adaptativa y 100% legal para un perfil humano adversarial.
- * Simula activamente durante toda la partida (0 a 120s, 3600 ticks).
+ * HumanAdversarialPolicy:
+ * Política pura e independiente que decide tick a tick las acciones de P1 observando el estado real del motor.
+ * - Recoge soles reales (`collect`) creados en state.suns con targetId canónico auth-v2.
+ * - Deriva productores vivos reales de state.plants (nunca de una lista paralela).
+ * - Deriva casillas ocupadas/libres de state.plants (si una planta muere, la casilla vuelve a estar libre).
+ * - Observa defensas, amenazas y HP de P2 para elegir carril de ataque/flanqueo/defensa.
  */
-export function generarTimelineHumanaAdversarial(
-  archetype: HumanDeckArchetype,
-  seed: number,
-  maxTicks: number = msToTicks(120000)
-): AccionP1Simulacion[] {
-  const actions: AccionP1Simulacion[] = []
-  const deck = archetype.deck
-  let p1Sun = INITIAL_SUN
-  let seq = 0
-  const slotCooldowns: Record<number, number> = {}
-  const occupiedCells = new Set<string>() // 'lane,col'
-  const activeProducers: { id: string; plantedTick: number; lastProduceTick: number; intervalTicks: number; value: number }[] = []
+export class HumanAdversarialPolicy {
+  public archetype: HumanDeckArchetype
+  public rng: Rng
+  public seq: number = 0
+  public lastActionTick: number = 0
+  public nextActionTick: number = 0
+  public seenSunIds: Set<string> = new Set()
+  public collectCount: number = 0
+  public plantsPlaced: number = 0
+  public totalSunSpent: number = 0
 
-  let nextActionTick = msToTicks(1500) // Primer acción a partir de 1.5s
-  let sunflowerCount = 0
-  const targetSunflowers = archetype.style === 'HUMAN_ECONOMIC' ? 3 : archetype.style === 'HUMAN_BALANCED' ? 2 : archetype.style === 'HUMAN_DEFENSIVE' ? 2 : 1
+  constructor(archetype: HumanDeckArchetype, seed: number) {
+    this.archetype = archetype
+    this.rng = createRng((seed ^ 0x48756d61) >>> 0) // "Huma"
+    this.nextActionTick = msToTicks(1500)
+  }
 
-  for (let tick = 0; tick <= maxTicks; tick++) {
-    // 1. Acreditación de sol del cielo (cada 6s)
-    const primerSolTick = -msToTicks(3500) + msToTicks(SOL_DEL_CIELO_MS)
-    if (tick >= primerSolTick && (tick - primerSolTick) % msToTicks(SOL_DEL_CIELO_MS) === 0) {
-      p1Sun += SUN_VALUE
-    }
+  /**
+   * Decide las acciones de P1 en el tick actual basadas en el estado real de la partida.
+   */
+  public decide(state: GameState, deck: CartaDeMazo[]): AccionP1Simulacion[] {
+    const actions: AccionP1Simulacion[] = []
+    const tick = state.tick
 
-    // 2. Acreditación de productores propios
-    for (const prod of activeProducers) {
-      if (tick > prod.plantedTick && tick - prod.lastProduceTick >= prod.intervalTicks) {
-        prod.lastProduceTick = tick
-        p1Sun += prod.value
+    // ── 1. RECOGER SOLES REALES AUTH-V2 ───────────────────────────────────────
+    for (const sun of state.suns) {
+      if (!this.seenSunIds.has(sun.id)) {
+        this.seenSunIds.add(sun.id)
+        this.collectCount++
+        actions.push({
+          seq: ++this.seq,
+          tick,
+          issuedTick: tick,
+          kind: 'collect',
+          targetId: sun.id,
+        })
       }
     }
 
-    if (tick < nextActionTick) continue
+    // ── 2. CADENCIA HUMANA PARA JUGADAS DE PLANTACIÓN ────────────────────────
+    if (tick < this.nextActionTick) {
+      return actions
+    }
 
-    // 3. Evaluar jugada según estilo
-    // A) Apertura económica si no ha alcanzado objetivo de productores
-    if (sunflowerCount < targetSunflowers && p1Sun >= 50) {
-      const sfCard = deck.find((c) => c.plantId === 'sunflower' || c.plantId === 'twinsunflower')
-      if (sfCard && (slotCooldowns[sfCard.slot ?? 0] || 0) <= tick) {
-        const config = getScaledPlantConfig(sfCard.plantId as PlantId)
-        if (config && p1Sun >= config.cost) {
-          // Buscar casilla libre en col 0 o 1
-          let placed = false
-          for (let l = 0; l < 3; l++) {
-            for (let c = 0; c < 2; c++) {
-              if (!occupiedCells.has(`${l},${c}`)) {
-                p1Sun -= config.cost
-                slotCooldowns[sfCard.slot ?? 0] = tick + msToTicks(config.cooldownMs)
-                occupiedCells.add(`${l},${c}`)
-                actions.push({
-                  seq: ++seq,
-                  tick: tick + MARGEN_DE_RED_TICS,
-                  issuedTick: tick,
-                  kind: 'plant',
-                  plantId: sfCard.plantId as PlantId,
-                  slot: sfCard.slot ?? undefined,
-                  lane: l,
-                  col: c,
-                })
-                activeProducers.push({
-                  id: `p1_prod_${seq}`,
-                  plantedTick: tick,
-                  lastProduceTick: tick,
-                  intervalTicks: sfCard.plantId === 'twinsunflower' ? msToTicks(GIRASOL_DOBLE_MS) : msToTicks(GIRASOL_MS),
-                  value: sfCard.plantId === 'twinsunflower' ? SOLES_POR_CICLO_GIRASOL_DOBLE * SUN_VALUE : SOLES_POR_CICLO_GIRASOL * SUN_VALUE,
-                })
-                sunflowerCount++
-                nextActionTick = tick + msToTicks(600 + ((seed + seq * 17) % 500))
-                placed = true
-                break
-              }
-            }
-            if (placed) break
+    // ── 3. PERCEPCIÓN DEL TABLERO REAL (Sin información futura ni trampas) ───
+    // A) Productores vivos reales derivados de state.plants
+    const aliveProducers = state.plants.filter(
+      (p) => !p.isWalking && (p.plantId === 'sunflower' || p.plantId === 'twinsunflower')
+    ).length
+
+    // B) Análisis de amenazas y defensas en state.enemyPlants y state.plants
+    const laneThreats = [0, 0, 0]
+    const laneEnemyDefenseHp = [0, 0, 0]
+
+    for (const ep of state.enemyPlants) {
+      if (
+        ep.isWalking ||
+        ep.plantId === 'repeater' ||
+        ep.plantId === 'peashooter' ||
+        ep.plantId === 'bonkchoy' ||
+        ep.plantId === 'chomper' ||
+        ep.plantId === 'garlic'
+      ) {
+        const proximity = Math.max(0, 100 - ep.x)
+        laneThreats[ep.lane] += 25 * (proximity / 50 + 0.5)
+      }
+      if (!ep.isWalking && (ep.plantId === 'wallnut' || ep.plantId === 'tallnut')) {
+        laneEnemyDefenseHp[ep.lane] += ep.hp
+      }
+    }
+
+    // C) Elección de Carril Adaptativo
+    let targetLane = 1
+    if (this.archetype.style === 'HUMAN_AGGRESSIVE' || this.archetype.style === 'HUMAN_OPPORTUNISTIC') {
+      // Buscar carril enemigo desprotegido para flanqueo
+      let minDefense = Infinity
+      let bestFlankLane = 0
+      for (let l = 0; l < 3; l++) {
+        if (laneEnemyDefenseHp[l] < minDefense) {
+          minDefense = laneEnemyDefenseHp[l]
+          bestFlankLane = l
+        }
+      }
+      const maxThreat = Math.max(...laneThreats)
+      if (maxThreat > 45 && this.archetype.style !== 'HUMAN_AGGRESSIVE') {
+        targetLane = laneThreats.indexOf(maxThreat)
+      } else {
+        targetLane = bestFlankLane
+      }
+    } else if (this.archetype.style === 'HUMAN_DEFENSIVE') {
+      const maxThreat = Math.max(...laneThreats)
+      targetLane = maxThreat > 10 ? laneThreats.indexOf(maxThreat) : 1
+    } else {
+      const maxThreat = Math.max(...laneThreats)
+      if (maxThreat > 25) {
+        targetLane = laneThreats.indexOf(maxThreat)
+      } else {
+        let minDefense = Infinity
+        for (let l = 0; l < 3; l++) {
+          if (laneEnemyDefenseHp[l] < minDefense) {
+            minDefense = laneEnemyDefenseHp[l]
+            targetLane = l
           }
-          if (placed) continue
         }
       }
     }
 
-    // B) Colocar unidades ofensivas / tanques / burst
-    const targetLane = archetype.laneFocus > 0.4 ? 1 : ((seed + seq * 31 + tick) % 3)
+    // D) Casillas ocupadas reales derivadas de state.plants (se liberan solas al morir)
+    const occupiedCells = new Set<string>()
+    for (const p of state.plants) {
+      if (!p.isWalking && p.col !== undefined) {
+        occupiedCells.add(`${p.lane},${p.col}`)
+      }
+    }
 
-    // Filtrar cartas que se pueden pagar y no están en cooldown
+    // ── 4. SELECCIÓN DE CARTA Y COLOCACIÓN ───────────────────────────────────
+    const targetSunflowers =
+      this.archetype.style === 'HUMAN_ECONOMIC'
+        ? 3
+        : this.archetype.style === 'HUMAN_BALANCED' || this.archetype.style === 'HUMAN_DEFENSIVE'
+        ? 2
+        : 1
+
+    // Si faltan productores y no hay amenaza crítica:
+    if (aliveProducers < targetSunflowers && Math.max(...laneThreats) < 50) {
+      const sfCard = deck.find((c) => c.plantId === 'sunflower' || c.plantId === 'twinsunflower')
+      if (sfCard) {
+        const slot = sfCard.slot ?? 0
+        const conf = getScaledPlantConfig(sfCard.plantId as PlantId)
+        if (conf && state.sunBank >= conf.cost && (state.slotCooldowns[slot] || 0) <= tick) {
+          for (let l = 0; l < 3; l++) {
+            for (let c = 0; c < 2; c++) {
+              if (!occupiedCells.has(`${l},${c}`)) {
+                actions.push({
+                  seq: ++this.seq,
+                  tick: tick + MARGEN_DE_RED_TICS,
+                  issuedTick: tick,
+                  kind: 'plant',
+                  plantId: sfCard.plantId as PlantId,
+                  slot,
+                  lane: l,
+                  col: c,
+                })
+                this.plantsPlaced++
+                this.totalSunSpent += conf.cost
+                const delayMs = 500 + nextInt(this.rng, 500)
+                this.nextActionTick = tick + msToTicks(delayMs)
+                return actions
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Filtrar cartas de combate listas según presupuesto y cooldowns
     const readyCards = deck.filter((c) => {
       const conf = getScaledPlantConfig(c.plantId as PlantId)
-      return conf && p1Sun >= conf.cost && (slotCooldowns[c.slot ?? 0] || 0) <= tick
+      const slot = c.slot ?? 0
+      return (
+        conf &&
+        state.sunBank >= conf.cost &&
+        (state.slotCooldowns[slot] || 0) <= tick &&
+        c.plantId !== 'sunflower' &&
+        c.plantId !== 'twinsunflower'
+      )
     })
 
     if (readyCards.length > 0) {
-      // Priorizar según estilo
       let chosenCard = readyCards[0]
-      if (archetype.style === 'HUMAN_AGGRESSIVE') {
-        // Priorizar melee rápido
-        const melee = readyCards.find((c) => c.plantId === 'garlic' || c.plantId === 'bonkchoy' || c.plantId === 'chomper')
-        if (melee) chosenCard = melee
-      } else if (archetype.style === 'HUMAN_ECONOMIC') {
-        // Priorizar artillería pesada si alcanza el sol
-        const heavy = readyCards.find((c) => c.plantId === 'melonpult' || c.plantId === 'threepeater')
+      if (this.archetype.style === 'HUMAN_AGGRESSIVE') {
+        const rush = readyCards.find(
+          (c) =>
+            c.plantId === 'garlic' ||
+            c.plantId === 'bonkchoy' ||
+            c.plantId === 'chomper' ||
+            c.plantId === 'jalapeno'
+        )
+        if (rush) chosenCard = rush
+      } else if (this.archetype.style === 'HUMAN_ECONOMIC') {
+        const heavy = readyCards.find(
+          (c) => c.plantId === 'melonpult' || c.plantId === 'threepeater' || c.plantId === 'tallnut'
+        )
         if (heavy) chosenCard = heavy
-      } else if (archetype.style === 'HUMAN_DEFENSIVE') {
-        // Priorizar muros y soporte
-        const wall = readyCards.find((c) => c.plantId === 'tallnut' || c.plantId === 'wallnut' || c.plantId === 'aloe')
-        if (wall) chosenCard = wall
+      } else if (this.archetype.style === 'HUMAN_DEFENSIVE') {
+        if (laneThreats[targetLane] > 20) {
+          const wall = readyCards.find(
+            (c) => c.plantId === 'tallnut' || c.plantId === 'wallnut' || c.plantId === 'jalapeno'
+          )
+          if (wall) chosenCard = wall
+        }
+      } else if (this.archetype.style === 'HUMAN_OPPORTUNISTIC') {
+        const flanker = readyCards.find(
+          (c) =>
+            c.plantId === 'repeater' ||
+            c.plantId === 'threepeater' ||
+            c.plantId === 'chomper' ||
+            c.plantId === 'garlic'
+        )
+        if (flanker) chosenCard = flanker
       }
 
       const conf = getScaledPlantConfig(chosenCard.plantId as PlantId)
       if (conf) {
-        const isWalking = conf.category === 'melee' || !!conf.moveSpeed || chosenCard.plantId === 'chomper' || chosenCard.plantId === 'bonkchoy' || chosenCard.plantId === 'garlic'
+        const isWalking =
+          conf.category === 'melee' ||
+          !!conf.moveSpeed ||
+          chosenCard.plantId === 'chomper' ||
+          chosenCard.plantId === 'bonkchoy' ||
+          chosenCard.plantId === 'garlic'
         let colFinal: number | undefined = undefined
 
-        if (!isWalking) {
-          // Buscar casilla libre en el carril
+        if (isWalking) {
+          colFinal = 1 // Columna de inicio para caminantes
+        } else {
           const preferredCol = conf.category === 'defensive' ? 3 : 1
           if (!occupiedCells.has(`${targetLane},${preferredCol}`)) {
             colFinal = preferredCol
@@ -361,37 +479,107 @@ export function generarTimelineHumanaAdversarial(
               }
             }
           }
-        } else {
-          colFinal = 1 // Spawn column for walking melee units
         }
 
         if (colFinal !== undefined) {
-          p1Sun -= conf.cost
-          slotCooldowns[chosenCard.slot ?? 0] = tick + msToTicks(conf.cooldownMs)
-          if (!isWalking) {
-            occupiedCells.add(`${targetLane},${colFinal}`)
-          }
-
+          const slot = chosenCard.slot ?? 0
           actions.push({
-            seq: ++seq,
+            seq: ++this.seq,
             tick: tick + MARGEN_DE_RED_TICS,
             issuedTick: tick,
             kind: 'plant',
             plantId: chosenCard.plantId as PlantId,
-            slot: chosenCard.slot ?? undefined,
+            slot,
             lane: targetLane,
             col: colFinal,
           })
-
-          // Cadencia de acción humana (400ms a 1100ms)
-          const humanDelayMs = archetype.style === 'HUMAN_AGGRESSIVE'
-            ? 350 + ((seed * 7 + seq * 23) % 400)
-            : 500 + ((seed * 7 + seq * 23) % 600)
-          nextActionTick = tick + msToTicks(humanDelayMs)
+          this.plantsPlaced++
+          this.totalSunSpent += conf.cost
+          const delayMs =
+            this.archetype.style === 'HUMAN_AGGRESSIVE'
+              ? 350 + nextInt(this.rng, 400)
+              : 500 + nextInt(this.rng, 600)
+          this.nextActionTick = tick + msToTicks(delayMs)
         }
       }
     }
+
+    return actions
+  }
+}
+
+/**
+ * Genera la timeline completa de acciones P1 ejecutando la partida tick a tick
+ * con la HumanAdversarialPolicy interactuando con el motor de simulación real.
+ */
+export function generarTimelineHumanaAdversarial(
+  archetype: HumanDeckArchetype,
+  seed: number,
+  maxTicks: number = msToTicks(120000),
+  botStyle: StrategicStyle = 'balanced',
+  botDifficulty: StrategicDifficulty = 'hard',
+  botDeck?: CartaDeMazo[]
+): AccionP1Simulacion[] {
+  const p1Deck = archetype.deck
+  const p2Deck = botDeck ?? [
+    { slot: 0, plantId: 'sunflower', level: 1, statRolls: [] },
+    { slot: 1, plantId: 'peashooter', level: 1, statRolls: [] },
+    { slot: 2, plantId: 'wallnut', level: 1, statRolls: [] },
+    { slot: 3, plantId: 'bonkchoy', level: 2, statRolls: [] },
+    { slot: 4, plantId: 'jalapeno', level: 2, statRolls: [] },
+    { slot: 5, plantId: 'repeater', level: 2, statRolls: [] },
+  ]
+
+  const state = createBattleState(seed, false, true, undefined, 'auth-v2')
+  const humanPolicy = new HumanAdversarialPolicy(archetype, seed)
+  const botController = createStrategicOpponentController(p2Deck, {
+    style: botStyle,
+    difficulty: botDifficulty,
+    profile: obtenerPerfilEstrategico(botStyle, botDifficulty),
+    roomSeed: seed,
+  })
+
+  const recordedP1Actions: AccionP1Simulacion[] = []
+
+  while (state.tick < maxTicks && state.status === 'playing') {
+    // 1. HumanAdversarialPolicy decide acciones en este tick
+    const p1Decisions = humanPolicy.decide(state, p1Deck)
+
+    for (const act of p1Decisions) {
+      recordedP1Actions.push(act)
+
+      if (act.kind === 'collect') {
+        const sol = state.suns.find((s) => s.id === act.targetId)
+        if (sol) {
+          state.suns = state.suns.filter((s) => s.id !== sol.id)
+          state.sunBank += sol.value
+          state.stats.sunsCollected += 1
+          state.stats.score += 50
+        }
+      } else if (act.kind === 'plant' && act.plantId) {
+        const slot = act.slot ?? 0
+        const conf = getScaledPlantConfig(act.plantId as PlantId)
+        if (conf && state.sunBank >= conf.cost) {
+          state.pending.push({
+            atTick: act.tick,
+            kind: 'own_plant',
+            plantId: act.plantId as PlantId,
+            lane: act.lane ?? 0,
+            col: act.col ?? 0,
+          })
+          state.sunBank -= conf.cost
+          state.slotCooldowns[slot] = act.tick + msToTicks(conf.cooldownMs)
+          state.stats.plantsPlaced += 1
+        }
+      }
+    }
+
+    // 2. Ejecutar política de P2 (Strategic Bot)
+    stepAsyncOpponent(botController, state)
+
+    // 3. Avanzar simulación 1 tick
+    stepTick(state, () => {})
   }
 
-  return actions
+  return recordedP1Actions
 }
