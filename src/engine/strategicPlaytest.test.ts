@@ -107,7 +107,7 @@ describe('Strategic Playtest V1 Module', () => {
         p1BaseHpEnd: 0,
         p2BaseHpEnd: 480,
         p1DamageDealt: 20,
-        p2DamageDealt: 500,
+        p2DamageDealt: 600,
         botPlantsPlaced: 8,
         botSunCredited: 850,
         botSunSpent: 800,

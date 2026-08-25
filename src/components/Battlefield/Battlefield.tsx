@@ -869,8 +869,9 @@ export default function Battlefield({
       // Ranked sin roomId = entrenamiento/bot.
       // Nunca inventar ELO ni cofres en el navegador.
       // Ranked real sólo cambia ELO mediante el árbitro del servidor.
+      // Strategic Test Match está 100% aislado (sin ELO, sin cofres, sin settlement).
       const reparteElCliente =
-        !roomId && matchMode !== 'ranked'
+        !roomId && matchMode !== 'ranked' && matchMode !== 'strategic_test'
 
       if (gameStatus === 'victory') {
         if (reparteElCliente && onBattleComplete) {

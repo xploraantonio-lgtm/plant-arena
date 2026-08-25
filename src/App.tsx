@@ -33,6 +33,7 @@ import UpdateModal from './components/UpdateModal/UpdateModal'
 import { parseEngineVersion, type EngineVersion } from './types/game'
 import { StrategicPlaytestLauncherModal } from './components/StrategicPlaytest/StrategicPlaytestLauncherModal'
 import type { StrategicPlaytestConfig } from './engine/strategicPlaytest'
+import { isStrategicPlaytestAuthorized } from './utils/strategicPlaytestAuth'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -577,6 +578,11 @@ function App() {
   }
 
   const handleStartStrategicPlaytest = (config: StrategicPlaytestConfig) => {
+    // Gate estricto: denegar si el usuario no está explícitamente autorizado
+    if (!isStrategicPlaytestAuthorized({ user, profile, isAdmin })) {
+      return
+    }
+
     setBattleMatchMode('strategic_test')
     setStrategicPlaytestConfig(config)
     setColosseumConfig(null)
@@ -586,7 +592,8 @@ function App() {
     setSalaId(null)
     setRivalId(null)
     setSemillaPartida(config.seed)
-    setNombresEnPartida({ mio: 'TÚ (P1)', rival: `RIVAL ESTRATÉGICO (${config.style.toUpperCase()})` })
+    // Estilo 100% oculto durante el combate (sin filtración en el árbol rival)
+    setNombresEnPartida({ mio: 'TÚ (P1)', rival: 'RIVAL ESTRATÉGICO' })
     setPartidaAsincrona(true)
     setEngineVersionSala('auth-v2')
     setScreen('battle')
@@ -781,7 +788,11 @@ function App() {
             onOpenMarketplace={() => setScreen('market')}
             onOpenLanding={handleGoToLanding}
             onOpenAdmin={() => setIsAdminPanelOpen(true)}
-            onOpenStrategicPlaytest={() => setIsStrategicPlaytestModalOpen(true)}
+            onOpenStrategicPlaytest={
+              isStrategicPlaytestAuthorized({ user, profile, isAdmin })
+                ? () => setIsStrategicPlaytestModalOpen(true)
+                : undefined
+            }
             isAdmin={isAdmin}
             onSignOut={async () => {
               await signOut()
