@@ -137,6 +137,7 @@ function App() {
     fuseAndUpgradePlant,
     buyVipPass,
     claimPassReward,
+    claimAllPassRewards,
     awardVictoryPack,
     startUnlockingSlot,
     fastUnlockSlot,
@@ -1021,21 +1022,37 @@ function App() {
                     })
                   }
                 }}
-                onClaimReward={(lvl) => {
-                  claimPassReward(lvl.reward, lvl.level)
-                  setActiveAppAlert({
-                    title: '¡RECOMPENSA RECLAMADA!',
-                    message: `👑 ¡RECOMPENSA VIP DEL NIVEL ${lvl.level} RECLAMADA!\n${lvl.reward.label}\nSe ha añadido a tu inventario de Mi Jardín.`,
-                    icon: '🎉',
-                  })
+                onClaimReward={async (lvl) => {
+                  const res = await claimPassReward(lvl.reward, lvl.level)
+                  if (res?.success) {
+                    setActiveAppAlert({
+                      title: '¡RECOMPENSA RECLAMADA!',
+                      message: `👑 ¡RECOMPENSA VIP DEL NIVEL ${lvl.level} RECLAMADA!\n${lvl.reward.label}\nSe ha añadido a tu inventario de Mi Jardín.`,
+                      icon: '🎉',
+                    })
+                  } else {
+                    setActiveAppAlert({
+                      title: 'NO SE PUDO RECLAMAR',
+                      message: res?.error || 'No se pudo reclamar la recompensa.',
+                      icon: '⚠️',
+                    })
+                  }
                 }}
-                onClaimAllRewards={(levels) => {
-                  levels.forEach((lvl) => claimPassReward(lvl.reward, lvl.level))
-                  setActiveAppAlert({
-                    title: '¡RECOMPENSAS RECLAMADAS!',
-                    message: `👑 ¡${levels.length} RECOMPENSAS VIP RECLAMADAS CON ÉXITO!\nSe han guardado en tu inventario de Mi Jardín.`,
-                    icon: '🎁',
-                  })
+                onClaimAllRewards={async (levels) => {
+                  const res = await claimAllPassRewards()
+                  if (res?.success) {
+                    setActiveAppAlert({
+                      title: '¡RECOMPENSAS RECLAMADAS!',
+                      message: `👑 ¡${levels.length} RECOMPENSAS VIP RECLAMADAS CON ÉXITO!\nSe han guardado en tu inventario de Mi Jardín.`,
+                      icon: '🎁',
+                    })
+                  } else {
+                    setActiveAppAlert({
+                      title: 'NO SE PUDO RECLAMAR',
+                      message: res?.error || 'No se pudieron reclamar las recompensas.',
+                      icon: '⚠️',
+                    })
+                  }
                 }}
               />
             </div>

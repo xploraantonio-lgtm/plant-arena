@@ -524,23 +524,44 @@ export function useInventory() {
   // no una constante en el cliente.
 
   /**
-   * PENDIENTE DE FASE 2c — cerrado a propósito.
-   *
-   * Entregaba las recompensas del pase de batalla creando sobres y copias en el
-   * navegador. Los sobres saldrían con un instanceId inventado y no se podrían
-   * abrir; las copias se sumarían sólo en local y las borraría el siguiente
-   * refresco desde el servidor.
-   *
-   * Tampoco marca el nivel como reclamado: si no se puede entregar, es mejor
-   * que el jugador conserve el derecho a reclamarlo cuando exista la RPC, en
-   * lugar de perder la recompensa para siempre.
+   * Reclama autoritativamente en Supabase la recompensa de un nivel del Pase VIP
+   * a través de la RPC claim_battle_pass_level(p_level).
    */
-  const claimPassReward = (reward: any, levelNum: number) => {
-    console.warn(
-      `[useInventory] Recompensa del pase (nivel ${levelNum}, tipo "${reward?.type}") ` +
-      'no entregada: debe concederla el servidor. Pendiente de la fase 2c. ' +
-      'El nivel NO se marca como reclamado.'
-    )
+  const claimPassReward = async (
+    _reward: any,
+    levelNum: number
+  ): Promise<{ success: boolean; level?: number; label?: string; error?: string }> => {
+    try {
+      const res = await SupabaseService.claimBattlePassLevel(levelNum)
+      if (res && res.success) {
+        await Promise.all([refreshBalance(), refreshInventory()])
+        return { success: true, level: levelNum, label: res.label }
+      }
+      return { success: false, error: res?.error || 'Error al reclamar recompensa VIP' }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error de conexión' }
+    }
+  }
+
+  /**
+   * Reclama autoritativamente todos los niveles disponibles del Pase VIP
+   * mediante claim_all_battle_pass_levels().
+   */
+  const claimAllPassRewards = async (): Promise<{
+    success: boolean
+    claimed?: any[]
+    error?: string
+  }> => {
+    try {
+      const res = await SupabaseService.claimAllBattlePassLevels()
+      if (res && res.success) {
+        await Promise.all([refreshBalance(), refreshInventory()])
+        return { success: true, claimed: res.claimed }
+      }
+      return { success: false, error: res?.error || 'Error al reclamar recompensas VIP' }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error de conexión' }
+    }
   }
 
   const currentUserIdRef = useRef<string | null>(null)
@@ -1041,6 +1062,7 @@ export function useInventory() {
     fuseAndUpgradePlant,
     buyVipPass,
     claimPassReward,
+    claimAllPassRewards,
     awardVictoryPack,
     startUnlockingSlot,
     fastUnlockSlot,
