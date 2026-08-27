@@ -810,3 +810,500 @@
   color: #64748b;
   padding: 20px;
 }
+
+.profile-loading-state {
+  text-align: center;
+  font-size: 12px;
+  color: #fbbf24;
+  padding: 24px;
+  font-weight: 700;
+}
+
+/* ── BEP20 CRYPTO DEPOSIT STYLES ─────────────────────────────────────────── */
+.crypto-wallet-register-box {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1.5px dashed #38bdf8;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crypto-step-badge {
+  font-size: 11px;
+  font-weight: 900;
+  color: #38bdf8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.crypto-step-desc {
+  font-size: 10px;
+  color: #cbd5e1;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.crypto-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.crypto-wallet-input {
+  flex: 1;
+  background: #090e17;
+  border: 1.5px solid #334155;
+  border-radius: 8px;
+  color: #f8fafc;
+  font-family: monospace;
+  font-size: 11px;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.crypto-wallet-input:focus {
+  border-color: #38bdf8;
+}
+
+.crypto-register-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.crypto-register-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+.crypto-cancel-link-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 9.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  align-self: flex-start;
+}
+
+.crypto-registered-wallet-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1.5px solid #10b981;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.crypto-registered-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.crypto-registered-tag {
+  font-size: 9.5px;
+  font-weight: 900;
+  color: #34d399;
+}
+
+.crypto-registered-addr {
+  font-size: 11px;
+  color: #ffffff;
+  font-family: monospace;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.crypto-change-wallet-btn {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #64748b;
+  color: #f1f5f9;
+  border-radius: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.crypto-exchange-warning-box {
+  display: flex;
+  gap: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1.5px solid #f59e0b;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.crypto-warning-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.crypto-warning-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crypto-warning-content strong {
+  font-size: 10.5px;
+  color: #fde68a;
+}
+
+.crypto-warning-content p {
+  font-size: 10px;
+  color: #fef08a;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.crypto-flow-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 9.5px;
+  color: #e2e8f0;
+  font-weight: 700;
+  margin: 2px 0;
+  flex-wrap: wrap;
+}
+
+.crypto-warning-content small {
+  font-size: 9px;
+  color: #fca5a5;
+  font-weight: 700;
+}
+
+.crypto-treasury-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1.5px solid #fbbf24;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.crypto-treasury-meta-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.crypto-network-badge,
+.crypto-token-badge,
+.crypto-rate-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.crypto-network-badge {
+  background: rgba(234, 179, 8, 0.2);
+  color: #facc15;
+  border: 1px solid #eab308;
+}
+
+.crypto-token-badge {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid #22c55e;
+}
+
+.crypto-rate-badge {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid #a855f7;
+}
+
+.crypto-treasury-address-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crypto-treasury-lbl {
+  font-size: 9.5px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.crypto-address-copy-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: #090e17;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.crypto-address-text {
+  flex: 1;
+  font-family: monospace;
+  font-size: 11px;
+  color: #fbbf24;
+  word-break: break-all;
+  font-weight: 700;
+}
+
+.crypto-copy-btn {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: #000000;
+  font-weight: 900;
+  font-size: 10px;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease;
+}
+
+.crypto-copy-btn:hover {
+  transform: scale(1.05);
+}
+
+.crypto-detector-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.crypto-detector-pulse {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #4ade80;
+}
+
+.crypto-refresh-blockchain-btn {
+  background: rgba(51, 65, 85, 0.8);
+  color: #f8fafc;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.crypto-refresh-blockchain-btn:hover:not(:disabled) {
+  background: #475569;
+}
+
+/* ── BEP20 WITHDRAWAL SETTLEMENT CARD ────────────────────────────────────── */
+.crypto-settlement-breakdown-card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1.5px solid #334155;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crypto-breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 900;
+  color: #e2e8f0;
+  margin-bottom: 2px;
+}
+
+.crypto-net-pill {
+  font-size: 8.5px;
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid #a855f7;
+}
+
+.crypto-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.crypto-breakdown-divider {
+  height: 1px;
+  background: #334155;
+  margin: 2px 0;
+}
+
+.crypto-breakdown-row--net strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.crypto-breakdown-row--meta {
+  font-size: 9px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* ── WITHDRAW CONFIRM MODAL ──────────────────────────────────────────────── */
+.withdraw-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.withdraw-confirm-card {
+  background: #0f172a;
+  border: 2px solid #ef4444;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 440px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.withdraw-confirm-icon {
+  font-size: 32px;
+}
+
+.withdraw-confirm-title {
+  font-family: 'Luckiest Guy', sans-serif;
+  font-size: 18px;
+  color: #f8fafc;
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+.withdraw-confirm-details {
+  width: 100%;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.withdraw-confirm-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.withdraw-confirm-item--net {
+  border-top: 1px solid #475569;
+  padding-top: 4px;
+  font-size: 12.5px;
+}
+
+.withdraw-confirm-dest {
+  font-family: monospace;
+  font-size: 10px;
+  color: #fde047;
+  word-break: break-all;
+}
+
+.withdraw-confirm-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.withdraw-confirm-cancel-btn,
+.withdraw-confirm-submit-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.withdraw-confirm-cancel-btn {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #94a3b8;
+}
+
+.withdraw-confirm-submit-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border: 1px solid #f87171;
+  color: #ffffff;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+.crypto-tx-badge {
+  font-size: 8.5px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.crypto-tx-badge--requested,
+.crypto-tx-badge--processing {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid #f59e0b;
+}
+
+.crypto-tx-badge--completed,
+.crypto-tx-badge--credited {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid #22c55e;
+}
+
+.crypto-tx-badge--failed,
+.crypto-tx-badge--rejected {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid #ef4444;
+}
+
+.crypto-tx-link {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+

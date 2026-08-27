@@ -1,15 +1,15 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   UserManager,
   PRESET_AVATARS,
   compressImage,
   type PlayerProfile,
-  type UserTransaction,
 } from '../../utils/userManager'
 import { soundManager } from '../../utils/audioManager'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import type { PlantId } from '../../types/game'
+import { SupabaseService } from '../../services/supabaseService'
 import PanelDeReferidos from '../Referidos/PanelDeReferidos'
 import './ProfileModal.css'
 
@@ -20,9 +20,6 @@ interface ProfileModalProps {
   hasVipPass: boolean
   unlockedPlants?: PlantId[]
   onClose: () => void
-  // onAddTokens / onDeductTokens se eliminaron: eran la vía por la que el
-  // formulario de recarga sumaba saldo sin cobrar nada. El saldo sólo lo
-  // mueve el servidor.
 }
 
 type ProfileTab = 'profile' | 'deposit' | 'withdraw' | 'referrals' | 'history'
@@ -42,26 +39,87 @@ export default function ProfileModal({
   const [nickInput, setNickInput] = useState(profile.name)
   const [isCompressing, setIsCompressing] = useState(false)
 
-  // Deposit state
-  const [depositAmount, setDepositAmount] = useState<number>(10)
-  const [depositMethod, setDepositMethod] = useState<'card' | 'crypto' | 'paypal'>('card')
+  // ── ESTADO DE DEPÓSITO BEP20 ───────────────────────────────────────────────
+  const [depositInfo, setDepositInfo] = useState<{
+    registeredWallet?: { id: string; address: string; normalized: string; status: string; createdAt: string } | null
+    treasuryWallet?: string
+    tokenContract?: string
+    network?: string
+    rate?: string
+  }>({
+    treasuryWallet: '0x721622D8cad39621C731eC286D1EA859365A51b8',
+    tokenContract: '0x55d398326f99059fF775485246999027B3197955',
+    network: 'BNB Smart Chain (BEP20)',
+    rate: '1 USDT = 1 GEMA',
+  })
+  const [personalWalletInput, setPersonalWalletInput] = useState('')
+  const [isRegisteringWallet, setIsRegisteringWallet] = useState(false)
+  const [isCheckingDeposits, setIsCheckingDeposits] = useState(false)
+  const [copiedTreasury, setCopiedTreasury] = useState(false)
+  const [isEditingRegisteredWallet, setIsEditingRegisteredWallet] = useState(false)
 
-  // Withdraw state
-  const [withdrawAmount, setWithdrawAmount] = useState<number>(5)
+  // ── ESTADO DE RETIRO BEP20 (5% COMISIÓN) ──────────────────────────────────
+  const [withdrawGems, setWithdrawGems] = useState<number>(10)
   const [withdrawAddress, setWithdrawAddress] = useState('')
-  const [withdrawMethod, setWithdrawMethod] = useState<'crypto' | 'worldapp' | 'paypal'>('crypto')
+  const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false)
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false)
 
-  // Status feedback
-  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  // ── ESTADO DE HISTORIAL FINANCIERO ─────────────────────────────────────────
+  const [financialHistory, setFinancialHistory] = useState<{
+    deposits: any[]
+    withdrawals: any[]
+  }>({ deposits: [], withdrawals: [] })
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+
+  // Status feedback toast
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  if (!isOpen) return null
-
-  const showFeedback = (text: string, type: 'success' | 'error' = 'success') => {
+  const showFeedback = (text: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setFeedbackMsg({ text, type })
-    setTimeout(() => setFeedbackMsg(null), 3500)
+    setTimeout(() => setFeedbackMsg(null), 4500)
   }
+
+  // Cargar datos de depósito e historial al abrir o cambiar de pestaña
+  useEffect(() => {
+    if (!isOpen) return
+    let active = true
+
+    const loadData = async () => {
+      if (!isSupabaseConfigured()) return
+      const info = await SupabaseService.getDepositInfo()
+      if (active && info.success) {
+        setDepositInfo({
+          registeredWallet: info.registeredWallet,
+          treasuryWallet: info.treasuryWallet,
+          tokenContract: info.tokenContract,
+          network: info.network,
+          rate: info.rate,
+        })
+        if (info.registeredWallet?.address) {
+          setPersonalWalletInput(info.registeredWallet.address)
+        }
+      }
+
+      setIsLoadingHistory(true)
+      const hist = await SupabaseService.getFinancialHistory()
+      if (active && hist.success) {
+        setFinancialHistory({
+          deposits: hist.deposits || [],
+          withdrawals: hist.withdrawals || [],
+        })
+      }
+      if (active) setIsLoadingHistory(false)
+    }
+
+    void loadData()
+    return () => {
+      active = false
+    }
+  }, [isOpen, activeTab])
+
+  if (!isOpen) return null
 
   // Handle Nick Change
   const handleSaveNick = async (e: React.FormEvent) => {
@@ -106,13 +164,12 @@ export default function ProfileModal({
 
     try {
       setIsCompressing(true)
-      // Compresses to max 128x128 JPEG at 75% quality (~10-15KB)
       const compressedDataUrl = await compressImage(file, 128, 0.75)
       const updated = UserManager.updateAvatar(compressedDataUrl, true)
       setProfile(updated)
       soundManager.playSound('victory', 0.8)
       showFeedback('¡Foto subida y optimizada con éxito!')
-    } catch (err) {
+    } catch {
       showFeedback('Error al procesar la imagen.', 'error')
     } finally {
       setIsCompressing(false)
@@ -122,32 +179,128 @@ export default function ProfileModal({
     }
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // DEPÓSITO Y RETIRO — MAQUETA, SIN EFECTO
-  //
-  // Estas pantallas son sólo interfaz. Antes el botón de depositar llamaba a
-  // onAddTokens(), es decir sumaba saldo en el navegador sin cobrar nada, y
-  // anunciaba "¡Depósito exitoso de +$X USD!". El de retirar descontaba saldo
-  // y decía "solicitud procesada" sin que existiera ninguna solicitud.
-  //
-  // No hay pasarela de pago ni endpoint detrás, así que los botones no tocan el
-  // saldo ni escriben transacciones, y el mensaje dice la verdad. Cuando exista
-  // la pasarela: el abono viene del webhook del proveedor, nunca del cliente, y
-  // el retiro se crea como fila 'pending' en transactions para revisión manual.
-  // ───────────────────────────────────────────────────────────────────────────
-  const handleDepositSubmit = (e: React.FormEvent) => {
+  // ── REGISTRAR WALLET PERSONAL DE DEPÓSITO ──────────────────────────────────
+  const handleRegisterPersonalWallet = async (e: React.FormEvent) => {
     e.preventDefault()
-    soundManager.playSound('click', 0.6)
-    showFeedback('Las recargas todavía no están disponibles.', 'error')
+    const address = personalWalletInput.trim()
+    if (!address.match(/^0x[a-fA-F0-9]{40}$/)) {
+      showFeedback('Dirección BEP20 inválida. Debe comenzar con 0x y tener 40 caracteres hexadecimales.', 'error')
+      return
+    }
+
+    try {
+      setIsRegisteringWallet(true)
+      const res = await SupabaseService.registerDepositWallet(address)
+      if (res.success && res.wallet) {
+        soundManager.playSound('victory', 0.7)
+        setDepositInfo((prev) => ({
+          ...prev,
+          registeredWallet: res.wallet,
+        }))
+        setIsEditingRegisteredWallet(false)
+        showFeedback('¡Wallet personal vinculada con éxito para depósitos automáticos!', 'success')
+      } else {
+        showFeedback(res.message || 'Error al vincular wallet.', 'error')
+      }
+    } catch (err: any) {
+      showFeedback(err?.message || 'Fallo de conexión.', 'error')
+    } finally {
+      setIsRegisteringWallet(false)
+    }
   }
 
-  const handleWithdrawSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    soundManager.playSound('click', 0.6)
-    showFeedback('Los retiros todavía no están disponibles.', 'error')
+  // ── COPIAR DIRECCIÓN OFICIAL DE TESORERÍA ─────────────────────────────────
+  const handleCopyTreasury = () => {
+    const addr = depositInfo.treasuryWallet || '0x721622D8cad39621C731eC286D1EA859365A51b8'
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(addr)
+      setCopiedTreasury(true)
+      soundManager.playSound('click', 0.5)
+      setTimeout(() => setCopiedTreasury(false), 3000)
+    }
   }
 
-  const transactions: UserTransaction[] = UserManager.getTransactions()
+  // ── COMPROBAR DEPÓSITOS EN BLOCKCHAIN ───────────────────────────────────────
+  const handleCheckBlockchainDeposits = async () => {
+    try {
+      setIsCheckingDeposits(true)
+      const res = await SupabaseService.triggerDepositCheck()
+      if (res.success) {
+        soundManager.playSound('click', 0.5)
+        showFeedback('Escaneo completado en BNB Smart Chain.', 'success')
+        // Refrescar historial
+        const hist = await SupabaseService.getFinancialHistory()
+        if (hist.success) {
+          setFinancialHistory({ deposits: hist.deposits, withdrawals: hist.withdrawals })
+        }
+      } else {
+        showFeedback(res.error || 'No se detectaron nuevas transferencias.', 'warning')
+      }
+    } catch {
+      showFeedback('Error al consultar blockchain.', 'error')
+    } finally {
+      setIsCheckingDeposits(false)
+    }
+  }
+
+  // ── CÁLCULO DE COMISIÓN DE RETIRO (5% SERVER-AUTHORITATIVE) ────────────────
+  const withdrawalFee = Number((withdrawGems * 0.05).toFixed(6))
+  const netWithdrawalUsdt = Number((withdrawGems * 0.95).toFixed(6))
+
+  // ── PREPARAR RETIRO Y MOSTRAR CONFIRMACIÓN ─────────────────────────────────
+  const handleOpenWithdrawConfirm = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (withdrawGems < 1.0) {
+      showFeedback('El retiro mínimo es de 1.00 Gema (1.00 USDT).', 'error')
+      return
+    }
+    if (withdrawGems > userTokens) {
+      showFeedback(`Saldo insuficiente. Tienes ${userTokens} gemas disponibles.`, 'error')
+      return
+    }
+    const cleanDest = withdrawAddress.trim()
+    if (!cleanDest.match(/^0x[a-fA-F0-9]{40}$/)) {
+      showFeedback('Dirección de destino inválida. Debe ser una dirección BEP20 (0x...).', 'error')
+      return
+    }
+
+    setShowWithdrawConfirm(true)
+    soundManager.playSound('click', 0.5)
+  }
+
+  // ── CONFIRMAR RETIRO DEFINITIVO (RPC IDEMPOTENTE) ──────────────────────────
+  const handleExecuteWithdrawal = async () => {
+    try {
+      setIsSubmittingWithdrawal(true)
+      const idempotencyKey = `wd-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      const res = await SupabaseService.requestWithdrawal(
+        withdrawGems,
+        withdrawAddress.trim(),
+        idempotencyKey
+      )
+
+      if (res.success && res.withdrawal) {
+        soundManager.playSound('victory', 0.8)
+        setShowWithdrawConfirm(false)
+        showFeedback(
+          `¡Solicitud de retiro enviada con éxito! Recibirás ${res.withdrawal.netAmountUsdt} USDT en tu wallet.`,
+          'success'
+        )
+        setWithdrawAddress('')
+        // Refrescar historial
+        const hist = await SupabaseService.getFinancialHistory()
+        if (hist.success) {
+          setFinancialHistory({ deposits: hist.deposits, withdrawals: hist.withdrawals })
+        }
+      } else {
+        showFeedback(res.message || 'Error al procesar retiro.', 'error')
+      }
+    } catch (err: any) {
+      showFeedback(err?.message || 'Fallo de conexión.', 'error')
+    } finally {
+      setIsSubmittingWithdrawal(false)
+    }
+  }
 
   return (
     <div className="profile-modal-backdrop" onClick={onClose}>
@@ -215,12 +368,12 @@ export default function ProfileModal({
 
               <div className="profile-badges-row">
                 <span className="profile-badge profile-badge--elo">🏆 {userElo} Copas</span>
+                <span className="profile-badge profile-badge--gems">💎 {userTokens} Gemas</span>
                 {hasVipPass ? (
                   <span className="profile-badge profile-badge--vip">👑 PASE VIP</span>
                 ) : (
                   <span className="profile-badge profile-badge--free">🌱 JUGADOR</span>
                 )}
-                <span className="profile-badge profile-badge--date">📅 Miembro desde {profile.joinedDate}</span>
               </div>
             </div>
           </div>
@@ -288,7 +441,6 @@ export default function ProfileModal({
         {/* TAB 1: PERFIL & STATS */}
         {activeTab === 'profile' && (
           <div className="profile-tab-body">
-            {/* Account Combat Stats (Top Focus) */}
             <div className="profile-section-title">
               <span>⚔️ ESTADÍSTICAS COMPETITIVAS</span>
               <small>Rendimiento en la Arena, balance de saldo y progreso de la cuenta.</small>
@@ -338,7 +490,6 @@ export default function ProfileModal({
 
               {showAvatarPicker && (
                 <div className="profile-avatar-picker-content">
-                  {/* Custom Upload Button */}
                   <div className="profile-upload-bar">
                     <button
                       type="button"
@@ -350,7 +501,6 @@ export default function ProfileModal({
                     </button>
                   </div>
 
-                  {/* Preset Avatars Grid */}
                   <div className="profile-avatar-grid">
                     {PRESET_AVATARS.map((av) => {
                       const isSelected = profile.avatar === av.icon && !profile.isCustomAvatar
@@ -379,140 +529,180 @@ export default function ProfileModal({
           </div>
         )}
 
-        {/* TAB 2: DEPOSITAR */}
+        {/* TAB 2: DEPOSITAR USDT BEP20 */}
         {activeTab === 'deposit' && (
-          <form onSubmit={handleDepositSubmit} className="profile-tab-body">
+          <div className="profile-tab-body">
             <div className="profile-section-title">
-              <span>💳 RECARGAR SALDO ($USD)</span>
-              <small>Añade fondos a tu cuenta para participar en Guerras de Clanes, Torneos y Comercio.</small>
+              <span>💰 DEPÓSITO AUTOMÁTICO DE USDT (BEP20)</span>
+              <small>Conversión oficial: <strong>1 USDT = 1 Gema 💎</strong> (BNB Smart Chain)</small>
+            </div>
+
+            {/* PASO 1: VINCULAR WALLET PERSONAL */}
+            {(!depositInfo.registeredWallet || isEditingRegisteredWallet) ? (
+              <form onSubmit={handleRegisterPersonalWallet} className="crypto-wallet-register-box">
+                <div className="crypto-step-badge">1️⃣ PASO 1: REGISTRA TU WALLET PERSONAL (SELF-CUSTODY)</div>
+                <p className="crypto-step-desc">
+                  Para acreditar tus depósitos automáticamente, introduce la dirección pública de tu wallet personal
+                  (<strong>MetaMask, Trust Wallet, Rabby, SafePal</strong>, etc.).
+                </p>
+                <div className="crypto-input-group">
+                  <input
+                    type="text"
+                    placeholder="0x... (Tu dirección pública BEP20)"
+                    value={personalWalletInput}
+                    onChange={(e) => setPersonalWalletInput(e.target.value)}
+                    className="crypto-wallet-input"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="crypto-register-btn"
+                    disabled={isRegisteringWallet}
+                  >
+                    {isRegisteringWallet ? '⏳ Vinculando...' : '🔗 VINCULAR WALLET'}
+                  </button>
+                </div>
+                {isEditingRegisteredWallet && (
+                  <button
+                    type="button"
+                    className="crypto-cancel-link-btn"
+                    onClick={() => setIsEditingRegisteredWallet(false)}
+                  >
+                    Cancelar y conservar wallet actual
+                  </button>
+                )}
+              </form>
+            ) : (
+              <div className="crypto-registered-wallet-pill">
+                <div className="crypto-registered-info">
+                  <span className="crypto-registered-tag">✅ WALLET PERSONAL VINCULADA:</span>
+                  <code className="crypto-registered-addr">{depositInfo.registeredWallet.address}</code>
+                </div>
+                <button
+                  type="button"
+                  className="crypto-change-wallet-btn"
+                  onClick={() => setIsEditingRegisteredWallet(true)}
+                  title="Cambiar Wallet Personal"
+                >
+                  ✏️ Cambiar
+                </button>
+              </div>
+            )}
+
+            {/* ADVERTENCIA MUY VISIBLE SOBRE BINANCE Y EXCHANGES */}
+            <div className="crypto-exchange-warning-box">
+              <div className="crypto-warning-icon">⚠️</div>
+              <div className="crypto-warning-content">
+                <strong>REGLA FUNDAMENTAL DE DEPÓSITOS:</strong>
+                <p>
+                  Los depósitos se acreditan automáticamente <strong>ÚNICAMENTE</strong> cuando el USDT se transfiere desde la wallet personal registrada en tu cuenta.
+                </p>
+                <div className="crypto-flow-pill">
+                  <span>BINANCE / EXCHANGE</span>
+                  <span>➔</span>
+                  <span>TU WALLET PERSONAL</span>
+                  <span>➔</span>
+                  <strong>PLANT ARENA (GEMAS)</strong>
+                </div>
+                <small>❌ NO envíes directamente desde Binance u otro exchange a la wallet de Plant Arena.</small>
+              </div>
+            </div>
+
+            {/* PASO 2: ENVIAR USDT A LA DIRECCIÓN OFICIAL DE PLANT ARENA */}
+            <div className="crypto-treasury-card">
+              <div className="crypto-step-badge">2️⃣ PASO 2: ENVÍA USDT (BEP20) A ESTA DIRECCIÓN</div>
+
+              <div className="crypto-treasury-meta-row">
+                <span className="crypto-network-badge">🟡 RED: BNB Smart Chain (BEP20)</span>
+                <span className="crypto-token-badge">💵 TOKEN: USDT</span>
+                <span className="crypto-rate-badge">💎 1 USDT = 1 GEMA</span>
+              </div>
+
+              <div className="crypto-treasury-address-box">
+                <span className="crypto-treasury-lbl">Dirección Oficial de Depósito de Plant Arena:</span>
+                <div className="crypto-address-copy-row">
+                  <code className="crypto-address-text">{depositInfo.treasuryWallet}</code>
+                  <button
+                    type="button"
+                    className="crypto-copy-btn"
+                    onClick={handleCopyTreasury}
+                  >
+                    {copiedTreasury ? '✓ ¡COPIADO!' : '📋 COPIAR'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="crypto-detector-status-bar">
+                <span className="crypto-detector-pulse">🟢 Detección Automática Activa</span>
+                <button
+                  type="button"
+                  className="crypto-refresh-blockchain-btn"
+                  onClick={handleCheckBlockchainDeposits}
+                  disabled={isCheckingDeposits}
+                >
+                  {isCheckingDeposits ? '⏳ Escaneando...' : '🔄 Comprobar Blockchain Ahora'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: RETIRAR USDT BEP20 (5% COMISIÓN) */}
+        {activeTab === 'withdraw' && (
+          <form onSubmit={handleOpenWithdrawConfirm} className="profile-tab-body">
+            <div className="profile-section-title">
+              <span>💸 RETIRO DE FONDOS (GEMAS → USDT BEP20)</span>
+              <small>Retira tus gemas a cualquier wallet BEP20 compatible con USDT. Comisión: <strong>5%</strong>.</small>
+            </div>
+
+            <div className="profile-balance-banner">
+              <span>💎 Gemas Disponibles para Retirar:</span>
+              <strong>{userTokens.toLocaleString()} Gemas</strong>
             </div>
 
             {/* Quick Amounts */}
             <div className="profile-quick-amounts">
-              {[5, 10, 20, 50, 100].map((amt) => (
+              {[10, 25, 50, 100].map((amt) => (
                 <button
                   key={amt}
                   type="button"
-                  className={`profile-quick-btn ${depositAmount === amt ? 'profile-quick-btn--active' : ''}`}
-                  onClick={() => setDepositAmount(amt)}
+                  className={`profile-quick-btn ${withdrawGems === amt ? 'profile-quick-btn--active' : ''}`}
+                  onClick={() => setWithdrawGems(amt)}
                 >
-                  ${amt} USD
+                  {amt} 💎
                 </button>
               ))}
+              <button
+                type="button"
+                className="profile-quick-btn profile-quick-btn--max"
+                onClick={() => setWithdrawGems(Math.max(1, userTokens))}
+              >
+                MÁX ({userTokens} 💎)
+              </button>
             </div>
 
             <div className="profile-form-row">
-              <label>Monto a Depositar:</label>
-              <div className="profile-input-wrap">
-                <span>$</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={500}
-                  step={1}
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(Number(e.target.value))}
-                  required
-                />
-                <span>USD</span>
-              </div>
-            </div>
-
-            <div className="profile-form-row">
-              <label>Método de Pago:</label>
-              <div className="profile-method-picker">
-                <button
-                  type="button"
-                  className={`profile-method-btn ${depositMethod === 'card' ? 'profile-method-btn--active' : ''}`}
-                  onClick={() => setDepositMethod('card')}
-                >
-                  💳 Tarjeta Débito / Crédito
-                </button>
-                <button
-                  type="button"
-                  className={`profile-method-btn ${depositMethod === 'crypto' ? 'profile-method-btn--active' : ''}`}
-                  onClick={() => setDepositMethod('crypto')}
-                >
-                  ⚡ Cripto (USDT / Web3 Wallet)
-                </button>
-                <button
-                  type="button"
-                  className={`profile-method-btn ${depositMethod === 'paypal' ? 'profile-method-btn--active' : ''}`}
-                  onClick={() => setDepositMethod('paypal')}
-                >
-                  🅿️ PayPal / Saldo Digital
-                </button>
-              </div>
-            </div>
-
-            <button type="submit" className="profile-submit-action-btn">
-              💰 CONFIRMAR DEPÓSITO DE ${depositAmount.toFixed(2)} USD
-            </button>
-          </form>
-        )}
-
-        {/* TAB 3: RETIRAR */}
-        {activeTab === 'withdraw' && (
-          <form onSubmit={handleWithdrawSubmit} className="profile-tab-body">
-            <div className="profile-section-title">
-              <span>💎 RETIRAR GEMAS A DINERO REAL</span>
-              <small>Mínimo de retiro: 10 Gemas 💎 ($10.00 USD). Retira tus ganancias obtenidas en el Coliseo, Guerras de Clanes y Comercio P2P.</small>
-            </div>
-
-            <div className="profile-balance-banner">
-              <span>Gemas Disponibles para Retirar:</span>
-              <strong>💎 {userTokens} Gemas</strong>
-            </div>
-
-            <div className="profile-form-row">
-              <label>Gemas a Retirar (Mín. 10 💎):</label>
+              <label>Cantidad de Gemas a Retirar (Mínimo: 1.00 💎):</label>
               <div className="profile-input-wrap">
                 <span>💎</span>
                 <input
                   type="number"
-                  min={10}
-                  max={userTokens}
-                  step={1}
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(Number(e.target.value))}
+                  min={1}
+                  max={Math.max(1, userTokens)}
+                  step={0.01}
+                  value={withdrawGems}
+                  onChange={(e) => setWithdrawGems(Number(e.target.value))}
                   required
                 />
-                <span>Gemas</span>
+                <span>GEMAS</span>
               </div>
             </div>
 
             <div className="profile-form-row">
-              <label>Método de Retiro:</label>
-              <div className="profile-method-picker">
-                <button
-                  type="button"
-                  className={`profile-method-btn ${withdrawMethod === 'crypto' ? 'profile-method-btn--active' : ''}`}
-                  onClick={() => setWithdrawMethod('crypto')}
-                >
-                  ⚡ USDT (TRC20 / Optimism)
-                </button>
-                <button
-                  type="button"
-                  className={`profile-method-btn ${withdrawMethod === 'worldapp' ? 'profile-method-btn--active' : ''}`}
-                  onClick={() => setWithdrawMethod('worldapp')}
-                >
-                  🌐 World App Wallet
-                </button>
-                <button
-                  type="button"
-                  className={`profile-method-btn ${withdrawMethod === 'paypal' ? 'profile-method-btn--active' : ''}`}
-                  onClick={() => setWithdrawMethod('paypal')}
-                >
-                  🅿️ PayPal
-                </button>
-              </div>
-            </div>
-
-            <div className="profile-form-row">
-              <label>Dirección de Destino / Billetera:</label>
+              <label>Wallet de Destino (Cualquier dirección BNB Smart Chain BEP20):</label>
               <input
                 type="text"
-                placeholder={withdrawMethod === 'paypal' ? 'tu-email@paypal.com' : '0x... o dirección de billetera'}
+                placeholder="0x... (Dirección BEP20 receptora)"
                 value={withdrawAddress}
                 onChange={(e) => setWithdrawAddress(e.target.value)}
                 className="profile-text-input"
@@ -520,67 +710,178 @@ export default function ProfileModal({
               />
             </div>
 
-            <button type="submit" className="profile-submit-action-btn profile-submit-action-btn--withdraw">
-              💸 SOLICITAR RETIRO DE ${withdrawAmount.toFixed(2)} USD
+            {/* DESGLOSE DINÁMICO EN TIEMPO REAL */}
+            <div className="crypto-settlement-breakdown-card">
+              <div className="crypto-breakdown-header">
+                <span>📋 RESUMEN DE LIQUIDACIÓN</span>
+                <span className="crypto-net-pill">1 USDT = 1 GEMA</span>
+              </div>
+              <div className="crypto-breakdown-row">
+                <span>Monto Solicitado:</span>
+                <strong>{withdrawGems.toFixed(2)} 💎</strong>
+              </div>
+              <div className="crypto-breakdown-row crypto-breakdown-row--fee">
+                <span>Comisión de Retiro (5%):</span>
+                <span style={{ color: '#f87171' }}>- {withdrawalFee.toFixed(2)} 💎</span>
+              </div>
+              <div className="crypto-breakdown-divider" />
+              <div className="crypto-breakdown-row crypto-breakdown-row--net">
+                <span>Recibirás en tu Wallet:</span>
+                <strong style={{ color: '#4ade80', fontSize: '16px' }}>
+                  {netWithdrawalUsdt.toFixed(2)} USDT
+                </strong>
+              </div>
+              <div className="crypto-breakdown-row crypto-breakdown-row--meta">
+                <small>Red: <strong>BNB Smart Chain (BEP20)</strong> • Token: <strong>USDT</strong></small>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="profile-submit-action-btn profile-submit-action-btn--withdraw"
+              disabled={withdrawGems <= 0 || withdrawGems > userTokens}
+            >
+              💸 SOLICITAR RETIRO DE {netWithdrawalUsdt.toFixed(2)} USDT
             </button>
           </form>
         )}
 
-        {/* TAB 4: REFERIDOS
-            Lo que había aquí era un decorado: el enlace apuntaba a
-            «/?ref=<nombre>», que nadie leía, y los contadores eran ceros de
-            localStorage. Ahora todo lo cuenta y lo paga el servidor, y vive en su
-            propio componente en lugar de dentro de este modal de mil líneas. */}
+        {/* TAB 4: REFERIDOS */}
         {activeTab === 'referrals' && (
           <div className="profile-tab-body">
             <PanelDeReferidos />
           </div>
         )}
 
-        {/* TAB 5: HISTORIAL */}
+        {/* TAB 5: HISTORIAL FINANCIERO */}
         {activeTab === 'history' && (
           <div className="profile-tab-body">
             <div className="profile-section-title">
-              <span>📊 HISTORIAL DE TRANSACCIONES</span>
-              <small>Registro de depósitos, retiros, compras y bonos de guerras de clan.</small>
+              <span>📊 HISTORIAL FINANCIERO BLOCKCHAIN</span>
+              <small>Registro de depósitos automáticos y retiros procesados en BNB Smart Chain.</small>
             </div>
 
-            <div className="profile-tx-list">
-              {transactions.length === 0 ? (
-                <div className="profile-empty-state">No hay movimientos recientes.</div>
-              ) : (
-                transactions.map((tx) => {
-                  const isPositive = tx.type === 'deposit' || tx.type === 'reward'
-                  return (
-                    <div key={tx.id} className="profile-tx-row">
-                      <div className="profile-tx-left">
-                        <span className="profile-tx-icon">
-                          {tx.type === 'deposit' && '💳'}
-                          {tx.type === 'withdraw' && '💸'}
-                          {tx.type === 'reward' && '🏆'}
-                          {tx.type === 'purchase' && '🛒'}
-                        </span>
-                        <div>
-                          <span className="profile-tx-desc">{tx.description}</span>
-                          <span className="profile-tx-date">
-                            {new Date(tx.timestamp).toLocaleDateString()} {new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {isLoadingHistory ? (
+              <div className="profile-loading-state">⏳ Cargando movimientos...</div>
+            ) : (
+              <div className="profile-tx-list">
+                {financialHistory.deposits.length === 0 && financialHistory.withdrawals.length === 0 ? (
+                  <div className="profile-empty-state">No hay movimientos financieros registrados.</div>
+                ) : (
+                  <>
+                    {/* Retiros */}
+                    {financialHistory.withdrawals.map((w: any) => (
+                      <div key={w.id} className="profile-tx-row">
+                        <div className="profile-tx-left">
+                          <span className="profile-tx-icon">💸</span>
+                          <div>
+                            <span className="profile-tx-desc">
+                              Retiro USDT ({w.amount_gems} 💎 ➔ {w.net_amount_usdt} USDT)
+                            </span>
+                            <span className="profile-tx-date">
+                              Destino: {w.destination_wallet.slice(0, 8)}...{w.destination_wallet.slice(-6)} • {new Date(w.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="profile-tx-right">
+                          <span className="profile-tx-amount profile-tx-amount--neg">
+                            -{w.amount_gems} 💎
+                          </span>
+                          <span className={`crypto-tx-badge crypto-tx-badge--${w.status}`}>
+                            {w.status === 'requested' && '⏳ Solicitado'}
+                            {w.status === 'processing' && '⚙️ Procesando'}
+                            {w.status === 'completed' && '✓ Completado'}
+                            {w.status === 'failed' && '❌ Fallido'}
                           </span>
                         </div>
                       </div>
-                      <div className="profile-tx-right">
-                        <span className={`profile-tx-amount ${isPositive ? 'profile-tx-amount--pos' : 'profile-tx-amount--neg'}`}>
-                          {isPositive ? '+' : '-'}${tx.amountUsd.toFixed(2)} USD
-                        </span>
-                        <span className="profile-tx-status">✓ {tx.status}</span>
+                    ))}
+
+                    {/* Depósitos */}
+                    {financialHistory.deposits.map((d: any) => (
+                      <div key={d.id} className="profile-tx-row">
+                        <div className="profile-tx-left">
+                          <span className="profile-tx-icon">💰</span>
+                          <div>
+                            <span className="profile-tx-desc">
+                              Depósito USDT (+{d.amount_gems} 💎)
+                            </span>
+                            <span className="profile-tx-date">
+                              TX: <a href={`https://bscscan.com/tx/${d.tx_hash}`} target="_blank" rel="noreferrer" className="crypto-tx-link">
+                                {d.tx_hash.slice(0, 10)}... ↗
+                              </a> • {new Date(d.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="profile-tx-right">
+                          <span className="profile-tx-amount profile-tx-amount--pos">
+                            +{d.amount_gems} 💎
+                          </span>
+                          <span className="crypto-tx-badge crypto-tx-badge--completed">
+                            ✓ {d.status}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* MODAL DE CONFIRMACIÓN PREVIA AL RETIRO */}
+      {showWithdrawConfirm && (
+        <div className="withdraw-confirm-backdrop" onClick={() => setShowWithdrawConfirm(false)}>
+          <div className="withdraw-confirm-card" onClick={(e) => e.stopPropagation()}>
+            <div className="withdraw-confirm-icon">💸</div>
+            <h3 className="withdraw-confirm-title">CONFIRMAR RETIRO DE FONDOS</h3>
+            
+            <div className="withdraw-confirm-details">
+              <div className="withdraw-confirm-item">
+                <span>Gemas a Descontar:</span>
+                <strong>{withdrawGems.toFixed(2)} 💎</strong>
+              </div>
+              <div className="withdraw-confirm-item">
+                <span>Comisión Plant Arena (5%):</span>
+                <span style={{ color: '#f87171' }}>{withdrawalFee.toFixed(2)} 💎</span>
+              </div>
+              <div className="withdraw-confirm-item withdraw-confirm-item--net">
+                <span>Neto a Recibir:</span>
+                <strong style={{ color: '#4ade80' }}>{netWithdrawalUsdt.toFixed(2)} USDT</strong>
+              </div>
+              <div className="withdraw-confirm-item">
+                <span>Red:</span>
+                <span>BNB Smart Chain (BEP20)</span>
+              </div>
+              <div className="withdraw-confirm-item">
+                <span>Wallet de Destino:</span>
+                <code className="withdraw-confirm-dest">{withdrawAddress}</code>
+              </div>
+            </div>
+
+            <div className="withdraw-confirm-actions">
+              <button
+                type="button"
+                className="withdraw-confirm-cancel-btn"
+                onClick={() => setShowWithdrawConfirm(false)}
+                disabled={isSubmittingWithdrawal}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="withdraw-confirm-submit-btn"
+                onClick={handleExecuteWithdrawal}
+                disabled={isSubmittingWithdrawal}
+              >
+                {isSubmittingWithdrawal ? '⏳ Procesando...' : '✓ CONFIRMAR Y ENVIAR RETIRO'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

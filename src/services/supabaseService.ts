@@ -2270,5 +2270,147 @@ export const SupabaseService = {
       return null
     }
   },
+
+  // ── DEPÓSITOS Y RETIROS USDT BEP20 (BNB SMART CHAIN) ─────────────────────────
+
+  /** Registra la wallet personal/self-custody del usuario para depósitos automáticos */
+  async registerDepositWallet(walletAddress: string): Promise<{ success: boolean; wallet?: any; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'NO_SUPABASE' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('register_deposit_wallet', {
+        p_wallet_address: walletAddress,
+      })
+      if (error) {
+        logError('registerDepositWallet', error)
+        return { success: false, error: error.code || 'RPC_ERROR', message: error.message }
+      }
+      return data ?? { success: false }
+    } catch (e: any) {
+      logError('registerDepositWallet', e)
+      return { success: false, error: 'EXCEPTION', message: e?.message }
+    }
+  },
+
+  /** Obtiene la información de depósito: wallet oficial del juego, contrato USDT y wallet registrada */
+  async getDepositInfo(): Promise<{
+    success: boolean
+    registeredWallet?: { id: string; address: string; normalized: string; status: string; createdAt: string } | null
+    treasuryWallet?: string
+    tokenContract?: string
+    network?: string
+    rate?: string
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'NO_SUPABASE' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_deposit_info')
+      if (error) {
+        logError('getDepositInfo', error)
+        return { success: false, error: error.message }
+      }
+      return data ?? { success: false }
+    } catch (e: any) {
+      logError('getDepositInfo', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /** Solicita un retiro con cálculo server-authoritative de comisión del 5% e idempotencia */
+  async requestWithdrawal(
+    amountGems: number,
+    destinationWallet: string,
+    idempotencyKey: string
+  ): Promise<{
+    success: boolean
+    alreadyProcessed?: boolean
+    withdrawal?: {
+      id: string
+      requestedGems?: number
+      amountGems?: number
+      feeGems: number
+      netGems: number
+      netAmountUsdt: number
+      destinationWallet: string
+      status: string
+      remainingBalance?: number
+    }
+    error?: string
+    message?: string
+  }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'NO_SUPABASE', message: 'Servidor no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('request_withdrawal', {
+        p_amount_gems: amountGems,
+        p_destination_wallet: destinationWallet,
+        p_idempotency_key: idempotencyKey,
+      })
+      if (error) {
+        logError('requestWithdrawal', error)
+        return { success: false, error: error.code || 'RPC_ERROR', message: error.message }
+      }
+      return data ?? { success: false }
+    } catch (e: any) {
+      logError('requestWithdrawal', e)
+      return { success: false, error: 'EXCEPTION', message: e?.message }
+    }
+  },
+
+  /** Obtiene el historial de depósitos y retiros del usuario */
+  async getFinancialHistory(): Promise<{
+    success: boolean
+    deposits: Array<{
+      id: string
+      tx_hash: string
+      amount_usdt: number
+      amount_gems: number
+      sender_address: string
+      status: string
+      created_at: string
+      credited_at?: string
+    }>
+    withdrawals: Array<{
+      id: string
+      amount_gems: number
+      fee_gems: number
+      net_gems: number
+      net_amount_usdt: number
+      destination_wallet: string
+      status: string
+      tx_hash?: string
+      created_at: string
+      completed_at?: string
+      failure_reason?: string
+    }>
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { success: false, deposits: [], withdrawals: [], error: 'NO_SUPABASE' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_financial_history')
+      if (error) {
+        logError('getFinancialHistory', error)
+        return { success: false, deposits: [], withdrawals: [], error: error.message }
+      }
+      return data ?? { success: false, deposits: [], withdrawals: [] }
+    } catch (e: any) {
+      logError('getFinancialHistory', e)
+      return { success: false, deposits: [], withdrawals: [], error: e?.message }
+    }
+  },
+
+  /** Dispara la verificación de nuevos depósitos en blockchain */
+  async triggerDepositCheck(): Promise<{ success: boolean; transfersFound?: number; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false }
+    try {
+      const { data, error } = await supabase.functions.invoke('crypto-deposit-detector', {
+        method: 'POST',
+      })
+      if (error) {
+        return { success: false, error: error.message }
+      }
+      return data ?? { success: true }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
+    }
+  },
 }
 

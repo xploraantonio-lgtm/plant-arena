@@ -263,7 +263,15 @@ export default function MainMenu({
               <img className="card__icon" src={moneda} alt="Monedas" />
               {userGold.toLocaleString()}
             </div>
-            <div className="card card--stat" title="Gemas Disponibles">
+            <div
+              className="card card--stat"
+              title="Gemas Disponibles (Clic para Depositar / Retirar USDT BEP20)"
+              style={{ cursor: 'pointer' }}
+              onClick={() => {
+                soundManager.playSound('click', 0.5)
+                setIsProfileModalOpen(true)
+              }}
+            >
               <img className="card__icon" src={gema} alt="Gemas" />
               {userTokens.toLocaleString()}
             </div>
