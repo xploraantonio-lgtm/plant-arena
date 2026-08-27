@@ -616,24 +616,46 @@ export function useInventory() {
   const awardVictoryPack = async (
     _playerElo: number
   ): Promise<{ awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean }> => {
+    const prevSlots = freePackSlots
     const res = await SupabaseService.awardVictoryChest()
 
-    if (!res.awarded) {
-      return { awarded: false, isSlotsFull: res.reason === 'huecos_llenos' }
-    }
-
-    // Adoptar los cofres tal como quedaron en el servidor.
+    // 1. Adoptar siempre los cofres tal como quedaron en el servidor.
+    let remoteSlots: FreePackSlot[] | null = null
     if (currentUserIdRef.current) {
-      const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
-      if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
+      remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+      if (remoteSlots && remoteSlots.length > 0) {
+        setFreePackSlots(remoteSlots)
+        localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))
+      }
     }
 
-    return {
-      awarded: true,
-      durationHours: res.durationHours as 2 | 4 | 8 | 12,
-      arenaLevel: res.arenaLevel,
-      isSlotsFull: false,
+    // 2. Si el RPC concedió directamente el sobre
+    if (res.awarded) {
+      return {
+        awarded: true,
+        durationHours: res.durationHours as 2 | 4 | 8 | 12,
+        arenaLevel: res.arenaLevel,
+        isSlotsFull: false,
+      }
     }
+
+    // 3. Si settlement ya lo había entregado hace instantes ('demasiado_pronto')
+    if (res.reason === 'demasiado_pronto' && remoteSlots) {
+      const newlyAwarded =
+        remoteSlots.find((s) => s.status === 'locked' && prevSlots.find((p) => p.slotId === s.slotId)?.status === 'empty') ??
+        remoteSlots.find((s) => s.status === 'locked')
+
+      if (newlyAwarded) {
+        return {
+          awarded: true,
+          durationHours: newlyAwarded.durationHours as 2 | 4 | 8 | 12,
+          arenaLevel: newlyAwarded.arenaLevel,
+          isSlotsFull: false,
+        }
+      }
+    }
+
+    return { awarded: false, isSlotsFull: res.reason === 'huecos_llenos' }
   }
 
   const startUnlockingSlot = (slotId: number): { success: boolean; error?: string } => {

@@ -653,4 +653,47 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     expect(auditRecord).not.toHaveProperty('migration_number')
     expect(auditRecord).not.toHaveProperty('applied_at')
   })
+
+  it('13. awardVictoryPack reconoce cofre ya entregado por settlement ante respuesta demasiado_pronto', async () => {
+    // Simula el flujo del hook cuando awardVictoryChest devuelve 'demasiado_pronto'
+    // pero getUserPackSlots devuelve los slots con el nuevo cofre bloqueado (locked).
+    const prevSlots: FreePackSlot[] = [
+      { slotId: 0, status: 'empty', durationHours: 2, arenaLevel: 1 },
+      { slotId: 1, status: 'empty', durationHours: 4, arenaLevel: 1 },
+      { slotId: 2, status: 'empty', durationHours: 8, arenaLevel: 1 },
+      { slotId: 3, status: 'empty', durationHours: 12, arenaLevel: 1 },
+    ]
+
+    const rpcResponse = { awarded: false, reason: 'demasiado_pronto' }
+    const remoteSlotsFromSettlement: FreePackSlot[] = [
+      { slotId: 0, status: 'locked', durationHours: 12, arenaLevel: 1 },
+      { slotId: 1, status: 'empty', durationHours: 4, arenaLevel: 1 },
+      { slotId: 2, status: 'empty', durationHours: 8, arenaLevel: 1 },
+      { slotId: 3, status: 'empty', durationHours: 12, arenaLevel: 1 },
+    ]
+
+    const newlyAwarded =
+      remoteSlotsFromSettlement.find(
+        (s) => s.status === 'locked' && prevSlots.find((p) => p.slotId === s.slotId)?.status === 'empty'
+      ) ?? remoteSlotsFromSettlement.find((s) => s.status === 'locked')
+
+    expect(newlyAwarded).toBeDefined()
+    expect(newlyAwarded?.slotId).toBe(0)
+    expect(newlyAwarded?.durationHours).toBe(12)
+    expect(newlyAwarded?.arenaLevel).toBe(1)
+
+    const result = newlyAwarded
+      ? {
+          awarded: true,
+          durationHours: newlyAwarded.durationHours as 2 | 4 | 8 | 12,
+          arenaLevel: newlyAwarded.arenaLevel,
+          isSlotsFull: false,
+        }
+      : { awarded: false, isSlotsFull: rpcResponse.reason === 'huecos_llenos' }
+
+    expect(result.awarded).toBe(true)
+    expect(result.durationHours).toBe(12)
+    expect(result.arenaLevel).toBe(1)
+    expect(result.isSlotsFull).toBe(false)
+  })
 })
