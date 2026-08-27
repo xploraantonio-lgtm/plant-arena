@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { calcularRankedEloDelta, aplicarPisoElo, RANKED_ELO_K } from './rankedElo.ts'
@@ -953,7 +953,7 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     const bfContent = readFileSync(bfPath, 'utf8')
 
     expect(bfContent).toMatch(/ultimaSeqAsyncRef/i)
-    expect(bfContent).toMatch(/\[roomId, isAsyncMatch, incorporarIntencionesAsync\]/i)
+    expect(bfContent).toMatch(/\[roomId, isAsyncMatch, sessionGeneration, incorporarIntencionesAsync\]/i)
     expect(bfContent).not.toMatch(/\[roomId, isAsyncMatch, tick, incorporarIntencionesAsync\]/i)
   })
 
@@ -5100,6 +5100,126 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(colosseumPos).toBeGreaterThan(-1)
     expect(rankedWinsPos).toBeGreaterThan(-1)
     expect(colosseumPos).toBeLessThan(rankedWinsPos)
+  })
+
+  // 233. Validación de ciclo de vida de polling: transición sessionGeneration 0 -> 1 tras startGame() incorpora intenciones
+  it('233. Polling de Rival Semilla: transición sessionGeneration 0 -> 1 tras startGame() captura generación activa e incorpora intenciones', async () => {
+    // Simula las referencias del estado de Battlefield
+    const sessionGenerationRef = { current: 0 }
+    const roomIdRef = { current: 'room-test-123' }
+    let cancelado = false
+    let ultimaSeqAsync = 0
+
+    const mockBuffer: any[] = []
+    let intentsIncorporados: any[] = []
+
+    // Función simulada de incorporarIntencionesAsync
+    const incorporarIntencionesAsync = (intents: unknown, generation?: number) => {
+      if (generation !== undefined && generation !== sessionGenerationRef.current) {
+        return { ok: false, reason: 'TIMELINE_INCONSISTENT', maxAcceptedSeq: null }
+      }
+      const res = incorporarLoteIntencionesP2({
+        bufferActual: mockBuffer,
+        nuevasIntenciones: intents,
+      })
+      if (res.ok) {
+        intentsIncorporados = [...res.nuevoBuffer]
+      }
+      return res
+    }
+
+    // SupabaseService mock
+    const mockPollRankedAsyncIntents = vi.fn().mockResolvedValue({
+      ok: true,
+      intents: [
+        { seq: 1, tick: 391, issuedTick: 385, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 0 },
+      ],
+    })
+
+    // Lógica exacta de refrescarIntencionesAsync en Battlefield.tsx
+    const refrescarIntencionesAsync = async () => {
+      const requestGeneration = sessionGenerationRef.current
+      const capturedRoomId = 'room-test-123'
+      if (cancelado || capturedRoomId !== roomIdRef.current) return
+      const res = await mockPollRankedAsyncIntents(capturedRoomId, ultimaSeqAsync)
+      if (
+        cancelado ||
+        requestGeneration !== sessionGenerationRef.current ||
+        capturedRoomId !== roomIdRef.current
+      ) return
+
+      if (!res || res.ok === false) return
+      const resultado = incorporarIntencionesAsync(res.intents, requestGeneration)
+      if (resultado.ok && typeof resultado.maxAcceptedSeq === 'number') {
+        ultimaSeqAsync = Math.max(ultimaSeqAsync, resultado.maxAcceptedSeq)
+      }
+    }
+
+    // 1. Al montarse Battlefield, generation = 0 (antes de sincronizar reloj)
+    expect(sessionGenerationRef.current).toBe(0)
+
+    // 2. startGame() se ejecuta tras sincronizar el reloj y pasa generation a 1
+    sessionGenerationRef.current = 1
+
+    // 3. El siguiente tick del polling ejecuta refrescarIntencionesAsync
+    await refrescarIntencionesAsync()
+
+    // 4. Verificaciones
+    expect(mockPollRankedAsyncIntents).toHaveBeenCalledWith('room-test-123', 0)
+    expect(intentsIncorporados.length).toBe(1)
+    expect(intentsIncorporados[0].plantId).toBe('sunflower')
+    expect(ultimaSeqAsync).toBe(1)
+  })
+
+  // 234. In-flight Stale Protection: respuesta descartada si sessionGeneration cambia mientras la petición está en vuelo
+  it('234. Polling de Rival Semilla: respuesta asíncrona es estrictamente descartada si sessionGeneration cambia en vuelo', async () => {
+    const sessionGenerationRef = { current: 1 }
+    const roomIdRef = { current: 'room-test-456' }
+    let cancelado = false
+    let ultimaSeqAsync = 0
+
+    let callbackLlegoAlMotor = false
+
+    const incorporarIntencionesAsync = (_intents: unknown, _generation?: number) => {
+      callbackLlegoAlMotor = true
+      return { ok: true, maxAcceptedSeq: 1 }
+    }
+
+    // Mock con retardo simulado para cambio de generación en vuelo
+    const mockPollRankedAsyncIntents = vi.fn().mockImplementation(async () => {
+      // Simula que durante el vuelo de la petición el usuario abandona / empieza rematch (gen pasa de 1 a 2)
+      sessionGenerationRef.current = 2
+      return {
+        ok: true,
+        intents: [
+          { seq: 1, tick: 391, issuedTick: 385, kind: 'plant', plantId: 'sunflower', slot: 0, lane: 1, col: 0 },
+        ],
+      }
+    })
+
+    const refrescarIntencionesAsync = async () => {
+      const requestGeneration = sessionGenerationRef.current
+      const capturedRoomId = 'room-test-456'
+      if (cancelado || capturedRoomId !== roomIdRef.current) return
+      const res = await mockPollRankedAsyncIntents(capturedRoomId, ultimaSeqAsync)
+      if (
+        cancelado ||
+        requestGeneration !== sessionGenerationRef.current ||
+        capturedRoomId !== roomIdRef.current
+      ) return
+
+      if (!res || res.ok === false) return
+      const resultado = incorporarIntencionesAsync(res.intents, requestGeneration)
+      if (resultado.ok && typeof resultado.maxAcceptedSeq === 'number') {
+        ultimaSeqAsync = Math.max(ultimaSeqAsync, resultado.maxAcceptedSeq)
+      }
+    }
+
+    await refrescarIntencionesAsync()
+
+    // La respuesta en vuelo fue descartada antes de tocar el motor
+    expect(callbackLlegoAlMotor).toBe(false)
+    expect(ultimaSeqAsync).toBe(0)
   })
 })
 

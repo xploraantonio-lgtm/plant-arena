@@ -678,7 +678,7 @@ export default function Battlefield({
       dejarDeEscuchar()
       clearInterval(reloj)
     }
-  }, [roomId, currentUserId, encolarAccionDelRival, isAsyncMatch])
+  }, [roomId, currentUserId, encolarAccionDelRival, isAsyncMatch, sessionGeneration])
 
   // ── FEED DE INTENCIONES ASÍNCRONAS (RIVAL SEMILLA RANKED) ──────────────────
   // En lugar de descargar todo el plan futuro al inicio, se consulta periódicamente
@@ -687,23 +687,27 @@ export default function Battlefield({
     if (!roomId || !isAsyncMatch) return
     ultimaSeqAsyncRef.current = 0
     let cancelado = false
-    const capturedGeneration = sessionGenerationRef.current
     const capturedRoomId = roomId
 
     const refrescarIntencionesAsync = async () => {
-      if (cancelado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+      const requestGeneration = sessionGenerationRef.current
+      if (cancelado || capturedRoomId !== roomIdRef.current) return
       const res = await SupabaseService.pollRankedAsyncIntents(
         capturedRoomId,
         ultimaSeqAsyncRef.current
       )
-      if (cancelado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+      if (
+        cancelado ||
+        requestGeneration !== sessionGenerationRef.current ||
+        capturedRoomId !== roomIdRef.current
+      ) return
 
       // A) Error de red / transporte / res inexistente / res.ok === false -> Reintentar en el siguiente ciclo sin marcar corrupción
       if (!res || res.ok === false) return
 
       // B) res.ok === true pero res.intents no es array o intenciones malformadas -> PROTOCOL_INCONSISTENCY / INVALID_ASYNC_PLAN
       // incorporarIntencionesAsync valida res.intents y si es inválido marca inconsistencia, congela el bucle y devuelve ok: false
-      const resultado = incorporarIntencionesAsync(res.intents, capturedGeneration)
+      const resultado = incorporarIntencionesAsync(res.intents, requestGeneration)
       if (resultado.ok && typeof resultado.maxAcceptedSeq === 'number') {
         ultimaSeqAsyncRef.current = Math.max(
           ultimaSeqAsyncRef.current,
@@ -721,7 +725,7 @@ export default function Battlefield({
       cancelado = true
       clearInterval(reloj)
     }
-  }, [roomId, isAsyncMatch, incorporarIntencionesAsync])
+  }, [roomId, isAsyncMatch, sessionGeneration, incorporarIntencionesAsync])
 
   // ── EL FINAL LLEGA A LOS DOS LADOS ─────────────────────────────────────────
   //
@@ -760,7 +764,7 @@ export default function Battlefield({
       dejarDeEscuchar()
       clearInterval(reloj)
     }
-  }, [roomId, currentUserId, terminarPorOrdenDelServidor])
+  }, [roomId, currentUserId, terminarPorOrdenDelServidor, sessionGeneration])
 
   // ── AVISO AL CERRAR EL NAVEGADOR ───────────────────────────────────────────
   //

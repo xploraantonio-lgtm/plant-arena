@@ -121,7 +121,12 @@ export function useGameEngine() {
     skySunSeq: 0,
     engineVersion: 'auth-v2',
     pending: [],
-    timers: { lastSkySun: 0, lastP2PassiveSun: 0, lastEnemySpawn: 0, waveStart: 0 },
+    timers: {
+      lastSkySun: -msToTicks(3500),
+      lastP2PassiveSun: -msToTicks(3500),
+      lastEnemySpawn: -msToTicks(1000),
+      waveStart: 0,
+    },
     status: 'ready',
     p1BaseHp: INITIAL_BASE_HP,
     p2BaseHp: INITIAL_BASE_HP,
@@ -1570,10 +1575,12 @@ export function useGameEngine() {
           // ahí no tocaba la partida en curso y la avalancha entraba igual, que es
           // justo lo que esto pretende evitar.
           const actual = stateRef.current
-          actual.timers.lastEnemySpawn = actual.tick
-          actual.timers.lastP2PassiveSun = actual.tick
-          actual.timers.lastSkySun = actual.tick
-          actual.timers.waveStart = actual.tick
+          if (actual.isPracticeMode) {
+            actual.timers.lastEnemySpawn = actual.tick
+            actual.timers.lastP2PassiveSun = actual.tick
+            actual.timers.lastSkySun = actual.tick
+            actual.timers.waveStart = actual.tick
+          }
           animationFrameId = requestAnimationFrame(gameLoop)
         }
       }
