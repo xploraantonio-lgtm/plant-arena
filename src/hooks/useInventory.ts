@@ -8,6 +8,7 @@ import {
 } from '../utils/packDropManager'
 import { createEmptySlots, type FreePackSlot } from '../utils/freePackManager'
 import { SupabaseService } from '../services/supabaseService'
+import { supabase } from '../lib/supabaseClient'
 import { STAT_LABELS, type PlantStatKey } from '../utils/gameConstants'
 
 // El servidor devuelve la rareza en inglés (columna plant_catalog.rarity).
@@ -621,8 +622,10 @@ export function useInventory() {
 
     // 1. Adoptar siempre los cofres tal como quedaron en el servidor.
     let remoteSlots: FreePackSlot[] | null = null
-    if (currentUserIdRef.current) {
-      remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+    const uid = currentUserIdRef.current ?? (await supabase.auth.getUser()).data?.user?.id
+    if (uid) {
+      currentUserIdRef.current = uid
+      remoteSlots = await SupabaseService.getUserPackSlots(uid)
       if (remoteSlots && remoteSlots.length > 0) {
         setFreePackSlots(remoteSlots)
         localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))
@@ -639,8 +642,8 @@ export function useInventory() {
       }
     }
 
-    // 3. Si settlement ya lo había entregado hace instantes ('demasiado_pronto')
-    if (res.reason === 'demasiado_pronto' && remoteSlots) {
+    // 3. Si settlement ya lo había entregado hace instantes ('demasiado_pronto') o ya existe en DB
+    if ((res.reason === 'demasiado_pronto' || !res.awarded) && remoteSlots) {
       const newlyAwarded =
         remoteSlots.find((s) => s.status === 'locked' && prevSlots.find((p) => p.slotId === s.slotId)?.status === 'empty') ??
         remoteSlots.find((s) => s.status === 'locked')
@@ -916,8 +919,10 @@ export function useInventory() {
   }
 
   const refreshPackSlots = async (): Promise<void> => {
-    if (!currentUserIdRef.current) return
-    const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+    const uid = currentUserIdRef.current ?? (await supabase.auth.getUser()).data?.user?.id
+    if (!uid) return
+    currentUserIdRef.current = uid
+    const remoteSlots = await SupabaseService.getUserPackSlots(uid)
     if (remoteSlots && remoteSlots.length > 0) {
       setFreePackSlots(remoteSlots)
       localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))

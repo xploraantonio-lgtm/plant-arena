@@ -880,35 +880,36 @@ export default function Battlefield({
         setTournamentResult(resolved)
       }
 
-      // Ranked sin roomId = entrenamiento/bot.
-      // Nunca inventar ELO ni cofres en el navegador.
-      // Ranked real sólo cambia ELO mediante el árbitro del servidor.
+      // Ranked sin roomId = entrenamiento/bot (el cliente calcula ELO local).
+      // Ranked con roomId = el servidor calcula ELO autoritativo, pero el cofre de victoria se sincroniza inmediatamente.
       // Strategic Test Match está 100% aislado (sin ELO, sin cofres, sin settlement).
       const reparteElCliente =
         !roomId && matchMode !== 'ranked' && matchMode !== 'strategic_test'
 
       if (gameStatus === 'victory') {
-        if (reparteElCliente && onBattleComplete) {
+        if (onBattleComplete && matchMode !== 'strategic_test') {
           void (async () => {
             const res = await onBattleComplete(true)
             if (res) {
-              setBattleSummaryResult({
-                eloChange: res.winElo,
-                newElo: res.newElo,
+              setBattleSummaryResult((prev) => ({
+                ...prev,
+                eloChange: reparteElCliente ? res.winElo : prev?.eloChange,
+                newElo: reparteElCliente ? res.newElo : prev?.newElo,
                 packResult: res.packResult,
-              })
+              }))
             }
           })()
         }
       } else if (gameStatus === 'defeat') {
-        if (reparteElCliente && onBattleComplete) {
+        if (onBattleComplete && matchMode !== 'strategic_test') {
           void (async () => {
             const res = await onBattleComplete(false)
             if (res) {
-              setBattleSummaryResult({
-                eloChange: -(res.loseElo || 8),
-                newElo: res.newElo,
-              })
+              setBattleSummaryResult((prev) => ({
+                ...prev,
+                eloChange: reparteElCliente ? -(res.loseElo || 8) : prev?.eloChange,
+                newElo: reparteElCliente ? res.newElo : prev?.newElo,
+              }))
             }
           })()
         }
