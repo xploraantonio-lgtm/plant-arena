@@ -201,8 +201,9 @@ export default function PlantHand({
                   isSelected ? 'plant-hand__card--selected' : ''
                 } ${isDisabled ? 'plant-hand__card--disabled' : ''}`}
                 onClick={() => {
-                  if (isSelected) onSelectCard(null, null)
-                  else if (!isDisabled) onSelectCard(cardId, realSlotIndex)
+                  if (!isDisabled) {
+                    onSelectCard(cardId, realSlotIndex)
+                  }
                 }}
               >
                 {/* Level Badge in top-right corner of seed packet */}

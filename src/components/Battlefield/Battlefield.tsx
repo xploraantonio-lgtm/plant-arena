@@ -1049,6 +1049,12 @@ export default function Battlefield({
     <div
       className={`battlefield ${selectedCard === 'shovel' ? 'battlefield--shovel-mode' : ''}`}
       style={{ backgroundImage: `url(${activeBgImage})` }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        if (selectedCard) {
+          setSelectedCard(null, null)
+        }
+      }}
     >
       {/* Top Controls Bar (Colosseum / Tournament Pill) */}
       {(matchMode === 'colosseum' || matchMode === 'tournament') && (

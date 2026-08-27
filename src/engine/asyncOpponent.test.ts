@@ -5221,6 +5221,77 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(callbackLlegoAlMotor).toBe(false)
     expect(ultimaSeqAsync).toBe(0)
   })
+
+  // 235. Mejora UX Selección de Cartas: Clic siempre selecciona, clic repetido no deselecciona, clic en otra carta cambia selección
+  it('235. UX Selección de cartas: clic repetido no deselecciona y clic en otra carta cambia la selección', () => {
+    let selectedCard: string | null = null
+    let selectedSlotIndex: number | null = null
+
+    const handleSelectCard = (id: any, slotIndex?: number | null) => {
+      selectedCard = id
+      selectedSlotIndex = slotIndex ?? null
+    }
+
+    // Simulación del manejador onClick de PlantHand
+    const simularClickCarta = (cardId: string, realSlotIndex: number, isDisabled: boolean) => {
+      if (!isDisabled) {
+        handleSelectCard(cardId, realSlotIndex)
+      }
+    }
+
+    // 1. Primer clic en Girasol (slot 0): selecciona girasol
+    simularClickCarta('sunflower', 0, false)
+    expect(selectedCard).toBe('sunflower')
+    expect(selectedSlotIndex).toBe(0)
+
+    // 2. Segundo clic en el MISMO Girasol: PERMANECE SELECCIONADO (no hace toggle a null)
+    simularClickCarta('sunflower', 0, false)
+    expect(selectedCard).toBe('sunflower')
+    expect(selectedSlotIndex).toBe(0)
+
+    // 3. Clic en Repetidora (slot 2): cambia inmediatamente a repetidora
+    simularClickCarta('repeater', 2, false)
+    expect(selectedCard).toBe('repeater')
+    expect(selectedSlotIndex).toBe(2)
+
+    // 4. Clic en carta deshabilitada (ej. sin soles o en cooldown): no altera la selección
+    simularClickCarta('bonkchoy', 3, true)
+    expect(selectedCard).toBe('repeater')
+    expect(selectedSlotIndex).toBe(2)
+  })
+
+  // 236. Mejora UX Clic Derecho en Battlefield: Cancela selección activa y previene menú contextual
+  it('236. UX Cancelación por Clic Derecho: previene contextmenu del navegador y deselecciona carta activa', () => {
+    let selectedCard: string | null = 'sunflower'
+    let selectedSlotIndex: number | null = 0
+    let preventDefaultCalled = false
+
+    const handleSelectCard = (id: any, slotIndex?: number | null) => {
+      selectedCard = id
+      selectedSlotIndex = slotIndex ?? null
+    }
+
+    // Simulación del evento onContextMenu en el contenedor de Battlefield
+    const handleContextMenu = (e: { preventDefault: () => void }) => {
+      e.preventDefault()
+      if (selectedCard) {
+        handleSelectCard(null, null)
+      }
+    }
+
+    const mockEvent = {
+      preventDefault: () => {
+        preventDefaultCalled = true
+      },
+    }
+
+    // Ejecutar clic derecho sobre el campo
+    handleContextMenu(mockEvent)
+
+    expect(preventDefaultCalled).toBe(true)
+    expect(selectedCard).toBeNull()
+    expect(selectedSlotIndex).toBeNull()
+  })
 })
 
 
