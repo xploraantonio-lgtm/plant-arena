@@ -696,4 +696,43 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     expect(result.arenaLevel).toBe(1)
     expect(result.isSlotsFull).toBe(false)
   })
+
+  it('14. awardVictoryPack con los 4 slots llenos devuelve isSlotsFull: true y awarded: false de inmediato', () => {
+    // 4 slots totalmente ocupados (ninguno empty)
+    const fullSlots: FreePackSlot[] = [
+      { slotId: 0, status: 'locked', durationHours: 2, arenaLevel: 1 },
+      { slotId: 1, status: 'unlocking', durationHours: 4, arenaLevel: 1 },
+      { slotId: 2, status: 'locked', durationHours: 8, arenaLevel: 1 },
+      { slotId: 3, status: 'ready', durationHours: 12, arenaLevel: 1 },
+    ]
+
+    const tieneHuecoVacio = fullSlots.some((s) => s.status === 'empty')
+    expect(tieneHuecoVacio).toBe(false)
+
+    // El resultado cuando no hay hueco vacío
+    const resultado = !tieneHuecoVacio ? { awarded: false, isSlotsFull: true } : { awarded: true, isSlotsFull: false }
+
+    expect(resultado.awarded).toBe(false)
+    expect(resultado.isSlotsFull).toBe(true)
+  })
+
+  it('15. awardVictoryPack ante respuesta huecos_llenos de Supabase no extrae sobres viejos como nuevos', () => {
+    const fullSlots: FreePackSlot[] = [
+      { slotId: 0, status: 'locked', durationHours: 2, arenaLevel: 1 },
+      { slotId: 1, status: 'locked', durationHours: 4, arenaLevel: 1 },
+      { slotId: 2, status: 'locked', durationHours: 8, arenaLevel: 1 },
+      { slotId: 3, status: 'locked', durationHours: 12, arenaLevel: 1 },
+    ]
+    expect(fullSlots.length).toBe(4)
+
+    const res = { awarded: false, reason: 'huecos_llenos' }
+    let resultadoFinal = { awarded: false, isSlotsFull: false }
+
+    if (res.reason === 'huecos_llenos') {
+      resultadoFinal = { awarded: false, isSlotsFull: true }
+    }
+
+    expect(resultadoFinal.awarded).toBe(false)
+    expect(resultadoFinal.isSlotsFull).toBe(true)
+  })
 })

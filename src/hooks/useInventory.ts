@@ -618,6 +618,13 @@ export function useInventory() {
     _playerElo: number
   ): Promise<{ awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean }> => {
     const prevSlots = freePackSlots
+    const tieneHuecoVacio = prevSlots.some((s) => s.status === 'empty')
+
+    // Si ya se tienen los 4 slots llenos, no pedir cofre ni mostrar premio de sobre
+    if (!tieneHuecoVacio) {
+      return { awarded: false, isSlotsFull: true }
+    }
+
     const res = await SupabaseService.awardVictoryChest()
 
     // 1. Adoptar siempre los cofres tal como quedaron en el servidor.
@@ -642,11 +649,16 @@ export function useInventory() {
       }
     }
 
-    // 3. Si settlement ya lo había entregado hace instantes ('demasiado_pronto') o ya existe en DB
-    if ((res.reason === 'demasiado_pronto' || !res.awarded) && remoteSlots) {
-      const newlyAwarded =
-        remoteSlots.find((s) => s.status === 'locked' && prevSlots.find((p) => p.slotId === s.slotId)?.status === 'empty') ??
-        remoteSlots.find((s) => s.status === 'locked')
+    // Si los huecos están llenos en el servidor
+    if (res.reason === 'huecos_llenos') {
+      return { awarded: false, isSlotsFull: true }
+    }
+
+    // 3. Si settlement ya lo había entregado hace instantes ('demasiado_pronto') en un hueco que antes estaba vacío
+    if (res.reason === 'demasiado_pronto' && remoteSlots) {
+      const newlyAwarded = remoteSlots.find(
+        (s) => s.status === 'locked' && prevSlots.find((p) => p.slotId === s.slotId)?.status === 'empty'
+      )
 
       if (newlyAwarded) {
         return {
