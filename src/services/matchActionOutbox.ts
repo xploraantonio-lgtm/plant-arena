@@ -167,6 +167,7 @@ async function sendOnce(
       p_seq: action.seq,
       p_tick: action.tick,
       p_kind: action.kind,
+      p_plant_id: action.plantId ?? null,
       p_plant: action.plantId ?? null,
       p_lane: action.lane ?? null,
       p_col: action.col ?? null,

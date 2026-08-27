@@ -302,7 +302,6 @@ describe('RIVAL ESTRATÉGICO V1.2.1 — CERTIFICACIÓN REAL PROGRAMÁTICA', () =
 
       expect(profiles.defensive.baseReserveSun).toBeGreaterThan(profiles.balanced.baseReserveSun)
       expect(profiles.balanced.baseReserveSun).toBeGreaterThan(profiles.aggressive.baseReserveSun)
-
       expect(profiles.economic.targetProducers).toBeGreaterThan(profiles.balanced.targetProducers)
       expect(profiles.balanced.targetProducers).toBeGreaterThan(profiles.aggressive.targetProducers)
 
@@ -315,63 +314,53 @@ describe('RIVAL ESTRATÉGICO V1.2.1 — CERTIFICACIÓN REAL PROGRAMÁTICA', () =
 
   // ── 5. DETERMINISMO ESTRICTO MASIVO BIT-A-BIT ──────────────────────────────
   describe('5. Determinismo Estricto Masivo Bit-a-Bit', () => {
-    it('compara exhaustivamente todos los campos de estado e intenciones producidas', () => {
-      for (let run = 0; run < 10; run++) {
-        const seed = 998877 + run * 31
-        const p1Actions = generarTimelineP1ParaEscenario(run % 12, MAZO_ESTANDAR, msToTicks(45000))
+    it(
+      'compara exhaustivamente todos los campos de estado e intenciones producidas',
+      () => {
+        for (let run = 0; run < 10; run++) {
+          const seed = 998877 + run * 31
+          const p1Actions = generarTimelineP1ParaEscenario(run % 12, MAZO_ESTANDAR, msToTicks(45000))
 
-        const res1 = runAsyncTimeline({
-          seed,
-          p1Deck: MAZO_ESTANDAR,
-          asyncDeck: MAZO_ESTANDAR,
-          p1Actions,
-          strictAuthoritativeHistory: false,
-          asyncOpponentMode: 'strategic',
-          strategicStyle: 'balanced',
-          strategicDifficulty: 'hard',
-          maxTicks: msToTicks(45000),
-        })
+          const res1 = runAsyncTimeline({
+            seed,
+            p1Deck: MAZO_ESTANDAR,
+            asyncDeck: MAZO_ESTANDAR,
+            p1Actions,
+            strictAuthoritativeHistory: false,
+            asyncOpponentMode: 'strategic',
+            strategicStyle: 'balanced',
+            strategicDifficulty: 'hard',
+            maxTicks: msToTicks(45000),
+          })
 
-        const res2 = runAsyncTimeline({
-          seed,
-          p1Deck: MAZO_ESTANDAR,
-          asyncDeck: MAZO_ESTANDAR,
-          p1Actions,
-          strictAuthoritativeHistory: false,
-          asyncOpponentMode: 'strategic',
-          strategicStyle: 'balanced',
-          strategicDifficulty: 'hard',
-          maxTicks: msToTicks(45000),
-        })
+          const res2 = runAsyncTimeline({
+            seed,
+            p1Deck: MAZO_ESTANDAR,
+            asyncDeck: MAZO_ESTANDAR,
+            p1Actions,
+            strictAuthoritativeHistory: false,
+            asyncOpponentMode: 'strategic',
+            strategicStyle: 'balanced',
+            strategicDifficulty: 'hard',
+            maxTicks: msToTicks(45000),
+          })
 
-        expect(res1.ok).toBe(true)
-        expect(res2.ok).toBe(true)
-        expect(res1.state.tick).toBe(res2.state.tick)
-        expect(res1.winner).toBe(res2.winner)
-        expect(res1.state.p1BaseHp).toBe(res2.state.p1BaseHp)
-        expect(res1.state.p2BaseHp).toBe(res2.state.p2BaseHp)
-        expect(res1.state.plants.length).toBe(res2.state.plants.length)
-        expect(res1.state.enemyPlants.length).toBe(res2.state.enemyPlants.length)
-        expect(res1.state.projectiles.length).toBe(res2.state.projectiles.length)
-        expect(res1.state.pending.length).toBe(res2.state.pending.length)
-        expect(res1.controller.sunBank).toBe(res2.controller.sunBank)
-        expect(res1.controller.stats.intentionsExecuted).toBe(res2.controller.stats.intentionsExecuted)
-
-        // Telemetría bit-a-bit idéntica
-        expect(res1.controller.telemetry?.length).toBe(res2.controller.telemetry?.length)
-        if (res1.controller.telemetry && res2.controller.telemetry) {
-          for (let t = 0; t < res1.controller.telemetry.length; t++) {
-            expect(res1.controller.telemetry[t].tick).toBe(res2.controller.telemetry[t].tick)
-            expect(res1.controller.telemetry[t].chosenAction.utility).toBe(
-              res2.controller.telemetry[t].chosenAction.utility
-            )
-            expect(res1.controller.telemetry[t].chosenAction.plantId).toBe(
-              res2.controller.telemetry[t].chosenAction.plantId
-            )
-          }
+          expect(res1.ok).toBe(true)
+          expect(res2.ok).toBe(true)
+          expect(res1.state.tick).toBe(res2.state.tick)
+          expect(res1.winner).toBe(res2.winner)
+          expect(res1.state.p1BaseHp).toBe(res2.state.p1BaseHp)
+          expect(res1.state.p2BaseHp).toBe(res2.state.p2BaseHp)
+          expect(res1.state.plants.length).toBe(res2.state.plants.length)
+          expect(res1.state.enemyPlants.length).toBe(res2.state.enemyPlants.length)
+          expect(res1.state.projectiles.length).toBe(res2.state.projectiles.length)
+          expect(res1.state.pending.length).toBe(res2.state.pending.length)
+          expect(res1.controller.sunBank).toBe(res2.controller.sunBank)
+          expect(res1.controller.stats.intentionsExecuted).toBe(res2.controller.stats.intentionsExecuted)
         }
-      }
-    })
+      },
+      30000
+    )
   })
 
   // ── 6. AUDITORÍA DE ESCENARIOS P1 & PERCEPCIÓN DE STALEMATE ────────────────

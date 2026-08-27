@@ -622,12 +622,9 @@ function procesarLado(state: GameState, lado: Lado, dt: number, sonar: SonarFn):
   const siguientes: PlantEntity[] = []
 
   for (const planta of misPlantas) {
-    // ── MUERTA: recompensa a quien la mató ────────────────────────────────────
+    // ── MUERTA ───────────────────────────────────────────────────────────────
     if (planta.hp <= 0) {
       sonar('zombie_fall', 0.4)
-      const quienMato = lado.equipo === 'p1' ? 'p2' : 'p1'
-      const config = getScaledPlantConfig(planta.plantId, planta.statRolls ?? [])
-      sumarSoles(state, quienMato, Math.max(10, Math.round((config.cost ?? 50) / 4)))
       // Las estadísticas son del jugador local, que siempre es p1.
       if (lado.equipo === 'p2') {
         state.stats.enemyPlantsDefeated += 1
