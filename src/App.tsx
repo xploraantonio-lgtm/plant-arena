@@ -699,12 +699,12 @@ function App() {
   // sólo en pantalla y el ranking se queda congelado. Es preferible un ranking
   // parado a uno que cualquiera puede falsificar.
   // ───────────────────────────────────────────────────────────────────────────
-  const handleBattleComplete = (isVictory: boolean) => {
+  const handleBattleComplete = async (isVictory: boolean) => {
     const deltas = getEloDeltasForElo(userElo)
     if (isVictory) {
       const newElo = userElo + deltas.winElo
       setUserElo(newElo)
-      const packResult = awardVictoryPack(newElo)
+      const packResult = await awardVictoryPack(newElo)
       return { winElo: deltas.winElo, newElo, packResult }
     } else {
       const newElo = Math.max(0, userElo - deltas.loseElo)

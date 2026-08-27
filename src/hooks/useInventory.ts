@@ -915,8 +915,17 @@ export function useInventory() {
     }
   }
 
+  const refreshPackSlots = async (): Promise<void> => {
+    if (!currentUserIdRef.current) return
+    const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+    if (remoteSlots && remoteSlots.length > 0) {
+      setFreePackSlots(remoteSlots)
+      localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))
+    }
+  }
+
   const refreshFromServer = async (): Promise<void> => {
-    await Promise.all([refreshBalance(), refreshInventory()])
+    await Promise.all([refreshBalance(), refreshInventory(), refreshPackSlots()])
   }
 
   /** Compra sobres. El precio y el tope de cantidad los pone el servidor. */

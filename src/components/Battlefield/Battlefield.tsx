@@ -847,6 +847,20 @@ export default function Battlefield({
             onServerEloUpdated(liq.eloAfter)
           }
 
+          if (liq.statusServidor === 'liquidada' && liq.resultadoFinal === 'victory' && onBattleComplete) {
+            try {
+              const res = await onBattleComplete(true)
+              if (res?.packResult) {
+                setBattleSummaryResult((prev) => ({
+                  ...prev,
+                  packResult: res.packResult,
+                }))
+              }
+            } catch (e) {
+              console.warn('[Battlefield] Error obteniendo pack de victoria:', e)
+            }
+          }
+
           if (liq.mostrarResultado && (liq.resultadoFinal === 'victory' || liq.resultadoFinal === 'defeat')) {
             terminarPorOrdenDelServidor(liq.resultadoFinal)
           }
@@ -875,24 +889,28 @@ export default function Battlefield({
 
       if (gameStatus === 'victory') {
         if (reparteElCliente && onBattleComplete) {
-          const res = onBattleComplete(true)
-          if (res) {
-            setBattleSummaryResult({
-              eloChange: res.winElo,
-              newElo: res.newElo,
-              packResult: res.packResult,
-            })
-          }
+          void (async () => {
+            const res = await onBattleComplete(true)
+            if (res) {
+              setBattleSummaryResult({
+                eloChange: res.winElo,
+                newElo: res.newElo,
+                packResult: res.packResult,
+              })
+            }
+          })()
         }
       } else if (gameStatus === 'defeat') {
         if (reparteElCliente && onBattleComplete) {
-          const res = onBattleComplete(false)
-          if (res) {
-            setBattleSummaryResult({
-              eloChange: -(res.loseElo || 8),
-              newElo: res.newElo,
-            })
-          }
+          void (async () => {
+            const res = await onBattleComplete(false)
+            if (res) {
+              setBattleSummaryResult({
+                eloChange: -(res.loseElo || 8),
+                newElo: res.newElo,
+              })
+            }
+          })()
         }
       }
     }
