@@ -96,7 +96,7 @@ INSERT INTO public.crypto_treasury_config (key, value, description)
 VALUES 
   ('bsc_treasury_wallet', '0x721622D8cad39621C731eC286D1EA859365A51b8', 'Wallet oficial de recepción de depósitos en BSC'),
   ('usdt_bep20_contract', '0x55d398326f99059fF775485246999027B3197955', 'Contrato oficial USDT BEP20 Mainnet'),
-  ('min_withdrawal_gems', '1.00', 'Retiro mínimo permitido en gemas'),
+  ('min_withdrawal_gems', '10.00', 'Retiro mínimo permitido en gemas'),
   ('max_withdrawal_gems', '500.00', 'Retiro máximo por transacción en gemas'),
   ('daily_withdrawal_limit_gems', '1000.00', 'Límite diario total de retiros por usuario en gemas'),
   ('max_daily_withdrawals_count', '5', 'Número máximo de retiros por día por usuario'),
@@ -309,7 +309,7 @@ BEGIN
   END IF;
 
   -- 3. Cargar configuración de límites
-  SELECT COALESCE(NULLIF(value, '')::NUMERIC, 1.00) INTO v_min FROM public.crypto_treasury_config WHERE key = 'min_withdrawal_gems';
+  SELECT COALESCE(NULLIF(value, '')::NUMERIC, 10.00) INTO v_min FROM public.crypto_treasury_config WHERE key = 'min_withdrawal_gems';
   SELECT COALESCE(NULLIF(value, '')::NUMERIC, 500.00) INTO v_max FROM public.crypto_treasury_config WHERE key = 'max_withdrawal_gems';
   SELECT COALESCE(NULLIF(value, '')::NUMERIC, 1000.00) INTO v_daily_limit FROM public.crypto_treasury_config WHERE key = 'daily_withdrawal_limit_gems';
   SELECT COALESCE(NULLIF(value, '')::INTEGER, 5) INTO v_max_count FROM public.crypto_treasury_config WHERE key = 'max_daily_withdrawals_count';

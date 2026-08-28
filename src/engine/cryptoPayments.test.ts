@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 // ── LÓGICA DE CONTABILIDAD Y SEGURIDAD BEP20 CRIPTO ─────────────────────────
 
 export function calculateWithdrawalSettlement(requestedAmountGems: number, feePercent = 5.0) {
-  if (requestedAmountGems < 1.0) {
+  if (requestedAmountGems < 10.0) {
     throw new Error('AMOUNT_BELOW_MIN')
   }
   if (requestedAmountGems > 500.0) {
@@ -116,25 +116,17 @@ describe('Sistema de Depósitos y Retiros USDT BEP20 (BNB Smart Chain)', () => {
   const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955'
 
   describe('Cálculo de Liquidación de Retiro (5% Comisión Server-Authoritative)', () => {
-    it('TEST 4: Retiro de 1.00 Gema -> Comisión: 0.05, Neto: 0.95 USDT', () => {
-      const res = calculateWithdrawalSettlement(1.0)
-      expect(res.amountGems).toBe(1.0)
-      expect(res.feeGems).toBe(0.05)
-      expect(res.netGems).toBe(0.95)
-      expect(res.amountUsdt).toBe(1.0)
-      expect(res.feeUsdt).toBe(0.05)
-      expect(res.netAmountUsdt).toBe(0.95)
-    })
-
-    it('TEST 5: Retiro de 10.00 Gemas -> Comisión: 0.50, Neto: 9.50 USDT', () => {
+    it('TEST 4: Retiro de 10.00 Gemas (Mínimo) -> Comisión: 0.50, Neto: 9.50 USDT', () => {
       const res = calculateWithdrawalSettlement(10.0)
       expect(res.amountGems).toBe(10.0)
       expect(res.feeGems).toBe(0.5)
       expect(res.netGems).toBe(9.5)
+      expect(res.amountUsdt).toBe(10.0)
+      expect(res.feeUsdt).toBe(0.5)
       expect(res.netAmountUsdt).toBe(9.5)
     })
 
-    it('Caso Decimal: Retiro de 25.50 Gemas -> Comisión: 1.275, Neto: 24.225 USDT', () => {
+    it('TEST 5: Caso Decimal: Retiro de 25.50 Gemas -> Comisión: 1.275, Neto: 24.225 USDT', () => {
       const res = calculateWithdrawalSettlement(25.5)
       expect(res.amountGems).toBe(25.5)
       expect(res.feeGems).toBe(1.275)
@@ -150,8 +142,9 @@ describe('Sistema de Depósitos y Retiros USDT BEP20 (BNB Smart Chain)', () => {
       expect(res.netAmountUsdt).toBe(95.0)
     })
 
-    it('Rechaza retiro menor al mínimo permitido (< 1.00 Gema)', () => {
-      expect(() => calculateWithdrawalSettlement(0.5)).toThrow('AMOUNT_BELOW_MIN')
+    it('Rechaza retiro menor al mínimo permitido (< 10.00 Gemas)', () => {
+      expect(() => calculateWithdrawalSettlement(9.99)).toThrow('AMOUNT_BELOW_MIN')
+      expect(() => calculateWithdrawalSettlement(1.0)).toThrow('AMOUNT_BELOW_MIN')
     })
 
     it('Rechaza retiro mayor al máximo permitido por transacción (> 500.00 Gemas)', () => {

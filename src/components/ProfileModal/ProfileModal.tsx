@@ -288,8 +288,8 @@ export default function ProfileModal({
   // ── PREPARAR RETIRO Y MOSTRAR CONFIRMACIÓN ─────────────────────────────────
   const handleOpenWithdrawConfirm = (e: React.FormEvent) => {
     e.preventDefault()
-    if (withdrawGems < 1.0) {
-      showFeedback('El retiro mínimo es de 1.00 Gema (1.00 USDT).', 'error')
+    if (withdrawGems < 10.0) {
+      showFeedback('El retiro mínimo es de 10.00 Gemas (10.00 USDT).', 'error')
       return
     }
     if (withdrawGems > userTokens) {
@@ -746,20 +746,20 @@ export default function ProfileModal({
               <button
                 type="button"
                 className="profile-quick-btn profile-quick-btn--max"
-                onClick={() => setWithdrawGems(Math.max(1, userTokens))}
+                onClick={() => setWithdrawGems(Math.max(10, userTokens))}
               >
                 MÁX ({userTokens} 💎)
               </button>
             </div>
 
             <div className="profile-form-row">
-              <label>Cantidad de Gemas a Retirar (Mínimo: 1.00 💎):</label>
+              <label>Cantidad de Gemas a Retirar (Mínimo: 10.00 💎):</label>
               <div className="profile-input-wrap">
                 <span>💎</span>
                 <input
                   type="number"
-                  min={1}
-                  max={Math.max(1, userTokens)}
+                  min={10}
+                  max={Math.max(10, userTokens)}
                   step={0.01}
                   value={withdrawGems}
                   onChange={(e) => setWithdrawGems(Number(e.target.value))}
@@ -810,7 +810,7 @@ export default function ProfileModal({
             <button
               type="submit"
               className="profile-submit-action-btn profile-submit-action-btn--withdraw"
-              disabled={withdrawGems <= 0 || withdrawGems > userTokens}
+              disabled={withdrawGems < 10 || withdrawGems > userTokens}
             >
               💸 SOLICITAR RETIRO DE {netWithdrawalUsdt.toFixed(2)} USDT
             </button>
