@@ -85,27 +85,56 @@ Deno.serve(async (req: Request) => {
 
     const treasuryAddress = configMap['bsc_treasury_wallet'] || DEFAULT_TREASURY_WALLET
     const usdtContract = configMap['usdt_bep20_contract'] || DEFAULT_USDT_CONTRACT
-    const bscRpcUrl = Deno.env.get('BSC_RPC_URL') || DEFAULT_BSC_RPC
+    const RPC_ENDPOINTS = [
+      Deno.env.get('BSC_RPC_URL'),
+      'https://bsc-dataseed1.binance.org/',
+      'https://bsc-dataseed2.binance.org/',
+      'https://binance.llamarpc.com',
+      'https://bsc-rpc.publicnode.com',
+    ].filter(Boolean) as string[]
 
-    let fromBlockHex = 'latest'
-    const latestBlockHex = await queryBscRpc(bscRpcUrl, 'eth_blockNumber', [])
-    const latestBlock = parseInt(latestBlockHex, 16)
-    // Escanear últimos 500 bloques (~25 minutos en BSC)
-    const scanFromBlock = Math.max(0, latestBlock - 500)
-    fromBlockHex = '0x' + scanFromBlock.toString(16)
+    let latestBlock = 0
+    let chosenRpc = RPC_ENDPOINTS[0]
 
-    const logs = await queryBscRpc(bscRpcUrl, 'eth_getLogs', [
-      {
-        fromBlock: fromBlockHex,
-        toBlock: 'latest',
-        address: usdtContract.toLowerCase(),
-        topics: [
-          TRANSFER_EVENT_TOPIC,
-          null, // from (any sender)
-          padAddressToTopic(treasuryAddress), // to (Plant Arena Treasury)
-        ],
-      },
-    ])
+    for (const rpc of RPC_ENDPOINTS) {
+      try {
+        const latestBlockHex = await queryBscRpc(rpc, 'eth_blockNumber', [])
+        latestBlock = parseInt(latestBlockHex, 16)
+        chosenRpc = rpc
+        break
+      } catch {
+        continue
+      }
+    }
+
+    if (!latestBlock) {
+      return json({ success: false, error: 'NO_BSC_RPC_AVAILABLE' }, 500)
+    }
+
+    // Escanear últimos 90 bloques (~4.5 minutos en BSC, compatible con RPCs públicos)
+    const scanFromBlock = Math.max(0, latestBlock - 90)
+    const fromBlockHex = '0x' + scanFromBlock.toString(16)
+
+    let logs: any[] = []
+    for (const rpc of [chosenRpc, ...RPC_ENDPOINTS.filter(r => r !== chosenRpc)]) {
+      try {
+        logs = await queryBscRpc(rpc, 'eth_getLogs', [
+          {
+            fromBlock: fromBlockHex,
+            toBlock: 'latest',
+            address: usdtContract.toLowerCase(),
+            topics: [
+              TRANSFER_EVENT_TOPIC,
+              null, // from (any sender)
+              padAddressToTopic(treasuryAddress), // to (Plant Arena Treasury)
+            ],
+          },
+        ])
+        break
+      } catch {
+        continue
+      }
+    }
 
     const processedResults = []
 

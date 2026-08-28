@@ -81,6 +81,9 @@ export default function ProfileModal({
     setTimeout(() => setFeedbackMsg(null), 4500)
   }
 
+  // Ref para trackear depósitos ya conocidos y no repetir toast
+  const knownDepositIdsRef = useRef<Set<string>>(new Set())
+
   // Cargar datos de depósito e historial al abrir o cambiar de pestaña
   useEffect(() => {
     if (!isOpen) return
@@ -108,6 +111,10 @@ export default function ProfileModal({
         setFinancialHistory({
           deposits: hist.deposits || [],
           withdrawals: hist.withdrawals || [],
+        });
+        // Inicializar depósitos ya conocidos
+        (hist.deposits || []).forEach((d: any) => {
+          if (d.status === 'credited') knownDepositIdsRef.current.add(d.id)
         })
       }
       if (active) setIsLoadingHistory(false)
@@ -118,8 +125,6 @@ export default function ProfileModal({
       active = false
     }
   }, [isOpen, activeTab])
-
-  if (!isOpen) return null
 
   // Handle Nick Change
   const handleSaveNick = async (e: React.FormEvent) => {
@@ -220,28 +225,61 @@ export default function ProfileModal({
     }
   }
 
-  // ── COMPROBAR DEPÓSITOS EN BLOCKCHAIN ───────────────────────────────────────
-  const handleCheckBlockchainDeposits = async () => {
+  // ── COMPROBAR DEPÓSITOS EN BLOCKCHAIN (CON DETECCIÓN Y NOTIFICACIÓN REALTIME) ─
+  const handleCheckBlockchainDeposits = async (isAutoPoll = false) => {
     try {
-      setIsCheckingDeposits(true)
+      if (!isAutoPoll) setIsCheckingDeposits(true)
       const res = await SupabaseService.triggerDepositCheck()
-      if (res.success) {
-        soundManager.playSound('click', 0.5)
-        showFeedback('Escaneo completado en BNB Smart Chain.', 'success')
-        // Refrescar historial
-        const hist = await SupabaseService.getFinancialHistory()
-        if (hist.success) {
-          setFinancialHistory({ deposits: hist.deposits, withdrawals: hist.withdrawals })
+
+      // Consultar historial actualizado
+      const hist = await SupabaseService.getFinancialHistory()
+      if (hist.success) {
+        setFinancialHistory({ deposits: hist.deposits, withdrawals: hist.withdrawals })
+
+        // Detectar si hay algún depósito recién acreditado
+        const newlyCredited = (hist.deposits || []).filter(
+          (d: any) => d.status === 'credited' && !knownDepositIdsRef.current.has(d.id)
+        )
+
+        if (newlyCredited.length > 0) {
+          // Registrar como conocidos
+          newlyCredited.forEach((d: any) => knownDepositIdsRef.current.add(d.id))
+          const totalNewGems = newlyCredited.reduce((acc: number, d: any) => acc + Number(d.amount_gems), 0)
+
+          soundManager.playSound('victory', 0.9)
+          showFeedback(`🎉 ¡DEPÓSITO RECIBIDO! +${totalNewGems.toFixed(2)} Gemas 💎 acreditadas a tu saldo en tiempo real.`, 'success')
+
+          // Disparar sincronización global de saldo en toda la aplicación
+          window.dispatchEvent(new Event('refresh_user_balance'))
+          window.dispatchEvent(new Event('player_profile_updated'))
+        } else if (!isAutoPoll) {
+          soundManager.playSound('click', 0.5)
+          showFeedback('✓ Escaneo completado: Tu saldo está actualizado (No hay nuevos depósitos pendientes).', 'success')
         }
-      } else {
-        showFeedback(res.error || 'No se detectaron nuevas transferencias.', 'warning')
+      } else if (!isAutoPoll) {
+        showFeedback(res.error || 'No se detectaron transferencias pendientes.', 'warning')
       }
     } catch {
-      showFeedback('Error al consultar blockchain.', 'error')
+      if (!isAutoPoll) showFeedback('Error al consultar blockchain.', 'error')
     } finally {
-      setIsCheckingDeposits(false)
+      if (!isAutoPoll) setIsCheckingDeposits(false)
     }
   }
+
+  // ── AUTO-POLLING EN TIEMPO REAL CUANDO ESTÁ EN LA PESTAÑA DE DEPÓSITO ───────
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'deposit') return
+
+    // Ejecutar de inmediato al abrir la pestaña
+    void handleCheckBlockchainDeposits(true)
+
+    // Polling automático cada 6 segundos mientras mantenga abierta la pestaña Depositar
+    const interval = setInterval(() => {
+      void handleCheckBlockchainDeposits(true)
+    }, 6000)
+
+    return () => clearInterval(interval)
+  }, [isOpen, activeTab])
 
   // ── CÁLCULO DE COMISIÓN DE RETIRO (5% SERVER-AUTHORITATIVE) ────────────────
   const withdrawalFee = Number((withdrawGems * 0.05).toFixed(6))
@@ -268,7 +306,7 @@ export default function ProfileModal({
     soundManager.playSound('click', 0.5)
   }
 
-  // ── CONFIRMAR RETIRO DEFINITIVO (RPC IDEMPOTENTE) ──────────────────────────
+  // ── CONFIRMAR RETIRO DEFINITIVO (RPC IDEMPOTENTE + PROCESADOR BLOCKCHAIN) ──
   const handleExecuteWithdrawal = async () => {
     try {
       setIsSubmittingWithdrawal(true)
@@ -280,14 +318,45 @@ export default function ProfileModal({
       )
 
       if (res.success && res.withdrawal) {
-        soundManager.playSound('victory', 0.8)
+        const withdrawalInfo = res.withdrawal
         setShowWithdrawConfirm(false)
-        showFeedback(
-          `¡Solicitud de retiro enviada con éxito! Recibirás ${res.withdrawal.netAmountUsdt} USDT en tu wallet.`,
-          'success'
-        )
         setWithdrawAddress('')
-        // Refrescar historial
+
+        // Sincronizar saldos en tiempo real
+        window.dispatchEvent(new Event('refresh_user_balance'))
+        window.dispatchEvent(new Event('player_profile_updated'))
+
+        // Disparar inmediatamente el procesador de retiros on-chain
+        showFeedback(`⏳ Solicitud de ${withdrawalInfo.netAmountUsdt} USDT registrada. Transmitiendo a BNB Smart Chain...`, 'success')
+        
+        try {
+          const procRes = await SupabaseService.triggerWithdrawalProcessor()
+          const matchedItem = (procRes.results || []).find((r: any) => r.id === withdrawalInfo.id)
+
+          if (matchedItem?.status === 'completed' && matchedItem.txHash) {
+            soundManager.playSound('victory', 0.9)
+            showFeedback(
+              `🎉 ¡RETIRO COMPLETADO CON ÉXITO! Se enviaron ${matchedItem.netAmountUsdt} USDT a tu wallet. (TX: ${matchedItem.txHash.slice(0, 10)}...)`,
+              'success'
+            )
+          } else if (matchedItem?.status === 'failed_and_refunded' || matchedItem?.error) {
+            soundManager.playSound('error', 0.5)
+            showFeedback(
+              `⚠️ El retiro en blockchain falló (${matchedItem.error || 'Error de red'}). Tus gemas han sido reembolsadas intactas a tu cuenta.`,
+              'error'
+            )
+          } else if (procRes.error) {
+            showFeedback(`⚠️ Retiro registrado en espera de confirmación: ${procRes.message || procRes.error}`, 'warning')
+          }
+        } catch {
+          // Si la edge function tarda, el retiro queda encolado de forma segura
+          soundManager.playSound('click', 0.5)
+          showFeedback(`✓ Solicitud de retiro encolada correctamente. Recibirás ${withdrawalInfo.netAmountUsdt} USDT al confirmar el bloque.`, 'success')
+        }
+
+        // Sincronizar nuevamente saldos e historial
+        window.dispatchEvent(new Event('refresh_user_balance'))
+        window.dispatchEvent(new Event('player_profile_updated'))
         const hist = await SupabaseService.getFinancialHistory()
         if (hist.success) {
           setFinancialHistory({ deposits: hist.deposits, withdrawals: hist.withdrawals })
@@ -301,6 +370,8 @@ export default function ProfileModal({
       setIsSubmittingWithdrawal(false)
     }
   }
+
+  if (!isOpen) return null
 
   return (
     <div className="profile-modal-backdrop" onClick={onClose}>
@@ -637,7 +708,7 @@ export default function ProfileModal({
                 <button
                   type="button"
                   className="crypto-refresh-blockchain-btn"
-                  onClick={handleCheckBlockchainDeposits}
+                  onClick={() => handleCheckBlockchainDeposits(false)}
                   disabled={isCheckingDeposits}
                 >
                   {isCheckingDeposits ? '⏳ Escaneando...' : '🔄 Comprobar Blockchain Ahora'}
@@ -779,7 +850,18 @@ export default function ProfileModal({
                               Retiro USDT ({w.amount_gems} 💎 ➔ {w.net_amount_usdt} USDT)
                             </span>
                             <span className="profile-tx-date">
-                              Destino: {w.destination_wallet.slice(0, 8)}...{w.destination_wallet.slice(-6)} • {new Date(w.created_at).toLocaleDateString()}
+                              Destino: {w.destination_wallet.slice(0, 8)}...{w.destination_wallet.slice(-6)}
+                              {w.tx_hash && (
+                                <> • <a href={`https://bscscan.com/tx/${w.tx_hash}`} target="_blank" rel="noreferrer" className="crypto-tx-link">
+                                  TX: {w.tx_hash.slice(0, 8)}... ↗
+                                </a></>
+                              )}
+                              • {new Date(w.created_at).toLocaleDateString()}
+                              {w.status === 'failed' && w.failure_reason && (
+                                <span style={{ color: '#f87171', display: 'block', fontSize: '10px' }}>
+                                  Motivo: {w.failure_reason} (Saldo Reembolsado)
+                                </span>
+                              )}
                             </span>
                           </div>
                         </div>
@@ -790,8 +872,9 @@ export default function ProfileModal({
                           <span className={`crypto-tx-badge crypto-tx-badge--${w.status}`}>
                             {w.status === 'requested' && '⏳ Solicitado'}
                             {w.status === 'processing' && '⚙️ Procesando'}
+                            {w.status === 'broadcasted' && '📡 Transmitido'}
                             {w.status === 'completed' && '✓ Completado'}
-                            {w.status === 'failed' && '❌ Fallido'}
+                            {w.status === 'failed' && '❌ Fallido (Reembolsado)'}
                           </span>
                         </div>
                       </div>

@@ -2398,10 +2398,26 @@ export const SupabaseService = {
   },
 
   /** Dispara la verificación de nuevos depósitos en blockchain */
-  async triggerDepositCheck(): Promise<{ success: boolean; transfersFound?: number; error?: string }> {
+  async triggerDepositCheck(): Promise<{ success: boolean; transfersFound?: number; processed?: any[]; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false }
     try {
       const { data, error } = await supabase.functions.invoke('crypto-deposit-detector', {
+        method: 'POST',
+      })
+      if (error) {
+        return { success: false, error: error.message }
+      }
+      return data ?? { success: true }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /** Dispara el procesador y firmador automático de retiros en blockchain */
+  async triggerWithdrawalProcessor(): Promise<{ success: boolean; processedCount?: number; results?: any[]; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false }
+    try {
+      const { data, error } = await supabase.functions.invoke('crypto-withdraw-processor', {
         method: 'POST',
       })
       if (error) {

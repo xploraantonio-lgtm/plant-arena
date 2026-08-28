@@ -883,6 +883,12 @@ export function useInventory() {
     setColosseumMaxStreak(Number(b.colosseum_max_streak))
   }
 
+  useEffect(() => {
+    const handleRefresh = () => void refreshBalance()
+    window.addEventListener('refresh_user_balance', handleRefresh)
+    return () => window.removeEventListener('refresh_user_balance', handleRefresh)
+  }, [])
+
   /** Recarga el inventario completo desde el servidor. */
   const refreshInventory = async (): Promise<void> => {
     const inv = await SupabaseService.myInventory()
