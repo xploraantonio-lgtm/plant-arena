@@ -33,6 +33,8 @@ import UpdateModal from './components/UpdateModal/UpdateModal'
 import { parseEngineVersion, type EngineVersion } from './types/game'
 import { StrategicPlaytestLauncherModal } from './components/StrategicPlaytest/StrategicPlaytestLauncherModal'
 import type { StrategicPlaytestConfig } from './engine/strategicPlaytest'
+import { SeasonManager } from './utils/seasonManager'
+import BetaPhaseModal from './components/BetaPhaseModal/BetaPhaseModal'
 import { isStrategicPlaytestAuthorized } from './utils/strategicPlaytestAuth'
 
 function App() {
@@ -248,6 +250,19 @@ function App() {
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false)
+  const [isBetaPhaseModalOpen, setIsBetaPhaseModalOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return !localStorage.getItem('plant_arena_beta_phase_seen_v1')
+  })
+
+  // Sincronizar temporada oficial desde Supabase al iniciar
+  useEffect(() => {
+    SupabaseService.getActiveSeason().then((season) => {
+      if (season) {
+        SeasonManager.updateFromSupabase(season)
+      }
+    })
+  }, [])
 
   // Automatically show set password modal if user logged in with Google for first time
   useEffect(() => {
@@ -818,6 +833,7 @@ function App() {
             onOpenMarketplace={() => setScreen('market')}
             onOpenLanding={handleGoToLanding}
             onOpenAdmin={() => setIsAdminPanelOpen(true)}
+            onOpenBetaInfo={() => setIsBetaPhaseModalOpen(true)}
             onOpenStrategicPlaytest={
               isStrategicPlaytestAuthorized({ user, profile, isAdmin })
                 ? () => setIsStrategicPlaytestModalOpen(true)
@@ -1194,6 +1210,13 @@ function App() {
           isOpen={isStrategicPlaytestModalOpen}
           onClose={() => setIsStrategicPlaytestModalOpen(false)}
           onStartPlaytest={handleStartStrategicPlaytest}
+        />
+
+        {/* Beta Phase Welcome Modal (Season 1 - 45 Days) */}
+        <BetaPhaseModal
+          isOpen={isBetaPhaseModalOpen}
+          onClose={() => setIsBetaPhaseModalOpen(false)}
+          onPlayNow={handlePlayNormal}
         />
       </GameFrame>
       <RotateOverlay />

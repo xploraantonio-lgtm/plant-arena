@@ -64,6 +64,7 @@ interface MainMenuProps {
   onOpenLanding?: () => void
   onOpenAdmin?: () => void
   onOpenStrategicPlaytest?: () => void
+  onOpenBetaInfo?: () => void
   isAdmin?: boolean
   onSignOut?: () => void
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
@@ -100,6 +101,7 @@ export default function MainMenu({
   onOpenLanding,
   onOpenAdmin,
   onOpenStrategicPlaytest,
+  onOpenBetaInfo,
   isAdmin = false,
   onSignOut,
   onStartSlotUnlock,
@@ -302,7 +304,12 @@ export default function MainMenu({
                 🛡️ Admin
               </button>
             )}
-            <div className="season-countdown-badge">
+            <div
+              className="season-countdown-badge"
+              onClick={onOpenBetaInfo}
+              style={{ cursor: onOpenBetaInfo ? 'pointer' : 'default' }}
+              title="🏆 Fase Beta Oficial - Temporada 1 (45 Días) - Clic para más información"
+            >
               <span className="season-badge-icon">⏳</span>
               <span className="season-badge-text">
                 TEMPORADA 1: <strong>{SeasonManager.getSeasonStatus().formattedCountdown}</strong>

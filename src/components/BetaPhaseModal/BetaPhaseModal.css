@@ -1,0 +1,384 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   BETA PHASE MODAL - PLANT ARENA
+   Pop-up de Bienvenida a la Fase Beta y Temporada 1 Oficial (45 Días)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.beta-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 9, 20, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: betaModalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes betaModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.beta-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0a1120 100%);
+  border: 2px solid #facc15;
+  border-radius: 26px;
+  padding: 32px 24px 26px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  box-shadow:
+    0 0 50px rgba(250, 204, 21, 0.3),
+    0 25px 60px rgba(0, 0, 0, 0.9);
+  animation: betaModalCardPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: hidden;
+}
+
+.beta-modal-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #f59e0b, #facc15, #22c55e, #facc15, #f59e0b);
+  background-size: 200% 100%;
+  animation: betaModalGlowBorder 3s linear infinite;
+}
+
+@keyframes betaModalGlowBorder {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+@keyframes betaModalCardPop {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Close button */
+.beta-modal-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  z-index: 10;
+}
+
+.beta-modal-close-btn:hover {
+  background: rgba(239, 68, 68, 0.8);
+  color: #fff;
+  border-color: #ef4444;
+  transform: scale(1.1);
+}
+
+/* Top Badge */
+.beta-modal-top-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.5);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #fde047;
+  text-transform: uppercase;
+}
+
+.beta-modal-top-badge-dot {
+  width: 7px;
+  height: 7px;
+  background: #facc15;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #facc15;
+  animation: betaDotPulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes betaDotPulse {
+  from { opacity: 0.5; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+/* Hero Icon */
+.beta-modal-hero-icon {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.25), rgba(245, 158, 11, 0.05));
+  border: 2px solid rgba(250, 204, 21, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  box-shadow: 0 0 30px rgba(250, 204, 21, 0.4);
+  animation: betaPulseHero 2s ease-in-out infinite;
+}
+
+@keyframes betaPulseHero {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 25px rgba(250, 204, 21, 0.35);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 40px rgba(250, 204, 21, 0.65);
+  }
+}
+
+.beta-modal-sparkles {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 18px;
+  animation: betaSparkle 2s ease-in-out infinite alternate;
+}
+
+@keyframes betaSparkle {
+  0% { transform: rotate(0deg) scale(0.8); opacity: 0.6; }
+  100% { transform: rotate(25deg) scale(1.2); opacity: 1; }
+}
+
+/* Header */
+.beta-modal-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.beta-modal-title {
+  margin: 0;
+  font-family: 'Luckiest Guy', 'Inter', Arial, sans-serif;
+  font-size: 26px;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #ffffff 20%, #fde047 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.beta-modal-season-name {
+  margin: 0;
+  font-size: 13.5px;
+  color: #94a3b8;
+  letter-spacing: 0.3px;
+}
+
+.beta-modal-season-name strong {
+  color: #facc15;
+}
+
+/* Timer Card */
+.beta-modal-timer-card {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1.5px solid rgba(250, 204, 21, 0.4);
+  border-radius: 16px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.beta-modal-timer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.beta-modal-timer-icon {
+  font-size: 26px;
+}
+
+.beta-modal-timer-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #facc15;
+  letter-spacing: 0.5px;
+}
+
+.beta-modal-timer-sub {
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.beta-modal-timer-countdown {
+  font-family: 'Luckiest Guy', monospace, sans-serif;
+  font-size: 20px;
+  color: #38bdf8;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+  letter-spacing: 0.5px;
+}
+
+/* Features List */
+.beta-modal-features {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.beta-modal-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 10px 14px;
+  transition: transform 0.15s ease;
+}
+
+.beta-modal-feature-item:hover {
+  transform: translateX(3px);
+  border-color: rgba(250, 204, 21, 0.3);
+}
+
+.beta-modal-feature-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.beta-modal-feature-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.beta-modal-feature-content strong {
+  font-size: 13px;
+  color: #f1f5f9;
+}
+
+.beta-modal-feature-content span {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+/* Action button */
+.beta-modal-actions {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.beta-modal-btn-play {
+  position: relative;
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
+  border: 1.5px solid #fde68a;
+  border-radius: 16px;
+  color: #ffffff;
+  font-family: 'Luckiest Guy', 'Inter', Arial, sans-serif;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.5);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.beta-modal-btn-play::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 70%
+  );
+  transform: rotate(25deg);
+  animation: betaBtnShine 3s infinite;
+}
+
+@keyframes betaBtnShine {
+  0% { transform: translateX(-100%) rotate(25deg); }
+  30%, 100% { transform: translateX(100%) rotate(25deg); }
+}
+
+.beta-modal-btn-play:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  box-shadow: 0 6px 28px rgba(245, 158, 11, 0.7);
+}
+
+.beta-modal-btn-play:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4);
+}
+
+@media (max-width: 540px) {
+  .beta-modal-card {
+    padding: 24px 16px 20px;
+    gap: 12px;
+    border-radius: 20px;
+  }
+
+  .beta-modal-title {
+    font-size: 21px;
+  }
+
+  .beta-modal-timer-card {
+    padding: 10px 14px;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .beta-modal-timer-left {
+    flex-direction: column;
+    text-align: center;
+    gap: 4px;
+  }
+
+  .beta-modal-btn-play {
+    font-size: 16px;
+    padding: 12px 16px;
+  }
+}
