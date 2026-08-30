@@ -647,6 +647,82 @@ export interface Database {
           },
         ]
       }
+      reward_codes: {
+        Row: {
+          id: string
+          code: string
+          normalized_code: string
+          reward_type: string
+          reward_value: number
+          max_uses: number
+          used_count: number
+          active: boolean
+          created_at: string
+          expires_at: string | null
+        }
+        Insert: {
+          id?: string
+          code: string
+          normalized_code: string
+          reward_type?: string
+          reward_value?: number
+          max_uses?: number
+          used_count?: number
+          active?: boolean
+          created_at?: string
+          expires_at?: string | null
+        }
+        Update: {
+          id?: string
+          code?: string
+          normalized_code?: string
+          reward_type?: string
+          reward_value?: number
+          max_uses?: number
+          used_count?: number
+          active?: boolean
+          created_at?: string
+          expires_at?: string | null
+        }
+        Relationships: []
+      }
+      reward_code_claims: {
+        Row: {
+          id: string
+          reward_code_id: string
+          user_id: string
+          claimed_at: string
+          generated_pack_slot_id: number
+        }
+        Insert: {
+          id?: string
+          reward_code_id: string
+          user_id: string
+          claimed_at?: string
+          generated_pack_slot_id: number
+        }
+        Update: {
+          id?: string
+          reward_code_id?: string
+          user_id?: string
+          claimed_at?: string
+          generated_pack_slot_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'reward_code_claims_reward_code_id_fkey'
+            columns: ['reward_code_id']
+            referencedRelation: 'reward_codes'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'reward_code_claims_user_id_fkey'
+            columns: ['user_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       /**
@@ -674,6 +750,12 @@ export interface Database {
       }
     }
     Functions: {
+      claim_reward_code: {
+        Args: {
+          p_code: string
+        }
+        Returns: Json
+      }
       resolve_colosseum_match: {
         Args: {
           p_room_id: string

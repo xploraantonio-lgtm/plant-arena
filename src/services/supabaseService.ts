@@ -2428,5 +2428,67 @@ export const SupabaseService = {
       return { success: false, error: e?.message }
     }
   },
+
+  // ---------------------------------------------------------------------------
+  // CÓDIGOS DE RECOMPENSA STREAMER
+  // ---------------------------------------------------------------------------
+  /**
+   * Canjea un código promocional de streamer.
+   * PostgreSQL valida la existencia, el estado activo, la expiración, el límite
+   * de usos y la unicidad por usuario. Genera un pack PvP locked en pack_slots.
+   */
+  async claimRewardCode(code: string): Promise<{
+    success: boolean
+    slotId?: number
+    durationHours?: number
+    arenaLevel?: number
+    error?: string
+    errorCode?: 'CODE_NOT_FOUND' | 'CODE_DISABLED' | 'CODE_EXPIRED' | 'CODE_LIMIT_REACHED' | 'CODE_ALREADY_CLAIMED' | 'SLOTS_FULL' | 'NOT_AUTHENTICATED' | 'UNKNOWN'
+  }> {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Supabase no está configurado', errorCode: 'UNKNOWN' }
+    }
+    const cleanCode = code.trim().toUpperCase()
+    if (!cleanCode) {
+      return { success: false, error: 'Código inválido', errorCode: 'CODE_NOT_FOUND' }
+    }
+    try {
+      const { data, error } = await (supabase.rpc as any)('claim_reward_code', {
+        p_code: cleanCode,
+      })
+      if (error) {
+        logError('claimRewardCode', error)
+        const msg = error.message || ''
+        let errorCode: 'CODE_NOT_FOUND' | 'CODE_DISABLED' | 'CODE_EXPIRED' | 'CODE_LIMIT_REACHED' | 'CODE_ALREADY_CLAIMED' | 'SLOTS_FULL' | 'NOT_AUTHENTICATED' | 'UNKNOWN' = 'UNKNOWN'
+
+        if (msg.includes('CODE_NOT_FOUND')) {
+          errorCode = 'CODE_NOT_FOUND'
+        } else if (msg.includes('CODE_DISABLED')) {
+          errorCode = 'CODE_DISABLED'
+        } else if (msg.includes('CODE_EXPIRED')) {
+          errorCode = 'CODE_EXPIRED'
+        } else if (msg.includes('CODE_LIMIT_REACHED')) {
+          errorCode = 'CODE_LIMIT_REACHED'
+        } else if (msg.includes('CODE_ALREADY_CLAIMED') || msg.includes('uq_reward_code_user_claim')) {
+          errorCode = 'CODE_ALREADY_CLAIMED'
+        } else if (msg.includes('SLOTS_FULL') || msg.includes('huecos_llenos')) {
+          errorCode = 'SLOTS_FULL'
+        } else if (msg.includes('NOT_AUTHENTICATED') || msg.includes('No autenticado')) {
+          errorCode = 'NOT_AUTHENTICATED'
+        }
+
+        return { success: false, error: msg, errorCode }
+      }
+      return {
+        success: Boolean(data?.success),
+        slotId: data?.slotId,
+        durationHours: data?.durationHours,
+        arenaLevel: data?.arenaLevel,
+      }
+    } catch (e: any) {
+      logError('claimRewardCode', e)
+      return { success: false, error: e?.message || 'Error de conexión', errorCode: 'UNKNOWN' }
+    }
+  },
 }
 

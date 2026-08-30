@@ -71,6 +71,11 @@ export default function ProfileModal({
   }>({ deposits: [], withdrawals: [] })
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
 
+  // ── ESTADO DE CÓDIGOS DE RECOMPENSA STREAMER ──────────────────────────────
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [isClaimingCode, setIsClaimingCode] = useState(false)
+  const [codeFeedback, setCodeFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
   // Status feedback toast
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null)
 
@@ -181,6 +186,54 @@ export default function ProfileModal({
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+    }
+  }
+
+  // ── CANJEAR CÓDIGO DE RECOMPENSA STREAMER ─────────────────────────────────
+  const handleClaimRewardCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const clean = promoCodeInput.trim().toUpperCase()
+    if (!clean) return
+
+    try {
+      setIsClaimingCode(true)
+      setCodeFeedback(null)
+      const res = await SupabaseService.claimRewardCode(clean)
+
+      if (res.success) {
+        soundManager.playSound('victory', 0.9)
+        setPromoCodeInput('')
+        setCodeFeedback({ text: '🎉 ¡Recompensa añadida al jardín!', type: 'success' })
+        showFeedback('🎉 ¡Recompensa añadida al jardín!', 'success')
+        window.dispatchEvent(new Event('refresh_pack_slots'))
+        window.dispatchEvent(new Event('refresh_user_balance'))
+      } else {
+        soundManager.playSound('error', 0.5)
+        let msg = 'Código no encontrado.'
+        if (res.errorCode === 'CODE_ALREADY_CLAIMED' || res.errorCode === 'CODE_LIMIT_REACHED') {
+          msg = 'Este código ya fue utilizado.'
+        } else if (res.errorCode === 'CODE_NOT_FOUND') {
+          msg = 'Código no encontrado.'
+        } else if (res.errorCode === 'SLOTS_FULL') {
+          msg = 'No tienes huecos de sobre libres en tu jardín.'
+        } else if (res.errorCode === 'CODE_EXPIRED' || res.errorCode === 'CODE_DISABLED') {
+          msg = 'Este código ha expirado o está desactivado.'
+        } else if (res.error) {
+          if (res.error.includes('CODE_ALREADY_CLAIMED') || res.error.includes('CODE_LIMIT_REACHED') || res.error.includes('uq_reward_code_user_claim')) {
+            msg = 'Este código ya fue utilizado.'
+          } else if (res.error.includes('SLOTS_FULL') || res.error.includes('huecos_llenos')) {
+            msg = 'No tienes huecos de sobre libres en tu jardín.'
+          }
+        }
+        setCodeFeedback({ text: msg, type: 'error' })
+        showFeedback(msg, 'error')
+      }
+    } catch {
+      soundManager.playSound('error', 0.5)
+      setCodeFeedback({ text: 'Error al conectar con el servidor.', type: 'error' })
+      showFeedback('Error al conectar con el servidor.', 'error')
+    } finally {
+      setIsClaimingCode(false)
     }
   }
 
@@ -536,6 +589,51 @@ export default function ProfileModal({
                 <span className="profile-stat-val" style={{ color: '#38bdf8' }}>{profile.totalReferred} Amigos</span>
                 <span className="profile-stat-lbl">Referidos Activos</span>
               </div>
+            </div>
+
+            {/* SECCIÓN: 🎁 CÓDIGOS DE RECOMPENSA */}
+            <div className="profile-reward-code-card">
+              <div className="profile-reward-code-header">
+                <div className="profile-reward-code-title-row">
+                  <span className="profile-reward-code-icon">🎁</span>
+                  <span className="profile-reward-code-title">CÓDIGOS DE RECOMPENSA</span>
+                </div>
+                <span className="profile-reward-code-subtitle">
+                  Canjea códigos promocionales de streamers para obtener sobres PvP en tu jardín.
+                </span>
+              </div>
+
+              <form onSubmit={handleClaimRewardCode} className="profile-reward-code-form">
+                <div className="profile-reward-code-input-group">
+                  <input
+                    type="text"
+                    placeholder="Ingresar código"
+                    value={promoCodeInput}
+                    onChange={(e) => {
+                      setPromoCodeInput(e.target.value.toUpperCase())
+                      if (codeFeedback) setCodeFeedback(null)
+                    }}
+                    className="profile-reward-code-input"
+                    maxLength={32}
+                    disabled={isClaimingCode}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="submit"
+                    className="profile-reward-code-btn"
+                    disabled={isClaimingCode || !promoCodeInput.trim()}
+                  >
+                    {isClaimingCode ? '⏳ RECLAMANDO...' : 'RECLAMAR'}
+                  </button>
+                </div>
+
+                {codeFeedback && (
+                  <div className={`profile-reward-code-feedback profile-reward-code-feedback--${codeFeedback.type}`}>
+                    {codeFeedback.text}
+                  </div>
+                )}
+              </form>
             </div>
 
             {/* Collapsible Avatar Picker Section */}

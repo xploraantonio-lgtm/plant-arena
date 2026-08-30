@@ -885,8 +885,13 @@ export function useInventory() {
 
   useEffect(() => {
     const handleRefresh = () => void refreshBalance()
+    const handleRefreshSlots = () => void refreshPackSlots()
     window.addEventListener('refresh_user_balance', handleRefresh)
-    return () => window.removeEventListener('refresh_user_balance', handleRefresh)
+    window.addEventListener('refresh_pack_slots', handleRefreshSlots)
+    return () => {
+      window.removeEventListener('refresh_user_balance', handleRefresh)
+      window.removeEventListener('refresh_pack_slots', handleRefreshSlots)
+    }
   }, [])
 
   /** Recarga el inventario completo desde el servidor. */
