@@ -6,7 +6,7 @@ import {
   type PackId,
   type PackDropResult,
 } from '../utils/packDropManager'
-import { createEmptySlots, type FreePackSlot } from '../utils/freePackManager'
+import { createEmptySlots, type FreePackSlot, type PlayerRewardPack } from '../utils/freePackManager'
 import { SupabaseService } from '../services/supabaseService'
 import { supabase } from '../lib/supabaseClient'
 import { STAT_LABELS, type PlantStatKey } from '../utils/gameConstants'
@@ -579,6 +579,8 @@ export function useInventory() {
     return createEmptySlots()
   })
 
+  const [playerRewardPacks, setPlayerRewardPacks] = useState<PlayerRewardPack[]>([])
+
   useEffect(() => {
     localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(freePackSlots))
   }, [freePackSlots])
@@ -598,6 +600,22 @@ export function useInventory() {
             }
           }
           return slot
+        })
+        return changed ? next : prev
+      })
+
+      setPlayerRewardPacks((prev) => {
+        let changed = false
+        const next = prev.map((pack) => {
+          if (pack.status === 'unlocking' && pack.unlockStartedAt && pack.durationHours) {
+            const totalMs = pack.durationHours * 3600 * 1000
+            const elapsedMs = Date.now() - pack.unlockStartedAt
+            if (elapsedMs >= totalMs) {
+              changed = true
+              return { ...pack, status: 'ready' as const }
+            }
+          }
+          return pack
         })
         return changed ? next : prev
       })
@@ -886,11 +904,14 @@ export function useInventory() {
   useEffect(() => {
     const handleRefresh = () => void refreshBalance()
     const handleRefreshSlots = () => void refreshPackSlots()
+    const handleRefreshRewardPacks = () => void refreshRewardPacks()
     window.addEventListener('refresh_user_balance', handleRefresh)
     window.addEventListener('refresh_pack_slots', handleRefreshSlots)
+    window.addEventListener('refresh_reward_packs', handleRefreshRewardPacks)
     return () => {
       window.removeEventListener('refresh_user_balance', handleRefresh)
       window.removeEventListener('refresh_pack_slots', handleRefreshSlots)
+      window.removeEventListener('refresh_reward_packs', handleRefreshRewardPacks)
     }
   }, [])
 
@@ -952,8 +973,13 @@ export function useInventory() {
     }
   }
 
+  const refreshRewardPacks = async (): Promise<void> => {
+    const remotePacks = await SupabaseService.getMyRewardPacks()
+    setPlayerRewardPacks(remotePacks)
+  }
+
   const refreshFromServer = async (): Promise<void> => {
-    await Promise.all([refreshBalance(), refreshInventory(), refreshPackSlots()])
+    await Promise.all([refreshBalance(), refreshInventory(), refreshPackSlots(), refreshRewardPacks()])
   }
 
   /** Compra sobres. El precio y el tope de cantidad los pone el servidor. */
@@ -1087,6 +1113,43 @@ export function useInventory() {
     return { success: true, goldSpent: res.goldSpent }
   }
 
+  /** Inicia el desbloqueo de un sobre PvP de recompensa en el jardín. */
+  const startUnlockRewardPack = async (
+    packId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await SupabaseService.startUnlockRewardPack(packId)
+    if (!res.success) return { success: false, error: res.error }
+
+    await refreshRewardPacks()
+    return { success: true }
+  }
+
+  /** Acelera un sobre PvP de recompensa con oro en el jardín. */
+  const instantUnlockRewardPack = async (
+    packId: string
+  ): Promise<{ success: boolean; goldSpent?: number; error?: string }> => {
+    const res = await SupabaseService.instantUnlockRewardPack(packId)
+    if (!res.success) return { success: false, error: res.error }
+
+    await Promise.all([refreshBalance(), refreshRewardPacks()])
+    return { success: true, goldSpent: res.goldSpent }
+  }
+
+  /** Reclama y abre un sobre PvP de recompensa listo. */
+  const openRewardPack = async (packId: string): Promise<PackDropResult | null> => {
+    const res = await SupabaseService.claimRewardPack(packId)
+    if (!res.success || !res.plantId) return null
+
+    await refreshFromServer()
+
+    return {
+      plantId: res.plantId as PlantId,
+      rarityLabel: RARITY_LABEL[res.rarity || 'common'] ?? 'COMÚN',
+      rarityColor: RARITY_COLOR[res.rarity || 'common'] ?? '#4ade80',
+      isNew: Boolean(res.isNew),
+    }
+  }
+
   return {
     refreshFromServer,
     buyGoldPackage,
@@ -1103,6 +1166,11 @@ export function useInventory() {
     addGold,
     deductGold,
     inventoryPacks,
+    playerRewardPacks,
+    refreshRewardPacks,
+    startUnlockRewardPack,
+    instantUnlockRewardPack,
+    openRewardPack,
     unlockedPlants,
     plantCopies,
     plantLevels,

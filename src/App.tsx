@@ -119,6 +119,7 @@ function App() {
     addGold,
     buyGoldPackage,
     inventoryPacks,
+    playerRewardPacks,
     unlockedPlants,
     plantCopies,
     plantLevels,
@@ -134,6 +135,9 @@ function App() {
     openPackByInstanceId,
     openPackByType,
     openMultiplePacksByInstanceIds,
+    startUnlockRewardPack,
+    instantUnlockRewardPack,
+    openRewardPack,
     fuseAndUpgradePlant,
     buyVipPass,
     claimPassReward,
@@ -684,6 +688,13 @@ function App() {
     }
   }
 
+  const handleOpenRewardPack = async (packId: string) => {
+    const drop = await openRewardPack(packId)
+    if (drop) {
+      setActiveOpeningResult(drop)
+    }
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // ELO — PENDIENTE DE FASE 2
   //
@@ -916,6 +927,7 @@ function App() {
             activeDeck={activeDeck}
             unlockedPlants={unlockedPlants}
             inventoryPacks={inventoryPacks}
+            playerRewardPacks={playerRewardPacks}
             userTokens={userTokens}
             userGold={userGold}
             plantCopies={plantCopies}
@@ -929,6 +941,9 @@ function App() {
             onOpenShop={handleOpenShop}
             onOpenPack={handleTriggerPackOpenByInstanceId}
             onOpenMultiplePacks={handleOpenMultiplePacks}
+            onStartUnlockRewardPack={startUnlockRewardPack}
+            onInstantUnlockRewardPack={instantUnlockRewardPack}
+            onOpenRewardPack={handleOpenRewardPack}
             onFusePlant={fuseAndUpgradePlant}
             onRewardsChanged={refreshFromServer}
           />

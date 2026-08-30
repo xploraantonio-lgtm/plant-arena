@@ -723,6 +723,52 @@ export interface Database {
           },
         ]
       }
+      player_reward_packs: {
+        Row: {
+          id: string
+          user_id: string
+          reward_code_id: string | null
+          source: string
+          status: 'pending' | 'unlocking' | 'ready' | 'opened'
+          duration_hours: number | null
+          arena_level: number
+          unlock_started_at: string | null
+          created_at: string
+          opened_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          reward_code_id?: string | null
+          source?: string
+          status?: 'pending' | 'unlocking' | 'ready' | 'opened'
+          duration_hours?: number | null
+          arena_level?: number
+          unlock_started_at?: string | null
+          created_at?: string
+          opened_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          reward_code_id?: string | null
+          source?: string
+          status?: 'pending' | 'unlocking' | 'ready' | 'opened'
+          duration_hours?: number | null
+          arena_level?: number
+          unlock_started_at?: string | null
+          created_at?: string
+          opened_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'player_reward_packs_user_id_fkey'
+            columns: ['user_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       /**
@@ -754,6 +800,28 @@ export interface Database {
         Args: {
           p_code: string
         }
+        Returns: Json
+      }
+      start_unlock_reward_pack: {
+        Args: {
+          p_pack_id: string
+        }
+        Returns: Json
+      }
+      instant_unlock_reward_pack: {
+        Args: {
+          p_pack_id: string
+        }
+        Returns: Json
+      }
+      claim_reward_pack: {
+        Args: {
+          p_pack_id: string
+        }
+        Returns: Json
+      }
+      get_my_reward_packs: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       resolve_colosseum_match: {

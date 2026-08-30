@@ -8,6 +8,15 @@ export interface FreePackSlot {
   arenaLevel: number // 1, 2, 3, 4, 5
 }
 
+export interface PlayerRewardPack {
+  id: string
+  status: 'pending' | 'unlocking' | 'ready'
+  durationHours?: number
+  arenaLevel: number
+  unlockStartedAt?: number // Timestamp ms
+  createdAt: number
+}
+
 export function createEmptySlots(): FreePackSlot[] {
   return [
     { slotId: 0, status: 'empty', durationHours: 2, arenaLevel: 1 },

@@ -205,6 +205,7 @@ export default function ProfileModal({
         setPromoCodeInput('')
         setCodeFeedback({ text: '🎉 ¡Recompensa añadida al jardín!', type: 'success' })
         showFeedback('🎉 ¡Recompensa añadida al jardín!', 'success')
+        window.dispatchEvent(new Event('refresh_reward_packs'))
         window.dispatchEvent(new Event('refresh_pack_slots'))
         window.dispatchEvent(new Event('refresh_user_balance'))
       } else {
@@ -214,15 +215,11 @@ export default function ProfileModal({
           msg = 'Este código ya fue utilizado.'
         } else if (res.errorCode === 'CODE_NOT_FOUND') {
           msg = 'Código no encontrado.'
-        } else if (res.errorCode === 'SLOTS_FULL') {
-          msg = 'No tienes huecos de sobre libres en tu jardín.'
         } else if (res.errorCode === 'CODE_EXPIRED' || res.errorCode === 'CODE_DISABLED') {
           msg = 'Este código ha expirado o está desactivado.'
         } else if (res.error) {
           if (res.error.includes('CODE_ALREADY_CLAIMED') || res.error.includes('CODE_LIMIT_REACHED') || res.error.includes('uq_reward_code_user_claim')) {
             msg = 'Este código ya fue utilizado.'
-          } else if (res.error.includes('SLOTS_FULL') || res.error.includes('huecos_llenos')) {
-            msg = 'No tienes huecos de sobre libres en tu jardín.'
           }
         }
         setCodeFeedback({ text: msg, type: 'error' })

@@ -8,6 +8,7 @@ import {
 import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
 import type { InventoryPack, PackId } from '../../utils/packDropManager'
+import type { PlayerRewardPack } from '../../utils/freePackManager'
 import LotteryModal from '../Lottery/LotteryModal'
 import './Jardin.css'
 
@@ -38,6 +39,7 @@ interface JardinProps {
   activeDeck: PlantId[]
   unlockedPlants: PlantId[]
   inventoryPacks: InventoryPack[]
+  playerRewardPacks?: PlayerRewardPack[]
   userTokens: number
   userGold?: number
   plantCopies?: Partial<Record<PlantId, number>>
@@ -51,6 +53,9 @@ interface JardinProps {
   onOpenShop: () => void
   onOpenPack: (instanceId: string) => void
   onOpenMultiplePacks?: (instanceIds: string[]) => void
+  onStartUnlockRewardPack?: (packId: string) => Promise<{ success: boolean; error?: string }>
+  onInstantUnlockRewardPack?: (packId: string) => Promise<{ success: boolean; goldSpent?: number; error?: string }>
+  onOpenRewardPack?: (packId: string) => void
   // Asíncrona: la fusión la resuelve fuse_plant en el servidor, que es quien
   // sortea la stat y descuenta las 5 copias.
   onFusePlant?: (plantId: PlantId, instanceId?: string) => Promise<{
@@ -74,6 +79,7 @@ export default function Jardin({
   activeDeck,
   unlockedPlants,
   inventoryPacks,
+  playerRewardPacks = [],
   userTokens,
   userGold = 0,
   plantCopies = {},
@@ -87,6 +93,9 @@ export default function Jardin({
   onOpenShop,
   onOpenPack,
   onOpenMultiplePacks,
+  onStartUnlockRewardPack,
+  onInstantUnlockRewardPack,
+  onOpenRewardPack,
   onFusePlant,
   onRewardsChanged,
 }: JardinProps) {
@@ -94,6 +103,9 @@ export default function Jardin({
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [showLotteryModal, setShowLotteryModal] = useState(false)
+  const [rewardPackAccelerating, setRewardPackAccelerating] = useState<{ packId: string; goldCost: number } | null>(null)
+  const [isAcceleratingReward, setIsAcceleratingReward] = useState(false)
+  const [rewardPackAlert, setRewardPackAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
   const [upgradeModal, setUpgradeModal] = useState<{
     plantId: PlantId
     newLevel: number
@@ -407,11 +419,11 @@ export default function Jardin({
       </div>
 
       <div className="jardin-scroll-area">
-        {inventoryPacks.length > 0 && (
+        {(inventoryPacks.length > 0 || (playerRewardPacks && playerRewardPacks.length > 0)) && (
           <div className="jardin-packs-section">
             <div className="jardin-section-header">
               <h3 className="jardin-section-title">
-                📦 SOBRES PENDIENTES POR ABRIR ({inventoryPacks.length})
+                📦 SOBRES PENDIENTES POR ABRIR ({inventoryPacks.length + (playerRewardPacks?.length || 0)})
               </h3>
               <button type="button" className="jardin-buy-more-btn" onClick={onOpenShop}>
                 + Conseguir más sobres en la Tienda
@@ -419,6 +431,109 @@ export default function Jardin({
             </div>
 
             <div className="jardin-packs-grid">
+              {/* SOBRES PvP DE RECOMPENSA (STREAMERS) */}
+              {playerRewardPacks && playerRewardPacks.map((pack) => {
+                const elapsedSec = pack.unlockStartedAt ? Math.max(0, (Date.now() - pack.unlockStartedAt) / 1000) : 0
+                const totalSec = (pack.durationHours || 4) * 3600
+                const remainingSec = Math.max(0, totalSec - elapsedSec)
+                const hours = Math.floor(remainingSec / 3600)
+                const mins = Math.floor((remainingSec % 3600) / 60)
+                const secs = Math.floor(remainingSec % 60)
+                const timerStr = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+                const remainingHours = remainingSec / 3600
+                const goldCost = Math.max(10, Math.ceil(remainingHours * 75))
+
+                const isReady = pack.status === 'ready'
+                const isUnlocking = pack.status === 'unlocking'
+
+                return (
+                  <div
+                    key={pack.id}
+                    className={`jardin-pack-card jardin-pack-card--pvp-reward ${
+                      isReady ? 'jardin-pack-card--ready' : isUnlocking ? 'jardin-pack-card--unlocking' : ''
+                    }`}
+                  >
+                    <span className="jardin-pack-stack-badge jardin-pack-stack-badge--streamer">
+                      🎁 STREAMER
+                    </span>
+                    <img
+                      src="/game-assets/greenfoot/seed_pack_pvp.png"
+                      alt="Sobre PvP de Recompensa"
+                      className="jardin-pack-card__img"
+                      onError={(e) => {
+                        // Fallback icon if image path differs
+                        ;(e.currentTarget as HTMLImageElement).src = '/game-assets/greenfoot/pack_basic.png'
+                      }}
+                    />
+                    <div className="jardin-pack-card__info">
+                      <span className="jardin-pack-card__rarity">
+                        ⚔️ Arena {pack.arenaLevel}
+                      </span>
+                      <h4 className="jardin-pack-card__name">Sobre PvP Streamer</h4>
+                    </div>
+
+                    <div className="jardin-pack-controls-wrap">
+                      {pack.status === 'pending' && (
+                        <button
+                          type="button"
+                          className="jardin-pack-card__unlock-btn"
+                          onClick={async () => {
+                            soundManager.playSound('click', 0.5)
+                            if (onStartUnlockRewardPack) {
+                              const res = await onStartUnlockRewardPack(pack.id)
+                              if (!res.success && res.error) {
+                                setRewardPackAlert({
+                                  title: 'ERROR AL DESBLOQUEAR',
+                                  message: res.error,
+                                  icon: '⚠️',
+                                })
+                              }
+                            }
+                          }}
+                        >
+                          🔓 DESBLOQUEAR
+                        </button>
+                      )}
+
+                      {isUnlocking && (
+                        <div className="jardin-pack-unlocking-box">
+                          <div className="jardin-pack-timer-display">
+                            <span className="jardin-pack-timer-clock">⏱️ {timerStr}</span>
+                            <span className="jardin-pack-timer-total">⏳ {pack.durationHours}h</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="jardin-pack-card__accelerate-btn"
+                            onClick={() => {
+                              soundManager.playSound('click', 0.5)
+                              setRewardPackAccelerating({ packId: pack.id, goldCost })
+                            }}
+                          >
+                            ⚡ ACELERAR ({goldCost} 🪙)
+                          </button>
+                        </div>
+                      )}
+
+                      {isReady && (
+                        <button
+                          type="button"
+                          className="jardin-pack-card__open-btn jardin-pack-card__open-btn--ready"
+                          onClick={() => {
+                            soundManager.playSound('plantation', 0.8)
+                            if (onOpenRewardPack) {
+                              onOpenRewardPack(pack.id)
+                            }
+                          }}
+                        >
+                          ✨ ABRIR SOBRE
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* SOBRES REGULARES */}
               {groupedPacks.map((group) => {
                 const maxCount = group.count
                 const currentQty = getQty(group.packId, maxCount)
@@ -866,6 +981,98 @@ export default function Jardin({
           userGold={userGold}
           onRewardsChanged={onRewardsChanged}
         />
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN PARA ACELERAR SOBRE PvP CON ORO */}
+      {rewardPackAccelerating && (
+        <div className="jardin-fuse-modal-backdrop" onClick={() => setRewardPackAccelerating(null)}>
+          <div className="jardin-fuse-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="jardin-fuse-modal__header">
+              <h3>⚡ ACELERAR DESBLOQUEO</h3>
+              <button
+                type="button"
+                className="jardin-fuse-modal__close"
+                onClick={() => setRewardPackAccelerating(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="jardin-fuse-modal__body">
+              <p>
+                ¿Deseas desbloquear y abrir este sobre PvP inmediatamente por <strong>{rewardPackAccelerating.goldCost} 🪙 Oro</strong>?
+              </p>
+              <div className="jardin-fuse-modal__cost-info">
+                <span>Tu saldo actual:</span>
+                <strong>{userGold} 🪙</strong>
+              </div>
+            </div>
+            <div className="jardin-fuse-modal__actions">
+              <button
+                type="button"
+                className="jardin-btn-cancel"
+                onClick={() => setRewardPackAccelerating(null)}
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                className="jardin-btn-confirm-fuse"
+                disabled={isAcceleratingReward || userGold < rewardPackAccelerating.goldCost}
+                onClick={async () => {
+                  if (userGold < rewardPackAccelerating.goldCost) {
+                    setRewardPackAlert({
+                      title: 'ORO INSUFICIENTE',
+                      message: `Necesitas ${rewardPackAccelerating.goldCost} de oro para acelerar este sobre.`,
+                      icon: '🪙',
+                    })
+                    setRewardPackAccelerating(null)
+                    return
+                  }
+                  setIsAcceleratingReward(true)
+                  try {
+                    soundManager.playSound('plantation', 0.9)
+                    if (onInstantUnlockRewardPack) {
+                      const res = await onInstantUnlockRewardPack(rewardPackAccelerating.packId)
+                      if (!res.success && res.error) {
+                        setRewardPackAlert({
+                          title: 'ERROR AL ACELERAR',
+                          message: res.error,
+                          icon: '⚠️',
+                        })
+                      }
+                    }
+                  } finally {
+                    setIsAcceleratingReward(false)
+                    setRewardPackAccelerating(null)
+                  }
+                }}
+              >
+                {isAcceleratingReward ? 'ACELERANDO...' : `PAGAR ${rewardPackAccelerating.goldCost} 🪙`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ALERTA DE SOBRES PvP */}
+      {rewardPackAlert && (
+        <div className="jardin-fuse-modal-backdrop" onClick={() => setRewardPackAlert(null)}>
+          <div className="jardin-fuse-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="jardin-fuse-modal__header">
+              <h3>{rewardPackAlert.title}</h3>
+              <button type="button" className="jardin-fuse-modal__close" onClick={() => setRewardPackAlert(null)}>✕</button>
+            </div>
+            <div className="jardin-fuse-modal__body">
+              <div style={{ fontSize: '3rem', textAlign: 'center', marginBottom: '10px' }}>{rewardPackAlert.icon}</div>
+              <p style={{ textAlign: 'center' }}>{rewardPackAlert.message}</p>
+            </div>
+            <div className="jardin-fuse-modal__actions">
+              <button type="button" className="jardin-btn-confirm-fuse" onClick={() => setRewardPackAlert(null)}>
+                ENTENDIDO
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

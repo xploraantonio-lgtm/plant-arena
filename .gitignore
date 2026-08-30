@@ -19,9 +19,8 @@ dist-ssr
 .env.local
 .env.*.local
 
-# Estado del CLI de Supabase: versiones, ref del proyecto y URL del pooler.
-# No son secretos, pero es scratch de la herramienta.
-supabase/.temp/
+# Carpeta de migraciones y lógica interna de base de datos Supabase
+supabase/
 
 # Editor directories and files
 .vscode/*
