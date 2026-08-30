@@ -211,7 +211,9 @@ export default function ProfileModal({
       } else {
         soundManager.playSound('error', 0.5)
         let msg = 'Código no encontrado.'
-        if (res.errorCode === 'CODE_ALREADY_CLAIMED' || res.errorCode === 'CODE_LIMIT_REACHED') {
+        if (res.errorCode === 'NOT_AUTHENTICATED') {
+          msg = 'Debes iniciar sesión para canjear códigos.'
+        } else if (res.errorCode === 'CODE_ALREADY_CLAIMED' || res.errorCode === 'CODE_LIMIT_REACHED') {
           msg = 'Este código ya fue utilizado.'
         } else if (res.errorCode === 'CODE_NOT_FOUND') {
           msg = 'Código no encontrado.'
@@ -220,6 +222,12 @@ export default function ProfileModal({
         } else if (res.error) {
           if (res.error.includes('CODE_ALREADY_CLAIMED') || res.error.includes('CODE_LIMIT_REACHED') || res.error.includes('uq_reward_code_user_claim')) {
             msg = 'Este código ya fue utilizado.'
+          } else if (res.error.includes('NOT_AUTHENTICATED') || res.error.includes('No autenticado')) {
+            msg = 'Debes iniciar sesión para canjear códigos.'
+          } else if (res.error.includes('CODE_NOT_FOUND')) {
+            msg = 'Código no encontrado.'
+          } else {
+            msg = res.error
           }
         }
         setCodeFeedback({ text: msg, type: 'error' })
