@@ -429,17 +429,17 @@ export interface StrategicProfile {
 export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
   balanced: {
     style: 'balanced',
-    aggression: 0.6,
-    defense: 0.6,
-    economy: 0.6,
-    opportunism: 0.6,
-    reactionMs: 600,
-    baseReserveSun: 50,
-    irregularity: 0.4,
-    badPlayMargin: 0.08,
+    aggression: 0.75, // +25% mayor agresividad
+    defense: 0.55,
+    economy: 0.72,    // +20% economía temprana
+    opportunism: 0.75,
+    reactionMs: 580,
+    baseReserveSun: 35, // -30% umbral de reserva para evitar acumular ociosamente
+    irregularity: 0.38,
+    badPlayMargin: 0.15, // 0.15 para ELO 1000
     targetProducers: 2,
     maxProducers: 3,
-    basePersonality: 'BALANCED',
+    basePersonality: 'AGGRESSIVE', // Personalidad BALANCED_AGGRESSIVE
   },
   aggressive: {
     style: 'aggressive',
@@ -517,8 +517,8 @@ export function obtenerPerfilEstrategico(
 
 /**
  * Escala un perfil estratégico según el rango ELO del jugador (V3.2).
- * 700 - 1200: badPlayMargin = 0.20
- * 1200 - 1600: badPlayMargin = 0.12 (escalado continuo 0.20 -> 0.05)
+ * 700 - 1200: badPlayMargin = 0.15 (1000 ELO)
+ * 1200 - 1600: badPlayMargin = escalado continuo 0.15 -> 0.05
  * 1600+: badPlayMargin = 0.05
  */
 export function escalarPerfilPorElo(
@@ -529,10 +529,10 @@ export function escalarPerfilPorElo(
 
   let badPlayMargin: number
   if (clampedElo <= 1200) {
-    badPlayMargin = 0.20
+    badPlayMargin = 0.15
   } else if (clampedElo <= 1600) {
     const ratio = (clampedElo - 1200) / 400
-    badPlayMargin = Math.round((0.20 - ratio * (0.20 - 0.05)) * 1000) / 1000
+    badPlayMargin = Math.round((0.15 - ratio * (0.15 - 0.05)) * 1000) / 1000
   } else {
     badPlayMargin = 0.05
   }
@@ -1166,16 +1166,16 @@ export function evaluarAgresionAdaptativa(params: {
       reason = 'Presión por ventaja económica'
     }
 
-    // 2. Detección de carril vulnerable / desprotegido
+    // 2. Detección de carril vulnerable / desprotegido (+25 weakLanePunishment)
     if (laneEval.isVulnerable) {
-      const vulnBonus = 40 * (0.8 + profile.opportunism * 0.5)
+      const vulnBonus = 65 * (0.8 + profile.opportunism * 0.5)
       bonus += vulnBonus
       reason = `Ataque a carril vulnerable ${laneEval.lane}`
     }
 
-    // 3. Flanqueo activo cuando otro carril está taponado
+    // 3. Flanqueo activo cuando otro carril está taponado (+20 flankPriority)
     if (laneEval.flankPriority > 45) {
-      const flankBonus = Math.min(45, laneEval.flankPriority * 0.6)
+      const flankBonus = Math.min(65, (laneEval.flankPriority + 20) * 0.7)
       bonus += flankBonus * (0.8 + profile.opportunism * 0.4)
       reason = `Flanqueo táctico en carril ${laneEval.lane}`
     }
@@ -1684,7 +1684,7 @@ export function calcularUtilidadPlanta(params: {
     else if (plantId === 'threepeater') baseAtk = 82
     else if (plantId === 'repeater') baseAtk = 58
 
-    attackScore = (baseAtk + laneEval.attackOpportunityScore * 0.7 + (100 - laneEval.threatScore) * 0.2) * profile.aggression
+    attackScore = (baseAtk * 1.25 + laneEval.attackOpportunityScore * 0.85 + (100 - laneEval.threatScore) * 0.25) * profile.aggression
 
     // Bono si es Threepeater en carril central
     if (plantId === 'threepeater' && lane === 1) {
@@ -1749,7 +1749,7 @@ export function calcularUtilidadPlanta(params: {
     const deficitProducers = profile.targetProducers - perception.totalOwnProducers
 
     if (deficitProducers > 0) {
-      economyScore = (deficitProducers * 35 + 25) * profile.economy
+      economyScore = (deficitProducers * 42 + 30) * profile.economy
     } else if (perception.totalOwnProducers < profile.maxProducers) {
       economyScore = 15 * profile.economy
     } else {

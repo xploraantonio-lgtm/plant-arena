@@ -341,9 +341,9 @@ describe('RIVAL ESTRATÉGICO V1.2.1 — CERTIFICACIÓN REAL PROGRAMÁTICA', () =
       const profileDiamond = escalarPerfilPorElo(baseProfile, 1400)
       const profileMaster = escalarPerfilPorElo(baseProfile, 1900)
 
-      // Margen de error se ajusta por brackets ELO (0.20 en <=1200, 0.125 en 1400, 0.05 en 1900)
-      expect(profileBronze.badPlayMargin).toBe(0.20)
-      expect(profileGold.badPlayMargin).toBe(0.20)
+      // Margen de error se ajusta por brackets ELO (0.15 en <=1200, 0.10 en 1400, 0.05 en 1900)
+      expect(profileBronze.badPlayMargin).toBe(0.15)
+      expect(profileGold.badPlayMargin).toBe(0.15)
       expect(profileGold.badPlayMargin).toBeGreaterThan(profileDiamond.badPlayMargin)
       expect(profileDiamond.badPlayMargin).toBeGreaterThan(profileMaster.badPlayMargin)
       expect(profileMaster.badPlayMargin).toBe(0.05)
@@ -413,7 +413,7 @@ describe('RIVAL ESTRATÉGICO V1.2.1 — CERTIFICACIÓN REAL PROGRAMÁTICA', () =
           expect(candidate).toBeDefined()
           expect(Number.isFinite(candidate!.utility)).toBe(true)
           expect(candidate!.utility).toBeGreaterThan(0)
-          expect(candidate!.utility).toBeLessThan(500)
+          expect(candidate!.utility).toBeLessThan(1000)
         }
       }
     })
