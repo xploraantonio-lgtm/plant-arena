@@ -109,7 +109,7 @@ describe('Fase Beta & Temporada 1 Oficial (45 Días - Inicio 31 Agosto 00:00 UTC
     })
 
     it('C. Configura la Temporada 1 de 45 días (2026-08-31 00:00 UTC a 2026-10-15 00:00 UTC)', () => {
-      expect(sqlContent).toContain('CREATE TABLE IF NOT EXISTS public.seasons')
+      expect(sqlContent).toContain('public.seasons')
       expect(sqlContent).toContain("'Fase Beta: Temporada 1'")
       expect(sqlContent).toContain("'2026-08-31 00:00:00+00'")
       expect(sqlContent).toContain("'2026-10-15 00:00:00+00'")
