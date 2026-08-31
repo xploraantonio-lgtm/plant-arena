@@ -1,5 +1,5 @@
-import React from 'react'
-import { SeasonManager } from '../../utils/seasonManager'
+import React, { useEffect, useState } from 'react'
+import { SeasonManager, type SeasonStatus } from '../../utils/seasonManager'
 import { soundManager } from '../../utils/audioManager'
 import './BetaPhaseModal.css'
 
@@ -14,9 +14,40 @@ export const BetaPhaseModal: React.FC<BetaPhaseModalProps> = ({
   onClose,
   onPlayNow,
 }) => {
-  if (!isOpen) return null
+  const [seasonStatus, setSeasonStatus] = useState<SeasonStatus>(() =>
+    SeasonManager.getSeasonStatus()
+  )
 
-  const seasonStatus = SeasonManager.getSeasonStatus()
+  useEffect(() => {
+    if (!isOpen) return
+
+    // Sincronizar y actualizar el cronómetro cada segundo mientras la ventana esté visible
+    setSeasonStatus(SeasonManager.getSeasonStatus())
+    const timerInterval = setInterval(() => {
+      setSeasonStatus(SeasonManager.getSeasonStatus())
+    }, 1000)
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        soundManager.playSound('click', 0.5)
+        localStorage.setItem('plant_arena_beta_phase_seen_v1', 'true')
+        onClose()
+      } else if (e.key === 'Enter') {
+        soundManager.playSound('victory', 0.8)
+        localStorage.setItem('plant_arena_beta_phase_seen_v1', 'true')
+        onClose()
+        if (onPlayNow) onPlayNow()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      clearInterval(timerInterval)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, onClose, onPlayNow])
+
+  if (!isOpen) return null
 
   const handleStartPlaying = () => {
     soundManager.playSound('victory', 0.8)
@@ -46,37 +77,38 @@ export const BetaPhaseModal: React.FC<BetaPhaseModalProps> = ({
           className="beta-modal-close-btn"
           onClick={handleDismiss}
           aria-label="Cerrar modal"
+          title="Cerrar"
         >
           ✕
         </button>
 
-        {/* Badge superior animado */}
-        <div className="beta-modal-top-badge">
-          <span className="beta-modal-top-badge-dot" />
-          <span>⭐ FASE BETA OFICIAL ⭐</span>
-        </div>
+        {/* Encabezado y Badge superior */}
+        <div className="beta-modal-top-section">
+          <div className="beta-modal-top-badge">
+            <span className="beta-modal-top-badge-dot" />
+            <span>⭐ FASE BETA OFICIAL ⭐</span>
+          </div>
 
-        {/* Icono de Trofeo / Corona */}
-        <div className="beta-modal-hero-icon">
-          <span className="beta-modal-trophy">🏆</span>
-          <span className="beta-modal-sparkles">✨</span>
-        </div>
+          <div className="beta-modal-hero-icon">
+            <span className="beta-modal-trophy">🏆</span>
+            <span className="beta-modal-sparkles">✨</span>
+          </div>
 
-        {/* Encabezado */}
-        <div className="beta-modal-header">
-          <h2 id="beta-modal-title" className="beta-modal-title">
-            ¡BIENVENIDO A LA FASE BETA!
-          </h2>
-          <p className="beta-modal-season-name">
-            🔥 TEMPORADA 1: <strong>REBELIÓN BOTÁNICA</strong>
-          </p>
+          <div className="beta-modal-header">
+            <h2 id="beta-modal-title" className="beta-modal-title">
+              ¡BIENVENIDO A LA FASE BETA!
+            </h2>
+            <p className="beta-modal-season-name">
+              🔥 TEMPORADA 1: <strong>REBELIÓN BOTÁNICA</strong>
+            </p>
+          </div>
         </div>
 
         {/* Banner de Contador de Temporada */}
         <div className="beta-modal-timer-card">
           <div className="beta-modal-timer-left">
             <span className="beta-modal-timer-icon">⏳</span>
-            <div>
+            <div className="beta-modal-timer-info">
               <div className="beta-modal-timer-label">DURACIÓN DE LA TEMPORADA</div>
               <div className="beta-modal-timer-sub">Cronómetro oficial: 45 Días</div>
             </div>
@@ -97,7 +129,7 @@ export const BetaPhaseModal: React.FC<BetaPhaseModalProps> = ({
           </div>
 
           <div className="beta-modal-feature-item">
-            <div className="beta-modal-feature-icon">🪴</div>
+            <div className="beta-modal-feature-icon">🎁</div>
             <div className="beta-modal-feature-content">
               <strong>Sobres PvP & Desbloqueo en el Jardín</strong>
               <span>Gana cofres en Ranked, canjea códigos de creadores y desbloquéalos a tu ritmo.</span>
@@ -120,7 +152,7 @@ export const BetaPhaseModal: React.FC<BetaPhaseModalProps> = ({
             className="beta-modal-btn-play"
             onClick={handleStartPlaying}
           >
-            <span>⚔️</span>
+            <span className="beta-modal-btn-icon">⚔️</span>
             <span>¡EMPEZAR A JUGAR AHORA!</span>
           </button>
         </div>

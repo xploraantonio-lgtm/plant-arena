@@ -1,19 +1,20 @@
 /* ══════════════════════════════════════════════════════════════════════════════
    BETA PHASE MODAL - PLANT ARENA
-   Pop-up de Bienvenida a la Fase Beta y Temporada 1 Oficial (45 Días)
+   Pop-up oficial de Bienvenida a la Fase Beta y Temporada 1 (45 Días)
+   Optimizado para todas las resoluciones, celulares, laptops y pantallas 16:9
    ══════════════════════════════════════════════════════════════════════════════ */
 
 .beta-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(4, 9, 20, 0.9);
+  background: rgba(4, 9, 20, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   z-index: 100000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 12px;
   animation: betaModalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -29,22 +30,46 @@
 .beta-modal-card {
   position: relative;
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
+  max-height: calc(100% - 16px);
   background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0a1120 100%);
   border: 2px solid #facc15;
-  border-radius: 26px;
-  padding: 32px 24px 26px;
+  border-radius: 20px;
+  padding: 16px 20px 14px;
   color: #ffffff;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 16px;
+  gap: 8px;
   box-shadow:
-    0 0 50px rgba(250, 204, 21, 0.3),
-    0 25px 60px rgba(0, 0, 0, 0.9);
-  animation: betaModalCardPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  overflow: hidden;
+    0 0 40px rgba(250, 204, 21, 0.28),
+    0 20px 50px rgba(0, 0, 0, 0.9);
+  animation: betaModalCardPop 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(250, 204, 21, 0.6) rgba(15, 23, 42, 0.7);
+  overscroll-behavior: contain;
+}
+
+/* Custom Scrollbar for extreme small screens */
+.beta-modal-card::-webkit-scrollbar {
+  width: 5px;
+}
+
+.beta-modal-card::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 4px;
+}
+
+.beta-modal-card::-webkit-scrollbar-thumb {
+  background: rgba(250, 204, 21, 0.6);
+  border-radius: 4px;
+}
+
+.beta-modal-card::-webkit-scrollbar-thumb:hover {
+  background: #facc15;
 }
 
 .beta-modal-card::before {
@@ -53,10 +78,11 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  height: 3px;
   background: linear-gradient(90deg, #f59e0b, #facc15, #22c55e, #facc15, #f59e0b);
   background-size: 200% 100%;
   animation: betaModalGlowBorder 3s linear infinite;
+  z-index: 5;
 }
 
 @keyframes betaModalGlowBorder {
@@ -67,7 +93,7 @@
 @keyframes betaModalCardPop {
   from {
     opacity: 0;
-    transform: scale(0.88) translateY(20px);
+    transform: scale(0.92) translateY(12px);
   }
   to {
     opacity: 1;
@@ -78,15 +104,16 @@
 /* Close button */
 .beta-modal-close-btn {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 32px;
-  height: 32px;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   color: #cbd5e1;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -96,22 +123,31 @@
 }
 
 .beta-modal-close-btn:hover {
-  background: rgba(239, 68, 68, 0.8);
+  background: rgba(239, 68, 68, 0.85);
   color: #fff;
   border-color: #ef4444;
   transform: scale(1.1);
+}
+
+/* Top Section (Badge, Icon, Header) */
+.beta-modal-top-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
 }
 
 /* Top Badge */
 .beta-modal-top-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 14px;
+  gap: 5px;
+  padding: 3px 12px;
   background: rgba(250, 204, 21, 0.15);
-  border: 1px solid rgba(250, 204, 21, 0.5);
-  border-radius: 20px;
-  font-size: 11px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-radius: 16px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.06em;
   color: #fde047;
@@ -119,51 +155,52 @@
 }
 
 .beta-modal-top-badge-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   background: #facc15;
   border-radius: 50%;
-  box-shadow: 0 0 8px #facc15;
+  box-shadow: 0 0 6px #facc15;
   animation: betaDotPulse 1.5s ease-in-out infinite alternate;
 }
 
 @keyframes betaDotPulse {
   from { opacity: 0.5; transform: scale(0.8); }
-  to { opacity: 1; transform: scale(1.2); }
+  to { opacity: 1; transform: scale(1.25); }
 }
 
 /* Hero Icon */
 .beta-modal-hero-icon {
   position: relative;
-  width: 76px;
-  height: 76px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(250, 204, 21, 0.25), rgba(245, 158, 11, 0.05));
-  border: 2px solid rgba(250, 204, 21, 0.7);
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.25), rgba(245, 158, 11, 0.06));
+  border: 1.5px solid rgba(250, 204, 21, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 38px;
-  box-shadow: 0 0 30px rgba(250, 204, 21, 0.4);
-  animation: betaPulseHero 2s ease-in-out infinite;
+  font-size: 26px;
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.35);
+  animation: betaPulseHero 2.5s ease-in-out infinite;
+  margin: 1px 0;
 }
 
 @keyframes betaPulseHero {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 25px rgba(250, 204, 21, 0.35);
+    box-shadow: 0 0 16px rgba(250, 204, 21, 0.3);
   }
   50% {
-    transform: scale(1.06);
-    box-shadow: 0 0 40px rgba(250, 204, 21, 0.65);
+    transform: scale(1.05);
+    box-shadow: 0 0 28px rgba(250, 204, 21, 0.55);
   }
 }
 
 .beta-modal-sparkles {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  font-size: 18px;
+  top: -4px;
+  right: -4px;
+  font-size: 13px;
   animation: betaSparkle 2s ease-in-out infinite alternate;
 }
 
@@ -176,25 +213,27 @@
 .beta-modal-header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  text-align: center;
 }
 
 .beta-modal-title {
   margin: 0;
   font-family: 'Luckiest Guy', 'Inter', Arial, sans-serif;
-  font-size: 26px;
-  letter-spacing: 0.5px;
-  background: linear-gradient(135deg, #ffffff 20%, #fde047 100%);
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: 0.4px;
+  background: linear-gradient(135deg, #ffffff 25%, #fde047 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
 }
 
 .beta-modal-season-name {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 11.5px;
   color: #94a3b8;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
 }
 
 .beta-modal-season-name strong {
@@ -204,45 +243,52 @@
 /* Timer Card */
 .beta-modal-timer-card {
   width: 100%;
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
   border: 1.5px solid rgba(250, 204, 21, 0.4);
-  border-radius: 16px;
-  padding: 12px 18px;
+  border-radius: 12px;
+  padding: 6px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
 .beta-modal-timer-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   text-align: left;
 }
 
 .beta-modal-timer-icon {
-  font-size: 26px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.beta-modal-timer-info {
+  display: flex;
+  flex-direction: column;
 }
 
 .beta-modal-timer-label {
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 800;
   color: #facc15;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
 }
 
 .beta-modal-timer-sub {
-  font-size: 11.5px;
+  font-size: 10px;
   color: #94a3b8;
 }
 
 .beta-modal-timer-countdown {
   font-family: 'Luckiest Guy', monospace, sans-serif;
-  font-size: 20px;
+  font-size: 15px;
   color: #38bdf8;
   text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
 }
 
 /* Features List */
@@ -250,74 +296,85 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 5px;
   text-align: left;
 }
 
 .beta-modal-feature-item {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  background: rgba(15, 23, 42, 0.7);
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 10px 14px;
-  transition: transform 0.15s ease;
+  border-radius: 10px;
+  padding: 6px 10px;
+  transition: all 0.15s ease;
 }
 
 .beta-modal-feature-item:hover {
-  transform: translateX(3px);
-  border-color: rgba(250, 204, 21, 0.3);
+  transform: translateX(2px);
+  border-color: rgba(250, 204, 21, 0.35);
+  background: rgba(20, 30, 52, 0.85);
 }
 
 .beta-modal-feature-icon {
-  font-size: 22px;
+  font-size: 18px;
   flex-shrink: 0;
-  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
 }
 
 .beta-modal-feature-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .beta-modal-feature-content strong {
-  font-size: 13px;
-  color: #f1f5f9;
+  font-size: 11.5px;
+  color: #f8fafc;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .beta-modal-feature-content span {
-  font-size: 12px;
+  font-size: 10px;
   color: #94a3b8;
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
 /* Action button */
 .beta-modal-actions {
   width: 100%;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .beta-modal-btn-play {
   position: relative;
   width: 100%;
-  padding: 14px 20px;
+  padding: 10px 16px;
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
   border: 1.5px solid #fde68a;
-  border-radius: 16px;
+  border-radius: 12px;
   color: #ffffff;
   font-family: 'Luckiest Guy', 'Inter', Arial, sans-serif;
-  font-size: 18px;
+  font-size: 14.5px;
   letter-spacing: 0.5px;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.5);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.45);
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   overflow: hidden;
+}
+
+.beta-modal-btn-icon {
+  font-size: 15px;
 }
 
 .beta-modal-btn-play::after {
@@ -330,7 +387,7 @@
   background: linear-gradient(
     60deg,
     transparent 30%,
-    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.28) 50%,
     transparent 70%
   );
   transform: rotate(25deg);
@@ -343,42 +400,74 @@
 }
 
 .beta-modal-btn-play:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
-  box-shadow: 0 6px 28px rgba(245, 158, 11, 0.7);
+  box-shadow: 0 6px 22px rgba(245, 158, 11, 0.65);
 }
 
 .beta-modal-btn-play:active {
   transform: translateY(1px);
-  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
 }
 
-@media (max-width: 540px) {
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE OPTIMIZATIONS (Compact screens, Mobile Landscape, Low Viewports)
+   ══════════════════════════════════════════════════════════════════════════════ */
+@media (max-height: 520px), (max-width: 480px) {
   .beta-modal-card {
-    padding: 24px 16px 20px;
-    gap: 12px;
-    border-radius: 20px;
+    padding: 12px 14px 10px;
+    gap: 6px;
+    border-radius: 16px;
+  }
+
+  .beta-modal-hero-icon {
+    width: 38px;
+    height: 38px;
+    font-size: 20px;
+    margin: 0;
   }
 
   .beta-modal-title {
-    font-size: 21px;
+    font-size: 16px;
+  }
+
+  .beta-modal-season-name {
+    font-size: 10px;
   }
 
   .beta-modal-timer-card {
-    padding: 10px 14px;
-    flex-direction: column;
-    gap: 8px;
-    text-align: center;
+    padding: 5px 10px;
   }
 
-  .beta-modal-timer-left {
-    flex-direction: column;
-    text-align: center;
+  .beta-modal-timer-countdown {
+    font-size: 13px;
+  }
+
+  .beta-modal-features {
     gap: 4px;
   }
 
+  .beta-modal-feature-item {
+    padding: 4px 8px;
+    gap: 8px;
+  }
+
+  .beta-modal-feature-icon {
+    font-size: 15px;
+    width: 20px;
+  }
+
+  .beta-modal-feature-content strong {
+    font-size: 10.5px;
+  }
+
+  .beta-modal-feature-content span {
+    font-size: 9px;
+  }
+
   .beta-modal-btn-play {
-    font-size: 16px;
-    padding: 12px 16px;
+    font-size: 13px;
+    padding: 8px 12px;
   }
 }
+
