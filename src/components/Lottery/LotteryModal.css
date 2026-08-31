@@ -674,11 +674,11 @@
   color: #cbd5e1;
 }
 
-/* 4 ACTIVE SLOTS */
+/* 5 ACTIVE SLOTS */
 .lottery-code-slots-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
 }
 
 .lottery-code-slot {

@@ -81,10 +81,10 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   // puede jugar sin ventaja.
   const [codeRounds, setCodeRounds] = useState<CodeRoundRow[]>([])
   const [codeBoard, setCodeBoard] = useState<CodeBoardEntry[]>([])
-  const [codePrizePool, setCodePrizePool] = useState(20)
+  const [codePrizePool, setCodePrizePool] = useState(10)
   const [codePrize1, setCodePrize1] = useState(10)
-  const [codePrize2, setCodePrize2] = useState(6)
-  const [codePrize3, setCodePrize3] = useState(4)
+  const [codePrize2, setCodePrize2] = useState(0)
+  const [codePrize3, setCodePrize3] = useState(0)
   const [codeFreeAttempts, setCodeFreeAttempts] = useState(3)
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
   const [seasons, setSeasons] = useState<SeasonRow[]>([])

@@ -189,6 +189,7 @@ export interface Database {
           prize_2nd: number
           prize_3rd: number
           winner_id: string | null
+          code_version?: number
           created_at: string
           finished_at: string | null
         }

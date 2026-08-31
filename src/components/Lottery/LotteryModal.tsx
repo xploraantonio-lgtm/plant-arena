@@ -136,6 +136,8 @@ const LEGACY_CODE_KEYS = [
   'plant_arena_lottery_code_extra_attempts',
 ]
 
+export const SECRET_CODE_LENGTH = 5
+
 /** Ronda tal como la devuelve secret_code_state(). Sin el secreto, que no sale
  *  de Postgres. */
 interface CodeRound {
@@ -146,6 +148,8 @@ interface CodeRound {
   prizePool: number
   prizes: number[]
   winnerId: string | null
+  codeVersion?: number
+  plantCount?: number
   createdAt: string
   finishedAt: string | null
 }
@@ -216,7 +220,9 @@ export default function LotteryModal({
   const [codeMyPayout, setCodeMyPayout] = useState<{ place: number; gems: number; tiedWith: number } | null>(null)
   const [codeBusy, setCodeBusy] = useState(false)
 
-  const [selectedSequence, setSelectedSequence] = useState<(PlantId | null)[]>([null, null, null, null])
+  const [selectedSequence, setSelectedSequence] = useState<(PlantId | null)[]>(
+    () => Array(SECRET_CODE_LENGTH).fill(null)
+  )
   const [codeWonPrize, setCodeWonPrize] = useState(false)
   const [codeBannerNotice, setCodeBannerNotice] = useState<string | null>(null)
   const [codeSubTab, setCodeSubTab] = useState<'play' | 'history' | 'ranking'>('play')
@@ -362,7 +368,7 @@ export default function LotteryModal({
 
   // ===================== CODE (SECUENCIA) ACTIONS =====================
   const handleSelectPlantForSlot = (plantId: PlantId) => {
-    if (isSpinning) return
+    if (isSpinning || !roundIsOpen || codeWonPrize) return
     soundManager.playSound('click', 0.3)
     const firstEmptyIndex = selectedSequence.findIndex((s) => s === null)
     if (firstEmptyIndex !== -1) {
@@ -372,12 +378,13 @@ export default function LotteryModal({
     } else {
       // Replace last slot
       const next = [...selectedSequence]
-      next[3] = plantId
+      next[SECRET_CODE_LENGTH - 1] = plantId
       setSelectedSequence(next)
     }
   }
 
   const handleClearSlot = (index: number) => {
+    if (!roundIsOpen || codeWonPrize) return
     soundManager.playSound('click', 0.3)
     const next = [...selectedSequence]
     next[index] = null
@@ -385,8 +392,9 @@ export default function LotteryModal({
   }
 
   const handleClearAllSlots = () => {
+    if (!roundIsOpen || codeWonPrize) return
     soundManager.playSound('click', 0.3)
-    setSelectedSequence([null, null, null, null])
+    setSelectedSequence(Array(SECRET_CODE_LENGTH).fill(null))
   }
 
   /**
@@ -396,7 +404,7 @@ export default function LotteryModal({
    * devolvía.
    */
   const handleBuyCodeAttempts = async () => {
-    if (codeBusy) return
+    if (codeBusy || !roundIsOpen) return
     setCodeBusy(true)
     const res = await SupabaseService.buySecretCodeAttempts()
     setCodeBusy(false)
@@ -419,20 +427,20 @@ export default function LotteryModal({
    * Prueba la secuencia.
    *
    * La comparación la hace guess_secret_code() en Postgres contra el secreto de
-   * la ronda, descuenta un intento y, si son los 4 exactos, cierra la ronda y
+   * la ronda, descuenta un intento y, si son los 5 exactos, cierra la ronda y
    * reparte el bote en la misma transacción. Aquí sólo se muestra el resultado.
    */
   const handleCheckCode = async () => {
     if (codeBusy) return
 
     if (selectedSequence.some((p) => p === null)) {
-      setCodeBannerNotice('⚠️ Elige 4 plantas para completar la secuencia.')
+      setCodeBannerNotice(`⚠️ Elige ${SECRET_CODE_LENGTH} plantas para completar la secuencia.`)
       setTimeout(() => setCodeBannerNotice(null), 3000)
       return
     }
 
     if (!roundIsOpen) {
-      setCodeBannerNotice('⚠️ No hay ninguna ronda abierta. Espera a que se abra la siguiente.')
+      setCodeBannerNotice('⚠️ Ronda cerrada: ¡El código ya ha sido descifrado! Espera la próxima ronda.')
       setTimeout(() => setCodeBannerNotice(null), 4000)
       return
     }
@@ -456,7 +464,7 @@ export default function LotteryModal({
     if (res.solved) {
       soundManager.playSound('victory', 1.0)
       setCodeWonPrize(true)
-      setCodeBannerNotice('🏆 ¡Código descifrado! La ronda se ha cerrado y el bote está repartido.')
+      setCodeBannerNotice('🏆 ¡Código descifrado! La ronda se ha cerrado y el premio está repartido.')
     } else {
       soundManager.playSound('defeat', 0.4)
       setCodeBannerNotice(
@@ -465,7 +473,7 @@ export default function LotteryModal({
       setTimeout(() => setCodeBannerNotice(null), 5000)
     }
 
-    setSelectedSequence([null, null, null, null])
+    setSelectedSequence(Array(SECRET_CODE_LENGTH).fill(null))
     await loadCodeData()
     await onRewardsChanged?.()
   }
@@ -516,7 +524,7 @@ export default function LotteryModal({
               setActiveTab('code')
             }}
           >
-            🔐 CÓDIGO SECRETO (¡GANA 20 💎!)
+            🔐 CÓDIGO SECRETO (¡GANA 10 💎!)
           </button>
         </div>
 
@@ -698,6 +706,7 @@ export default function LotteryModal({
                           key={plantId}
                           type="button"
                           className="lottery-mini-plant-card"
+                          disabled={!roundIsOpen || codeWonPrize}
                           onClick={() => handleSelectPlantForSlot(plantId)}
                           title={conf.name}
                         >
@@ -715,25 +724,23 @@ export default function LotteryModal({
                   <div className="lottery-code-promo-banner">
                     <div className="lottery-promo-badge">
                       {roundIsOpen
-                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizePool} 💎`
+                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizePool ?? 10} 💎`
                         : codeRound
-                          ? `⏸️ RONDA #${codeRound.roundNumber} CERRADA`
+                          ? `⏸️ RONDA #${codeRound.roundNumber} FINALIZADA`
                           : '⏸️ SIN RONDA ACTIVA'}
                     </div>
-                    <h3>¡ADIVINA LA SECUENCIA DE 4 PLANTAS!</h3>
+                    <h3>¡ADIVINA LA SECUENCIA DE {SECRET_CODE_LENGTH} PLANTAS!</h3>
                     {roundIsOpen ? (
                       <p>
-                        {codeRound?.freeAttempts} intentos gratis por ronda. El primero que
-                        acierte las 4 en orden <strong>cierra la ronda</strong> y se lleva{' '}
-                        <strong>{codeRound?.prizes?.[0]} 💎</strong>. El 2.º puesto{' '}
-                        {codeRound?.prizes?.[1]} 💎 y el 3.º {codeRound?.prizes?.[2]} 💎, según el
-                        porcentaje de acercamiento.
+                        {codeRound?.freeAttempts ?? 3} intentos gratis por ronda. El primero que
+                        acierte las {SECRET_CODE_LENGTH} en orden <strong>cierra la ronda</strong> y se lleva{' '}
+                        <strong>{codeRound?.prizes?.[0] ?? 10} 💎</strong>.
                       </p>
                     ) : (
                       <p>
-                        No hay ninguna ronda abierta ahora mismo.
-                        {codeRound?.winnerId && ' La anterior ya tiene ganador.'} Vuelve cuando
-                        se abra la siguiente.
+                        {codeRound?.winnerId
+                          ? '🏆 ¡El código ya ha sido descifrado y la ronda está cerrada! Vuelve cuando se abra la siguiente.'
+                          : 'No hay ninguna ronda abierta ahora mismo. Vuelve cuando se abra la siguiente.'}
                       </p>
                     )}
                   </div>
@@ -838,7 +845,7 @@ export default function LotteryModal({
                             {Array.from({ length: lastAtt.wrongPosCount }).map((_, i) => (
                               <span key={`wp_${i}`} className="lottery-pin lottery-pin--wrong" title="Posición errónea">🟡</span>
                             ))}
-                            {Array.from({ length: 4 - lastAtt.exactCount - lastAtt.wrongPosCount }).map((_, i) => (
+                            {Array.from({ length: Math.max(0, (lastAtt.sequence?.length || SECRET_CODE_LENGTH) - lastAtt.exactCount - lastAtt.wrongPosCount) }).map((_, i) => (
                               <span key={`inc_${i}`} className="lottery-pin lottery-pin--miss" title="No está">🔴</span>
                             ))}
                           </div>
@@ -877,7 +884,7 @@ export default function LotteryModal({
                     {codeHistory.length === 0 ? (
                       <div className="lottery-history-empty">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
-                          <span>Aún no has realizado intentos en esta ronda. ¡Elige 4 plantas y pon a prueba tu deducción!</span>
+                          <span>Aún no has realizado intentos en esta ronda. ¡Elige {SECRET_CODE_LENGTH} plantas y pon a prueba tu deducción!</span>
                           <button
                             type="button"
                             className="lottery-code-check-btn"
@@ -915,7 +922,7 @@ export default function LotteryModal({
                                 🟡
                               </span>
                             ))}
-                            {Array.from({ length: 4 - att.exactCount - att.wrongPosCount }).map((_, i) => (
+                            {Array.from({ length: Math.max(0, (att.sequence?.length || SECRET_CODE_LENGTH) - att.exactCount - att.wrongPosCount) }).map((_, i) => (
                               <span key={`inc_${i}`} className="lottery-pin lottery-pin--miss" title="Planta no está en la clave">
                                 🔴
                               </span>
@@ -1073,10 +1080,10 @@ export default function LotteryModal({
               </div>
               <div className="lottery-prize-icon">💎</div>
               <h3 className="lottery-prize-name" style={{ color: '#4ade80' }}>
-                +20 GEMAS 💎
+                +10 GEMAS 💎
               </h3>
               <p className="lottery-prize-desc">
-                ¡Increíble deducción! Has acertado las 4 plantas en la posición exacta y ganado el <strong>Gran Premio de 20 Gemas 💎</strong>.
+                ¡Increíble deducción! Has acertado las {SECRET_CODE_LENGTH} plantas en la posición exacta y ganado el <strong>Gran Premio de 10 Gemas 💎</strong>.
               </p>
               <button
                 type="button"
@@ -1086,7 +1093,7 @@ export default function LotteryModal({
                   setCodeWonPrize(false)
                 }}
               >
-                ¡RECLAMAR 20 GEMAS 💎!
+                ¡RECLAMAR 10 GEMAS 💎!
               </button>
             </div>
           </div>
@@ -1132,7 +1139,7 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">🎯</div>
               <h3>COMPRAR INTENTOS DE CÓDIGO</h3>
               <p>
-                ¿Deseas pagar <strong>1 Gema 💎</strong> para adquirir <strong>2 INTENTOS ADICIONALES</strong> y descifrar la secuencia para ganar las <strong>20 Gemas 💎</strong>?
+                ¿Deseas pagar <strong>1 Gema 💎</strong> para adquirir <strong>2 INTENTOS ADICIONALES</strong> y descifrar la secuencia para ganar las <strong>10 Gemas 💎</strong>?
               </p>
               <div className="lottery-confirm-balance">
                 Saldo actual: <strong>{userTokens} Gemas 💎</strong> (Recibes: +2 Intentos)
