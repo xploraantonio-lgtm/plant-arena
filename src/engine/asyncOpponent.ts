@@ -42,6 +42,7 @@ import {
   decidirAccionEstrategica,
   crearEstadoMentalEstrategico,
   obtenerPerfilEstrategico,
+  escalarPerfilPorElo,
   type StrategicStyle,
   type StrategicDifficulty,
   type StrategicProfile,
@@ -56,6 +57,8 @@ export type {
   StrategicMentalState,
   StrategicTelemetryEntry,
 }
+
+export { escalarPerfilPorElo }
 
 export const TOPE_DE_SEGURIDAD_ASYNC = msToTicks(TOPE_DE_PARTIDA_MS) + 600
 export const RETRY_INTERVAL_TICKS = 6
@@ -827,6 +830,7 @@ export interface RunAsyncTimelineOptions {
   strategicDifficulty?: StrategicDifficulty
   strategicProfile?: StrategicProfile
   botSeed?: number
+  playerElo?: number
   untilTick?: number
   maxTicks?: number
   validateP1?: boolean
@@ -864,6 +868,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     strategicDifficulty,
     strategicProfile,
     botSeed,
+    playerElo,
     untilTick,
     maxTicks = TOPE_DE_SEGURIDAD_ASYNC,
     validateP1 = false,
@@ -963,6 +968,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
               profile: strategicProfile,
               roomSeed: seed,
               botSeed,
+              playerElo,
             })
           : createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2),
         p1Ilegal: true,
@@ -981,6 +987,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
           profile: strategicProfile,
           roomSeed: seed,
           botSeed,
+          playerElo,
         })
       : createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2)
   } else {
@@ -995,6 +1002,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         profile: strategicProfile,
         roomSeed: seed,
         botSeed,
+        playerElo,
       })
     } else {
       intencionesP2 = normalizarIntencionesLegacy(asyncActions) as AsyncOpponentIntentRankedEstricta[]
