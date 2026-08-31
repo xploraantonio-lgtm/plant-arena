@@ -4,6 +4,7 @@ import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { SupabaseService } from '../../services/supabaseService'
 import { isCurrentLeaderboardUser } from '../../utils/leaderboardParser'
+import { getPlayerAvatarUrl } from '../../utils/userManager'
 import './Ranking.css'
 
 import type { Database } from '../../types/database.types'
@@ -166,7 +167,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
             referredCount: r.validos,
             earnedUsd: r.validos * 1.0,
             tierBadge: r.validos >= 25 ? '👑 Embajador VIP' : r.validos >= 10 ? '⭐ Influencer' : r.validos >= 5 ? '🥉 Promotor' : '🌱 Iniciado',
-            avatar: r.avatar || '/game-assets/greenfoot/transparentsunflower.png',
+            avatar: getPlayerAvatarUrl(r.avatar),
             isCurrentUser: isMe,
           }
         })
@@ -806,9 +807,12 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           <td className="col-user">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <img
-                                src={usr.avatar}
-                                alt=""
+                                src={getPlayerAvatarUrl(usr.avatar)}
+                                alt={usr.username}
                                 style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
+                                onError={(e) => {
+                                  e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                                }}
                               />
                               <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>
                                 {usr.isCurrentUser && hasVipPass && '👑 '}

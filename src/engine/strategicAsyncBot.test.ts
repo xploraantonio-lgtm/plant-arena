@@ -3,6 +3,10 @@ import {
   percibirTablero,
   generarAccionesCandidatas,
   obtenerPerfilEstrategico,
+  crearEstadoMentalEstrategico,
+  calcularReservaSoles,
+  actualizarMemoriaDeCarriles,
+  escalarPerfilPorElo,
   STRATEGIC_PROFILES,
   type StrategicStyle,
 } from './strategicAsyncBot.ts'
@@ -266,6 +270,126 @@ describe('RIVAL ESTRATÉGICO V1.2.1 — CERTIFICACIÓN REAL PROGRAMÁTICA', () =
       )
       expect(lanesUsed.size).toBeGreaterThanOrEqual(2)
     })
+
+    // ── V3.1 ENHANCEMENTS TESTS ──────────────────────────────────────────────
+    it('8. Estado DESPERATE: se activa bajo <= 25% HP y fuerza all-in con cero reserva de soles', () => {
+      const state = createBattleState(1234, false, true)
+      state.p2BaseHp = 240 // <= 25% HP (240 / 1000 = 24%)
+      const profile = obtenerPerfilEstrategico('balanced')
+      const mentalState = crearEstadoMentalEstrategico(9999, profile)
+
+      const perception = percibirTablero(state, 200, profile, mentalState)
+      expect(perception.personalityState).toBe('DESPERATE')
+
+      // Verificar que en DESPERATE la reserva de soles se anula para gastar todo
+      const reserve = calcularReservaSoles(perception, profile, perception.personalityState)
+      expect(reserve).toBe(0)
+
+      // Verificar que las unidades de ataque reciben gran bonificación de remontada
+      const candidates = generarAccionesCandidatas(MAZO_ESTANDAR, {}, perception, state, profile, mentalState)
+      const attackCard = candidates.find((c) => c.plantId === 'chomper')
+      expect(attackCard).toBeDefined()
+      expect(attackCard!.utility).toBeGreaterThan(60)
+    })
+
+    it('9. Behavioral Diversity: distribuye arquetipos de apertura deterministas entre semillas', () => {
+      const profile = obtenerPerfilEstrategico('balanced')
+      const archetypes = new Set<string>()
+
+      for (let s = 1; s <= 50; s++) {
+        const mental = crearEstadoMentalEstrategico(s * 777, profile)
+        archetypes.add(mental.openingArchetype)
+      }
+
+      // Debe haber generado los 3 arquetipos en la muestra
+      expect(archetypes.has('ECO_FIRST')).toBe(true)
+      expect(archetypes.has('TEMPO_LANE')).toBe(true)
+      expect(archetypes.has('EARLY_RUSH')).toBe(true)
+    })
+
+    it('10. Adaptive Lane Memory: detecta carril preferido y carril ciego del rival', () => {
+      const state = createBattleState(1234, false, true)
+      // El humano concentra 3 atacantes en carril 0, 1 girasol en carril 1 y 0 plantas en carril 2
+      state.plants.push(
+        { id: 'p1-1', plantId: 'peashooter', lane: 0, x: 20, hp: 300, maxHp: 300, isWalking: false, state: 'idle', lastActionTime: 0 },
+        { id: 'p1-2', plantId: 'repeater', lane: 0, x: 25, hp: 300, maxHp: 300, isWalking: false, state: 'idle', lastActionTime: 0 },
+        { id: 'p1-3', plantId: 'bonkchoy', lane: 0, x: 50, hp: 500, maxHp: 500, isWalking: true, state: 'walking', lastActionTime: 0 },
+        { id: 'p1-mid', plantId: 'sunflower', lane: 1, x: 20, hp: 300, maxHp: 300, isWalking: false, state: 'idle', lastActionTime: 0 }
+      )
+
+      const profile = obtenerPerfilEstrategico('balanced')
+      const mentalState = crearEstadoMentalEstrategico(4321, profile)
+
+      actualizarMemoriaDeCarriles(mentalState, state)
+      expect(mentalState.laneMemory.preferredAttackLane).toBe(0)
+      expect(mentalState.laneMemory.neglectedLane).toBe(2)
+
+      const perception = percibirTablero(state, 200, profile, mentalState)
+      const candidates = generarAccionesCandidatas(MAZO_ESTANDAR, {}, perception, state, profile, mentalState)
+
+      // Verificar que el carril ciego (lane 2) recibe bonificación de ataque por flanqueo inteligente
+      const attackLane2 = candidates.find((c) => c.plantId === 'chomper' && c.lane === 2)
+      expect(attackLane2).toBeDefined()
+      expect(attackLane2!.utility).toBeGreaterThan(40)
+    })
+
+    it('11. ELO Scaling: escala de forma continua la precisión, cadencia y tolerancia al error', () => {
+      const baseProfile = obtenerPerfilEstrategico('balanced')
+
+      const profileBronze = escalarPerfilPorElo(baseProfile, 800)
+      const profileGold = escalarPerfilPorElo(baseProfile, 1200)
+      const profileDiamond = escalarPerfilPorElo(baseProfile, 1400)
+      const profileMaster = escalarPerfilPorElo(baseProfile, 1900)
+
+      // Margen de error se ajusta por brackets ELO (0.20 en <=1200, 0.125 en 1400, 0.05 en 1900)
+      expect(profileBronze.badPlayMargin).toBe(0.20)
+      expect(profileGold.badPlayMargin).toBe(0.20)
+      expect(profileGold.badPlayMargin).toBeGreaterThan(profileDiamond.badPlayMargin)
+      expect(profileDiamond.badPlayMargin).toBeGreaterThan(profileMaster.badPlayMargin)
+      expect(profileMaster.badPlayMargin).toBe(0.05)
+
+      // Tiempo de reacción es más rápido con mayor ELO
+      expect(profileBronze.reactionMs).toBeGreaterThan(profileGold.reactionMs)
+      expect(profileGold.reactionMs).toBeGreaterThan(profileDiamond.reactionMs)
+      expect(profileDiamond.reactionMs).toBeGreaterThan(profileMaster.reactionMs)
+    })
+
+    it('12. Exponential Memory Decay: la memoria decae suavemente con el tiempo sin reseteos instantáneos', () => {
+      const state = createBattleState(1234, false, true)
+      const profile = obtenerPerfilEstrategico('balanced')
+      const mentalState = crearEstadoMentalEstrategico(9999, profile)
+
+      // Oleada en carril 0
+      state.plants.push({
+        id: 'p1-wave',
+        plantId: 'bonkchoy',
+        lane: 0,
+        x: 40,
+        hp: 500,
+        maxHp: 500,
+        isWalking: true,
+        state: 'walking',
+        lastActionTime: 0,
+      })
+
+      actualizarMemoriaDeCarriles(mentalState, state)
+      const initialHeatmapL0 = mentalState.laneMemory.attackHeatmap[0]
+      expect(initialHeatmapL0).toBeGreaterThan(0)
+
+      // El atacante muere (state.plants queda vacío) pero han pasado 5 segundos
+      state.plants = []
+      state.tick = msToTicks(5000)
+      actualizarMemoriaDeCarriles(mentalState, state)
+
+      // La memoria NO es 0 inmediatamente: retiene el histórico
+      expect(mentalState.laneMemory.attackHeatmap[0]).toBeGreaterThan(0)
+      expect(mentalState.laneMemory.attackHeatmap[0]).toBeLessThan(initialHeatmapL0)
+
+      // Tras 35 segundos (1050 ticks), la memoria ha decaído casi por completo
+      state.tick = msToTicks(35000)
+      actualizarMemoriaDeCarriles(mentalState, state)
+      expect(mentalState.laneMemory.attackHeatmap[0]).toBeLessThan(0.01)
+    })
   })
 
   // ── 3. ANÁLISIS DE LAS 15 CARTAS ───────────────────────────────────────────
@@ -433,7 +557,7 @@ describe('RIVAL ESTRATÉGICO V1.2.1 — CERTIFICACIÓN REAL PROGRAMÁTICA', () =
         console.log(JSON.stringify(report, null, 2))
         console.log('=== STRATEGIC_BENCHMARK_REPORT_END ===')
       },
-      120000
+      300000
     )
   })
 

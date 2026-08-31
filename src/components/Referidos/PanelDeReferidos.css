@@ -395,6 +395,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+.ref-ranking__avatar,
+.ref-amigo__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  background: rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
 .ref-ranking__nombre { flex: 1; overflow-wrap: anywhere; }
 
 .ref-ranking__num {

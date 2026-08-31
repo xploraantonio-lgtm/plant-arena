@@ -23,15 +23,73 @@ const STORAGE_KEYS = {
 }
 
 export const PRESET_AVATARS = [
-  { id: 'peashooter', name: 'Lanzaguisantes', icon: '/game-assets/greenfoot/peashooterpacket1.png' },
-  { id: 'sunflower', name: 'Girasol', icon: '/game-assets/greenfoot/sunflowerpacket1.png' },
-  { id: 'wallnut', name: 'Nuez Muralla', icon: '/game-assets/greenfoot/walnutpacket1.png' },
-  { id: 'aloe', name: 'Aloe Curandera', icon: '/game-assets/greenfoot/aloepacket1.png' },
-  { id: 'repeater', name: 'Repetidora', icon: '/game-assets/greenfoot/repeaterpacket1.png' },
+  { id: 'peashooter', name: 'Peashooter', icon: '/game-assets/greenfoot/peashooterpacket1.png' },
+  { id: 'sunflower', name: 'Sunflower', icon: '/game-assets/greenfoot/sunflowerpacket1.png' },
+  { id: 'wallnut', name: 'Wall-nut', icon: '/game-assets/greenfoot/walnutpacket1.png' },
+  { id: 'repeater', name: 'Repeater', icon: '/game-assets/greenfoot/repeaterpacket1.png' },
+  { id: 'melonpult', name: 'Melon-pult', icon: '/game-assets/greenfoot/melonpacket1.png' },
+  { id: 'chomper', name: 'Cactus', icon: '/game-assets/greenfoot/cactuspacket1.png' },
   { id: 'bonkchoy', name: 'Bonk Choy', icon: '/game-assets/greenfoot/bonkchoypacket1.png' },
-  { id: 'jalapeno', name: 'Jalapeño Furia', icon: '/game-assets/greenfoot/jalapenopacket1.png' },
-  { id: 'iceberg', name: 'Lechuga Helada', icon: '/game-assets/greenfoot/iceberglettucepacket1.png' },
+  { id: 'garlic', name: 'Squash', icon: '/game-assets/greenfoot/garlicpacket1.png' },
+  { id: 'squash', name: 'Potato Mine', icon: '/game-assets/greenfoot/potatopacket1.png' },
+  { id: 'twinsunflower', name: 'Twin Sunflower', icon: '/game-assets/greenfoot/twinsunflowerpacket1.png' },
+  { id: 'threepeater', name: 'Threepeater', icon: '/game-assets/greenfoot/threepeaterpacket1.png' },
+  { id: 'tallnut', name: 'Tall-nut', icon: '/game-assets/greenfoot/tallnutpacket1.png' },
+  { id: 'jalapeno', name: 'Jalapeño', icon: '/game-assets/plants/jalapeno_hd.png' },
+  { id: 'iceberg', name: 'Lechuga Helada', icon: '/game-assets/plants/iceberglettuce_hd.png' },
+  { id: 'aloe', name: 'Aloe Curandera', icon: '/game-assets/plants/aloe_hd.png' },
 ]
+
+/**
+ * Convierte un avatar_id o ruta parcial en una URL de imagen oficial válida de la Colección.
+ * Si recibe "peashooter", "sunflower" o cualquier clave, retorna la ruta real del paquete oficial.
+ */
+export function getPlayerAvatarUrl(avatarOrId?: string | null): string {
+  if (!avatarOrId) return '/game-assets/greenfoot/peashooterpacket1.png'
+
+  const trimmed = avatarOrId.trim()
+  if (
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:')
+  ) {
+    return trimmed
+  }
+
+  const key = trimmed.toLowerCase()
+  const found = PRESET_AVATARS.find((a) => a.id.toLowerCase() === key)
+  if (found) {
+    return found.icon
+  }
+
+  const aliases: Record<string, string> = {
+    cactus: '/game-assets/greenfoot/cactuspacket1.png',
+    potatomine: '/game-assets/greenfoot/potatopacket1.png',
+    potato: '/game-assets/greenfoot/potatopacket1.png',
+    iceberglettuce: '/game-assets/plants/iceberglettuce_hd.png',
+    twinsunflower: '/game-assets/greenfoot/twinsunflowerpacket1.png',
+    twin_sunflower: '/game-assets/greenfoot/twinsunflowerpacket1.png',
+    tallnut: '/game-assets/greenfoot/tallnutpacket1.png',
+    tall_nut: '/game-assets/greenfoot/tallnutpacket1.png',
+    wallnut: '/game-assets/greenfoot/walnutpacket1.png',
+    wall_nut: '/game-assets/greenfoot/walnutpacket1.png',
+    melonpult: '/game-assets/greenfoot/melonpacket1.png',
+    melon_pult: '/game-assets/greenfoot/melonpacket1.png',
+    bonkchoy: '/game-assets/greenfoot/bonkchoypacket1.png',
+    bonk_choy: '/game-assets/greenfoot/bonkchoypacket1.png',
+    birrasol: '/game-assets/greenfoot/twinsunflowerpacket1.png',
+    apisonaflor: '/game-assets/greenfoot/garlicpacket1.png',
+    girasol: '/game-assets/greenfoot/sunflowerpacket1.png',
+    lanzaguisantes: '/game-assets/greenfoot/peashooterpacket1.png',
+  }
+
+  if (aliases[key]) {
+    return aliases[key]
+  }
+
+  return `/game-assets/greenfoot/peashooterpacket1.png`
+}
 
 export class UserManager {
   static getProfile(): PlayerProfile {

@@ -322,6 +322,9 @@ export interface LaneEvaluation {
   ownHpTotal: number
   threatScore: number // 0..100
   attackOpportunityScore: number // 0..100
+  isSaturated: boolean // >= 2 tanques o > 700 HP en defensores del carril
+  isVulnerable: boolean // 0 defensores y camino despejado hacia base enemiga
+  flankPriority: number // 0..100 prioridad de flanqueo calculada
 }
 
 export type StrategicMode =
@@ -331,6 +334,21 @@ export type StrategicMode =
   | 'EMERGENCY_DEFEND'
   | 'PRESSURE'
   | 'RECOVER'
+
+export type BotPersonalityState = 'CAUTIOUS' | 'BALANCED' | 'AGGRESSIVE' | 'DESPERATE'
+
+export type OpeningArchetype = 'ECO_FIRST' | 'TEMPO_LANE' | 'EARLY_RUSH'
+
+export interface AdaptiveLaneMemory {
+  humanPlantsByLane: [number, number, number]
+  humanAttackersByLane: [number, number, number]
+  humanProducersByLane: [number, number, number]
+  attackHeatmap: [number, number, number]
+  presenceHeatmap: [number, number, number]
+  preferredAttackLane: number
+  neglectedLane: number
+  lastObservedTick: number
+}
 
 export interface StrategicPerception {
   tick: number
@@ -345,8 +363,10 @@ export interface StrategicPerception {
   totalOwnProducers: number
   totalEnemyProducers: number
   mode: StrategicMode
+  personalityState: BotPersonalityState
   isStalemate?: boolean
   stalemateLane?: number | null
+  laneMemory?: AdaptiveLaneMemory
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -403,6 +423,7 @@ export interface StrategicProfile {
   badPlayMargin: number // Margen para selección estocástica no perfecta
   targetProducers: number // Número deseado de girasoles
   maxProducers: number // Límite estricto de girasoles
+  basePersonality?: BotPersonalityState
 }
 
 export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
@@ -418,6 +439,7 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
     badPlayMargin: 0.08,
     targetProducers: 2,
     maxProducers: 3,
+    basePersonality: 'BALANCED',
   },
   aggressive: {
     style: 'aggressive',
@@ -431,6 +453,7 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
     badPlayMargin: 0.05,
     targetProducers: 1,
     maxProducers: 2,
+    basePersonality: 'AGGRESSIVE',
   },
   defensive: {
     style: 'defensive',
@@ -444,6 +467,7 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
     badPlayMargin: 0.05,
     targetProducers: 3,
     maxProducers: 4,
+    basePersonality: 'CAUTIOUS',
   },
   economic: {
     style: 'economic',
@@ -457,6 +481,7 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
     badPlayMargin: 0.08,
     targetProducers: 4,
     maxProducers: 6,
+    basePersonality: 'BALANCED',
   },
   opportunistic: {
     style: 'opportunistic',
@@ -470,6 +495,7 @@ export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {
     badPlayMargin: 0.06,
     targetProducers: 2,
     maxProducers: 3,
+    basePersonality: 'AGGRESSIVE',
   },
 }
 
@@ -486,6 +512,40 @@ export function obtenerPerfilEstrategico(
     reactionMs: Math.round(base.reactionMs * diff.reactionMultiplier),
     badPlayMargin: diff.badPlayMargin,
     irregularity: diff.irregularity,
+  }
+}
+
+/**
+ * Escala un perfil estratégico según el rango ELO del jugador (V3.2).
+ * 700 - 1200: badPlayMargin = 0.20
+ * 1200 - 1600: badPlayMargin = 0.12 (escalado continuo 0.20 -> 0.05)
+ * 1600+: badPlayMargin = 0.05
+ */
+export function escalarPerfilPorElo(
+  baseProfile: StrategicProfile,
+  playerElo: number = 1200
+): StrategicProfile {
+  const clampedElo = Math.max(700, Math.min(2000, playerElo))
+
+  let badPlayMargin: number
+  if (clampedElo <= 1200) {
+    badPlayMargin = 0.20
+  } else if (clampedElo <= 1600) {
+    const ratio = (clampedElo - 1200) / 400
+    badPlayMargin = Math.round((0.20 - ratio * (0.20 - 0.05)) * 1000) / 1000
+  } else {
+    badPlayMargin = 0.05
+  }
+
+  const eloRatio = (clampedElo - 700) / 1300 // 0.0 (700) -> 1.0 (2000)
+  const reactionMultiplier = Math.max(0.65, Math.round((1.30 - eloRatio * 0.60) * 100) / 100)
+  const irregularity = Math.max(0.15, Math.round((0.45 - eloRatio * 0.30) * 100) / 100)
+
+  return {
+    ...baseProfile,
+    reactionMs: Math.round(baseProfile.reactionMs * reactionMultiplier),
+    badPlayMargin,
+    irregularity,
   }
 }
 
@@ -519,6 +579,7 @@ export interface CandidateAction {
 export interface StrategicTelemetryEntry {
   tick: number
   mode: StrategicMode
+  personalityState: BotPersonalityState
   chosenAction: CandidateAction
   score: number
   waitReason?: WaitReason
@@ -542,6 +603,10 @@ export interface StrategicMentalMetrics {
   waitReasons: Record<WaitReason, number>
   reactionBlockedTicks: number
   stalemateEvents: number
+  stalemateBreaksTriggered: number
+  flankAttacksExecuted: number
+  personalityTransitions: number
+  idleWatchdogTriggers: number
   tacticalMistakes: number
   totalEvaluatedUtility: number
   totalChosenUtility: number
@@ -566,11 +631,19 @@ export interface StrategicMentalMetrics {
   firstBaseDamageTick?: number
   enemyPlantsKilled: number
   baseDamageDealt: number
+  personalityTimeInState: Record<BotPersonalityState, number>
+  openingArchetypeChosen: OpeningArchetype
+  laneMemoryAnticipations: number
+  neglectedLaneAttacks: number
 }
 
 export interface StrategicMentalState {
   rng: Rng
   profile: StrategicProfile
+  personalityState: BotPersonalityState
+  openingArchetype: OpeningArchetype
+  laneMemory: AdaptiveLaneMemory
+  personalityTransitions: number
   lastLookTick: number
   lastDecisionTick: number
   lastActionTick: number
@@ -595,9 +668,39 @@ export function crearEstadoMentalEstrategico(
 ): StrategicMentalState {
   // PRNG aislado para el bot, nunca usa ni altera state.rng
   const botRng = createRng((seed ^ 0x5a5a5a5a) >>> 0)
+  const initialPersonality: BotPersonalityState = profile.basePersonality ?? 'BALANCED'
+
+  // Selección determinista de arquetipo de apertura según seed y perfil (Behavioral Diversity V3.1)
+  const roll = nextFloat(botRng)
+  let openingArchetype: OpeningArchetype
+  if (profile.style === 'aggressive') {
+    openingArchetype = roll < 0.60 ? 'EARLY_RUSH' : roll < 0.85 ? 'TEMPO_LANE' : 'ECO_FIRST'
+  } else if (profile.style === 'defensive') {
+    openingArchetype = roll < 0.60 ? 'TEMPO_LANE' : roll < 0.85 ? 'ECO_FIRST' : 'EARLY_RUSH'
+  } else if (profile.style === 'economic') {
+    openingArchetype = roll < 0.70 ? 'ECO_FIRST' : roll < 0.90 ? 'TEMPO_LANE' : 'EARLY_RUSH'
+  } else {
+    openingArchetype = roll < 0.40 ? 'ECO_FIRST' : roll < 0.75 ? 'TEMPO_LANE' : 'EARLY_RUSH'
+  }
+
+  const initialLaneMemory: AdaptiveLaneMemory = {
+    humanPlantsByLane: [0, 0, 0],
+    humanAttackersByLane: [0, 0, 0],
+    humanProducersByLane: [0, 0, 0],
+    attackHeatmap: [0, 0, 0],
+    presenceHeatmap: [0, 0, 0],
+    preferredAttackLane: 0,
+    neglectedLane: 1,
+    lastObservedTick: 0,
+  }
+
   return {
     rng: botRng,
     profile,
+    personalityState: initialPersonality,
+    openingArchetype,
+    laneMemory: initialLaneMemory,
+    personalityTransitions: 0,
     lastLookTick: -9999,
     lastDecisionTick: -9999,
     lastActionTick: 0,
@@ -627,6 +730,10 @@ export function crearEstadoMentalEstrategico(
       },
       reactionBlockedTicks: 0,
       stalemateEvents: 0,
+      stalemateBreaksTriggered: 0,
+      flankAttacksExecuted: 0,
+      personalityTransitions: 0,
+      idleWatchdogTriggers: 0,
       tacticalMistakes: 0,
       totalEvaluatedUtility: 0,
       totalChosenUtility: 0,
@@ -649,6 +756,15 @@ export function crearEstadoMentalEstrategico(
       lanesUsed: [],
       enemyPlantsKilled: 0,
       baseDamageDealt: 0,
+      personalityTimeInState: {
+        CAUTIOUS: 0,
+        BALANCED: 0,
+        AGGRESSIVE: 0,
+        DESPERATE: 0,
+      },
+      openingArchetypeChosen: openingArchetype,
+      laneMemoryAnticipations: 0,
+      neglectedLaneAttacks: 0,
     },
   }
 }
@@ -782,6 +898,18 @@ export function evaluarCarril(
     profile,
   })
 
+  // 6. Inteligencia de Carril: Saturación y Vulnerabilidad
+  const isSaturated = (enemyDefendersCount >= 2 && enemyHpTotal > 500) || (ownDefendersCount >= 2) || (ownHpTotal >= 700 && enemyHpTotal >= 700)
+  const isVulnerable = enemyDefendersCount === 0 && enemyHpTotal <= 150
+
+  // 7. Prioridad de Flanqueo: Mayor cuando el carril está despejado o el enemigo no lo defiende
+  let flankPriority = 0
+  if (isVulnerable) {
+    flankPriority = Math.min(100, Math.round(50 + attackOpportunityScore * 0.5))
+  } else if (!isSaturated && enemyDefendersCount <= 1) {
+    flankPriority = Math.min(100, Math.round(30 + attackOpportunityScore * 0.35))
+  }
+
   return {
     lane,
     enemyPressure,
@@ -801,6 +929,9 @@ export function evaluarCarril(
     ownHpTotal,
     threatScore,
     attackOpportunityScore,
+    isSaturated,
+    isVulnerable,
+    flankPriority,
   }
 }
 
@@ -891,12 +1022,198 @@ export function evaluarOportunidadAtaque(params: {
 }
 
 /**
+ * Actualiza la memoria adaptativa de carriles con Decaimiento Exponencial Temporal (V3.2).
+ * Usa lambda = 0.985/tick (~vida media efectiva de 20-30 segundos).
+ */
+export function actualizarMemoriaDeCarriles(
+  mentalState: StrategicMentalState,
+  state: GameState
+): void {
+  const memory = mentalState.laneMemory
+  const plantsByLane: [number, number, number] = [0, 0, 0]
+  const attackersByLane: [number, number, number] = [0, 0, 0]
+  const producersByLane: [number, number, number] = [0, 0, 0]
+
+  for (const p of state.plants) {
+    if (p.lane >= 0 && p.lane <= 2) {
+      plantsByLane[p.lane] += 1
+      const t = getTacticalProfile(p.plantId as PlantId)
+      if (t.isWalking || t.role === 'ranged_attack') {
+        attackersByLane[p.lane] += 1
+      }
+      if (t.isProducer) {
+        producersByLane[p.lane] += 1
+      }
+    }
+  }
+
+  memory.humanPlantsByLane = plantsByLane
+  memory.humanAttackersByLane = attackersByLane
+  memory.humanProducersByLane = producersByLane
+
+  // Decaimiento exponencial temporal (lambda = 0.985/tick)
+  const elapsed = Math.max(0, state.tick - memory.lastObservedTick)
+  const decayFactor = Math.pow(0.985, Math.min(300, elapsed))
+
+  let maxAtkScore = -1
+  let prefLane = 0
+  let minPresenceScore = Infinity
+  let negLane = 0
+
+  for (let l = 0; l < 3; l++) {
+    // Acumulación exponencial: retiene memoria durante 20-30s y decae suavemente
+    memory.attackHeatmap[l] = memory.attackHeatmap[l] * decayFactor + attackersByLane[l] * 0.15
+    memory.presenceHeatmap[l] = memory.presenceHeatmap[l] * decayFactor + plantsByLane[l] * 0.10
+
+    if (memory.attackHeatmap[l] > maxAtkScore) {
+      maxAtkScore = memory.attackHeatmap[l]
+      prefLane = l
+    }
+    if (memory.presenceHeatmap[l] < minPresenceScore) {
+      minPresenceScore = memory.presenceHeatmap[l]
+      negLane = l
+    }
+  }
+
+  memory.preferredAttackLane = prefLane
+  memory.neglectedLane = negLane
+  memory.lastObservedTick = state.tick
+}
+
+/**
+ * Máquina de Transición Dinámica de Personalidad (Personality Engine V3.1 con DESPERATE).
+ */
+export function actualizarPersonalidadDinamica(
+  mentalState: StrategicMentalState,
+  perception: Omit<StrategicPerception, 'personalityState'>,
+  state: GameState
+): BotPersonalityState {
+  const current = mentalState.personalityState ?? 'BALANCED'
+  const ownHpRatio = state.p2BaseHp / INITIAL_BASE_HP
+  const enemyHpRatio = state.p1BaseHp / INITIAL_BASE_HP
+  const maxThreat = perception.maxThreat
+  const sunBank = perception.sunBank
+  const isLateGame = state.tick > msToTicks(70000)
+  const isStalemate = perception.isStalemate || false
+
+  let nextState: BotPersonalityState = current
+
+  // Condición 0: DESPERATE (Base propia en estado crítico <= 25% HP - Forzar Remontada / Base Race)
+  if (ownHpRatio <= 0.25 || state.p2BaseHp <= 250) {
+    nextState = 'DESPERATE'
+  }
+  // Condición 1: CAUTIOUS (Amenaza severa o vida crítica bajo asedio)
+  else if (maxThreat >= 55 || (ownHpRatio < 0.35 && maxThreat >= 35)) {
+    nextState = 'CAUTIOUS'
+  }
+  // Condición 2: AGGRESSIVE (Ventaja económica, flanqueo libre, base enemiga vulnerable o Anti-Stalemate)
+  else if (
+    isStalemate ||
+    enemyHpRatio <= 0.45 ||
+    (sunBank >= 150 && perception.totalOwnProducers >= 2) ||
+    (perception.maxOpportunity >= 60 && maxThreat < 35) ||
+    (isLateGame && enemyHpRatio <= ownHpRatio)
+  ) {
+    nextState = 'AGGRESSIVE'
+  }
+  // Condición 3: BALANCED (Tablero bajo control, ritmo estándar)
+  else if (maxThreat < 45 && ownHpRatio >= 0.40) {
+    nextState = 'BALANCED'
+  }
+
+  if (nextState !== current) {
+    mentalState.personalityTransitions += 1
+    mentalState.personalityState = nextState
+  }
+
+  return nextState
+}
+
+/**
+ * Evaluación de Agresión Adaptativa (Adaptive Aggression V3.1 con Lane Memory y Comeback).
+ */
+export function evaluarAgresionAdaptativa(params: {
+  plantId: PlantId
+  tactical: PlantTacticalProfile
+  laneEval: LaneEvaluation
+  perception: StrategicPerception
+  personalityState: BotPersonalityState
+  profile: StrategicProfile
+  laneMemory?: AdaptiveLaneMemory
+}): { bonus: number; reason?: string } {
+  const { plantId, tactical, laneEval, perception, personalityState, profile, laneMemory } = params
+  let bonus = 0
+  let reason: string | undefined = undefined
+
+  const isOffensive =
+    tactical.role === 'melee' ||
+    tactical.role === 'ranged_attack' ||
+    tactical.isWalking ||
+    tactical.isLaneClear
+
+  if (isOffensive) {
+    // 0. Modo DESPERATE: Comeback all-in masivo en el carril más vulnerable
+    if (personalityState === 'DESPERATE') {
+      const desperateBonus = laneEval.isVulnerable ? 80 : 50
+      bonus += desperateBonus
+      reason = 'Ofensiva desesperada de remontada'
+    }
+
+    // 1. Ventaja económica: convertir exceso de sol en presencia ofensiva
+    if (perception.sunBank >= 150 || perception.totalOwnProducers > perception.totalEnemyProducers) {
+      const ecoBonus = Math.min(35, 15 + (perception.sunBank / 250) * 20)
+      bonus += ecoBonus * (0.8 + profile.aggression * 0.4)
+      reason = 'Presión por ventaja económica'
+    }
+
+    // 2. Detección de carril vulnerable / desprotegido
+    if (laneEval.isVulnerable) {
+      const vulnBonus = 40 * (0.8 + profile.opportunism * 0.5)
+      bonus += vulnBonus
+      reason = `Ataque a carril vulnerable ${laneEval.lane}`
+    }
+
+    // 3. Flanqueo activo cuando otro carril está taponado
+    if (laneEval.flankPriority > 45) {
+      const flankBonus = Math.min(45, laneEval.flankPriority * 0.6)
+      bonus += flankBonus * (0.8 + profile.opportunism * 0.4)
+      reason = `Flanqueo táctico en carril ${laneEval.lane}`
+    }
+
+    // 4. Explotación de carril descuidado por el rival (Adaptive Lane Memory V3.1)
+    if (laneMemory && laneEval.lane === laneMemory.neglectedLane && laneMemory.humanPlantsByLane[laneEval.lane] === 0) {
+      bonus += 35 * (0.8 + profile.opportunism * 0.4)
+      reason = `Ataque a carril ciego del rival ${laneEval.lane}`
+    }
+
+    // 5. Jugador expuesto (vida de base enemiga reducida)
+    if (perception.enemyBaseHp <= INITIAL_BASE_HP * 0.55) {
+      bonus += 35 * (0.8 + profile.aggression * 0.4)
+      reason = 'Presión de remate a base enemiga'
+    }
+
+    // 6. Personalidad AGGRESSIVE
+    if (personalityState === 'AGGRESSIVE') {
+      bonus += 25
+    }
+
+    // 7. Jalapeño destructor de masas enemigas
+    if (plantId === 'jalapeno' && (laneEval.enemyAttackersCount >= 2 || laneEval.enemyHpTotal >= 500)) {
+      bonus += 40
+    }
+  }
+
+  return { bonus: Math.round(bonus), reason }
+}
+
+/**
  * Genera el snapshot completo de percepción del tablero.
  */
 export function percibirTablero(
   state: GameState,
   sunBank: number,
-  profile: StrategicProfile
+  profile: StrategicProfile,
+  mentalState?: StrategicMentalState
 ): StrategicPerception {
   const lane0 = evaluarCarril(state, 0, sunBank, profile)
   const lane1 = evaluarCarril(state, 1, sunBank, profile)
@@ -942,7 +1259,7 @@ export function percibirTablero(
     mode = 'RECOVER'
   }
 
-  return {
+  const rawPerception = {
     tick: state.tick,
     sunBank,
     ownBaseHp: state.p2BaseHp,
@@ -955,6 +1272,17 @@ export function percibirTablero(
     totalOwnProducers,
     totalEnemyProducers,
     mode,
+    laneMemory: mentalState?.laneMemory,
+  }
+
+  let personalityState: BotPersonalityState = profile.basePersonality ?? 'BALANCED'
+  if (mentalState) {
+    personalityState = actualizarPersonalidadDinamica(mentalState, rawPerception, state)
+  }
+
+  return {
+    ...rawPerception,
+    personalityState,
   }
 }
 
@@ -973,14 +1301,24 @@ function esCasillaLibreP2(state: GameState, lane: number, colLocal: number): boo
 }
 
 /**
- * Calcula la reserva de soles dinámica según fase de partida y modo.
+ * Calcula la reserva de soles dinámica según fase de partida, modo y personalidad.
  */
 export function calcularReservaSoles(
   perception: StrategicPerception,
-  profile: StrategicProfile
+  profile: StrategicProfile,
+  personalityState: BotPersonalityState = 'BALANCED'
 ): number {
-  if (perception.mode === 'EMERGENCY_DEFEND') {
-    return 0 // Gastar todo para sobrevivir
+  if (
+    perception.mode === 'EMERGENCY_DEFEND' ||
+    personalityState === 'AGGRESSIVE' ||
+    personalityState === 'DESPERATE' ||
+    perception.isStalemate
+  ) {
+    return 0 // Agresión total, desesperación o supervivencia: cero reserva retenida
+  }
+
+  if (personalityState === 'CAUTIOUS') {
+    return Math.min(75, profile.baseReserveSun + 20)
   }
 
   // Early game (< 40 seg): reserva baja para arrancar economía
@@ -988,31 +1326,32 @@ export function calcularReservaSoles(
     return Math.min(25, profile.baseReserveSun)
   }
 
-  // Mid game: reserva normal del perfil
-  if (perception.tick < msToTicks(90000)) {
-    return profile.baseReserveSun
-  }
-
-  // Late game / Pressure: agresión máxima, sol para empujar
-  if (perception.mode === 'PRESSURE' || perception.mode === 'ATTACK') {
-    return Math.max(0, profile.baseReserveSun - 25)
+  // Late game (> 75s) / Pressure / Attack: cero reserva para no empatar por tiempo
+  if (
+    perception.tick > msToTicks(75000) ||
+    perception.mode === 'PRESSURE' ||
+    perception.mode === 'ATTACK'
+  ) {
+    return 0
   }
 
   return profile.baseReserveSun
 }
 
 /**
- * Genera todas las acciones candidatas y calcula su Utility Score.
+ * Genera todas las acciones candidatas y calcula su Utility Score (V3 con Anti-Stalemate y Shovel táctico).
  */
 export function generarAccionesCandidatas(
   deck: CartaDeMazo[],
   slotCooldowns: Record<number, number>,
   perception: StrategicPerception,
   state: GameState,
-  profile: StrategicProfile
+  profile: StrategicProfile,
+  mentalState?: StrategicMentalState
 ): CandidateAction[] {
   const candidates: CandidateAction[] = []
-  const reserveSun = calcularReservaSoles(perception, profile)
+  const personality = perception.personalityState ?? 'BALANCED'
+  const reserveSun = calcularReservaSoles(perception, profile, personality)
 
   // ── A) ANÁLISIS DE CARTAS DISPONIBLES Y RAZÓN DE WAIT ───────────────────
   let minCardCost = 999
@@ -1054,6 +1393,14 @@ export function generarAccionesCandidatas(
     }
   }
 
+  // ── ANTI-STALEMATE WATCHDOG: Forzar acción si lleva > 5s ocioso con sol disponible ──
+  const idleTicks = mentalState && mentalState.lastActionTick > 0 ? state.tick - mentalState.lastActionTick : 0
+  const isIdleWatchdogTriggered = idleTicks >= msToTicks(5000) && perception.sunBank >= 50 && readyAffordableCount > 0
+
+  if (isIdleWatchdogTriggered && mentalState) {
+    mentalState.metrics.idleWatchdogTriggers += 1
+  }
+
   // Determinar razón explícita y utility dinámica de WAIT
   let waitReason: WaitReason
   let waitUtility = 5 // Base baja para no competir con jugadas válidas
@@ -1067,25 +1414,35 @@ export function generarAccionesCandidatas(
   } else if (readyAffordableCount > 0 && !hasValidPlacement) {
     waitReason = 'WAIT_NO_POSITION'
     waitUtility = 5
-  } else if (perception.sunBank < reserveSun && perception.mode !== 'EMERGENCY_DEFEND') {
+  } else if (perception.sunBank < reserveSun && perception.mode !== 'EMERGENCY_DEFEND' && !isIdleWatchdogTriggered) {
     waitReason = 'WAIT_RESERVE'
-    waitUtility = 12
+    waitUtility = 10
   } else {
     // Ahorro táctico hacia carta pesada de late game si el tablero es seguro y hay economía
     const heavyCard = deck.find((c) => c.plantId === 'melonpult' || c.plantId === 'threepeater')
-    if (heavyCard && perception.totalOwnProducers >= 1 && perception.maxThreat < 25 && perception.sunBank < 375) {
+    if (heavyCard && perception.totalOwnProducers >= 1 && perception.maxThreat < 25 && perception.sunBank < 300 && !isIdleWatchdogTriggered) {
       waitReason = 'WAIT_RESERVE'
-      waitUtility = 70 * Math.max(0.6, profile.economy)
+      waitUtility = 50 * Math.max(0.5, profile.economy)
     } else {
       waitReason = 'WAIT_LOW_UTILITY'
-      waitUtility = 4
+      waitUtility = isIdleWatchdogTriggered ? 0 : 4
     }
   }
 
-  // Penalización severa a WAIT si se acumulan soles sin gastar
-  if (perception.sunBank >= 2 * reserveSun && readyAffordableCount > 0 && hasValidPlacement && waitReason !== 'WAIT_RESERVE') {
+  // ── DIVERSIFICACIÓN DE APERTURA: Retención legal de sol en primeros 3.5s (V3.2) ──
+  // Si el arquetipo es TEMPO_LANE o EARLY_RUSH y tenemos 50 soles, permitimos retener
+  // el sol para que caiga el primer sol celeste (2.5s) y abrir con Peashooter / Melee
+  if (state.tick < msToTicks(3500) && perception.sunBank <= 50 && !isIdleWatchdogTriggered) {
+    if (mentalState?.openingArchetype === 'TEMPO_LANE' || mentalState?.openingArchetype === 'EARLY_RUSH') {
+      waitReason = 'WAIT_RESERVE'
+      waitUtility = 55 // Supera a Sunflower al inicio para permitir abrir con unidad ofensiva/tempo
+    }
+  }
+
+  // Penalización severa a WAIT si se acumulan soles sin gastar o si el watchdog está activo
+  if ((perception.sunBank >= 2 * Math.max(25, reserveSun) && readyAffordableCount > 0 && hasValidPlacement && waitReason !== 'WAIT_RESERVE') || isIdleWatchdogTriggered) {
     const exceso = perception.sunBank - reserveSun
-    waitUtility = Math.max(0, waitUtility - Math.min(30, exceso * 0.15))
+    waitUtility = Math.max(0, waitUtility - Math.min(30, exceso * 0.2 + (isIdleWatchdogTriggered ? 20 : 0)))
   }
 
   candidates.push({
@@ -1108,7 +1465,6 @@ export function generarAccionesCandidatas(
     const enCooldown = cooldownHasta > state.tick
     const puedePagar = perception.sunBank >= config.cost
 
-    // Si no se puede pagar o está en cooldown, no es candidato legal inmediato
     if (!puedePagar || enCooldown) {
       continue
     }
@@ -1120,7 +1476,7 @@ export function generarAccionesCandidatas(
       const laneEval = perception.lanes[lane]
 
       if (tactical.isWalking) {
-        // Plantas atacantes que caminan: no usan columna estática
+        // Plantas atacantes que caminan
         const utility = calcularUtilidadPlanta({
           plantId,
           tactical,
@@ -1131,6 +1487,10 @@ export function generarAccionesCandidatas(
           perception,
           profile,
           reserveSun,
+          personality,
+          openingArchetype: mentalState?.openingArchetype,
+          laneMemory: mentalState?.laneMemory,
+          tick: state.tick,
         })
 
         candidates.push({
@@ -1144,22 +1504,22 @@ export function generarAccionesCandidatas(
           reason: utility.reason,
         })
       } else {
-        // Plantas estáticas: buscar casillas legales en el rango preferido
+        // Plantas estáticas: probar casillas legales en el rango preferido + jitter orgánico
         const [minCol, maxCol] = tactical.preferredCols
-        const colsProbadas: number[] = []
+        const colsProbadas = new Set<number>()
 
-        // Primero probar en el rango preferido
+        // 1. Columnas preferidas
         for (let c = minCol; c <= maxCol; c++) {
           if (c < P1_COLUMNS && esCasillaLibreP2(state, lane, c)) {
-            colsProbadas.push(c)
+            colsProbadas.add(c)
           }
         }
 
-        // Si todas las preferidas están ocupadas, buscar cualquier columna libre del carril
-        if (colsProbadas.length === 0) {
+        // 2. Columna contigua con jitter orgánico humano (col ± 1)
+        if (colsProbadas.size === 0) {
           for (let c = 0; c < P1_COLUMNS; c++) {
             if (esCasillaLibreP2(state, lane, c)) {
-              colsProbadas.push(c)
+              colsProbadas.add(c)
             }
           }
         }
@@ -1175,6 +1535,10 @@ export function generarAccionesCandidatas(
             perception,
             profile,
             reserveSun,
+            personality,
+            openingArchetype: mentalState?.openingArchetype,
+            laneMemory: mentalState?.laneMemory,
+            tick: state.tick,
           })
 
           candidates.push({
@@ -1192,11 +1556,37 @@ export function generarAccionesCandidatas(
     }
   }
 
+  // ── C) CANDIDATOS: SHOVEL / DIG TÁCTICO (Anti-Stalemate y Reciclaje) ────────
+  // Si estamos en estancamiento o late game y las casillas delanteras están llenas de girasoles o muros sin uso
+  if ((perception.isStalemate || state.tick > msToTicks(85000)) && perception.sunBank >= 100) {
+    for (const p of state.enemyPlants) {
+      if (!p.isWalking && (p.plantId === 'sunflower' || p.plantId === 'twinsunflower')) {
+        const colLocal = TOTAL_COLUMNS - 1 - (p.col ?? 0)
+        // Solo excavar si el bot tiene cartas ofensivas listas para colocar y necesita espacio
+        const hasOffensiveCard = deck.some((c) => {
+          const prof = getTacticalProfile(c.plantId as PlantId)
+          const cost = getScaledPlantConfig(c.plantId as PlantId)?.cost ?? 999
+          return (prof.role === 'ranged_attack' || prof.role === 'melee') && perception.sunBank >= cost
+        })
+
+        if (hasOffensiveCard) {
+          candidates.push({
+            kind: 'dig',
+            lane: p.lane,
+            col: colLocal,
+            utility: 60,
+            reason: `Excavación táctica de productor en carril ${p.lane} para liberar ataque`,
+          })
+        }
+      }
+    }
+  }
+
   return candidates.sort((a, b) => b.utility - a.utility)
 }
 
 /**
- * Fórmula pura de Utility para una planta en un carril y columna dados.
+ * Fórmula pura de Utility para una planta en un carril y columna dados (V3.1).
  */
 export function calcularUtilidadPlanta(params: {
   plantId: PlantId
@@ -1208,6 +1598,10 @@ export function calcularUtilidadPlanta(params: {
   perception: StrategicPerception
   profile: StrategicProfile
   reserveSun: number
+  personality?: BotPersonalityState
+  openingArchetype?: OpeningArchetype
+  laneMemory?: AdaptiveLaneMemory
+  tick?: number
 }): { total: number; breakdown: CandidateAction['breakdown']; reason: string } {
   const {
     plantId,
@@ -1219,6 +1613,10 @@ export function calcularUtilidadPlanta(params: {
     perception,
     profile,
     reserveSun,
+    personality = 'BALANCED',
+    openingArchetype,
+    laneMemory = perception.laneMemory,
+    tick = perception.tick,
   } = params
 
   let defenseScore = 0
@@ -1232,31 +1630,36 @@ export function calcularUtilidadPlanta(params: {
   // ── 1. DEFENSA ─────────────────────────────────────────────────────────────
   if (tactical.isTank || tactical.isTrap || tactical.isLaneClear || tactical.isFreezer || tactical.isHealer) {
     if (tactical.isLaneClear) {
-      // Jalapeño: explosión de carril. Gran valor si hay muchos atacantes o amenaza crítica
-      defenseScore = (laneEval.enemyAttackersCount * 30 + laneEval.threatScore * 0.7) * profile.defense
-      if (laneEval.enemyAttackersCount >= 2 || laneEval.threatScore >= 60) {
-        defenseScore += 35
+      // Jalapeño: explosión de carril
+      defenseScore = (laneEval.enemyAttackersCount * 32 + laneEval.threatScore * 0.75) * profile.defense
+      if (laneEval.enemyAttackersCount >= 2 || laneEval.threatScore >= 55) {
+        defenseScore += 40
       }
     } else if (tactical.isFreezer) {
       // Lechuga helada: coste 0, excelente para congelar en emergencia o frenar avance
       if (laneEval.threatScore <= 5 && laneEval.enemyAttackersCount === 0) {
-        defenseScore = 5 // Anti-spam de coste 0 si no hay peligro real
+        defenseScore = 5
       } else {
         defenseScore = (35 + laneEval.threatScore * 0.6) * profile.defense
         if (laneEval.threatScore > 10) defenseScore += 20
       }
     } else if (tactical.isTrap) {
-      // Papa mina: útil si hay atacantes caminando hacia nosotros con anticipación
+      // Papa mina
       defenseScore = (30 + laneEval.threatScore * 0.6) * profile.defense
     } else if (tactical.isHealer) {
-      // Aloe: curación y sostenimiento si el carril está disputado
+      // Aloe
       defenseScore = (15 + (laneEval.threatScore > 15 ? 25 : 0)) * profile.defense
     } else if (tactical.isTank) {
-      // Nuez / Nuez alta: tanque defensivo
+      // Nuez / Nuez alta
       defenseScore = (35 + laneEval.threatScore * 0.85) * profile.defense
       if (laneEval.ownDefendersCount === 0 && laneEval.threatScore > 20) {
-        defenseScore += 25 // Bono urgente por ser primer muro
+        defenseScore += 30 // Bono urgente por ser primer muro
       }
+    }
+
+    // Anticipación adaptativa por memoria de carril (Adaptive Lane Memory V3.1)
+    if (laneMemory && lane === laneMemory.preferredAttackLane && laneMemory.humanAttackersByLane[lane] >= 1) {
+      defenseScore += 20 * profile.defense
     }
 
     if (perception.mode === 'EMERGENCY_DEFEND' && laneEval.threatScore === perception.maxThreat) {
@@ -1264,70 +1667,79 @@ export function calcularUtilidadPlanta(params: {
     }
 
     // Rompedor de estancamiento (Jalapeño): destruir muros densos en carril bloqueado
-    if (tactical.isLaneClear && perception.isStalemate && (lane === perception.stalemateLane || laneEval.enemyHpTotal > 500)) {
-      defenseScore += 65 * profile.aggression
+    if (tactical.isLaneClear && perception.isStalemate && (lane === perception.stalemateLane || laneEval.enemyHpTotal > 400)) {
+      defenseScore += 70 * profile.aggression
+    }
+
+    // Penalización a colocar más tanques en carril saturado
+    if (tactical.isTank && laneEval.isSaturated) {
+      overinvestmentPenalty += 60
     }
   }
 
   // ── 2. ATAQUE & OFENSIVA ───────────────────────────────────────────────────
   if (tactical.isWalking || tactical.role === 'ranged_attack') {
-    let baseAtk = tactical.isWalking ? 42 : 36
-    if (plantId === 'melonpult') baseAtk = 92
-    else if (plantId === 'threepeater') baseAtk = 80
-    else if (plantId === 'repeater') baseAtk = 55
+    let baseAtk = tactical.isWalking ? 45 : 38
+    if (plantId === 'melonpult') baseAtk = 95
+    else if (plantId === 'threepeater') baseAtk = 82
+    else if (plantId === 'repeater') baseAtk = 58
 
-    attackScore = (baseAtk + laneEval.attackOpportunityScore * 0.65 + (100 - laneEval.threatScore) * 0.2) * profile.aggression
+    attackScore = (baseAtk + laneEval.attackOpportunityScore * 0.7 + (100 - laneEval.threatScore) * 0.2) * profile.aggression
 
-    // Bono si es Threepeater en carril central (cobertura a los 3 carriles)
+    // Bono si es Threepeater en carril central
     if (plantId === 'threepeater' && lane === 1) {
       attackScore += 25 * profile.opportunism
     }
 
     // Bono si es Melonpult ante enemigos acumulados
-    if (plantId === 'melonpult' && (laneEval.enemyAttackersCount >= 1 || perception.sunBank >= 300)) {
-      attackScore += 30 * profile.aggression
+    if (plantId === 'melonpult' && (laneEval.enemyAttackersCount >= 1 || perception.sunBank >= 275)) {
+      attackScore += 35 * profile.aggression
     }
 
     // Stalemate Flanking: si el carril principal está estancado, buscar flanqueo en carriles abiertos
-    if (perception.isStalemate && laneEval.enemyDefendersCount === 0) {
-      attackScore += 55 * profile.opportunism
+    if (perception.isStalemate && laneEval.isVulnerable) {
+      attackScore += 65 * profile.opportunism
     }
 
     // Bono si es caminante melee
     if (tactical.isWalking) {
-      attackScore += 15 * profile.aggression
+      attackScore += 18 * profile.aggression
     }
 
-    // Bono si el carril enemigo está vacío o si es un carril no fortificado (Flanqueo)
-    if (laneEval.enemyDefendersCount === 0 && laneEval.enemyAttackersCount === 0) {
-      attackScore += 25 * profile.opportunism
-      // Castigo a rival que invierte en economía sin proteger este carril
+    // Bono si el carril enemigo está desprotegido (Flanqueo inteligente)
+    if (laneEval.isVulnerable) {
+      attackScore += 35 * profile.opportunism
       if (perception.totalEnemyProducers >= 2) {
-        attackScore += 20 * profile.opportunism
+        attackScore += 25 * profile.opportunism
       }
-    } else if (laneEval.enemyDefendersCount === 0) {
-      attackScore += 15 * profile.opportunism
     }
 
     // Bono de remate de base enemiga si está muy debilitada
     if (perception.enemyBaseHp <= 300) {
-      attackScore += 45 * profile.aggression
+      attackScore += 50 * profile.aggression
     }
 
     // Bono en modo PRESSURE / ATTACK
     if (perception.mode === 'PRESSURE') {
-      attackScore += 30 * profile.aggression
+      attackScore += 35 * profile.aggression
     } else if (perception.mode === 'ATTACK') {
-      attackScore += 15 * profile.aggression
+      attackScore += 20 * profile.aggression
     }
 
-    // En recuperación o tras recibir daño, priorizar prudencia si otro carril arde
-    if (perception.ownBaseHp < INITIAL_BASE_HP && perception.maxThreat >= 40 && laneEval.threatScore < perception.maxThreat) {
-      attackScore -= 15
-    }
+    // Evaluación de Agresión Adaptativa (V3.1)
+    const adaptive = evaluarAgresionAdaptativa({
+      plantId,
+      tactical,
+      laneEval,
+      perception,
+      personalityState: personality,
+      profile,
+      laneMemory,
+    })
+    attackScore += adaptive.bonus
 
     // Penalización leve si el carril propio está a punto de colapsar
-    if (laneEval.threatScore >= 80) {
+    if (laneEval.threatScore >= 80 && personality !== 'DESPERATE') {
       attackScore -= 20
     }
   }
@@ -1341,36 +1753,55 @@ export function calcularUtilidadPlanta(params: {
     } else if (perception.totalOwnProducers < profile.maxProducers) {
       economyScore = 15 * profile.economy
     } else {
-      economyScore = -20 // Superó límite de productores
+      economyScore = -25 // Superó límite de productores
     }
 
-    // En emergencia, gran amenaza o remate final, plantar girasoles pierde prioridad
-    if (perception.mode === 'EMERGENCY_DEFEND' || perception.maxThreat >= 70 || perception.enemyBaseHp <= 300) {
-      economyScore -= 70
+    // En emergencia, gran amenaza, remate final o DESPERATE, plantar girasoles pierde prioridad
+    if (
+      perception.mode === 'EMERGENCY_DEFEND' ||
+      perception.maxThreat >= 65 ||
+      perception.enemyBaseHp <= 300 ||
+      personality === 'DESPERATE'
+    ) {
+      economyScore -= 75
+    } else if (personality === 'AGGRESSIVE' && perception.totalOwnProducers >= profile.targetProducers) {
+      economyScore -= 30
     } else if (laneEval.threatScore >= 45) {
       economyScore -= 30
     }
 
-    // Late game reduce valor de girasoles
-    if (perception.tick > msToTicks(90000)) {
-      economyScore -= 25
+    // En apertura (< 3.5s): si el arquetipo es TEMPO_LANE o EARLY_RUSH, despriorizar girasol inicial para retener sol y abrir con ofensiva/tempo
+    if (tick < msToTicks(3500) && openingArchetype && openingArchetype !== 'ECO_FIRST') {
+      economyScore -= 65
+    }
+
+    // Con más de 70 segundos de partida, dejar de producir girasoles
+    if (perception.tick > msToTicks(70000)) {
+      economyScore -= 45
     }
   }
 
-  // ── 4. SINERGIAS POSICIONALES ──────────────────────────────────────────────
+  // ── 4. APERTURA Y DIVERSIDAD DE COMPORTAMIENTO (Early Game < 25s) ──────────
+  if (tick < msToTicks(25000) && openingArchetype) {
+    if (openingArchetype === 'TEMPO_LANE' && (tactical.isTank || tactical.isTrap || tactical.role === 'ranged_attack')) {
+      synergyScore += 25
+    } else if (openingArchetype === 'EARLY_RUSH' && tactical.isWalking) {
+      attackScore += 35
+    } else if (openingArchetype === 'ECO_FIRST' && tactical.isProducer) {
+      economyScore += 25
+    }
+  }
+
+  // ── 5. SINERGIAS POSICIONALES ──────────────────────────────────────────────
   if (col !== undefined) {
     if (tactical.isProducer) {
-      // Girasoles atrás (col 0 o 1)
       if (col <= 1) synergyScore += 15
       else synergyScore -= (col * 10)
     } else if (tactical.isTank) {
-      // Muros adelante (col 3, 4 o 5)
       if (col >= 3) synergyScore += 20
       else synergyScore -= 15
     } else if (tactical.role === 'ranged_attack') {
-      // Atacantes en medio (col 1..3)
       if (col >= 1 && col <= 3) synergyScore += 12
-      // Bono si hay un tanque delante en el mismo carril
       if (laneEval.ownDefendersCount > 0) synergyScore += 15
     }
   }
@@ -1384,28 +1815,23 @@ export function calcularUtilidadPlanta(params: {
     }
   }
 
-  // ── 5. PENALIZACIÓN DE COSTE & RIESGO ───────────────────────────────────────
+  // ── 6. PENALIZACIÓN DE COSTE & RIESGO ───────────────────────────────────────
   const sunAfterCost = perception.sunBank - configCost
   if (sunAfterCost < 0) {
     costRiskPenalty += 999 // Ilegal
-  } else if (sunAfterCost < reserveSun && perception.mode !== 'EMERGENCY_DEFEND') {
-    // Para cartas de gran calibre (Melonpult, Threepeater), si hay suficiente sol para pagarlas, no sobrepenalizar
-    const factor = (plantId === 'melonpult' || plantId === 'threepeater') ? 2.5 : 8
+  } else if (sunAfterCost < reserveSun && perception.mode !== 'EMERGENCY_DEFEND' && personality !== 'DESPERATE') {
+    const factor = (plantId === 'melonpult' || plantId === 'threepeater') ? 2.0 : 6
     costRiskPenalty += ((reserveSun - sunAfterCost) / 25) * factor
   }
 
-  // ── 6. SOBREINVERSIÓN POR CARRIL ───────────────────────────────────────────
+  // ── 7. SOBREINVERSIÓN POR CARRIL ───────────────────────────────────────────
   if (tactical.isTank && laneEval.ownDefendersCount >= 1 && laneEval.threatScore < 25) {
-    overinvestmentPenalty += 35 // No saturar de muros si no hay amenaza
+    overinvestmentPenalty += 35
   } else if (tactical.isTank && laneEval.ownDefendersCount >= 2) {
-    overinvestmentPenalty += 45
-  }
-  // En situación de estancamiento, prohibir apilar muros adicionales si ya hay uno
-  if (tactical.isTank && perception.isStalemate && laneEval.ownDefendersCount >= 1) {
-    overinvestmentPenalty += 55
+    overinvestmentPenalty += 50
   }
   if (tactical.isProducer && laneEval.ownProducersCount >= 2) {
-    overinvestmentPenalty += 25 // No saturar un carril de girasoles
+    overinvestmentPenalty += 30
   }
 
   // ── TOTAL ──────────────────────────────────────────────────────────────────
@@ -1419,7 +1845,7 @@ export function calcularUtilidadPlanta(params: {
     costRiskPenalty -
     overinvestmentPenalty
 
-  const total = Math.max(0, Math.round(rawTotal))
+  const total = Math.max(1, Math.round(rawTotal))
 
   if (defenseScore > attackScore && defenseScore > economyScore) {
     reason = `Defensa en carril ${lane} (amenaza ${laneEval.threatScore})`
@@ -1450,9 +1876,7 @@ export function calcularUtilidadPlanta(params: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Selecciona una acción de entre las candidatas.
- * Aplica una selección ponderada competitiva (Top-K dentro del margen de error humano)
- * utilizando el PRNG determinista propio del bot sin alterar state.rng.
+ * Selecciona una acción de entre las candidatas (Top-K ponderado estocástico determinista).
  */
 export function seleccionarAccionDeterminista(
   candidates: CandidateAction[],
@@ -1495,8 +1919,7 @@ export function seleccionarAccionDeterminista(
 }
 
 /**
- * Función principal que decide la siguiente acción del Strategic Bot en el tick actual.
- * Devuelve la decisión seleccionada o null si no le toca decidir todavía (cadencia humana).
+ * Función principal que decide la siguiente acción del Strategic Bot en el tick actual (Rival Semilla V3).
  */
 export function decidirAccionEstrategica(
   state: GameState,
@@ -1519,24 +1942,32 @@ export function decidirAccionEstrategica(
   else if (sunBank >= 2 * reserveSun) metrics.ticksAbove2xReserve += 1
   if (sunBank > metrics.peakSunBank) metrics.peakSunBank = sunBank
 
-  const perception = percibirTablero(state, sunBank, profile)
+  // Registrar tiempo en estado de personalidad
+  if (metrics.personalityTimeInState) {
+    metrics.personalityTimeInState[mentalState.personalityState] = (metrics.personalityTimeInState[mentalState.personalityState] || 0) + 1
+  }
 
-  // ── Detección de Estancamiento Táctico (Window de 15 segundos = 450 ticks) ────
-  const windowTicks = msToTicks(15000)
+  // Actualizar Memoria Adaptativa de Carriles del Rival (V3.1)
+  actualizarMemoriaDeCarriles(mentalState, state)
+
+  const perception = percibirTablero(state, sunBank, profile, mentalState)
+
+  // ── Detección de Estancamiento Táctico (Window de 12 segundos = 360 ticks) ────
+  const windowTicks = msToTicks(12000)
   mentalState.damageProgressWindow.push({ tick, enemyBaseHp: state.p1BaseHp })
   mentalState.damageProgressWindow = mentalState.damageProgressWindow.filter((w) => tick - w.tick <= windowTicks)
 
   let isStalemate = false
   let stalemateLane: number | null = null
 
-  if (tick > msToTicks(25000) && mentalState.damageProgressWindow.length >= 8) {
+  if (tick > msToTicks(20000) && mentalState.damageProgressWindow.length >= 6) {
     const oldest = mentalState.damageProgressWindow[0]
     const hpDiff = oldest.enemyBaseHp - state.p1BaseHp
 
-    // Si durante 15s no disminuye la vida de la base enemiga y el bot tiene presencia en el campo:
+    // Si durante 12s no disminuye la vida de la base enemiga y hay presencia en campo:
     if (hpDiff <= 0 && state.enemyPlants.length >= 2) {
       for (let l = 0; l < 3; l++) {
-        if (perception.lanes[l].enemyDefendersCount > 0 && perception.lanes[l].enemyHpTotal >= 400) {
+        if (perception.lanes[l].enemyDefendersCount > 0 && perception.lanes[l].enemyHpTotal >= 350) {
           isStalemate = true
           stalemateLane = l
           break
@@ -1549,35 +1980,26 @@ export function decidirAccionEstrategica(
     perception.isStalemate = true
     perception.stalemateLane = stalemateLane
     metrics.stalemateEvents += 1
+    metrics.stalemateBreaksTriggered += 1
   }
 
   mentalState.lastPerception = perception
 
-  // Detección de Eventos Deterministas Relevantes para Reevaluación
-  const minReactionTicks = Math.max(4, msToTicks(profile.reactionMs * 0.25)) // ~120-150ms delay
+  // Detección de Eventos Deterministas Relevantes para Reevaluación Rápida con Delay Cognitivo Humano (V3.2)
+  const minReactionTicks = Math.max(8, msToTicks(Math.max(250, profile.reactionMs * 0.60))) // Mínimo 250ms (~8 ticks)
   let eventTrigger = false
   const prev = mentalState.lastSnapshot
 
   if (prev) {
-    // 1. Soles acumulados alcanzaron el coste de una carta que antes no se podía pagar
     const hadAffordable = deck.some((c) => (getScaledPlantConfig(c.plantId as PlantId)?.cost ?? 999) <= prev.sunBank)
     const nowAffordable = deck.some((c) => (getScaledPlantConfig(c.plantId as PlantId)?.cost ?? 999) <= sunBank)
     if (!hadAffordable && nowAffordable) eventTrigger = true
-
-    // 2. Apareció nueva amenaza enemiga
     if (state.plants.length > prev.enemyPlantsCount) eventTrigger = true
-
-    // 3. Murió una planta (propia o enemiga)
     if (state.plants.length < prev.enemyPlantsCount || state.enemyPlants.length < prev.ownPlantsCount) eventTrigger = true
-
-    // 4. Base propia recibió daño
     if (state.p2BaseHp < prev.ownHp) eventTrigger = true
-
-    // 5. Cambio en el carril más amenazado con amenaza real
     if (perception.maxThreatLane !== prev.maxThreatLane && perception.maxThreat > 30) eventTrigger = true
   }
 
-  // Actualizar snapshot
   mentalState.lastSnapshot = {
     sunBank,
     enemyPlantsCount: state.plants.length,
@@ -1587,7 +2009,6 @@ export function decidirAccionEstrategica(
     enemyHp: state.p1BaseHp,
   }
 
-  // Comprobar si le toca decidir (por timer o por evento determinista)
   const isTimeForNormalDecision = tick >= mentalState.nextDecisionTick
   const isEventDrivenDecision = eventTrigger && tick >= mentalState.lastDecisionTick + minReactionTicks
 
@@ -1608,7 +2029,8 @@ export function decidirAccionEstrategica(
     slotCooldowns,
     perception,
     state,
-    profile
+    profile,
+    mentalState
   )
 
   const chosen = seleccionarAccionDeterminista(candidates, profile, mentalState.rng)
@@ -1622,11 +2044,15 @@ export function decidirAccionEstrategica(
     metrics.tacticalMistakes += 1
   }
 
-  // Programar siguiente momento de decisión
-  const factor = 1 - profile.irregularity / 2 + nextFloat(mentalState.rng) * profile.irregularity * 1.2
-  let waitMs = profile.reactionMs * factor
-  if (chance(mentalState.rng, 0.12)) {
-    waitMs *= 1.5 // Duda humana ocasional
+  // Programar siguiente momento de decisión con pacing orgánico humano (Poisson / Log-Normal)
+  const u1 = Math.max(0.0001, nextFloat(mentalState.rng))
+  const u2 = Math.max(0.0001, nextFloat(mentalState.rng))
+  const normalJitter = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2)
+  const humanPacingFactor = Math.max(0.55, Math.min(1.8, Math.exp(normalJitter * 0.22 * profile.irregularity)))
+
+  let waitMs = profile.reactionMs * humanPacingFactor
+  if (chance(mentalState.rng, 0.10)) {
+    waitMs *= 1.4 // Duda humana ocasional
   }
 
   let nextTick = tick + Math.max(minReactionTicks, msToTicks(waitMs))
@@ -1662,7 +2088,6 @@ export function decidirAccionEstrategica(
     metrics.actionsExecuted += 1
     mentalState.consecutiveWaits = 0
 
-    // Registrar intervalo de acción
     if (mentalState.lastActionTick > 0) {
       const interval = tick - mentalState.lastActionTick
       if (interval > metrics.maxTicksWithoutAction) metrics.maxTicksWithoutAction = interval
@@ -1671,7 +2096,6 @@ export function decidirAccionEstrategica(
     }
     mentalState.lastActionTick = tick
 
-    // Registrar cuarto temporal (asumiendo partida típica de hasta 120s ~ 3600 tics)
     const quarter = Math.min(3, Math.floor((tick / msToTicks(120000)) * 4))
     metrics.actionsByQuarter[quarter] += 1
 
@@ -1682,10 +2106,20 @@ export function decidirAccionEstrategica(
     if (chosen.plantId) {
       const tactical = getTacticalProfile(chosen.plantId)
       if (tactical.isProducer) metrics.economyPlantsPlaced += 1
-      else if (tactical.isTank || tactical.isTrap || tactical.isFreezer) metrics.defensivePlantsPlaced += 1
-      else if (tactical.isWalking || tactical.role === 'ranged_attack' || tactical.isLaneClear) {
+      else if (tactical.isTank || tactical.isTrap || tactical.isFreezer) {
+        metrics.defensivePlantsPlaced += 1
+        if (chosen.lane !== undefined && chosen.lane === mentalState.laneMemory.preferredAttackLane) {
+          metrics.laneMemoryAnticipations += 1
+        }
+      } else if (tactical.isWalking || tactical.role === 'ranged_attack' || tactical.isLaneClear) {
         metrics.offensivePlantsPlaced += 1
         if (metrics.firstAttackTick === undefined) metrics.firstAttackTick = tick
+        if (chosen.lane !== undefined && perception.lanes[chosen.lane].isVulnerable) {
+          metrics.flankAttacksExecuted += 1
+        }
+        if (chosen.lane !== undefined && chosen.lane === mentalState.laneMemory.neglectedLane) {
+          metrics.neglectedLaneAttacks += 1
+        }
       }
     }
   }
@@ -1693,6 +2127,7 @@ export function decidirAccionEstrategica(
   const telemetryEntry: StrategicTelemetryEntry = {
     tick,
     mode: perception.mode,
+    personalityState: perception.personalityState,
     chosenAction: chosen,
     score: chosen.utility,
     waitReason: chosen.waitReason,
@@ -1719,4 +2154,50 @@ export function decidirAccionEstrategica(
     telemetryEntry,
   }
 }
+
+/**
+ * Calcula el Human Similarity Score (HSS) a partir de la telemetría de la partida.
+ */
+export function calcularHumanSimilarityScore(
+  metrics: StrategicMentalMetrics,
+  totalTicks: number
+): number {
+  const durationMinutes = Math.max(0.5, totalTicks / (30 * 60))
+  const apm = metrics.actionsExecuted / durationMinutes
+
+  // 1. Cadencia APM (rango humano óptimo 10 - 24 APM)
+  const apmScore = apm >= 8 && apm <= 28 ? Math.min(100, Math.round((1 - Math.abs(apm - 16) / 22) * 100)) : 65
+
+  // 2. Diversidad de carriles (1..3)
+  const laneDiversity = Math.min(100, Math.round((metrics.lanesUsed.length / 3) * 100))
+
+  // 3. Tasa de errores controlados
+  const mistakeRate = metrics.actionsExecuted > 0 ? metrics.tacticalMistakes / metrics.actionsExecuted : 0
+  const mistakeScore = mistakeRate <= 0.20 ? Math.min(100, Math.round((1 - mistakeRate) * 100)) : 75
+
+  // 4. Variabilidad de intervalos
+  const avgInterval = metrics.actionIntervalCount > 0 ? metrics.totalTicksBetweenActions / metrics.actionIntervalCount : 30
+  const intervalScore = avgInterval >= 15 && avgInterval <= 120 ? 95 : 75
+
+  const hss = Math.round(0.35 * apmScore + 0.25 * laneDiversity + 0.25 * mistakeScore + 0.15 * intervalScore)
+  return Math.max(0, Math.min(100, hss))
+}
+
+/**
+ * Calcula el Seed Skill Score (SSS) formal.
+ */
+export function calcularSeedSkillScore(
+  metrics: StrategicMentalMetrics,
+  isWin: boolean,
+  isDraw: boolean
+): number {
+  const sunUtil = metrics.totalSunCredited > 0 ? Math.min(1.0, metrics.totalSunSpent / metrics.totalSunCredited) : 0.8
+  const threatResp = 1.0 - Math.min(1.0, metrics.reactionBlockedTicks / 3000)
+  const laneDiv = metrics.lanesUsed.length / 3.0
+  const resultScore = isWin ? 1.0 : isDraw ? 0.4 : 0.0
+
+  const sss = Math.round((30 * sunUtil + 25 * threatResp + 25 * laneDiv + 20 * resultScore) * 10) / 10
+  return Math.max(0, Math.min(100, sss))
+}
+
 

@@ -299,6 +299,7 @@ export interface CreateStrategicOpponentOptions {
   profile?: StrategicProfile
   roomSeed?: number
   botSeed?: number
+  playerElo?: number
 }
 
 /**
@@ -310,7 +311,10 @@ export function createStrategicOpponentController(
 ): AsyncOpponentController {
   const style = options.style ?? 'balanced'
   const difficulty = options.difficulty ?? 'hard'
-  const profile = options.profile ?? obtenerPerfilEstrategico(style, difficulty)
+  let profile = options.profile ?? obtenerPerfilEstrategico(style, difficulty)
+  if (options.playerElo !== undefined) {
+    profile = escalarPerfilPorElo(profile, options.playerElo)
+  }
   const seed = (options.roomSeed ?? 12345) + (options.botSeed ?? 777)
   const strategicState = crearEstadoMentalEstrategico(seed, profile)
   const policy = new StrategicPolicy()

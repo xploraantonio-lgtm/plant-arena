@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { SupabaseService, type MisReferidos } from '../../services/supabaseService'
 import { soundManager } from '../../utils/audioManager'
 import { enlaceDeReferido } from '../../utils/direccionPublica'
+import { getPlayerAvatarUrl } from '../../utils/userManager'
 import './PanelDeReferidos.css'
 
 /**
@@ -520,6 +521,14 @@ export default function PanelDeReferidos() {
             {rankingPaginado.map((r) => (
               <li key={r.puesto}>
                 <span className="ref-ranking__pos">{r.puesto}</span>
+                <img
+                  src={getPlayerAvatarUrl(r.avatar)}
+                  alt=""
+                  className="ref-ranking__avatar"
+                  onError={(e) => {
+                    e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                  }}
+                />
                 <span className="ref-ranking__nombre">{r.nombre ?? 'Jugador'}</span>
                 <span className="ref-ranking__num">{r.validos} amigos</span>
               </li>
@@ -631,6 +640,14 @@ export default function PanelDeReferidos() {
             <ul className="ref-amigos" ref={amigosListaRef}>
               {amigosPaginados.map((a, i) => (
                 <li key={`${a.nombre}-${i}`} className={a.valido ? 'ref-amigo--ok' : ''}>
+                  <img
+                    src={getPlayerAvatarUrl(a.avatar)}
+                    alt=""
+                    className="ref-amigo__avatar"
+                    onError={(e) => {
+                      e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                    }}
+                  />
                   <span className="ref-amigo__nombre">{a.nombre ?? 'Jugador'}</span>
                   <span className="ref-amigo__copas">{a.copas} copas</span>
                   <span className="ref-amigo__estado">
