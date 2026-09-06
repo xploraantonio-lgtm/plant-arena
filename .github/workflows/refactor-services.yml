@@ -90,10 +90,23 @@ jobs:
           migrate_whole('src/components/Marketplace/Marketplace.tsx', 'marketplaceService', 'marketplaceService')
           migrate_whole('src/components/LandingPage/LandingPage.tsx', 'publicService', 'publicService')
           migrate_whole('src/components/Battlefield/Battlefield.tsx', 'battleService', 'battleService')
-          migrate_whole('src/components/Referidos/PanelDeReferidos.tsx', 'referralService', 'referralService')
           migrate_whole('src/components/Lottery/LotteryModal.tsx', 'lotteryService', 'lotteryService')
           migrate_whole('src/components/Shop/Shop.tsx', 'shopService', 'shopService')
           migrate_whole('src/components/ProfileModal/ProfileModal.tsx', 'accountService', 'accountService')
+
+          # Referidos también importa el tipo MisReferidos desde el servicio viejo.
+          referral_path = 'src/services/referralService.ts'
+          referral_text = Path(referral_path).read_text()
+          type_export = "export type { MisReferidos } from './supabaseService'"
+          if type_export not in referral_text:
+              Path(referral_path).write_text(referral_text + '\n' + type_export + '\n')
+          path = 'src/components/Referidos/PanelDeReferidos.tsx'
+          replace_required(
+              path,
+              "import { SupabaseService, type MisReferidos } from '../../services/supabaseService'",
+              "import { referralService, type MisReferidos } from '../../services/referralService'",
+          )
+          replace_required(path, 'SupabaseService.', 'referralService.')
 
           # Barrel público de servicios.
           index = Path('src/services/index.ts')
