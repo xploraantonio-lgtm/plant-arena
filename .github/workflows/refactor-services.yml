@@ -37,7 +37,15 @@ jobs:
               p.write_text(text.replace(old, new))
               print(f'{path}: replaced {count} x {old}')
 
-          # Ranking: separar ranking global y referidos.
+          def migrate_whole(path: str, service_name: str, service_file: str):
+              replace_required(
+                  path,
+                  "import { SupabaseService } from '../../services/supabaseService'",
+                  f"import {{ {service_name} }} from '../../services/{service_file}'",
+              )
+              replace_required(path, 'SupabaseService.', f'{service_name}.')
+
+          # Ranking: ranking global y referidos tienen fachadas específicas.
           path = 'src/components/Ranking/Ranking.tsx'
           replace_required(
               path,
@@ -48,8 +56,7 @@ jobs:
           replace_required(path, 'SupabaseService.getUserRank', 'leaderboardService.getUserRank')
           replace_required(path, 'SupabaseService.myReferrals', 'referralService.myReferrals')
 
-          # Inventario: casi todas sus operaciones son del dominio inventario;
-          # el saldo autoritativo pertenece a perfil.
+          # Inventario: saldo a perfil; el resto a inventario.
           path = 'src/hooks/useInventory.ts'
           replace_required(
               path,
@@ -59,7 +66,7 @@ jobs:
           replace_required(path, 'SupabaseService.', 'inventoryService.')
           replace_required(path, 'inventoryService.myBalance', 'profileService.myBalance')
 
-          # App: cada llamada se dirige a su dominio, sin alterar argumentos ni flujo.
+          # App: dirigir cada llamada a su dominio sin cambiar argumentos ni flujo.
           path = 'src/App.tsx'
           replace_required(
               path,
@@ -78,42 +85,44 @@ jobs:
           for method, service in mapping.items():
               replace_required(path, f'SupabaseService.{method}', f'{service}.{method}')
 
-          # Admin: fachada transicional propia; la extracción interna será posterior.
-          path = 'src/components/Admin/AdminPanel.tsx'
-          replace_required(
-              path,
-              "import { SupabaseService } from '../../services/supabaseService'",
-              "import { adminService } from '../../services/adminService'",
-          )
-          replace_required(path, 'SupabaseService.', 'adminService.')
+          # Pantallas con dominios amplios: fachada transicional propia.
+          migrate_whole('src/components/Admin/AdminPanel.tsx', 'adminService', 'adminService')
+          migrate_whole('src/components/Marketplace/Marketplace.tsx', 'marketplaceService', 'marketplaceService')
+          migrate_whole('src/components/LandingPage/LandingPage.tsx', 'publicService', 'publicService')
+          migrate_whole('src/components/Battlefield/Battlefield.tsx', 'battleService', 'battleService')
+          migrate_whole('src/components/Referidos/PanelDeReferidos.tsx', 'referralService', 'referralService')
+          migrate_whole('src/components/Lottery/LotteryModal.tsx', 'lotteryService', 'lotteryService')
+          migrate_whole('src/components/Shop/Shop.tsx', 'shopService', 'shopService')
+          migrate_whole('src/components/ProfileModal/ProfileModal.tsx', 'accountService', 'accountService')
 
-          # Barrel público.
+          # Barrel público de servicios.
           index = Path('src/services/index.ts')
           text = index.read_text()
-          if "export { adminService } from './adminService'" not in text:
-              text += "export { adminService } from './adminService'\n"
-              index.write_text(text)
-
-          # No debe quedar dependencia directa en estos consumidores.
-          targets = [
-              'src/components/Ranking/Ranking.tsx',
-              'src/hooks/useInventory.ts',
-              'src/App.tsx',
-              'src/components/Admin/AdminPanel.tsx',
+          exports = [
+              "export { adminService } from './adminService'",
+              "export { accountService } from './accountService'",
+              "export { publicService } from './publicService'",
+              "export { battleService } from './battleService'",
+              "export { marketplaceService } from './marketplaceService'",
+              "export { lotteryService } from './lotteryService'",
+              "export { shopService } from './shopService'",
           ]
-          for target in targets:
-              if 'SupabaseService' in Path(target).read_text():
-                  raise SystemExit(f'{target}: still contains SupabaseService')
+          for line in exports:
+              if line not in text:
+                  text += line + '\n'
+          index.write_text(text)
 
-          # Mostrar otros consumidores directos que queden fuera de services.
+          # Ningún consumidor de producción debe depender directamente del monolito.
           remaining = []
           for p in Path('src').rglob('*'):
               if p.suffix not in {'.ts', '.tsx'} or 'services' in p.parts:
                   continue
+              if '.test.' in p.name or '.spec.' in p.name:
+                  continue
               if 'SupabaseService' in p.read_text(errors='ignore'):
                   remaining.append(str(p))
           if remaining:
-              raise SystemExit('Remaining direct consumers:\n' + '\n'.join(remaining))
+              raise SystemExit('Remaining direct production consumers:\n' + '\n'.join(remaining))
           PY
 
       - name: Install dependencies
@@ -129,7 +138,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx src/hooks/useInventory.ts src/components/Ranking/Ranking.tsx src/components/Admin/AdminPanel.tsx src/services/index.ts
+          git add src
           git diff --cached --check
           git commit -m "refactor: finalize service consumer migration"
           git push origin HEAD:refactor/services-structure
