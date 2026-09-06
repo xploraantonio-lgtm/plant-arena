@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SupabaseService } from '../../services/supabaseService'
+import { replayService } from '../../services/replayService'
 import { enlaceDeRepeticion } from '../../utils/direccionPublica'
 import './MisPartidas.css'
 
@@ -64,7 +64,7 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
 
   useEffect(() => {
     let cancelado = false
-    void SupabaseService.myMatches(30).then((lista) => {
+    void replayService.myMatches(30).then((lista) => {
       if (!cancelado) setPartidas(lista)
     })
     return () => { cancelado = true }
@@ -78,7 +78,7 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
 
     let token = p.shareToken
     if (!token) {
-      const r = await SupabaseService.shareMatch(p.roomId)
+      const r = await replayService.shareMatch(p.roomId)
       token = r.token ?? null
       // Antes esto era un `return` a secas y el botón parecía muerto: la llamada
       // fallaba (el código se generaba con una función de pgcrypto que no estaba
@@ -114,7 +114,7 @@ export default function MisPartidas({ onVolver, onVerRepeticion }: Props) {
   }
 
   const dejarDeCompartir = async (p: Partida) => {
-    if (!(await SupabaseService.unshareMatch(p.roomId))) return
+    if (!(await replayService.unshareMatch(p.roomId))) return
     setPartidas((antes) =>
       antes?.map((x) => (x.roomId === p.roomId ? { ...x, shareToken: null } : x)) ?? antes
     )
