@@ -1252,3 +1252,24 @@
   color: #000;
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5);
 }
+
+
+/* ── FARMING INVENTORY ─────────────────────────────────────────────────── */
+.jardin-farming-resources {
+  margin: 18px 0 26px;
+  padding: 18px;
+  border: 1px solid rgba(74, 222, 128, .28);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(7, 38, 24, .88), rgba(35, 20, 8, .84));
+  box-shadow: inset 0 1px rgba(255,255,255,.06), 0 14px 36px rgba(0,0,0,.22);
+}
+.jardin-section-header--farming { align-items: flex-start; }
+.jardin-farming-subtitle { margin: 4px 0 0; font-size: .78rem; color: #bbf7d0; }
+.jardin-farming-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin-top: 14px; }
+.jardin-farming-card { min-height: 196px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; padding: 12px 9px; border-radius: 18px; border: 1px solid rgba(255,255,255,.1); background: rgba(3, 17, 10, .62); text-align: center; color: #f8fafc; }
+.jardin-farming-card__art { position: relative; width: 92px; height: 92px; display: grid; place-items: center; }
+.jardin-farming-card__art img { position: relative; z-index: 2; width: 92px; height: 92px; object-fit: contain; filter: drop-shadow(0 7px 8px rgba(0,0,0,.38)); }
+.jardin-farming-card__art span { position: absolute; font-size: 3.3rem; z-index: 1; }
+.jardin-farming-card strong { font-size: .85rem; }
+.jardin-farming-card__qty { font-size: 1.15rem; font-weight: 1000; color: #fde047; }
+.jardin-farming-card small { max-width: 155px; color: #a7f3d0; font-size: .66rem; line-height: 1.25; }

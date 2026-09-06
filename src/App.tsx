@@ -12,6 +12,8 @@ import Clan from './components/Clan/Clan'
 import Marketplace from './components/Marketplace/Marketplace'
 import LandingPage from './components/LandingPage/LandingPage'
 import PackOpeningModal from './components/PackOpeningModal/PackOpeningModal'
+import PvpRewardOpeningModal from './components/PvpRewardOpeningModal/PvpRewardOpeningModal'
+import type { PvpRewardDrop } from './utils/pvpRewardManager'
 import { useInventory } from './hooks/useInventory'
 import type { PackDropResult, PackId } from './utils/packDropManager'
 import background from './assets/images/background.png'
@@ -71,6 +73,7 @@ function App() {
   })
   const [practicePlantId, setPracticePlantId] = useState<string | null>(null)
   const [activeOpeningResult, setActiveOpeningResult] = useState<PackDropResult | PackDropResult[] | null>(null)
+  const [activePvpRewardDrops, setActivePvpRewardDrops] = useState<PvpRewardDrop[] | null>(null)
   const [lastOpenedPackType, setLastOpenedPackType] = useState<PackId | null>(null)
   const [activeAppAlert, setActiveAppAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
 
@@ -122,6 +125,7 @@ function App() {
     refreshFromServer,
     userTokens,
     userGold,
+    farmingItems,
     addGold,
     buyGoldPackage,
     inventoryPacks,
@@ -701,9 +705,9 @@ function App() {
   }
 
   const handleOpenSlotPack = async (slotId: number) => {
-    const drop = await openSlotPack(slotId)
-    if (drop) {
-      setActiveOpeningResult(drop)
+    const drops = await openSlotPack(slotId)
+    if (drops && drops.length > 0) {
+      setActivePvpRewardDrops(drops)
     }
   }
 
@@ -950,6 +954,7 @@ function App() {
             playerRewardPacks={playerRewardPacks}
             userTokens={userTokens}
             userGold={userGold}
+            farmingItems={farmingItems}
             plantCopies={plantCopies}
             plantLevels={plantLevels}
             plantStatRolls={plantStatRolls}
@@ -1172,6 +1177,17 @@ function App() {
             onOpenAnother={handleOpenAnotherPack}
             hasMorePacks={hasMorePacksOfSameType}
           />
+        )}
+
+        {/* PvP victory pack: 3 server-authoritative drops revealed one by one. */}
+        {activePvpRewardDrops && (
+<PvpRewardOpeningModal
+  drops={activePvpRewardDrops}
+  onClose={() => {
+    setActivePvpRewardDrops(null)
+    setScreen('jardin')
+  }}
+/>
         )}
 
         {/* Global Themed Modal Alert */}

@@ -11,6 +11,7 @@ import { inventoryService } from '../services/inventoryService'
 import { profileService } from '../services/profileService'
 import { supabase } from '../lib/supabaseClient'
 import { STAT_LABELS, type PlantStatKey } from '../utils/gameConstants'
+import { EMPTY_FARMING_INVENTORY, parseFarmingInventory, type FarmingInventory, type PvpRewardDrop } from '../utils/pvpRewardManager'
 
 // El servidor devuelve la rareza en inglés (columna plant_catalog.rarity).
 // Estas dos tablas la traducen a lo que ya espera la interfaz, para no tener que
@@ -581,6 +582,8 @@ export function useInventory() {
   })
 
   const [playerRewardPacks, setPlayerRewardPacks] = useState<PlayerRewardPack[]>([])
+  // Recursos farming: sólo memoria de UI. La fuente de verdad vive en Supabase.
+  const [farmingItems, setFarmingItems] = useState<FarmingInventory>({ ...EMPTY_FARMING_INVENTORY })
 
   useEffect(() => {
     localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(freePackSlots))
@@ -630,12 +633,12 @@ export function useInventory() {
    *
    * LÍMITE CONOCIDO: la partida se juega en el navegador, así que el servidor no
    * puede comprobar que se ganó de verdad. Lo acotan el tope de 4 huecos, las
-   * 2–12 h de espera por cofre y un cofre como máximo cada 2 minutos. Se cierra
+   * 1–6 h de espera por cofre y un cofre como máximo cada 2 minutos. Se cierra
    * del todo cuando el servidor resuelva las partidas.
    */
   const awardVictoryPack = async (
     _playerElo: number
-  ): Promise<{ awarded: boolean; durationHours?: 2 | 4 | 8 | 12; arenaLevel?: number; isSlotsFull?: boolean }> => {
+  ): Promise<{ awarded: boolean; durationHours?: FreePackSlot['durationHours']; arenaLevel?: number; isSlotsFull?: boolean }> => {
     const prevSlots = freePackSlots
     const tieneHuecoVacio = prevSlots.some((s) => s.status === 'empty')
 
@@ -662,7 +665,7 @@ export function useInventory() {
     if (res.awarded) {
       return {
         awarded: true,
-        durationHours: res.durationHours as 2 | 4 | 8 | 12,
+        durationHours: res.durationHours as FreePackSlot['durationHours'],
         arenaLevel: res.arenaLevel,
         isSlotsFull: false,
       }
@@ -682,7 +685,7 @@ export function useInventory() {
       if (newlyAwarded) {
         return {
           awarded: true,
-          durationHours: newlyAwarded.durationHours as 2 | 4 | 8 | 12,
+          durationHours: newlyAwarded.durationHours as FreePackSlot['durationHours'],
           arenaLevel: newlyAwarded.arenaLevel,
           isSlotsFull: false,
         }
@@ -731,7 +734,7 @@ export function useInventory() {
    * ponía el cofre a 'empty' por su cuenta, así que se podía repetir la tirada
    * hasta sacar la carta deseada. El servidor además revalida el temporizador.
    */
-  const openSlotPack = async (slotId: number): Promise<PackDropResult | null> => {
+  const openSlotPack = async (slotId: number): Promise<PvpRewardDrop[] | null> => {
     return await claimSlotOnServer(slotId)
   }
 
@@ -979,8 +982,13 @@ export function useInventory() {
     setPlayerRewardPacks(remotePacks)
   }
 
+  const refreshFarmingInventory = async (): Promise<void> => {
+    const remote = await inventoryService.myFarmingInventory()
+    if (remote) setFarmingItems(parseFarmingInventory(remote))
+  }
+
   const refreshFromServer = async (): Promise<void> => {
-    await Promise.all([refreshBalance(), refreshInventory(), refreshPackSlots(), refreshRewardPacks()])
+    await Promise.all([refreshBalance(), refreshInventory(), refreshFarmingInventory(), refreshPackSlots(), refreshRewardPacks()])
   }
 
   /** Compra sobres. El precio y el tope de cantidad los pone el servidor. */
@@ -1077,25 +1085,36 @@ export function useInventory() {
     }
   }
 
-  /** Reclama un cofre listo. El servidor revalida el temporizador. */
+  /** Reclama un cofre PvP listo. Los 3 drops ya vienen fijados por Supabase. */
   const claimSlotOnServer = async (
     slotIndex: number
-  ): Promise<PackDropResult | null> => {
+  ): Promise<PvpRewardDrop[] | null> => {
     const res = await inventoryService.claimPackSlot(slotIndex)
-    if (!res.success || !res.plantId) return null
+    if (!res.success) return null
+
+    // Compatibilidad con claim_pack_slot v1 durante el despliegue del SQL.
+    const drops: PvpRewardDrop[] = Array.isArray(res.drops)
+      ? res.drops
+      : res.plantId
+        ? [{
+  type: 'plant',
+  plantId: res.plantId as PlantId,
+  rarity: (res.rarity === 'uncommon' ? 'uncommon' : 'common') as 'common' | 'uncommon',
+  isNew: Boolean(res.isNew),
+  quantity: 1,
+}]
+        : []
+
+    if (drops.length === 0) return null
 
     await refreshFromServer()
+    if (res.farmingItems) setFarmingItems(parseFarmingInventory(res.farmingItems))
     if (currentUserIdRef.current) {
       const remoteSlots = await inventoryService.getUserPackSlots(currentUserIdRef.current)
       if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
     }
 
-    return {
-      plantId: res.plantId as PlantId,
-      rarityLabel: RARITY_LABEL[res.rarity || 'common'] ?? 'COMÚN',
-      rarityColor: RARITY_COLOR[res.rarity || 'common'] ?? '#4ade80',
-      isNew: Boolean(res.isNew),
-    }
+    return drops
   }
 
   /** Abre un cofre al instante pagando oro. El coste lo calcula el servidor. */
@@ -1168,6 +1187,7 @@ export function useInventory() {
     deductGold,
     inventoryPacks,
     playerRewardPacks,
+    farmingItems,
     refreshRewardPacks,
     startUnlockRewardPack,
     instantUnlockRewardPack,

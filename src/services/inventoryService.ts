@@ -8,6 +8,7 @@ export const inventoryService = {
   getUserPlants: SupabaseService.getUserPlants.bind(SupabaseService),
   insertPlantInstance: SupabaseService.insertPlantInstance.bind(SupabaseService),
   myInventory: SupabaseService.myInventory.bind(SupabaseService),
+  myFarmingInventory: SupabaseService.myFarmingInventory.bind(SupabaseService),
   getUserPackSlots: SupabaseService.getUserPackSlots.bind(SupabaseService),
   syncPackSlots: SupabaseService.syncPackSlots.bind(SupabaseService),
   getMyRewardPacks: SupabaseService.getMyRewardPacks.bind(SupabaseService),

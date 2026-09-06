@@ -5,6 +5,7 @@ import type { DatosDeRepeticion } from '../engine/replay'
 import { parseLeaderboardRow, type ParsedLeaderboardRow } from '../utils/leaderboardParser'
 import { validateMatchClock } from '../utils/matchClock'
 import type { EngineVersion } from '../types/game'
+import type { FarmingInventory, PvpRewardDrop } from '../utils/pvpRewardManager'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -2000,13 +2001,33 @@ export const SupabaseService = {
     }
   },
 
-  /** Reclama un cofre listo. El servidor vuelve a comprobar el temporizador. */
+  /** Inventario farming autoritativo. Los consumibles nunca se leen de localStorage. */
+  async myFarmingInventory(): Promise<FarmingInventory | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('my_farming_inventory')
+      if (error) {
+        // Compatibilidad durante despliegue: una base que aún no tenga la migración
+        // simplemente mostrará ceros hasta que se aplique el SQL.
+        return null
+      }
+      return data as FarmingInventory
+    } catch {
+      return null
+    }
+  },
+
+  /** Reclama un cofre PvP listo. El servidor genera y persiste los 3 drops. */
   async claimPackSlot(slotIndex: number): Promise<{
     success: boolean
+    drops?: PvpRewardDrop[]
+    farmingItems?: FarmingInventory
+    goldBalance?: number
+    alreadyOpened?: boolean
+    // Fallback temporal para una base que todavía exponga claim_pack_slot v1.
     plantId?: string
     rarity?: string
     isNew?: boolean
-    /** Oro extra del cofre, según su duración (2h→10 … 12h→60). */
     gold?: number
     error?: string
   }> {

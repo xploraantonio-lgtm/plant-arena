@@ -1,0 +1,100 @@
+.pvp-reward-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(3, 8, 18, 0.88);
+  backdrop-filter: blur(8px);
+}
+
+.pvp-reward-modal {
+  position: relative;
+  width: min(920px, 96vw);
+  overflow: hidden;
+  border: 2px solid rgba(250, 204, 21, 0.75);
+  border-radius: 28px;
+  padding: 28px;
+  background: linear-gradient(145deg, rgba(38, 8, 18, 0.98), rgba(11, 26, 16, 0.98));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.72), 0 0 50px rgba(250, 204, 21, 0.18);
+  color: white;
+  text-align: center;
+}
+
+.pvp-reward-rays {
+  position: absolute;
+  inset: -50%;
+  pointer-events: none;
+  opacity: 0.16;
+  background: repeating-conic-gradient(from 0deg, #facc15 0 8deg, transparent 8deg 18deg);
+  animation: pvp-rays-spin 18s linear infinite;
+}
+
+.pvp-reward-header,
+.pvp-reward-grid,
+.pvp-reward-claim,
+.pvp-reward-wait { position: relative; z-index: 1; }
+
+.pvp-reward-header > span { color: #86efac; font-weight: 900; letter-spacing: .14em; }
+.pvp-reward-header h2 { margin: 6px 0 4px; font-size: clamp(1.55rem, 4vw, 2.5rem); color: #fde047; text-shadow: 0 3px 0 #7c2d12; }
+.pvp-reward-header p { margin: 0; color: #d1fae5; }
+
+.pvp-reward-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 24px 0;
+}
+
+.pvp-drop-card {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 22px;
+  border: 2px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(0,0,0,.28));
+  transition: transform .35s ease, box-shadow .35s ease;
+}
+.pvp-drop-card--hidden { filter: saturate(.25); }
+.pvp-drop-card--revealed { animation: pvp-drop-pop .5s cubic-bezier(.2,.9,.2,1.15); box-shadow: 0 0 28px rgba(74, 222, 128, .22); }
+.pvp-drop-index { font-size: .72rem; font-weight: 900; letter-spacing: .12em; color: #fef08a; }
+.pvp-drop-question { font-size: 5rem; font-weight: 1000; color: rgba(255,255,255,.35); }
+.pvp-drop-img-wrap { position: relative; display: grid; place-items: center; }
+.pvp-drop-img { width: 126px; height: 126px; object-fit: contain; filter: drop-shadow(0 10px 10px rgba(0,0,0,.35)); }
+.pvp-drop-fallback { position: absolute; z-index: -1; font-size: 4.5rem; }
+.pvp-drop-name { font-size: 1rem; }
+.pvp-drop-quantity { font-size: 1.45rem; font-weight: 1000; color: #fde047; }
+.pvp-drop-detail { color: #bbf7d0; font-size: .8rem; font-weight: 800; }
+.pvp-drop-rarity { border: 1px solid currentColor; border-radius: 999px; padding: 3px 9px; font-size: .68rem; font-weight: 900; }
+.pvp-drop-rarity--common { color: #4ade80; }
+.pvp-drop-rarity--uncommon { color: #22d3ee; }
+.pvp-drop-rarity--gold { color: #facc15; }
+.pvp-drop-rarity--resource { color: #a7f3d0; }
+
+.pvp-reward-claim {
+  border: 0;
+  border-radius: 14px;
+  padding: 13px 24px;
+  font-weight: 1000;
+  color: #17210d;
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  box-shadow: 0 8px 0 #92400e;
+  cursor: pointer;
+}
+.pvp-reward-wait { display: block; min-height: 42px; color: #fef08a; font-weight: 800; }
+
+@keyframes pvp-drop-pop { from { opacity: 0; transform: scale(.58) rotateY(90deg); } to { opacity: 1; transform: scale(1) rotateY(0); } }
+@keyframes pvp-rays-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 720px) {
+  .pvp-reward-modal { padding: 18px 12px; }
+  .pvp-reward-grid { gap: 7px; }
+  .pvp-drop-card { min-height: 205px; }
+  .pvp-drop-img { width: 82px; height: 82px; }
+  .pvp-drop-name { font-size: .78rem; }
+}
