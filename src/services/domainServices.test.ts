@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MatchmakingService,
   ReplayService,
+  replayService,
   colosseumService,
   inventoryService,
   leaderboardService,
@@ -29,8 +30,9 @@ describe('domain service facades', () => {
     expect(typeof MatchmakingService.enterMatchmaking).toBe('function')
     expect(typeof MatchmakingService.pollMatchmaking).toBe('function')
     expect(typeof MatchmakingService.getGameRoom).toBe('function')
-    expect(typeof ReplayService.myMatches).toBe('function')
-    expect(typeof ReplayService.matchReplay).toBe('function')
+    expect(typeof replayService.myMatches).toBe('function')
+    expect(typeof replayService.matchReplay).toBe('function')
+    expect(ReplayService).toBe(replayService)
   })
 
   it('exposes leaderboard, season, colosseum and referral operations', () => {
