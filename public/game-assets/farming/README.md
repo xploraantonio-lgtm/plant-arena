@@ -1,14 +1,11 @@
-# Farming UI assets
+Farming reward assets used by PvP victory packs and the Garden inventory.
 
-The PvP/farming UI expects these transparent assets:
+PvP drop assets:
+- water.webp
+- fertilizer.webp
+- gold_coin.webp
+- shovel_fragment.webp
+- scarecrow_fragment.webp
+- pesticide.webp
 
-- `water.webp`
-- `fertilizer.webp`
-- `shovel_fragment.webp`
-- `scarecrow_fragment.webp`
-- `pesticide.webp`
-- `shovel.webp`
-- `scarecrow.webp`
-- `gold_coin.webp`
-
-The React UI includes emoji fallbacks, so missing art never blocks gameplay or build validation.
+Full shovel/scarecrow are crafted items, not direct PvP drops.
