@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Apply migration script
@@ -36,6 +36,24 @@ jobs:
           raw = source[start:end]
           code = '\n'.join(line[10:] if line.startswith('          ') else line for line in raw.splitlines())
           exec(compile(code, 'apply-pvp-farming.py', 'exec'))
+
+          # Backward-compatible reader: existing users may still have an 8h/12h
+          # chest until the migration normalizes server rows. New slots remain
+          # strictly created/forced as 1h/2h/4h/6h.
+          p = Path('src/utils/freePackManager.ts')
+          text = p.read_text()
+          text = text.replace("import type { PlantId } from '../types/game'\n\n", '')
+          text = text.replace('durationHours: 1 | 2 | 4 | 6', 'durationHours: 1 | 2 | 4 | 6 | 8 | 12')
+          p.write_text(text)
+
+          p = Path('src/hooks/useInventory.ts')
+          text = p.read_text()
+          text = text.replace(
+              "Promise<{ awarded: boolean; durationHours?: 1 | 2 | 4 | 6; arenaLevel?: number; isSlotsFull?: boolean }>",
+              "Promise<{ awarded: boolean; durationHours?: FreePackSlot['durationHours']; arenaLevel?: number; isSlotsFull?: boolean }>",
+          )
+          text = text.replace('as 2 | 4 | 8 | 12', "as FreePackSlot['durationHours']")
+          p.write_text(text)
           PY
 
       - name: Install dependencies
