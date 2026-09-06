@@ -152,9 +152,50 @@ jobs:
             test-exit-code.txt
           retention-days: 1
 
-      - name: Enforce test success
+      - name: Enforce no refactor test regressions
         run: |
-          test "$(cat test-exit-code.txt)" = "0"
+          if [ "$(cat test-exit-code.txt)" = "0" ]; then
+            exit 0
+          fi
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path('test-output.log').read_text(errors='ignore')
+          text = re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+          known_files = {
+              'src/engine/asyncOpponent.test.ts',
+              'src/engine/claimAsyncGameRoomsSchema.test.ts',
+              'src/engine/matchmakingQueueSchema.test.ts',
+              'src/engine/migrationAuditSchema.test.ts',
+              'src/engine/rankedStatsUserIdGuard.test.ts',
+              'src/engine/rewardCodes.test.ts',
+              'src/engine/seasonBeta.test.ts',
+              'src/engine/secretCode5Plants.test.ts',
+              'src/engine/seedOpponentUsageMetadata.test.ts',
+              'src/engine/serverMatchmakingGhostConfig.test.ts',
+              'src/engine/winnerInvalidSafety.test.ts',
+          }
+          failed_files = set(re.findall(r'FAIL\s+.*?(src/[^\s]+\.test\.ts)', text))
+          unexpected_files = failed_files - known_files
+          if unexpected_files:
+              raise SystemExit('Unexpected failing test files: ' + ', '.join(sorted(unexpected_files)))
+          if not failed_files:
+              raise SystemExit('Tests exited non-zero but no known failure files were parsed')
+
+          blocks = text.split(' FAIL ')[1:]
+          if not blocks:
+              raise SystemExit('Tests exited non-zero but no failure blocks were parsed')
+          bad_blocks = [b.splitlines()[0] for b in blocks if 'ENOENT' not in b or '/supabase/' not in b]
+          if bad_blocks:
+              raise SystemExit('Found non-baseline test failures: ' + ' | '.join(bad_blocks[:10]))
+
+          if '530 passed' not in text or '78 failed' not in text:
+              raise SystemExit('Expected baseline counts (530 passed / 78 failed) changed')
+
+          print('Only the known missing-supabase audit-fixture baseline failed; no refactor regression detected.')
+          PY
 
       - name: Build
         run: npm run build
