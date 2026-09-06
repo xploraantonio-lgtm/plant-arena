@@ -11,7 +11,7 @@ import arena5Bg from '../../assets/images/battlefield-bg5.jpg'
 import rankingIco from '../../assets/ico/Ranking.png'
 import { soundManager } from '../../utils/audioManager'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
-import { SupabaseService } from '../../services/supabaseService'
+import { publicService } from '../../services/publicService'
 import './LandingPage.css'
 
 interface LandingPageProps {
@@ -371,7 +371,7 @@ export default function LandingPage({
         if (error) console.error('[LandingPage] conteo de jugadores falló:', error.message)
         if (mounted && count !== null) setTotalPlayers(count)
       })
-      SupabaseService.getActiveSeason().then((s) => {
+      publicService.getActiveSeason().then((s) => {
         if (mounted && s) setSeasonInfo(s)
       })
       supabase.from('clans').select('id', { count: 'exact', head: true }).then(({ count, error }) => {

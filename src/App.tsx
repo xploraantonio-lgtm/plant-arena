@@ -22,7 +22,11 @@ import MatchmakingScreen from './components/Matchmaking/MatchmakingScreen'
 import MisPartidas from './components/Repeticiones/MisPartidas'
 import VerRepeticion from './components/Repeticiones/VerRepeticion'
 import { useMatchmaking, buscaRival, type ModoPartida } from './hooks/useMatchmaking'
-import { SupabaseService } from './services/supabaseService'
+import { profileService } from './services/profileService'
+import { inventoryService } from './services/inventoryService'
+import { referralService } from './services/referralService'
+import { seasonService } from './services/seasonService'
+import { MatchmakingService } from './services/matchmakingService'
 import { useAuth } from './hooks/useAuth'
 import AuthModal from './components/Auth/AuthModal'
 import AdminPanel from './components/Admin/AdminPanel'
@@ -193,7 +197,7 @@ function App() {
 
     let cancelado = false
 
-    void SupabaseService.myBalance().then((balance) => {
+    void profileService.myBalance().then((balance) => {
       if (cancelado || !balance) return
 
       const eloReal = Number(balance.elo_rating)
@@ -245,7 +249,7 @@ function App() {
     try {
       sessionStorage.removeItem('pa_ref')
     } catch {}
-    void SupabaseService.referralBind(codigo)
+    void referralService.referralBind(codigo)
   }, [profile])
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
@@ -257,7 +261,7 @@ function App() {
 
   // Sincronizar temporada oficial desde Supabase al iniciar
   useEffect(() => {
-    SupabaseService.getActiveSeason().then((season) => {
+    seasonService.getActiveSeason().then((season) => {
       if (season) {
         SeasonManager.updateFromSupabase(season)
       }
@@ -334,11 +338,11 @@ function App() {
     if (!encontrada) return
     let cancelado = false
     ;(async () => {
-      const info = await SupabaseService.gameRoomInfo(encontrada.roomId)
+      const info = await MatchmakingService.gameRoomInfo(encontrada.roomId)
       if (cancelado) return
 
       const sala = info ?? (await (async () => {
-        const basica = await SupabaseService.getGameRoom(encontrada.roomId)
+        const basica = await MatchmakingService.getGameRoom(encontrada.roomId)
         if (!basica) return null
         return {
           id: basica.id,
@@ -476,7 +480,7 @@ function App() {
     // conservar IDs locales antiguos como "inst_base_jalapeno".
     // Los convertimos a las UUID reales recién creadas en servidor.
     if (ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
-      const inventario = await SupabaseService.myInventory()
+      const inventario = await inventoryService.myInventory()
 
       if (!inventario) {
         return false
@@ -510,7 +514,7 @@ function App() {
       return false
     }
 
-    const resultado = await SupabaseService.saveActiveDeck(ids)
+    const resultado = await profileService.saveActiveDeck(ids)
 
     if (!resultado.success) {
       setActiveAppAlert({

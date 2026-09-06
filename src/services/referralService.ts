@@ -12,3 +12,5 @@ export const referralService = {
   claimReferralReward: SupabaseService.claimReferralReward.bind(SupabaseService),
   adminCloseReferralSeason: SupabaseService.adminCloseReferralSeason.bind(SupabaseService),
 } as const
+
+export type { MisReferidos } from './supabaseService'

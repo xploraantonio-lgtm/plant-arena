@@ -8,7 +8,7 @@ import {
   type PackId,
 } from '../../utils/packDropManager'
 import { soundManager } from '../../utils/audioManager'
-import { SupabaseService } from '../../services/supabaseService'
+import { shopService } from '../../services/shopService'
 import Marketplace from '../Marketplace/Marketplace'
 import type { PlantStatKey } from '../../utils/gameConstants'
 import './Shop.css'
@@ -248,7 +248,7 @@ export default function Shop({
 
   useEffect(() => {
     let mounted = true
-    SupabaseService.getShopPackPrices().then((prices) => {
+    shopService.getShopPackPrices().then((prices) => {
       if (mounted && prices) setServerPackPrices(prices)
     })
     return () => {

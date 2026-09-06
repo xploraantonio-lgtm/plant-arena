@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import background from '../../assets/images/background.png'
 import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
-import { SupabaseService } from '../../services/supabaseService'
+import { leaderboardService } from '../../services/leaderboardService'
+import { referralService } from '../../services/referralService'
 import { isCurrentLeaderboardUser } from '../../utils/leaderboardParser'
 import { getPlayerAvatarUrl } from '../../utils/userManager'
 import './Ranking.css'
@@ -101,7 +102,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
     setIsLoadingLeaderboard(true)
     setLeaderboardError(null)
 
-    SupabaseService.getGlobalLeaderboard()
+    leaderboardService.getGlobalLeaderboard()
       .then((profiles) => {
         const mapped: LeaderboardUser[] = profiles.map((p) => {
           const arena = getArenaForElo(p.elo_rating)
@@ -130,7 +131,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
       })
 
     if (myId) {
-      SupabaseService.getUserRank(myId)
+      leaderboardService.getUserRank(myId)
         .then((r) => {
           setUserRank(r)
         })
@@ -150,7 +151,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
 
     // Cargar ranking real de referidos
     setIsLoadingReferrals(true)
-    SupabaseService.myReferrals().then((refData) => {
+    referralService.myReferrals().then((refData) => {
       if (!mounted) return
       setIsLoadingReferrals(false)
       if (refData?.ranking && refData.ranking.length > 0) {

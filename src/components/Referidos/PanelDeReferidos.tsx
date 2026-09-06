@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
-import { SupabaseService, type MisReferidos } from '../../services/supabaseService'
+import { referralService, type MisReferidos } from '../../services/referralService'
 import { soundManager } from '../../utils/audioManager'
 import { enlaceDeReferido } from '../../utils/direccionPublica'
 import { getPlayerAvatarUrl } from '../../utils/userManager'
@@ -78,7 +78,7 @@ export default function PanelDeReferidos() {
   const rankingListaRef = useRef<HTMLOListElement>(null)
 
   const cargar = useCallback(async () => {
-    const d = await SupabaseService.myReferrals()
+    const d = await referralService.myReferrals()
     setDatos(d)
     setRestante(d?.temporada?.segundos ?? 0)
     setCargando(false)
@@ -187,7 +187,7 @@ export default function PanelDeReferidos() {
     const limpio = codigoEscrito.trim()
     if (!limpio) return
     setOcupado('codigo')
-    const r = await SupabaseService.referralBind(limpio)
+    const r = await referralService.referralBind(limpio)
     setOcupado(null)
 
     if (r.ok) {
@@ -207,7 +207,7 @@ export default function PanelDeReferidos() {
 
   const cobrarOro = async () => {
     setOcupado('oro')
-    const r = await SupabaseService.claimReferralGold()
+    const r = await referralService.claimReferralGold()
     setOcupado(null)
     if (r.ok) {
       soundManager.playSound('victory', 0.7)
@@ -222,7 +222,7 @@ export default function PanelDeReferidos() {
 
   const cobrarMeta = async (kind: 'sobre_10' | 'gemas_25') => {
     setOcupado(kind)
-    const r = await SupabaseService.claimReferralReward(kind)
+    const r = await referralService.claimReferralReward(kind)
     setOcupado(null)
     if (r.ok) {
       soundManager.playSound('victory', 0.8)

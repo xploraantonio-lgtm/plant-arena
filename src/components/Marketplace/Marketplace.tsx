@@ -4,7 +4,7 @@ import {
   getPlantRarityAndMinPrice,
   type PlantRarity,
 } from '../../utils/marketplaceManager'
-import { SupabaseService } from '../../services/supabaseService'
+import { marketplaceService } from '../../services/marketplaceService'
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
 import type { PlantId, PlantCardInstance } from '../../types/game'
 import { PLANT_CONFIGS, STAT_LABELS, VIP_PASS_PRECIO_GEMAS, type PlantStatKey } from '../../utils/gameConstants'
@@ -208,7 +208,7 @@ export default function Marketplace({
   }
 
   const refreshListings = async () => {
-    const tablero = await SupabaseService.marketplaceBoard(60)
+    const tablero = await marketplaceService.marketplaceBoard(60)
     if (tablero) {
       setListings(tablero.ofertas)
       setComisionPct(Number(tablero.comisionPct ?? 10))
@@ -274,7 +274,7 @@ export default function Marketplace({
       `¿Deseas comprar "${nombre}" (Nivel ${item.nivel}) por ${item.precio} 💎 gemas?`,
       '🛒',
       async () => {
-        const r = await SupabaseService.buyMarketplaceCard(item.id)
+        const r = await marketplaceService.buyMarketplaceCard(item.id)
         if (!r.success) {
           showModalAlert('NO SE PUDO COMPRAR', r.error || 'La carta ya no está disponible.', '⚠️', 'error')
           await refreshListings()
@@ -356,7 +356,7 @@ Ya está en tu Jardín.`,
         // El servidor mueve la carta: la marca en venta y la saca del mazo. Esta
         // pantalla ya no toca el inventario — cuando lo hacía, una publicación
         // fallida dejaba la carta perdida en el navegador.
-        const r = await SupabaseService.listMarketplaceCard(selectedInstance.instanceId, sellPriceGems)
+        const r = await marketplaceService.listMarketplaceCard(selectedInstance.instanceId, sellPriceGems)
         if (!r.success) {
           showModalAlert('NO SE PUDO PUBLICAR', r.error || 'Inténtalo de nuevo.', '⚠️', 'error')
           return
@@ -387,7 +387,7 @@ Recibirás ${neto} 💎 cuando se venda.`,
       `¿Deseas retirar "${nombre}" del mercado y recuperarla en tu Jardín?`,
       '📦',
       async () => {
-        const r = await SupabaseService.cancelMarketplaceListing(item.id)
+        const r = await marketplaceService.cancelMarketplaceListing(item.id)
         if (!r.success) {
           showModalAlert('NO SE PUDO RETIRAR', r.error || 'Inténtalo de nuevo.', '⚠️', 'error')
           return

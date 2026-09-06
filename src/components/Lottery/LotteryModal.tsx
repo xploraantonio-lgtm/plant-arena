@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import type { PlantId } from '../../types/game'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import { soundManager } from '../../utils/audioManager'
-import { SupabaseService } from '../../services/supabaseService'
+import { lotteryService } from '../../services/lotteryService'
 import './LotteryModal.css'
 
 interface LotteryModalProps {
@@ -260,8 +260,8 @@ export default function LotteryModal({
   // Carga el estado de la ronda y la clasificación.
   const loadCodeData = async () => {
     const [st, board] = await Promise.all([
-      SupabaseService.secretCodeState(),
-      SupabaseService.secretCodeLeaderboard(),
+      lotteryService.secretCodeState(),
+      lotteryService.secretCodeLeaderboard(),
     ])
     if (st) {
       setCodeRound((st.round as CodeRound) ?? null)
@@ -316,7 +316,7 @@ export default function LotteryModal({
     setIsSpinning(true)
     soundManager.playSound('click', 0.6)
 
-    const res = await SupabaseService.spinLottery(!isFree)
+    const res = await lotteryService.spinLottery(!isFree)
 
     if (!res.success || !res.sectorId) {
       setIsSpinning(false)
@@ -406,7 +406,7 @@ export default function LotteryModal({
   const handleBuyCodeAttempts = async () => {
     if (codeBusy || !roundIsOpen) return
     setCodeBusy(true)
-    const res = await SupabaseService.buySecretCodeAttempts()
+    const res = await lotteryService.buySecretCodeAttempts()
     setCodeBusy(false)
 
     if (!res.success) {
@@ -451,7 +451,7 @@ export default function LotteryModal({
     }
 
     setCodeBusy(true)
-    const res = await SupabaseService.guessSecretCode(selectedSequence as string[])
+    const res = await lotteryService.guessSecretCode(selectedSequence as string[])
     setCodeBusy(false)
 
     if (!res.success) {

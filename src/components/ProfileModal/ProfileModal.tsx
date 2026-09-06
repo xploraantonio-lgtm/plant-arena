@@ -9,7 +9,7 @@ import { soundManager } from '../../utils/audioManager'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import type { PlantId } from '../../types/game'
-import { SupabaseService } from '../../services/supabaseService'
+import { accountService } from '../../services/accountService'
 import PanelDeReferidos from '../Referidos/PanelDeReferidos'
 import './ProfileModal.css'
 
@@ -96,7 +96,7 @@ export default function ProfileModal({
 
     const loadData = async () => {
       if (!isSupabaseConfigured()) return
-      const info = await SupabaseService.getDepositInfo()
+      const info = await accountService.getDepositInfo()
       if (active && info.success) {
         setDepositInfo({
           registeredWallet: info.registeredWallet,
@@ -111,7 +111,7 @@ export default function ProfileModal({
       }
 
       setIsLoadingHistory(true)
-      const hist = await SupabaseService.getFinancialHistory()
+      const hist = await accountService.getFinancialHistory()
       if (active && hist.success) {
         setFinancialHistory({
           deposits: hist.deposits || [],
@@ -198,7 +198,7 @@ export default function ProfileModal({
     try {
       setIsClaimingCode(true)
       setCodeFeedback(null)
-      const res = await SupabaseService.claimRewardCode(clean)
+      const res = await accountService.claimRewardCode(clean)
 
       if (res.success) {
         soundManager.playSound('victory', 0.9)
@@ -253,7 +253,7 @@ export default function ProfileModal({
 
     try {
       setIsRegisteringWallet(true)
-      const res = await SupabaseService.registerDepositWallet(address)
+      const res = await accountService.registerDepositWallet(address)
       if (res.success && res.wallet) {
         soundManager.playSound('victory', 0.7)
         setDepositInfo((prev) => ({
@@ -287,10 +287,10 @@ export default function ProfileModal({
   const handleCheckBlockchainDeposits = async (isAutoPoll = false) => {
     try {
       if (!isAutoPoll) setIsCheckingDeposits(true)
-      const res = await SupabaseService.triggerDepositCheck()
+      const res = await accountService.triggerDepositCheck()
 
       // Consultar historial actualizado
-      const hist = await SupabaseService.getFinancialHistory()
+      const hist = await accountService.getFinancialHistory()
       if (hist.success) {
         setFinancialHistory({ deposits: hist.deposits, withdrawals: hist.withdrawals })
 
@@ -369,7 +369,7 @@ export default function ProfileModal({
     try {
       setIsSubmittingWithdrawal(true)
       const idempotencyKey = `wd-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-      const res = await SupabaseService.requestWithdrawal(
+      const res = await accountService.requestWithdrawal(
         withdrawGems,
         withdrawAddress.trim(),
         idempotencyKey
@@ -388,7 +388,7 @@ export default function ProfileModal({
         showFeedback(`⏳ Solicitud de ${withdrawalInfo.netAmountUsdt} USDT registrada. Transmitiendo a BNB Smart Chain...`, 'success')
         
         try {
-          const procRes = await SupabaseService.triggerWithdrawalProcessor()
+          const procRes = await accountService.triggerWithdrawalProcessor()
           const matchedItem = (procRes.results || []).find((r: any) => r.id === withdrawalInfo.id)
 
           if (matchedItem?.status === 'completed' && matchedItem.txHash) {
@@ -415,7 +415,7 @@ export default function ProfileModal({
         // Sincronizar nuevamente saldos e historial
         window.dispatchEvent(new Event('refresh_user_balance'))
         window.dispatchEvent(new Event('player_profile_updated'))
-        const hist = await SupabaseService.getFinancialHistory()
+        const hist = await accountService.getFinancialHistory()
         if (hist.success) {
           setFinancialHistory({ deposits: hist.deposits, withdrawals: hist.withdrawals })
         }

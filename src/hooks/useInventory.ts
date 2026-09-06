@@ -7,7 +7,8 @@ import {
   type PackDropResult,
 } from '../utils/packDropManager'
 import { createEmptySlots, type FreePackSlot, type PlayerRewardPack } from '../utils/freePackManager'
-import { SupabaseService } from '../services/supabaseService'
+import { inventoryService } from '../services/inventoryService'
+import { profileService } from '../services/profileService'
 import { supabase } from '../lib/supabaseClient'
 import { STAT_LABELS, type PlantStatKey } from '../utils/gameConstants'
 
@@ -533,7 +534,7 @@ export function useInventory() {
     levelNum: number
   ): Promise<{ success: boolean; level?: number; label?: string; error?: string }> => {
     try {
-      const res = await SupabaseService.claimBattlePassLevel(levelNum)
+      const res = await inventoryService.claimBattlePassLevel(levelNum)
       if (res && res.success) {
         await Promise.all([refreshBalance(), refreshInventory()])
         return { success: true, level: levelNum, label: res.label }
@@ -554,7 +555,7 @@ export function useInventory() {
     error?: string
   }> => {
     try {
-      const res = await SupabaseService.claimAllBattlePassLevels()
+      const res = await inventoryService.claimAllBattlePassLevels()
       if (res && res.success) {
         await Promise.all([refreshBalance(), refreshInventory()])
         return { success: true, claimed: res.claimed }
@@ -643,14 +644,14 @@ export function useInventory() {
       return { awarded: false, isSlotsFull: true }
     }
 
-    const res = await SupabaseService.awardVictoryChest()
+    const res = await inventoryService.awardVictoryChest()
 
     // 1. Adoptar siempre los cofres tal como quedaron en el servidor.
     let remoteSlots: FreePackSlot[] | null = null
     const uid = currentUserIdRef.current ?? (await supabase.auth.getUser()).data?.user?.id
     if (uid) {
       currentUserIdRef.current = uid
-      remoteSlots = await SupabaseService.getUserPackSlots(uid)
+      remoteSlots = await inventoryService.getUserPackSlots(uid)
       if (remoteSlots && remoteSlots.length > 0) {
         setFreePackSlots(remoteSlots)
         localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))
@@ -704,7 +705,7 @@ export function useInventory() {
     localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(nextSlots))
 
     if (currentUserIdRef.current) {
-      void SupabaseService.syncPackSlots(nextSlots).then(({ slots }) => {
+      void inventoryService.syncPackSlots(nextSlots).then(({ slots }) => {
         if (slots && slots.length > 0) {
           setFreePackSlots(slots)
           localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(slots))
@@ -860,7 +861,7 @@ export function useInventory() {
     if (!profile) return
     if (profile.id) {
       currentUserIdRef.current = profile.id
-      SupabaseService.getUserPackSlots(profile.id).then((remoteSlots) => {
+      inventoryService.getUserPackSlots(profile.id).then((remoteSlots) => {
         if (remoteSlots && remoteSlots.length > 0) {
           setFreePackSlots(remoteSlots)
         }
@@ -890,7 +891,7 @@ export function useInventory() {
 
   /** Adopta el saldo autoritativo del servidor. */
   const refreshBalance = async (): Promise<void> => {
-    const b = await SupabaseService.myBalance()
+    const b = await profileService.myBalance()
     if (!b) return
     setUserTokens(Number(b.gems_balance))
     setUserGold(Number(b.gold_balance))
@@ -917,7 +918,7 @@ export function useInventory() {
 
   /** Recarga el inventario completo desde el servidor. */
   const refreshInventory = async (): Promise<void> => {
-    const inv = await SupabaseService.myInventory()
+    const inv = await inventoryService.myInventory()
     if (!inv) return
 
     setPlantInstances(
@@ -966,7 +967,7 @@ export function useInventory() {
     const uid = currentUserIdRef.current ?? (await supabase.auth.getUser()).data?.user?.id
     if (!uid) return
     currentUserIdRef.current = uid
-    const remoteSlots = await SupabaseService.getUserPackSlots(uid)
+    const remoteSlots = await inventoryService.getUserPackSlots(uid)
     if (remoteSlots && remoteSlots.length > 0) {
       setFreePackSlots(remoteSlots)
       localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))
@@ -974,7 +975,7 @@ export function useInventory() {
   }
 
   const refreshRewardPacks = async (): Promise<void> => {
-    const remotePacks = await SupabaseService.getMyRewardPacks()
+    const remotePacks = await inventoryService.getMyRewardPacks()
     setPlayerRewardPacks(remotePacks)
   }
 
@@ -987,7 +988,7 @@ export function useInventory() {
     packId: PackId,
     qty: number = 1
   ): Promise<{ success: boolean; packs?: InventoryPack[]; error?: string }> => {
-    const res = await SupabaseService.buyPacks(packId, qty)
+    const res = await inventoryService.buyPacks(packId, qty)
     if (!res.success) return { success: false, error: res.error }
 
     await refreshFromServer()
@@ -1008,14 +1009,14 @@ export function useInventory() {
   const buyGoldPackage = async (
     packageId: string
   ): Promise<{ success: boolean; goldAdded?: number; error?: string }> => {
-    const res = await SupabaseService.buyGold(packageId)
+    const res = await inventoryService.buyGold(packageId)
     if (!res.success) return { success: false, error: res.error }
     await refreshBalance()
     return { success: true, goldAdded: res.goldAdded }
   }
 
   const buyVipPass = async (): Promise<{ success: boolean; error?: string }> => {
-    const res = await SupabaseService.buyVipPass()
+    const res = await inventoryService.buyVipPass()
     if (!res.success) return { success: false, error: res.error }
     await refreshBalance()
     return { success: true }
@@ -1025,7 +1026,7 @@ export function useInventory() {
   const openPackOnServer = async (
     packRowId: string
   ): Promise<{ drops: PackDropResult[]; colosseumTicket: boolean } | null> => {
-    const res = await SupabaseService.openPack(packRowId)
+    const res = await inventoryService.openPack(packRowId)
     if (!res.success || !res.drops) return null
 
     await refreshFromServer()
@@ -1055,7 +1056,7 @@ export function useInventory() {
     goldBalance?: number
     error?: string
   }> => {
-    const res = await SupabaseService.fusePlant(instanceId)
+    const res = await inventoryService.fusePlant(instanceId)
     if (!res.success) return { success: false, error: res.error }
 
     // Refrescar inventario (instancias + copias) y saldo de oro desde PostgreSQL
@@ -1080,12 +1081,12 @@ export function useInventory() {
   const claimSlotOnServer = async (
     slotIndex: number
   ): Promise<PackDropResult | null> => {
-    const res = await SupabaseService.claimPackSlot(slotIndex)
+    const res = await inventoryService.claimPackSlot(slotIndex)
     if (!res.success || !res.plantId) return null
 
     await refreshFromServer()
     if (currentUserIdRef.current) {
-      const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+      const remoteSlots = await inventoryService.getUserPackSlots(currentUserIdRef.current)
       if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
     }
 
@@ -1101,12 +1102,12 @@ export function useInventory() {
   const instantUnlockSlotOnServer = async (
     slotIndex: number
   ): Promise<{ success: boolean; goldSpent?: number; error?: string }> => {
-    const res = await SupabaseService.instantUnlockPackSlot(slotIndex)
+    const res = await inventoryService.instantUnlockPackSlot(slotIndex)
     if (!res.success) return { success: false, error: res.error }
 
     await refreshBalance()
     if (currentUserIdRef.current) {
-      const remoteSlots = await SupabaseService.getUserPackSlots(currentUserIdRef.current)
+      const remoteSlots = await inventoryService.getUserPackSlots(currentUserIdRef.current)
       if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
     }
 
@@ -1117,7 +1118,7 @@ export function useInventory() {
   const startUnlockRewardPack = async (
     packId: string
   ): Promise<{ success: boolean; error?: string }> => {
-    const res = await SupabaseService.startUnlockRewardPack(packId)
+    const res = await inventoryService.startUnlockRewardPack(packId)
     if (!res.success) return { success: false, error: res.error }
 
     await refreshRewardPacks()
@@ -1128,7 +1129,7 @@ export function useInventory() {
   const instantUnlockRewardPack = async (
     packId: string
   ): Promise<{ success: boolean; goldSpent?: number; error?: string }> => {
-    const res = await SupabaseService.instantUnlockRewardPack(packId)
+    const res = await inventoryService.instantUnlockRewardPack(packId)
     if (!res.success) return { success: false, error: res.error }
 
     await Promise.all([refreshBalance(), refreshRewardPacks()])
@@ -1137,7 +1138,7 @@ export function useInventory() {
 
   /** Reclama y abre un sobre PvP de recompensa listo. */
   const openRewardPack = async (packId: string): Promise<PackDropResult | null> => {
-    const res = await SupabaseService.claimRewardPack(packId)
+    const res = await inventoryService.claimRewardPack(packId)
     if (!res.success || !res.plantId) return null
 
     await refreshFromServer()

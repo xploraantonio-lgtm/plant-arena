@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import { soundManager } from '../../utils/audioManager'
-import { SupabaseService } from '../../services/supabaseService'
+import { adminService } from '../../services/adminService'
 import type { Database } from '../../types/database.types'
 import './AdminPanel.css'
 
@@ -155,7 +155,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     setCodeRounds(rows)
 
     // Clasificación de la ronda más reciente
-    const board = await SupabaseService.secretCodeLeaderboard()
+    const board = await adminService.secretCodeLeaderboard()
     setCodeBoard(
       board.map((b) => ({
         userId: b.userId,
@@ -175,7 +175,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       return
     }
     setIsLoading(true)
-    const res = await SupabaseService.adminOpenSecretCodeRound({
+    const res = await adminService.adminOpenSecretCodeRound({
       prizePool: codePrizePool,
       prize1st: codePrize1,
       prize2nd: codePrize2,
@@ -195,7 +195,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
 
   const handleCloseCodeRound = async (settle: boolean) => {
     setIsLoading(true)
-    const res = await SupabaseService.adminCloseSecretCodeRound(settle)
+    const res = await adminService.adminCloseSecretCodeRound(settle)
     setIsLoading(false)
 
     if (!res.success) {
@@ -221,9 +221,9 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
         supabase.from('tournaments').select('*').order('created_at', { ascending: false }),
         supabase.from('seasons').select('*').order('created_at', { ascending: false }),
         supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(30),
-        SupabaseService.adminGetLotterySectors(),
-        SupabaseService.adminGetShopPacks(),
-        SupabaseService.adminGetBattlePassLevels(),
+        adminService.adminGetLotterySectors(),
+        adminService.adminGetShopPacks(),
+        adminService.adminGetBattlePassLevels(),
       ])
 
       if (tRes.data) setTournaments(tRes.data)
@@ -335,13 +335,13 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       plantQty: s.reward_type === 'plant' ? Number(s.plant_qty) || 1 : null,
     }))
 
-    const res = await SupabaseService.adminSaveLotterySectors(payload)
+    const res = await adminService.adminSaveLotterySectors(payload)
     setIsLoading(false)
 
     if (res.success) {
       soundManager.playSound('victory', 0.8)
       showNotice('✅ Ruleta de premios guardada en Supabase (pesos verificados: 100%).')
-      const updated = await SupabaseService.adminGetLotterySectors()
+      const updated = await adminService.adminGetLotterySectors()
       if (updated) setLotterySectors(updated)
     } else {
       alert(`Error al guardar la ruleta: ${res.error || 'Error desconocido'}`)
@@ -355,13 +355,13 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       return
     }
     setIsLoading(true)
-    const res = await SupabaseService.adminSetPackPrice(packId, price)
+    const res = await adminService.adminSetPackPrice(packId, price)
     setIsLoading(false)
 
     if (res.success) {
       soundManager.playSound('victory', 0.8)
       showNotice(`✅ Precio de sobre "${packId}" actualizado a ${price} 💎 en la tienda.`)
-      const updated = await SupabaseService.adminGetShopPacks()
+      const updated = await adminService.adminGetShopPacks()
       if (updated) setShopPacks(updated)
     } else {
       alert(`Error al cambiar precio: ${res.error || 'Error desconocido'}`)
@@ -404,13 +404,13 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const handleSaveBattlePass = async () => {
     if (bpLevels.length === 0) return
     setIsLoading(true)
-    const res = await SupabaseService.adminSaveBattlePassLevels(bpLevels)
+    const res = await adminService.adminSaveBattlePassLevels(bpLevels)
     setIsLoading(false)
 
     if (res.success) {
       soundManager.playSound('victory', 0.8)
       showNotice(`✅ ${bpLevels.length} niveles del Pase de Batalla guardados en Supabase.`)
-      const updated = await SupabaseService.adminGetBattlePassLevels()
+      const updated = await adminService.adminGetBattlePassLevels()
       if (updated) setBpLevels(updated)
     } else {
       alert(`Error al guardar pase de batalla: ${res.error || 'Error desconocido'}`)
@@ -602,7 +602,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
             className={`admin-tab-btn ${activeTab === 'referidos' ? 'admin-tab-btn--active' : ''}`}
             onClick={() => {
               setActiveTab('referidos')
-              void SupabaseService.adminP2pReport(50).then(setP2pReport)
+              void adminService.adminP2pReport(50).then(setP2pReport)
             }}
           >
             🔗 Referidos y Mercado
@@ -612,7 +612,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
             className={`admin-tab-btn ${activeTab === 'partidas' ? 'admin-tab-btn--active' : ''}`}
             onClick={() => {
               setActiveTab('partidas')
-              void SupabaseService.adminDivergencias(60).then(setDivergencias)
+              void adminService.adminDivergencias(60).then(setDivergencias)
             }}
           >
             🔬 ¿Partidas iguales?
@@ -723,13 +723,13 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                   type="button"
                   className="admin-action-btn--red"
                   onClick={async () => {
-                    const r = await SupabaseService.adminCloseReferralSeason()
+                    const r = await adminService.adminCloseReferralSeason()
                     setStatusNotice(
                       r?.cerrada
                         ? `Temporada cerrada: ${r.total} referidos válidos, meta ${r.meta ?? 'ninguna'}, ${r.premiados ?? 0} premiados.`
                         : 'No había temporada que cerrar.'
                     )
-                    void SupabaseService.adminP2pReport(50).then(setP2pReport)
+                    void adminService.adminP2pReport(50).then(setP2pReport)
                   }}
                 >
                   ⏭️ Cerrar la temporada YA y repartir premios
@@ -781,7 +781,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                 <button
                   type="button"
                   className="admin-action-btn--green"
-                  onClick={() => { void SupabaseService.adminDivergencias(60).then(setDivergencias) }}
+                  onClick={() => { void adminService.adminDivergencias(60).then(setDivergencias) }}
                 >
                   🔄 Actualizar
                 </button>

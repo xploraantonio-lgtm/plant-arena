@@ -4,7 +4,7 @@ import { parseEngineVersion } from '../../types/game'
 import { TournamentManager, type ActiveTournamentSession } from '../../utils/tournamentManager'
 import { useGameEngine } from '../../hooks/useGameEngine'
 import { useAuth } from '../../hooks/useAuth'
-import { SupabaseService } from '../../services/supabaseService'
+import { battleService } from '../../services/battleService'
 import {
   MatchActionOutbox,
   type MatchActionIntent,
@@ -298,7 +298,7 @@ export default function Battlefield({
     setClockSyncStatus('syncing')
     setClockSyncError(null)
 
-    SupabaseService.startMatchClock(targetRoomId)
+    battleService.startMatchClock(targetRoomId)
       .then((reloj) => {
         // Protección contra respuestas stale o doble inicio:
         if (matchClockGenRef.current !== attemptGen || startedGensRef.current.has(attemptGen)) {
@@ -635,7 +635,7 @@ export default function Battlefield({
       })
     }
 
-    const dejarDeEscuchar = SupabaseService.subscribeToMatchActions(roomId, aplicar, (estado) => {
+    const dejarDeEscuchar = battleService.subscribeToMatchActions(roomId, aplicar, (estado) => {
       setDiag((d) => ({ ...d, canal: estado }))
     })
 
@@ -647,7 +647,7 @@ export default function Battlefield({
     // dejaría las dos partidas divergentes hasta el final.
     const recuperar = async () => {
       if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
-      const todas = await SupabaseService.matchActionsSince(capturedRoomId, 0)
+      const todas = await battleService.matchActionsSince(capturedRoomId, 0)
       if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
       setDiag((d) => ({
         ...d,
@@ -692,7 +692,7 @@ export default function Battlefield({
     const refrescarIntencionesAsync = async () => {
       const requestGeneration = sessionGenerationRef.current
       if (cancelado || capturedRoomId !== roomIdRef.current) return
-      const res = await SupabaseService.pollRankedAsyncIntents(
+      const res = await battleService.pollRankedAsyncIntents(
         capturedRoomId,
         ultimaSeqAsyncRef.current
       )
@@ -740,7 +740,7 @@ export default function Battlefield({
 
     const comprobar = async () => {
       if (cerrado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
-      const r = await SupabaseService.roomResult(capturedRoomId)
+      const r = await battleService.roomResult(capturedRoomId)
       if (cerrado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current || !r || !r.ended) return
       cerrado = true
 
@@ -754,7 +754,7 @@ export default function Battlefield({
       terminarPorOrdenDelServidor(r.iWon ? 'victory' : 'defeat')
     }
 
-    const dejarDeEscuchar = SupabaseService.subscribeToRoomEnd(capturedRoomId, () => { void comprobar() })
+    const dejarDeEscuchar = battleService.subscribeToRoomEnd(capturedRoomId, () => { void comprobar() })
     // Y se pregunta cada 4 s por si el mensaje de Realtime se perdió. Sin esta red
     // un mensaje perdido dejaría a alguien peleando contra un campo vacío.
     const reloj = setInterval(() => { void comprobar() }, 4000)
@@ -818,10 +818,10 @@ export default function Battlefield({
           // En partidas humanas envía telemetría de reporte.
           // En partidas contra Rival Semilla NO se reporta (no hay 2º cliente).
           if (!isAsyncMatch) {
-            await SupabaseService.reportMatchResult(capturedRoomId, ganadorQueVioMiCliente)
+            await battleService.reportMatchResult(capturedRoomId, ganadorQueVioMiCliente)
           }
 
-          const verificacion = await SupabaseService.verifyMatch(capturedRoomId)
+          const verificacion = await battleService.verifyMatch(capturedRoomId)
 
           if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) {
             return
@@ -961,7 +961,7 @@ export default function Battlefield({
     const pendientes = tomarHuellasPendientes()
     if (pendientes.length === 0) return
     for (const h of pendientes) {
-      void SupabaseService.submitMatchCheckpoint(roomId, h.tick, h.huella)
+      void battleService.submitMatchCheckpoint(roomId, h.tick, h.huella)
     }
     setDiag((d) => ({ ...d, huellas: d.huellas + pendientes.length }))
   }, [tick, roomId, tomarHuellasPendientes, isAsyncMatch])
@@ -986,7 +986,7 @@ export default function Battlefield({
     // volvía el ELO de antes; y el rival se quedaba esperando un reporte que no
     // llegaba nunca.
     if (roomId) {
-      void SupabaseService.surrenderMatch(roomId).then((r: any) => {
+      void battleService.surrenderMatch(roomId).then((r: any) => {
         setResultadoServidor(r)
         if (r && typeof r.eloAfter === 'number' && onServerEloUpdated) {
           onServerEloUpdated(r.eloAfter)
