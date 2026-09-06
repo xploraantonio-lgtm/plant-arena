@@ -45,7 +45,6 @@ jobs:
               )
               replace_required(path, 'SupabaseService.', f'{service_name}.')
 
-          # Ranking: ranking global y referidos tienen fachadas específicas.
           path = 'src/components/Ranking/Ranking.tsx'
           replace_required(
               path,
@@ -56,7 +55,6 @@ jobs:
           replace_required(path, 'SupabaseService.getUserRank', 'leaderboardService.getUserRank')
           replace_required(path, 'SupabaseService.myReferrals', 'referralService.myReferrals')
 
-          # Inventario: saldo a perfil; el resto a inventario.
           path = 'src/hooks/useInventory.ts'
           replace_required(
               path,
@@ -66,7 +64,6 @@ jobs:
           replace_required(path, 'SupabaseService.', 'inventoryService.')
           replace_required(path, 'inventoryService.myBalance', 'profileService.myBalance')
 
-          # App: dirigir cada llamada a su dominio sin cambiar argumentos ni flujo.
           path = 'src/App.tsx'
           replace_required(
               path,
@@ -85,7 +82,6 @@ jobs:
           for method, service in mapping.items():
               replace_required(path, f'SupabaseService.{method}', f'{service}.{method}')
 
-          # Pantallas con dominios amplios: fachada transicional propia.
           migrate_whole('src/components/Admin/AdminPanel.tsx', 'adminService', 'adminService')
           migrate_whole('src/components/Marketplace/Marketplace.tsx', 'marketplaceService', 'marketplaceService')
           migrate_whole('src/components/LandingPage/LandingPage.tsx', 'publicService', 'publicService')
@@ -94,7 +90,6 @@ jobs:
           migrate_whole('src/components/Shop/Shop.tsx', 'shopService', 'shopService')
           migrate_whole('src/components/ProfileModal/ProfileModal.tsx', 'accountService', 'accountService')
 
-          # Referidos también importa el tipo MisReferidos desde el servicio viejo.
           referral_path = 'src/services/referralService.ts'
           referral_text = Path(referral_path).read_text()
           type_export = "export type { MisReferidos } from './supabaseService'"
@@ -108,7 +103,6 @@ jobs:
           )
           replace_required(path, 'SupabaseService.', 'referralService.')
 
-          # Barrel público de servicios.
           index = Path('src/services/index.ts')
           text = index.read_text()
           exports = [
@@ -125,7 +119,6 @@ jobs:
                   text += line + '\n'
           index.write_text(text)
 
-          # Ningún consumidor de producción debe depender directamente del monolito.
           remaining = []
           for p in Path('src').rglob('*'):
               if p.suffix not in {'.ts', '.tsx'} or 'services' in p.parts:
@@ -141,8 +134,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests and capture diagnostics
+        run: |
+          set +e
+          npm test -- --reporter=verbose > test-output.log 2>&1
+          code=$?
+          cat test-output.log
+          echo "$code" > test-exit-code.txt
+          exit 0
+
+      - name: Upload test diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-migration-test-output
+          path: |
+            test-output.log
+            test-exit-code.txt
+          retention-days: 1
+
+      - name: Enforce test success
+        run: |
+          test "$(cat test-exit-code.txt)" = "0"
 
       - name: Build
         run: npm run build
