@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { urlDeVuelta } from '../utils/direccionPublica'
-import { SupabaseService } from '../services/supabaseService'
+import { profileService } from '../services/profileService'
 import { UserManager } from '../utils/userManager'
 import type { Database } from '../types/database.types'
 
@@ -102,7 +102,7 @@ export function useAuth() {
       return
     }
 
-    const status = await SupabaseService.myAuthStatus()
+    const status = await profileService.myAuthStatus()
     if (!status) {
       // Sin respuesta del servidor no se molesta al jugador: es preferible no
       // pedir la contraseña que pedirla de nuevo a quien ya la puso.
@@ -154,7 +154,7 @@ export function useAuth() {
 
   const loadUserProfile = async (userId: string, currentUser?: any) => {
     setLoading(true)
-    let prof = await SupabaseService.getProfile(userId)
+    let prof = await profileService.getProfile(userId)
     const authUser = currentUser || user
     const candidateName =
       authUser?.user_metadata?.username ||
@@ -176,7 +176,7 @@ export function useAuth() {
       localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN_SESSION)
     } else {
       await initializeNewUserProfile(userId, candidateName || 'Guerrero', authUser?.email)
-      prof = await SupabaseService.getProfile(userId)
+      prof = await profileService.getProfile(userId)
       if (prof) {
         setProfile(prof)
         setIsAdmin(Boolean(prof.is_admin))
