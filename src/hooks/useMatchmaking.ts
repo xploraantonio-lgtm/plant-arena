@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { SupabaseService } from '../services/supabaseService'
+import { MatchmakingService } from '../services/matchmakingService'
 import { RANKED_MATCHMAKING_TIMEOUT_SECONDS } from '../utils/gameConstants'
 
 /**
@@ -78,11 +78,11 @@ export function useMatchmaking() {
     buscandoRef.current = false
     claimingRef.current = false
     if (vivoRef.current) setEstado(ESTADO_INICIAL)
-    await SupabaseService.cancelMatchmaking()
+    await MatchmakingService.cancelMatchmaking()
   }, [pararSondeo])
 
   const sondear = useCallback(async () => {
-    const r = await SupabaseService.pollMatchmaking()
+    const r = await MatchmakingService.pollMatchmaking()
     if (!vivoRef.current) return
 
     if (r.error) {
@@ -126,7 +126,7 @@ export function useMatchmaking() {
     if (modoRef.current === 'ranked' && segundosEsperados >= RANKED_MATCHMAKING_TIMEOUT_SECONDS && !claimingRef.current) {
       claimingRef.current = true
       try {
-        const claimRes = await SupabaseService.claimRankedAsyncOpponent()
+        const claimRes = await MatchmakingService.claimRankedAsyncOpponent()
         if (!vivoRef.current) return
 
         if (claimRes.matched && claimRes.roomId) {
@@ -163,10 +163,10 @@ export function useMatchmaking() {
       setEncontrada(null)
       setEstado({ ...ESTADO_INICIAL, buscando: true })
 
-      const r = await SupabaseService.enterMatchmaking(modo, opciones)
+      const r = await MatchmakingService.enterMatchmaking(modo, opciones)
 
       if (!vivoRef.current) {
-        await SupabaseService.cancelMatchmaking()
+        await MatchmakingService.cancelMatchmaking()
         return { ok: false }
       }
 
@@ -194,7 +194,7 @@ export function useMatchmaking() {
 
     const alCerrar = () => {
       if (!buscandoRef.current) return
-      void SupabaseService.cancelMatchmaking()
+      void MatchmakingService.cancelMatchmaking()
     }
     window.addEventListener('beforeunload', alCerrar)
 
@@ -205,7 +205,7 @@ export function useMatchmaking() {
       intervaloRef.current = null
       if (buscandoRef.current) {
         buscandoRef.current = false
-        void SupabaseService.cancelMatchmaking()
+        void MatchmakingService.cancelMatchmaking()
       }
     }
   }, [])
