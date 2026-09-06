@@ -73,7 +73,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src public supabase
+          git add src public
+          git add -f supabase/migrations/40-pvp-farming-reward-drops.sql
           if git diff --cached --quiet; then
             echo "No migration changes to commit"
             exit 0
