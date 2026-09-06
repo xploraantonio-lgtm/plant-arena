@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { ColosseumBetAmount, ColosseumLeaderboardEntry } from '../../types/game'
 import { soundManager } from '../../utils/audioManager'
-import { SupabaseService } from '../../services/supabaseService'
+import { colosseumService } from '../../services/colosseumService'
 import './ColosseumModal.css'
 
 interface ColosseumModalProps {
@@ -32,7 +32,7 @@ export default function ColosseumModal({
   useEffect(() => {
     if (!isOpen) return
     let mounted = true
-    SupabaseService.getColosseumLeaderboard(50).then((profiles) => {
+    colosseumService.getColosseumLeaderboard(50).then((profiles) => {
       if (!mounted) return
       const mapped: ColosseumLeaderboardEntry[] = profiles.map((p, idx) => ({
         rank: idx + 1,
