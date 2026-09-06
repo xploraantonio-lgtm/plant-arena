@@ -8,4 +8,6 @@ PvP drop assets:
 - scarecrow_fragment.webp
 - pesticide.webp
 
-Full shovel/scarecrow are crafted items, not direct PvP drops.
+Crafted inventory assets (not direct PvP drops):
+- shovel.webp
+- scarecrow.webp
