@@ -2,20 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   MatchmakingService,
   ReplayService,
-  accountService,
-  adminService,
-  battleService,
+  replayService,
   colosseumService,
   inventoryService,
   leaderboardService,
-  lotteryService,
-  marketplaceService,
   profileService,
-  publicService,
   referralService,
-  replayService,
   seasonService,
-  shopService,
 } from './index'
 
 describe('domain service facades', () => {
@@ -47,15 +40,5 @@ describe('domain service facades', () => {
     expect(typeof seasonService.getActiveSeason).toBe('function')
     expect(typeof colosseumService.getColosseumLeaderboard).toBe('function')
     expect(typeof referralService.myReferrals).toBe('function')
-  })
-
-  it('exposes transitional seams for remaining production domains', () => {
-    expect(typeof adminService.getActiveSeason).toBe('function')
-    expect(typeof accountService.myBalance).toBe('function')
-    expect(typeof publicService.getGlobalLeaderboard).toBe('function')
-    expect(typeof battleService.reportMatchResult).toBe('function')
-    expect(typeof marketplaceService.getMarketplaceListings).toBe('function')
-    expect(typeof lotteryService.getLotterySectors).toBe('function')
-    expect(typeof shopService.buyPacks).toBe('function')
   })
 })
