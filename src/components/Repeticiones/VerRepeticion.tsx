@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { SupabaseService } from '../../services/supabaseService'
+import { replayService } from '../../services/replayService'
 import { construirRepeticion, type DatosDeRepeticion, type Repeticion } from '../../engine/replay'
 import { TICK_MS } from '../../engine/time'
 import { PLANT_CONFIGS, LANES_CONFIG, INITIAL_BASE_HP } from '../../utils/gameConstants'
@@ -50,7 +50,7 @@ export default function VerRepeticion({ roomId, token, onVolver }: Props) {
   // ── Cargar ────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelado = false
-    void SupabaseService.matchReplay({
+    void replayService.matchReplay({
       roomId: roomId ?? undefined,
       token: token ?? undefined,
     }).then((d) => {
