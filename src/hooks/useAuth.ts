@@ -65,13 +65,23 @@ export function useAuth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         setUser(session.user)
         checkIfPasswordNeeded(session.user)
         loadUserProfile(session.user.id, session.user)
+
         if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
-          window.history.replaceState(null, '', window.location.pathname)
+          const hash = window.location.hash.toLowerCase()
+          const isPasswordRecovery = event === 'PASSWORD_RECOVERY' || hash.includes('type=recovery')
+
+          // Un enlace de recuperación crea una sesión temporal a propósito. No
+          // debemos borrar su hash como si fuera un login normal: AuthModal usa
+          // type=recovery para forzar la pantalla "Crear nueva contraseña".
+          // Después de guardar la nueva contraseña, el propio modal limpia la URL.
+          if (!isPasswordRecovery) {
+            window.history.replaceState(null, '', window.location.pathname)
+          }
         }
       } else {
         setUser(null)
