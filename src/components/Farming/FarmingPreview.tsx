@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import logo from '../../assets/images/logo.png'
 import gema from '../../assets/ico/gema.png'
 import moneda from '../../assets/ico/moneda.png'
+import landCommon from '../../assets/images/farming/lands/common.webp'
+import landRare from '../../assets/images/farming/lands/rare.webp'
+import landEpic from '../../assets/images/farming/lands/epic.webp'
+import landLegendary from '../../assets/images/farming/lands/legendary.webp'
 import {
   FARMING_ITEM_DEFINITIONS,
   type FarmingInventory,
@@ -14,6 +18,17 @@ interface FarmingPreviewProps {
 
 type RarityKey = 'common' | 'rare' | 'epic' | 'legendary'
 type CenterMode = 'entry' | 'rent' | 'buy'
+
+type RarityConfig = {
+  label: string
+  slots: number
+  count: number
+  rent: number
+  buy: number
+  image: string
+  perPage: number
+  description: string
+}
 
 const DEMO_INVENTORY: FarmingInventory = {
   water: 12,
@@ -33,14 +48,47 @@ const INVENTORY_ORDER: FarmingItemId[] = [
   'scarecrow_fragment',
 ]
 
-const RARITIES: Record<
-  RarityKey,
-  { label: string; slots: number; count: number; rent: number; buy: number; visual: string }
-> = {
-  common: { label: 'COMÚN', slots: 8, count: 10, rent: 0.5, buy: 100, visual: '🌾' },
-  rare: { label: 'RARA', slots: 12, count: 6, rent: 0.8, buy: 180, visual: '⛰️' },
-  epic: { label: 'ÉPICA', slots: 16, count: 3, rent: 1.2, buy: 350, visual: '🌳' },
-  legendary: { label: 'LEGENDARIA', slots: 20, count: 1, rent: 2, buy: 700, visual: '✨' },
+const RARITIES: Record<RarityKey, RarityConfig> = {
+  common: {
+    label: 'COMÚN',
+    slots: 8,
+    count: 10,
+    rent: 0.5,
+    buy: 100,
+    image: landCommon,
+    perPage: 4,
+    description: 'Terreno seco y plano',
+  },
+  rare: {
+    label: 'RARA',
+    slots: 12,
+    count: 6,
+    rent: 0.8,
+    buy: 180,
+    image: landRare,
+    perPage: 3,
+    description: 'Relieve montañoso',
+  },
+  epic: {
+    label: 'ÉPICA',
+    slots: 16,
+    count: 3,
+    rent: 1.2,
+    buy: 350,
+    image: landEpic,
+    perPage: 3,
+    description: 'Fértil y arbolada',
+  },
+  legendary: {
+    label: 'LEGENDARIA',
+    slots: 20,
+    count: 1,
+    rent: 2,
+    buy: 700,
+    image: landLegendary,
+    perPage: 1,
+    description: 'Terreno mágico especial',
+  },
 }
 
 const DEMO_PLAYER_OWNERS: Partial<Record<RarityKey, Record<number, string>>> = {
@@ -53,24 +101,42 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
   const [mode, setMode] = useState<CenterMode>('entry')
   const [rarity, setRarity] = useState<RarityKey>('common')
   const [selectedLand, setSelectedLand] = useState<number | null>(null)
+  const [page, setPage] = useState(0)
   const [demoGems] = useState(2500)
   const [demoGold] = useState(3000)
 
   const rarityData = RARITIES[rarity]
+  const pageCount = Math.ceil(rarityData.count / rarityData.perPage)
   const lands = useMemo(
     () => Array.from({ length: rarityData.count }, (_, index) => index + 1),
     [rarityData.count]
   )
+  const visibleLands = lands.slice(page * rarityData.perPage, (page + 1) * rarityData.perPage)
 
   const openExplore = (nextMode: Exclude<CenterMode, 'entry'>) => {
     setMode(nextMode)
+    setRarity('common')
+    setPage(0)
+    setSelectedLand(null)
+  }
+
+  const selectRarity = (nextRarity: RarityKey) => {
+    setRarity(nextRarity)
+    setPage(0)
+    setSelectedLand(null)
+  }
+
+  const changePage = (nextPage: number) => {
+    setPage(Math.max(0, Math.min(pageCount - 1, nextPage)))
     setSelectedLand(null)
   }
 
   return (
     <div className="farming-preview-screen" role="dialog" aria-modal="true" aria-label="Vista previa de Farming">
       <header className="farming-preview-topbar">
-        <button type="button" className="farming-preview-topbtn" onClick={onClose}>← INICIO</button>
+        <div className="farming-preview-topbar-left">
+          <button type="button" className="farming-preview-topbtn farming-preview-topbtn--home" onClick={onClose}>← INICIO</button>
+        </div>
 
         <div className="farming-preview-logo-wrap" aria-label="Plant Arena Farming">
           <img src={logo} alt="Plant Arena" />
@@ -116,9 +182,7 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
             <section className="farming-preview-empty-state">
               <div className="farming-preview-seedmark">🌱</div>
               <h1>Tu granja aún está vacía</h1>
-              <p>
-                Empieza alquilando un slot o compra una Land. Esta vista usa los assets reales de farming del juego.
-              </p>
+              <p>Empieza alquilando un slot o compra una Land. Las Lands Genesis son mundos compartidos con sus propios slots.</p>
               <div className="farming-preview-entry-actions">
                 <button type="button" className="farming-preview-choice farming-preview-choice--rent" onClick={() => openExplore('rent')}>
                   <span>🤝</span>
@@ -133,11 +197,11 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
               </div>
             </section>
           ) : (
-            <section className="farming-preview-explore">
+            <section className="farming-preview-explore farming-preview-explore--headers">
               <div className="farming-preview-explore-head">
                 <div>
-                  <h1>{mode === 'rent' ? 'Explorar Lands para alquilar' : 'Genesis Lands en venta'}</h1>
-                  <p>Las 20 Lands están separadas por rareza para dar más presencia a cada mundo.</p>
+                  <h1>{mode === 'rent' ? 'Explorar Genesis Lands' : 'Genesis Lands en venta'}</h1>
+                  <p>Elige una rareza y entra a un mundo. Los precios siguen siendo demostrativos.</p>
                 </div>
                 <button type="button" className="farming-preview-back" onClick={() => setMode('entry')}>← VOLVER</button>
               </div>
@@ -148,40 +212,71 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
                     type="button"
                     key={key}
                     className={`farming-preview-rarity-tab farming-preview-rarity-tab--${key} ${rarity === key ? 'is-active' : ''}`}
-                    onClick={() => { setRarity(key); setSelectedLand(null) }}
+                    onClick={() => selectRarity(key)}
                   >
                     {RARITIES[key].label}
                   </button>
                 ))}
               </div>
 
-              <div className="farming-preview-land-grid">
-                {lands.map((landNumber) => {
+              <div className={`farming-preview-land-headers farming-preview-land-headers--${rarity}`}>
+                {visibleLands.map((landNumber) => {
                   const owner = DEMO_PLAYER_OWNERS[rarity]?.[landNumber]
                   const isSelected = selectedLand === landNumber
+                  const available = Math.max(1, rarityData.slots - (landNumber % 4))
                   return (
                     <button
                       type="button"
                       key={landNumber}
-                      className={`farming-preview-land-card farming-preview-land-card--${rarity} ${isSelected ? 'is-selected' : ''}`}
+                      className={`farming-preview-land-header farming-preview-land-header--${rarity} ${isSelected ? 'is-selected' : ''}`}
                       onClick={() => setSelectedLand(landNumber)}
                     >
-                      <div className="farming-preview-land-visual">{rarityData.visual}</div>
-                      <div className="farming-preview-land-copy">
-                        <strong>GENESIS {rarityData.label} #{String(landNumber).padStart(2, '0')}</strong>
-                        <span>{rarityData.slots} slots</span>
-                        <small>{owner ? `Propietario: ${owner}` : 'Administrada por Plant Arena'}</small>
-                        <em>
-                          {mode === 'rent'
-                            ? `desde ${rarityData.rent} 💎 / día`
-                            : owner
-                              ? 'No disponible para compra'
-                              : `${rarityData.buy} 💎`}
-                        </em>
+                      <div className="farming-preview-land-header-art">
+                        <img src={rarityData.image} alt={`Land ${rarityData.label}`} />
                       </div>
+                      <div className="farming-preview-land-header-copy">
+                        <div className="farming-preview-land-header-title">
+                          <strong>GENESIS {rarityData.label} #{String(landNumber).padStart(2, '0')}</strong>
+                          <span className={`farming-preview-owner-pill ${owner ? 'is-player' : ''}`}>
+                            {owner ? `Propietario: ${owner}` : 'Plant Arena'}
+                          </span>
+                        </div>
+                        <small>{rarityData.description}</small>
+                        <div className="farming-preview-land-header-meta">
+                          <span>{rarityData.slots} slots</span>
+                          <span className="is-available">{available} disponibles</span>
+                          <span className="is-price">
+                            {mode === 'rent'
+                              ? `desde ${rarityData.rent} 💎 / día`
+                              : owner
+                                ? 'No disponible para compra'
+                                : `${rarityData.buy} 💎`}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="farming-preview-land-enter">
+                        {mode === 'rent' ? 'ENTRAR' : owner ? 'VER' : 'COMPRAR'}
+                      </span>
                     </button>
                   )
                 })}
+              </div>
+
+              <div className="farming-preview-land-pager" aria-label="Paginación de Lands">
+                <button type="button" onClick={() => changePage(page - 1)} disabled={page === 0}>‹</button>
+                <div className="farming-preview-land-dots">
+                  {Array.from({ length: pageCount }, (_, index) => (
+                    <button
+                      type="button"
+                      key={index}
+                      className={index === page ? 'is-active' : ''}
+                      onClick={() => changePage(index)}
+                      aria-label={`Página ${index + 1}`}
+                    />
+                  ))}
+                </div>
+                <span>{page + 1} / {pageCount}</span>
+                <button type="button" onClick={() => changePage(page + 1)} disabled={page === pageCount - 1}>›</button>
               </div>
             </section>
           )}
@@ -192,7 +287,9 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
           <div className="farming-preview-action-body">
             {selectedLand ? (
               <>
-                <div className="farming-preview-selected-icon">{rarityData.visual}</div>
+                <div className="farming-preview-selected-land-art">
+                  <img src={rarityData.image} alt={`Genesis ${rarityData.label}`} />
+                </div>
                 <h2>GENESIS {rarityData.label} #{String(selectedLand).padStart(2, '0')}</h2>
                 <dl>
                   <div><dt>Slots</dt><dd>{rarityData.slots}</dd></div>
@@ -218,8 +315,8 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
 
       <footer className="farming-preview-bottom">
         {(Object.keys(RARITIES) as RarityKey[]).map((key) => (
-          <button type="button" key={key} onClick={() => { setMode('rent'); setRarity(key); setSelectedLand(null) }}>
-            <span>{RARITIES[key].visual}</span>
+          <button type="button" key={key} onClick={() => { setMode('rent'); selectRarity(key) }}>
+            <img src={RARITIES[key].image} alt={`Land ${RARITIES[key].label}`} />
             <div><strong>{RARITIES[key].label}</strong><small>{RARITIES[key].slots} slots por Land</small></div>
           </button>
         ))}
