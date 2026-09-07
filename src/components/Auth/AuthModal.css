@@ -322,6 +322,33 @@
   transform: scale(1.02);
 }
 
+.auth-submit-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none;
+}
+
+.auth-link-btn {
+  background: transparent;
+  border: 0;
+  color: #86efac;
+  padding: 4px 0;
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-link-btn:hover {
+  color: #dcfce7;
+}
+
+.auth-link-btn--forgot {
+  align-self: flex-end;
+  margin-top: 3px;
+}
+
 .auth-submit-btn--admin {
   background: linear-gradient(135deg, #6366f1, #4f46e5);
   border-color: #a5b4fc;
