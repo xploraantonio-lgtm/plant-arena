@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import background from '../../assets/images/background.png'
-const sunIcon = '/game-assets/greenfoot/sun1.png'
+import background from '../../assets/images/background.webp'
+const sunIcon = '/game-assets/greenfoot/sun1.webp'
 import { soundManager } from '../../utils/audioManager'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import type { PlantId } from '../../types/game'

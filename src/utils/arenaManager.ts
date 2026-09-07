@@ -1,8 +1,8 @@
-import arena1Bg from '../assets/images/battlefield-bg.png'
-import arena2Bg from '../assets/images/battlefield-bg2.jpg'
-import arena3Bg from '../assets/images/battlefield-bg3.jpg'
-import arena4Bg from '../assets/images/battlefield-bg4.jpg'
-import arena5Bg from '../assets/images/battlefield-bg5.jpg'
+import arena1Bg from '../assets/images/battlefield-bg.webp'
+import arena2Bg from '../assets/images/battlefield-bg2.webp'
+import arena3Bg from '../assets/images/battlefield-bg3.webp'
+import arena4Bg from '../assets/images/battlefield-bg4.webp'
+import arena5Bg from '../assets/images/battlefield-bg5.webp'
 
 export interface ArenaInfo {
   id: number

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import jardin from '../../assets/images/jardin.png'
+import jardin from '../../assets/images/jardin.webp'
 import FarmingPreviewCorrections from './FarmingPreviewCorrections'
 import './FarmingPreview.css'
 import './FarmingPreviewFixes.css'

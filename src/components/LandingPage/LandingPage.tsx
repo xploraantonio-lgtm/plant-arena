@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
-import logo from '../../assets/images/logo.png'
-import plant1 from '../../assets/images/plant1.png'
-import plant2 from '../../assets/images/plant2.png'
-import bgImage from '../../assets/images/background.png'
-import arena1Bg from '../../assets/images/battlefield-bg.png'
-import arena2Bg from '../../assets/images/battlefield-bg2.jpg'
-import arena3Bg from '../../assets/images/battlefield-bg3.jpg'
-import arena4Bg from '../../assets/images/battlefield-bg4.jpg'
-import arena5Bg from '../../assets/images/battlefield-bg5.jpg'
-import rankingIco from '../../assets/ico/Ranking.png'
+import logo from '../../assets/images/logo.webp'
+import plant1 from '../../assets/images/plant1.webp'
+import plant2 from '../../assets/images/plant2.webp'
+import bgImage from '../../assets/images/background.webp'
+import arena1Bg from '../../assets/images/battlefield-bg.webp'
+import arena2Bg from '../../assets/images/battlefield-bg2.webp'
+import arena3Bg from '../../assets/images/battlefield-bg3.webp'
+import arena4Bg from '../../assets/images/battlefield-bg4.webp'
+import arena5Bg from '../../assets/images/battlefield-bg5.webp'
+import rankingIco from '../../assets/ico/Ranking.webp'
 import { soundManager } from '../../utils/audioManager'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import { publicService } from '../../services/publicService'
@@ -66,7 +66,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#4ade80',
     rarityInitial: 'C',
     cost: 50,
-    img: '/game-assets/greenfoot/transparentsunflower.png',
+    img: '/game-assets/greenfoot/transparentsunflower.webp',
     hp: 300,
     cooldown: '5 s',
     descEs: 'Genera 25 soles de forma periódica para desplegar más tropas en tus carriles.',
@@ -84,7 +84,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#4ade80',
     rarityInitial: 'C',
     cost: 100,
-    img: '/game-assets/greenfoot/transparentpeashooter.png',
+    img: '/game-assets/greenfoot/transparentpeashooter.webp',
     hp: 300,
     damage: 25,
     fireRate: '1.4 s',
@@ -103,7 +103,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#4ade80',
     rarityInitial: 'C',
     cost: 50,
-    img: '/game-assets/greenfoot/transparentwalnut.png',
+    img: '/game-assets/greenfoot/transparentwalnut.webp',
     hp: 1200,
     cooldown: '15 s',
     descEs: 'Cáscara blindada ultra resistente que retiene el avance enemigo y absorbe daño masivo.',
@@ -121,7 +121,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#4ade80',
     rarityInitial: 'C',
     cost: 150,
-    img: '/game-assets/greenfoot/cactus1.png',
+    img: '/game-assets/greenfoot/cactus1.webp',
     hp: 500,
     damage: 35,
     speed: 1,
@@ -140,7 +140,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#22d3ee',
     rarityInitial: 'PC',
     cost: 200,
-    img: '/game-assets/greenfoot/transparentrepeater.png',
+    img: '/game-assets/greenfoot/transparentrepeater.webp',
     hp: 300,
     damage: '2x 25',
     fireRate: '1.2 s',
@@ -159,7 +159,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#22d3ee',
     rarityInitial: 'PC',
     cost: 375,
-    img: '/game-assets/images/Plants/melon_pult.png',
+    img: '/game-assets/images/Plants/melon_pult.webp',
     hp: 350,
     damage: 80,
     fireRate: '2.4 s',
@@ -178,7 +178,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#22d3ee',
     rarityInitial: 'PC',
     cost: 150,
-    img: '/game-assets/greenfoot/bonkchoy1.png',
+    img: '/game-assets/greenfoot/bonkchoy1.webp',
     hp: 600,
     damage: 65,
     speed: 1,
@@ -198,7 +198,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#22d3ee',
     rarityInitial: 'PC',
     cost: 50,
-    img: '/game-assets/greenfoot/garlic1.png',
+    img: '/game-assets/greenfoot/garlic1.webp',
     hp: 300,
     damage: 600,
     speed: 1.2,
@@ -217,7 +217,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#22d3ee',
     rarityInitial: 'PC',
     cost: 25,
-    img: '/game-assets/greenfoot/potato1.png',
+    img: '/game-assets/greenfoot/potato1.webp',
     hp: 300,
     damage: 1800,
     cooldown: '20 s',
@@ -236,7 +236,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#60a5fa',
     rarityInitial: 'R',
     cost: 125,
-    img: '/game-assets/greenfoot/twinsunflower1.png',
+    img: '/game-assets/greenfoot/twinsunflower1.webp',
     hp: 300,
     cooldown: '10 s',
     descEs: 'Genera el doble de soles que un girasol común, acelerando tu economía para tropas legendarias.',
@@ -254,7 +254,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#60a5fa',
     rarityInitial: 'R',
     cost: 125,
-    img: '/game-assets/plants/jalapeno_hd.png',
+    img: '/game-assets/plants/jalapeno_hd.webp',
     damage: 1000,
     cooldown: '15 s',
     descEs: 'Planta explosiva de 1 solo uso. Desata una columna de fuego que incinera la fila entera.',
@@ -272,7 +272,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#c084fc',
     rarityInitial: 'E',
     cost: 125,
-    img: '/game-assets/greenfoot/transparenttallnut.png',
+    img: '/game-assets/greenfoot/transparenttallnut.webp',
     hp: 2400,
     cooldown: '20 s',
     descEs: 'Nuez gigante colosal: muro infranqueable con un colosal escudo de 2,400 HP.',
@@ -290,7 +290,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#c084fc',
     rarityInitial: 'E',
     cost: 100,
-    img: '/game-assets/plants/aloe_hd.png',
+    img: '/game-assets/plants/aloe_hd.webp',
     hp: 400,
     healing: '+60 HP/s',
     descEs: 'Planta de soporte místico. Regenera constantemente la salud de tus tropas aliadas heridas en su carril.',
@@ -308,7 +308,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#fbbf24',
     rarityInitial: 'L',
     cost: 0,
-    img: '/game-assets/plants/iceberglettuce_hd.png',
+    img: '/game-assets/plants/iceberglettuce_hd.webp',
     freeze: '7 s',
     cooldown: '12 s',
     descEs: '¡Coste cero soles de 1 solo uso! Congela a todos los enemigos en su carril durante 7 segundos.',
@@ -326,7 +326,7 @@ const PLANTS_DATA: PlantCardData[] = [
     rarityColor: '#fbbf24',
     rarityInitial: 'L',
     cost: 325,
-    img: '/game-assets/greenfoot/threepeater1.png',
+    img: '/game-assets/greenfoot/threepeater1.webp',
     hp: 300,
     damage: '75 (3 Carriles)',
     fireRate: '1.4 s',
@@ -621,7 +621,7 @@ export default function LandingPage({
               <div className="landing-step-card__body">
                 <div className="landing-step-card__header">
                   <span className="landing-step-num" style={{ background: '#fbbf24', color: '#451a03' }}>01</span>
-                  <img src="/game-assets/greenfoot/sun1.png" alt="Soles" className="landing-step-icon landing-spin" />
+                  <img src="/game-assets/greenfoot/sun1.webp" alt="Soles" className="landing-step-icon landing-spin" />
                 </div>
                 <h3 className="landing-step-title">
                   {lang === 'es' ? 'Recolecta Soles' : 'Collect Sun'}
@@ -639,7 +639,7 @@ export default function LandingPage({
               <div className="landing-step-card__body">
                 <div className="landing-step-card__header">
                   <span className="landing-step-num" style={{ background: '#22c55e', color: '#052e16' }}>02</span>
-                  <img src="/game-assets/greenfoot/peashooterpacket1.png" alt="Mazo" className="landing-step-icon" />
+                  <img src="/game-assets/greenfoot/peashooterpacket1.webp" alt="Mazo" className="landing-step-icon" />
                 </div>
                 <h3 className="landing-step-title">
                   {lang === 'es' ? 'Despliega tu Mazo' : 'Deploy Your Deck'}
@@ -657,7 +657,7 @@ export default function LandingPage({
               <div className="landing-step-card__body">
                 <div className="landing-step-card__header">
                   <span className="landing-step-num" style={{ background: '#ef4444', color: '#ffffff' }}>03</span>
-                  <img src="/game-assets/greenfoot/bonkchoy1.png" alt="Derribar Base" className="landing-step-icon" />
+                  <img src="/game-assets/greenfoot/bonkchoy1.webp" alt="Derribar Base" className="landing-step-icon" />
                 </div>
                 <h3 className="landing-step-title">
                   {lang === 'es' ? 'Derriba la Base Rival' : 'Destroy the Rival Base'}
@@ -683,7 +683,7 @@ export default function LandingPage({
 
               {/* Sun count tag */}
               <div className="landing-demo-sun-tag">
-                <img src="/game-assets/greenfoot/sun1.png" alt="" /> 225 ☀
+                <img src="/game-assets/greenfoot/sun1.webp" alt="" /> 225 ☀
               </div>
 
               {/* Enemy Base HP Bar */}
@@ -698,13 +698,13 @@ export default function LandingPage({
 
               {/* Player Mother Tree (Left) */}
               <div className="landing-demo-player-tree">
-                <img src="/game-assets/greenfoot/mothertree_whitebg.png" alt="" />
+                <img src="/game-assets/greenfoot/mothertree_whitebg.webp" alt="" />
                 <span className="landing-demo-tree-badge" style={{ color: '#86efac' }}>600 / 600 HP</span>
               </div>
 
               {/* Enemy Mother Tree (Right) */}
               <div className="landing-demo-enemy-tree">
-                <img src="/game-assets/greenfoot/mothertree_whitebg.png" alt="" />
+                <img src="/game-assets/greenfoot/mothertree_whitebg.webp" alt="" />
                 <span className="landing-demo-tree-badge" style={{ color: '#fca5a5' }}>215 / 600 HP</span>
                 {/* Floating Damage Numbers */}
                 <div className="landing-dmg-float-1">-65</div>
@@ -717,35 +717,35 @@ export default function LandingPage({
               <div className="landing-demo-lane-line" style={{ top: '56%' }}></div>
 
               {/* Lane 1 (Top): Sunflower producing sun + Cactus marching */}
-              <img src="/game-assets/greenfoot/transparentsunflower.png" alt="" className="landing-demo-unit landing-bounce" style={{ left: '16%', top: '23%', height: '15%' }} />
+              <img src="/game-assets/greenfoot/transparentsunflower.webp" alt="" className="landing-demo-unit landing-bounce" style={{ left: '16%', top: '23%', height: '15%' }} />
               <div className="landing-sun-produce">☀</div>
-              <img src="/game-assets/greenfoot/cactus1.png" alt="" className="landing-demo-unit landing-cactus-march" style={{ top: '22%', height: '15%' }} />
+              <img src="/game-assets/greenfoot/cactus1.webp" alt="" className="landing-demo-unit landing-cactus-march" style={{ top: '22%', height: '15%' }} />
 
               {/* Lane 2 (Mid): Peashooter shooting rapid peas -> Enemy Wallnut */}
-              <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="" className="landing-demo-unit landing-peashooter-recoil" style={{ left: '18%', top: '42%', height: '15%' }} />
+              <img src="/game-assets/greenfoot/transparentpeashooter.webp" alt="" className="landing-demo-unit landing-peashooter-recoil" style={{ left: '18%', top: '42%', height: '15%' }} />
               <div className="landing-pea-1"></div>
               <div className="landing-pea-2"></div>
               <div className="landing-pea-3"></div>
-              <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" className="landing-demo-unit landing-enemy-unit" style={{ right: '18%', top: '42%', height: '14%', transform: 'scaleX(-1)', filter: 'hue-rotate(300deg)' }} />
+              <img src="/game-assets/greenfoot/transparentwalnut.webp" alt="" className="landing-demo-unit landing-enemy-unit" style={{ right: '18%', top: '42%', height: '14%', transform: 'scaleX(-1)', filter: 'hue-rotate(300deg)' }} />
               <div className="landing-hit-spark">💥</div>
 
               {/* Lane 3 (Bot): Wall-nut defense + Bonk Choy marching & punching */}
-              <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" className="landing-demo-unit" style={{ left: '26%', top: '61%', height: '14%' }} />
-              <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" className="landing-demo-unit landing-bonk-march" style={{ top: '60%', height: '15%' }} />
+              <img src="/game-assets/greenfoot/transparentwalnut.webp" alt="" className="landing-demo-unit" style={{ left: '26%', top: '61%', height: '14%' }} />
+              <img src="/game-assets/greenfoot/bonkchoy1.webp" alt="" className="landing-demo-unit landing-bonk-march" style={{ top: '60%', height: '15%' }} />
               <div className="landing-punch-fx">🥊</div>
 
               {/* Falling Sun Drops */}
-              <img src="/game-assets/greenfoot/sun1.png" alt="" className="landing-demo-sunfall-1" />
-              <img src="/game-assets/greenfoot/sun1.png" alt="" className="landing-demo-sunfall-2" />
+              <img src="/game-assets/greenfoot/sun1.webp" alt="" className="landing-demo-sunfall-1" />
+              <img src="/game-assets/greenfoot/sun1.webp" alt="" className="landing-demo-sunfall-2" />
 
               {/* Deck Dock at bottom */}
               <div className="landing-demo-dock">
-                <img src="/game-assets/greenfoot/transparentsunflower.png" alt="" title="Sunflower" />
-                <img src="/game-assets/greenfoot/transparentpeashooter.png" alt="" title="Peashooter" />
-                <img src="/game-assets/greenfoot/transparentwalnut.png" alt="" title="Wall-nut" />
-                <img src="/game-assets/greenfoot/bonkchoy1.png" alt="" style={{ opacity: 0.5 }} title="Bonk Choy (Recarga)" />
-                <img src="/game-assets/greenfoot/potato1.png" alt="" title="Potato Mine" />
-                <img src="/game-assets/greenfoot/threepeater1.png" alt="" style={{ opacity: 0.5 }} title="Threepeater (Recarga)" />
+                <img src="/game-assets/greenfoot/transparentsunflower.webp" alt="" title="Sunflower" />
+                <img src="/game-assets/greenfoot/transparentpeashooter.webp" alt="" title="Peashooter" />
+                <img src="/game-assets/greenfoot/transparentwalnut.webp" alt="" title="Wall-nut" />
+                <img src="/game-assets/greenfoot/bonkchoy1.webp" alt="" style={{ opacity: 0.5 }} title="Bonk Choy (Recarga)" />
+                <img src="/game-assets/greenfoot/potato1.webp" alt="" title="Potato Mine" />
+                <img src="/game-assets/greenfoot/threepeater1.webp" alt="" style={{ opacity: 0.5 }} title="Threepeater (Recarga)" />
               </div>
             </div>
 
@@ -867,7 +867,7 @@ export default function LandingPage({
                           {lang === 'es' ? plant.roleEs : plant.roleEn}
                         </span>
                         <span className="landing-plant-cost">
-                          <img src="/game-assets/greenfoot/sun1.png" alt="" />
+                          <img src="/game-assets/greenfoot/sun1.webp" alt="" />
                           {plant.cost} ☀
                         </span>
                         <span className="landing-plant-hint">
@@ -1100,21 +1100,21 @@ export default function LandingPage({
 
           <div className="landing-features-trio">
             <div className="landing-feature-box">
-              <img src="/game-assets/greenfoot/seed_pack_common_whitebg.png" alt="Sobres" />
+              <img src="/game-assets/greenfoot/seed_pack_common_whitebg.webp" alt="Sobres" />
               <div>
                 <h4>{lang === 'es' ? 'Sobres por Victoria' : 'Packs on Win'}</h4>
                 <p>{lang === 'es' ? 'Cada partida ganada en la arena te otorga un sobre de semillas gratuito.' : 'Every victory earned awards a free seed reward pack.'}</p>
               </div>
             </div>
             <div className="landing-feature-box">
-              <img src="/game-assets/greenfoot/seed_pack_epic_whitebg.png" alt="Ranuras" />
+              <img src="/game-assets/greenfoot/seed_pack_epic_whitebg.webp" alt="Ranuras" />
               <div>
                 <h4>{lang === 'es' ? '4 Ranuras de Sobres' : '4 Free Pack Slots'}</h4>
                 <p>{lang === 'es' ? 'Sistema estilo Clash Royale: desbloquea sobres por tiempo de forma 100% gratuita.' : 'Clash Royale style system: time-unlock packs completely free.'}</p>
               </div>
             </div>
             <div className="landing-feature-box">
-              <img src="/game-assets/greenfoot/seed_pack_legendary_whitebg.png" alt="Mejoras" />
+              <img src="/game-assets/greenfoot/seed_pack_legendary_whitebg.webp" alt="Mejoras" />
               <div>
                 <h4>{lang === 'es' ? 'Fusión & Mejoras' : 'Fusion & Upgrades'}</h4>
                 <p>{lang === 'es' ? 'Acumula copias repetidas para fusionar y otorgar +15% de HP y daño por nivel.' : 'Collect duplicate cards to fuse: +15% HP & damage per level.'}</p>

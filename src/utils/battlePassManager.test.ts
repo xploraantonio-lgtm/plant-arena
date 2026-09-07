@@ -27,7 +27,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       plantId: 'sunflower',
       copiesCount: 1,
       label: 'x1 Girasol',
-      icon: '/game-assets/greenfoot/transparentsunflower.png',
+      icon: '/game-assets/greenfoot/transparentsunflower.webp',
     })
 
     const lvl3 = BATTLE_PASS_LEVELS.find((l) => l.level === 3)!
@@ -36,7 +36,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       plantId: 'bonkchoy',
       copiesCount: 1,
       label: 'x1 Bonk Choy',
-      icon: '/game-assets/greenfoot/bonkchoy1.png',
+      icon: '/game-assets/greenfoot/bonkchoy1.webp',
     })
 
     const lvl6 = BATTLE_PASS_LEVELS.find((l) => l.level === 6)!
@@ -45,7 +45,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       plantId: 'repeater',
       copiesCount: 1,
       label: 'x1 Repetidora',
-      icon: '/game-assets/greenfoot/transparentrepeater.png',
+      icon: '/game-assets/greenfoot/transparentrepeater.webp',
     })
 
     const lvl7 = BATTLE_PASS_LEVELS.find((l) => l.level === 7)!
@@ -54,7 +54,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       plantId: 'aloe',
       copiesCount: 1,
       label: 'x1 Aloe Vera',
-      icon: '/game-assets/plants/aloe_hd.png',
+      icon: '/game-assets/plants/aloe_hd.webp',
     })
 
     const lvl8 = BATTLE_PASS_LEVELS.find((l) => l.level === 8)!
@@ -63,7 +63,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       plantId: 'tallnut',
       copiesCount: 1,
       label: 'x1 Nuez Alta',
-      icon: '/game-assets/greenfoot/transparenttallnut.png',
+      icon: '/game-assets/greenfoot/transparenttallnut.webp',
     })
 
     const lvl11 = BATTLE_PASS_LEVELS.find((l) => l.level === 11)!
@@ -72,7 +72,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       plantId: 'aloe',
       copiesCount: 1,
       label: 'x1 Aloe Vera',
-      icon: '/game-assets/plants/aloe_hd.png',
+      icon: '/game-assets/plants/aloe_hd.webp',
     })
 
     const lvl12 = BATTLE_PASS_LEVELS.find((l) => l.level === 12)!
@@ -81,7 +81,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       plantId: 'tallnut',
       copiesCount: 1,
       label: 'x1 Nuez Alta',
-      icon: '/game-assets/greenfoot/transparenttallnut.png',
+      icon: '/game-assets/greenfoot/transparenttallnut.webp',
     })
   })
 

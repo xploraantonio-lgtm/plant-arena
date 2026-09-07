@@ -8,7 +8,7 @@ import RelojDePartida from '../RelojDePartida/RelojDePartida'
 import './VerRepeticion.css'
 
 /** El mismo fichero que usa la batalla, para que la repetición se vea igual. */
-const ARBOL_MADRE = '/game-assets/greenfoot/mothertree_whitebg.png'
+const ARBOL_MADRE = '/game-assets/greenfoot/mothertree_whitebg.webp'
 
 /**
  * EL REPRODUCTOR DE REPETICIONES

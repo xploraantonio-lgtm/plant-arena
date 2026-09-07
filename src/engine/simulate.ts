@@ -494,7 +494,7 @@ const LADO_P2: Lado = { equipo: 'p2', sentido: -1, objetivo: 'p1' }
  */
 const DAÑO_DEL_JALAPENO = 1000
 const FUEGO_DEL_JALAPENO =
-  '/game-assets/plants/jalapeno_flame_fx.png'
+  '/game-assets/plants/jalapeno_flame_fx.webp'
 
 function aplicarJalapeno(
   state: GameState,
@@ -733,7 +733,7 @@ function procesarLado(state: GameState, lado: Lado, dt: number, sonar: SonarFn):
     // ── LECHUGA DE HIELO ──────────────────────────────────────────────────────
     if (planta.plantId === 'iceberglettuce' && !planta.isArmed) {
       planta.isArmed = true
-      planta.spriteOverride = '/game-assets/plants/iceberglettuce_burst.png'
+      planta.spriteOverride = '/game-assets/plants/iceberglettuce_burst.webp'
       sonar('pea_hit', 1.0)
 
       const hasta = state.tick + msToTicks(7000)
@@ -1011,7 +1011,7 @@ export function stepTick(state: GameState, sonar: SonarFn = () => {}): void {
 
           if (hielo) {
             hielo.spriteOverride =
-              '/game-assets/plants/iceberglettuce_hd.png'
+              '/game-assets/plants/iceberglettuce_hd.webp'
 
             aunNoVencen.push({
               atTick: state.tick + msToTicks(300),

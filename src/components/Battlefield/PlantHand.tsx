@@ -8,8 +8,8 @@ import {
   getScaledPlantConfig,
   type PlantStatKey,
 } from '../../utils/gameConstants'
-const sunIcon = '/game-assets/greenfoot/sun1.png'
-const shovelIcon = '/game-assets/images/Interface/shovelIcon.png'
+const sunIcon = '/game-assets/greenfoot/sun1.webp'
+const shovelIcon = '/game-assets/images/Interface/shovelIcon.webp'
 import './PlantHand.css'
 
 function getSlotCardLevelData(slotIndex: number, plantId: PlantId) {

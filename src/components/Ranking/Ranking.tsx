@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import background from '../../assets/images/background.png'
+import background from '../../assets/images/background.webp'
 import { soundManager } from '../../utils/audioManager'
 import { ARENAS, getArenaForElo } from '../../utils/arenaManager'
 import { leaderboardService } from '../../services/leaderboardService'
@@ -118,7 +118,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
             winRate: p.ranked_win_rate,
             arenaName: arena.name,
             bestPlantName: 'Sunflower',
-            bestPlantImg: '/game-assets/greenfoot/transparentsunflower.png',
+            bestPlantImg: '/game-assets/greenfoot/transparentsunflower.webp',
             isCurrentUser: isMe,
           }
         })
@@ -812,7 +812,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                                 alt={usr.username}
                                 style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
                                 onError={(e) => {
-                                  e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                                  e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
                                 }}
                               />
                               <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>

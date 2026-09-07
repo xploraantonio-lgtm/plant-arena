@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import background from '../../assets/images/background.png'
-import monedaImg from '../../assets/ico/moneda.png'
+import background from '../../assets/images/background.webp'
+import monedaImg from '../../assets/ico/moneda.webp'
 import type { PlantCardInstance, PlantId } from '../../types/game'
 import {
   PACK_DEFINITIONS,
@@ -13,9 +13,9 @@ import Marketplace from '../Marketplace/Marketplace'
 import type { PlantStatKey } from '../../utils/gameConstants'
 import './Shop.css'
 
-const commonSeedImg = '/game-assets/greenfoot/seed_pack_common_whitebg.png'
-const epicSeedImg = '/game-assets/greenfoot/seed_pack_epic_whitebg.png'
-const legendarySeedImg = '/game-assets/greenfoot/seed_pack_legendary_whitebg.png'
+const commonSeedImg = '/game-assets/greenfoot/seed_pack_common_whitebg.webp'
+const epicSeedImg = '/game-assets/greenfoot/seed_pack_epic_whitebg.webp'
+const legendarySeedImg = '/game-assets/greenfoot/seed_pack_legendary_whitebg.webp'
 
 export interface GoldPackage {
   id: string

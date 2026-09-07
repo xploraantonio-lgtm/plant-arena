@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react'
-import background from '../../assets/images/background.png'
-import logo from '../../assets/images/logo.png'
-import plant1 from '../../assets/images/plant1.png'
-import plant2 from '../../assets/images/plant2.png'
-import play from '../../assets/images/play.png'
-import jardin from '../../assets/images/jardin.png'
-import coleccion from '../../assets/images/coleccion.png'
-import arena from '../../assets/images/Arena.png'
-import shop from '../../assets/images/shop.png'
-import gema from '../../assets/ico/gema.png'
-import moneda from '../../assets/ico/moneda.png'
-import ranking from '../../assets/ico/Ranking.png'
-import clan from '../../assets/ico/clan.png'
-import ajustes from '../../assets/ico/ajustes.png'
+import background from '../../assets/images/background.webp'
+import logo from '../../assets/images/logo.webp'
+import plant1 from '../../assets/images/plant1.webp'
+import plant2 from '../../assets/images/plant2.webp'
+import play from '../../assets/images/play.webp'
+import jardin from '../../assets/images/jardin.webp'
+import coleccion from '../../assets/images/coleccion.webp'
+import arena from '../../assets/images/Arena.webp'
+import shop from '../../assets/images/shop.webp'
+import gema from '../../assets/ico/gema.webp'
+import moneda from '../../assets/ico/moneda.webp'
+import ranking from '../../assets/ico/Ranking.webp'
+import clan from '../../assets/ico/clan.webp'
+import ajustes from '../../assets/ico/ajustes.webp'
 import { soundManager } from '../../utils/audioManager'
 import {
   getRemainingTimeString,
@@ -201,7 +201,7 @@ export default function MainMenu({
                   src={playerProfile.avatar}
                   alt={userProfile?.username || playerProfile.name}
                   onError={(e) => {
-                    e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                    e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
                   }}
                 />
               </div>
@@ -422,7 +422,7 @@ export default function MainMenu({
                 <div className="chest-slot__content">
                   <span className="chest-slot__arena-tag">ARENA {slot.arenaLevel}</span>
                   <img
-                    src="/game-assets/greenfoot/seed_pack_pvp.png"
+                    src="/game-assets/greenfoot/seed_pack_pvp.webp"
                     alt="Sobre PvP"
                     className="chest-slot__pack-img"
                   />
@@ -435,7 +435,7 @@ export default function MainMenu({
                 <div className="chest-slot__content chest-slot__content--unlocking">
                   <span className="chest-slot__arena-tag">DESBLOQUEANDO</span>
                   <img
-                    src="/game-assets/greenfoot/seed_pack_pvp.png"
+                    src="/game-assets/greenfoot/seed_pack_pvp.webp"
                     alt="Sobre PvP"
                     className="chest-slot__pack-img chest-slot__pack-img--pulsing"
                   />
@@ -454,7 +454,7 @@ export default function MainMenu({
                     ¡LISTO!
                   </span>
                   <img
-                    src="/game-assets/greenfoot/seed_pack_pvp.png"
+                    src="/game-assets/greenfoot/seed_pack_pvp.webp"
                     alt="Sobre PvP"
                     className="chest-slot__pack-img chest-slot__pack-img--glowing"
                   />

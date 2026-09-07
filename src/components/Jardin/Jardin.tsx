@@ -5,7 +5,7 @@ import {
   STAT_LABELS,
   type PlantStatKey,
 } from '../../utils/gameConstants'
-import background from '../../assets/images/background.png'
+import background from '../../assets/images/background.webp'
 import { soundManager } from '../../utils/audioManager'
 import type { InventoryPack, PackId } from '../../utils/packDropManager'
 import type { PlayerRewardPack } from '../../utils/freePackManager'
@@ -13,7 +13,7 @@ import { EMPTY_FARMING_INVENTORY, FARMING_ITEM_DEFINITIONS, type FarmingInventor
 import LotteryModal from '../Lottery/LotteryModal'
 import './Jardin.css'
 
-const sunIcon = '/game-assets/greenfoot/sun1.png'
+const sunIcon = '/game-assets/greenfoot/sun1.webp'
 const ALL_PLANTS = Object.keys(PLANT_CONFIGS) as PlantId[]
 
 function groupRolls(rolls: PlantStatKey[]) {
@@ -460,7 +460,7 @@ export default function Jardin({
                       🎁 STREAMER
                     </span>
                     <img
-                      src="/game-assets/greenfoot/seed_pack_pvp.png"
+                      src="/game-assets/greenfoot/seed_pack_pvp.webp"
                       alt="Sobre PvP de Recompensa"
                       className="jardin-pack-card__img"
                       onError={(e) => {

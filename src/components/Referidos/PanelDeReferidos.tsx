@@ -526,7 +526,7 @@ export default function PanelDeReferidos() {
                   alt=""
                   className="ref-ranking__avatar"
                   onError={(e) => {
-                    e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                    e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
                   }}
                 />
                 <span className="ref-ranking__nombre">{r.nombre ?? 'Jugador'}</span>
@@ -645,7 +645,7 @@ export default function PanelDeReferidos() {
                     alt=""
                     className="ref-amigo__avatar"
                     onError={(e) => {
-                      e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                      e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
                     }}
                   />
                   <span className="ref-amigo__nombre">{a.nombre ?? 'Jugador'}</span>

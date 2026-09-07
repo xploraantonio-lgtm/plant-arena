@@ -16,7 +16,7 @@ import PvpRewardOpeningModal from './components/PvpRewardOpeningModal/PvpRewardO
 import type { PvpRewardDrop } from './utils/pvpRewardManager'
 import { useInventory } from './hooks/useInventory'
 import type { PackDropResult, PackId } from './utils/packDropManager'
-import background from './assets/images/background.png'
+import background from './assets/images/background.webp'
 import { soundManager } from './utils/audioManager'
 
 import { getEloDeltasForElo } from './utils/arenaManager'

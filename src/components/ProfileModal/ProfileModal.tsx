@@ -443,7 +443,7 @@ export default function ProfileModal({
                 alt={profile.name}
                 className="profile-avatar-img"
                 onError={(e) => {
-                  e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                  e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
                 }}
               />
               <button
@@ -689,7 +689,7 @@ export default function ProfileModal({
                             src={av.icon}
                             alt={av.name}
                             onError={(e) => {
-                              e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                              e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
                             }}
                           />
                           <span>{av.name}</span>

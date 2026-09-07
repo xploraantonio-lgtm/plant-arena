@@ -413,7 +413,7 @@ export class ClanManager {
           requesterName: 'PyroGuisante',
           plantId: 'peashooter',
           plantName: 'Lanza-guisantes',
-          plantIcon: '/game-assets/greenfoot/peashooterpacket1.png',
+          plantIcon: '/game-assets/greenfoot/peashooterpacket1.webp',
           copiesRequested: 1,
           donors: [{ donorId: 'm3', donorName: 'SunGoddess' }],
           createdAt: Date.now() - 3600000,
@@ -424,7 +424,7 @@ export class ClanManager {
           requesterName: 'LightStrike',
           plantId: 'wallnut',
           plantName: 'Nuez Muralla',
-          plantIcon: '/game-assets/greenfoot/walnutpacket1.png',
+          plantIcon: '/game-assets/greenfoot/walnutpacket1.webp',
           copiesRequested: 1,
           donors: [
             { donorId: 'm1', donorName: 'SolarKing_PRO' },

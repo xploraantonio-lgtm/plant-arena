@@ -19,9 +19,9 @@ import {
   INITIAL_BASE_HP,
 } from '../../utils/gameConstants'
 import { getArenaForElo } from '../../utils/arenaManager'
-const sunIcon = '/game-assets/greenfoot/sun1.png'
-const peaImg = '/game-assets/images/Plants/PB00.png'
-const melonImg = '/game-assets/images/Plants/melon_pult.png'
+const sunIcon = '/game-assets/greenfoot/sun1.webp'
+const peaImg = '/game-assets/images/Plants/PB00.webp'
+const melonImg = '/game-assets/images/Plants/melon_pult.webp'
 const needleImg = '/game-assets/greenfoot/needle1.png'
 import PlantHand from './PlantHand'
 import RelojDePartida from '../RelojDePartida/RelojDePartida'
@@ -58,7 +58,7 @@ interface BaseTowerProps {
   nombre?: string | null
 }
 
-const motherTreeImg = '/game-assets/greenfoot/mothertree_whitebg.png'
+const motherTreeImg = '/game-assets/greenfoot/mothertree_whitebg.webp'
 
 function BaseTower({ team, hp, maxHp, sunBank, nombre }: BaseTowerProps) {
   const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100))
@@ -1368,7 +1368,7 @@ export default function Battlefield({
             )}
             {plant.spriteOverride?.includes('jalapeno_flame_fx') ? (
               <div className="jalapeno-lane-flame">
-                <img src="/game-assets/plants/jalapeno_flame_fx.png" alt="Fuego" />
+                <img src="/game-assets/plants/jalapeno_flame_fx.webp" alt="Fuego" />
               </div>
             ) : (
               <>
@@ -1665,7 +1665,7 @@ export default function Battlefield({
                         </span>
                         <div className="victory-pack-reward__card">
                           <img
-                            src="/game-assets/greenfoot/seed_pack_pvp.png"
+                            src="/game-assets/greenfoot/seed_pack_pvp.webp"
                             alt="Sobre de Batalla PvP"
                             className="victory-pack-reward__img"
                           />
