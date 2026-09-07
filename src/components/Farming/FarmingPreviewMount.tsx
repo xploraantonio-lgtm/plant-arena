@@ -1,12 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import jardin from '../../assets/images/jardin.webp'
-import FarmingPreviewCorrections from './FarmingPreviewCorrections'
 import './FarmingPreview.css'
 import './FarmingPreviewFixes.css'
 
-const FarmingPreview = lazy(() => import('./FarmingPreview'))
-const FarmingSlotOverlay = lazy(() => import('./FarmingSlotOverlay'))
+const FarmingFlowV3 = lazy(() => import('./FarmingFlowV3'))
 
 export default function FarmingPreviewMount() {
   const [launcherHost, setLauncherHost] = useState<HTMLElement | null>(null)
@@ -49,9 +47,7 @@ export default function FarmingPreviewMount() {
       )}
       {open && (
         <Suspense fallback={<div className="farming-preview-loading">CARGANDO FARMING…</div>}>
-          <FarmingPreviewCorrections />
-          <FarmingPreview onClose={() => setOpen(false)} />
-          <FarmingSlotOverlay />
+          <FarmingFlowV3 onClose={() => setOpen(false)} />
         </Suspense>
       )}
     </>
