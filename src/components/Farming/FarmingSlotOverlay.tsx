@@ -37,11 +37,11 @@ export default function FarmingSlotOverlay() {
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
-      const enter = target?.closest<HTMLElement>('.farming-preview-land-enter')
-      if (!enter || enter.textContent?.trim() !== 'ENTRAR') return
-
-      const header = enter.closest<HTMLElement>('.farming-preview-land-header')
+      const header = target?.closest<HTMLElement>('.farming-preview-land-header')
       if (!header) return
+
+      const enter = header.querySelector<HTMLElement>('.farming-preview-land-enter')
+      if (enter?.textContent?.trim() !== 'ENTRAR') return
 
       const title = header.querySelector('strong')?.textContent?.trim() ?? ''
       const match = title.match(/GENESIS\s+(.+?)\s+#(\d+)/)
@@ -82,6 +82,12 @@ export default function FarmingSlotOverlay() {
 
   const total = world.pricePerDay * days
   const slotImage = world.rarity === 'legendary' ? slotLegendary : slotAsset
+
+  const goToPage = (nextPage: number) => {
+    const safePage = Math.max(0, Math.min(pageCount - 1, nextPage))
+    setPage(safePage)
+    setSelectedSlot(Math.min(world.slots, safePage * 4 + 1))
+  }
 
   return (
     <div className="farming-world-overlay" role="dialog" aria-modal="true" aria-label={`Slots de Genesis ${world.label}`}>
@@ -160,10 +166,10 @@ export default function FarmingSlotOverlay() {
         </div>
 
         <footer className="farming-world-pager">
-          <button type="button" disabled={page === 0} onClick={() => { setPage((p) => Math.max(0, p - 1)); setSelectedSlot(Math.max(1, page * 4 - 3)) }}>‹</button>
+          <button type="button" disabled={page === 0} onClick={() => goToPage(page - 1)}>‹</button>
           <div>{Array.from({ length: pageCount }, (_, index) => <span key={index} className={index === page ? 'is-active' : ''} />)}</div>
           <b>{page + 1} / {pageCount}</b>
-          <button type="button" disabled={page === pageCount - 1} onClick={() => { setPage((p) => Math.min(pageCount - 1, p + 1)); setSelectedSlot(Math.min(world.slots, (page + 1) * 4 + 1)) }}>›</button>
+          <button type="button" disabled={page === pageCount - 1} onClick={() => goToPage(page + 1)}>›</button>
         </footer>
       </section>
     </div>
