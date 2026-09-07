@@ -13,23 +13,15 @@
 //   dominio del juego.
 //
 // LA REGLA
-//   Un enlace que sale del juego lleva SIEMPRE el dominio de verdad, se navegue
-//   desde donde se navegue. Se configura una vez en VITE_PUBLIC_URL y se acabó.
-//
-//   La vuelta de un inicio de sesión es el caso contrario y va aparte: ahí sí hay
-//   que volver a donde estabas, o quien desarrolla en local acabaría en producción
-//   cada vez que entra con Google.
+//   Los enlaces que se COMPARTEN usan siempre el dominio público configurado en
+//   VITE_PUBLIC_URL. En cambio, los flujos de autenticación y recuperación deben
+//   volver al MISMO entorno desde el que se iniciaron (producción, preview o local),
+//   para que una preview de Vercel no salte a producción al abrir el correo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Quita la barra final: así al pegar rutas no salen dobles barras. */
 function sinBarraFinal(url: string): string {
   return url.replace(/\/+$/, '')
-}
-
-function esLocal(): boolean {
-  if (typeof window === 'undefined') return false
-  const h = window.location.hostname
-  return h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local')
 }
 
 /**
@@ -44,22 +36,16 @@ export const URL_PUBLICA: string = sinBarraFinal(
 )
 
 /**
- * Adónde tiene que volver el navegador después de entrar con Google.
+ * Adónde tiene que volver Supabase después de OAuth o recuperación de contraseña.
  *
- * En local, a local: si aquí se devolviera el dominio público, cada inicio de
- * sesión desde el ordenador de desarrollo saltaría a producción y no habría forma
- * de probar la entrada.
- *
- * En cualquier otro sitio, al dominio público: así quien entre por una dirección
- * vieja (la de Vercel, por ejemplo) acaba en el dominio de verdad y no se queda
- * con la sesión abierta en el sitio equivocado.
- *
- * OJO — esto no basta por sí solo. Supabase sólo respeta esta dirección si está
- * en su lista blanca (Authentication → URL Configuration → Redirect URLs). Si no
- * está, ignora lo que se le pase y usa su «Site URL».
+ * Debe ser siempre el origin actual: así producción vuelve a producción, una
+ * preview de Vercel vuelve a esa misma preview y localhost vuelve a localhost.
+ * Supabase sólo respetará esta URL si está incluida en Authentication → URL
+ * Configuration → Redirect URLs; para previews de Vercel se puede usar un patrón
+ * permitido como https://*.vercel.app/** o una URL exacta.
  */
 export function urlDeVuelta(): string {
-  if (esLocal() && typeof window !== 'undefined') return window.location.origin
+  if (typeof window !== 'undefined') return sinBarraFinal(window.location.origin)
   return URL_PUBLICA
 }
 
