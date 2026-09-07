@@ -17,7 +17,10 @@ export default function FarmingPreviewCorrections() {
         const title = header.querySelector('strong')?.textContent ?? ''
         const rarity = Object.keys(SYSTEM_SLOT_TOTALS).find((key) => title.includes(key))
         const available = header.querySelector<HTMLElement>('.is-available')
-        if (rarity && available) available.textContent = `${SYSTEM_SLOT_TOTALS[rarity]} disponibles`
+        if (!rarity || !available) return
+
+        const nextText = `${SYSTEM_SLOT_TOTALS[rarity]} disponibles`
+        if (available.textContent !== nextText) available.textContent = nextText
       })
     }
 
