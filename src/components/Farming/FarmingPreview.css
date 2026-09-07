@@ -1,0 +1,203 @@
+.farming-preview-launcher {
+  position: fixed;
+  left: 2.2vw;
+  top: 44%;
+  z-index: 9000;
+  min-width: 150px;
+  height: 58px;
+  border-radius: 14px;
+  border: 2px solid #a7df64;
+  background: linear-gradient(180deg, #65b946, #347d35);
+  color: white;
+  font-weight: 950;
+  letter-spacing: .04em;
+  box-shadow: 0 7px 18px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.farming-preview-launcher:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.farming-preview-launcher__icon { font-size: 24px; }
+
+.farming-preview-screen {
+  --fp-panel: #153746;
+  --fp-panel-dark: #0e2b38;
+  --fp-cream: #fff0b5;
+  --fp-muted: #9fb5b8;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  min-width: 760px;
+  min-height: 390px;
+  overflow: hidden;
+  color: white;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(161,228,96,.17), transparent 26%),
+    linear-gradient(180deg, rgba(15,59,69,.3), rgba(5,20,27,.82)),
+    linear-gradient(135deg, #58b7ca 0%, #8fc874 49%, #d0ad63 100%);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.farming-preview-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 100px rgba(0,0,0,.38);
+}
+
+.farming-preview-topbar {
+  position: absolute;
+  z-index: 3;
+  left: 1.1%;
+  right: 1.1%;
+  top: 1.2%;
+  height: 9.3%;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 .8%;
+  border: 2px solid rgba(157,213,168,.55);
+  border-radius: 14px;
+  background: linear-gradient(#173b4b,#0e2936);
+  box-shadow: 0 6px 18px rgba(0,0,0,.32);
+}
+
+.farming-preview-brand { font-size: clamp(12px,1.18vw,19px); font-weight: 950; letter-spacing: .08em; color: #ebfbd9; }
+.farming-preview-brand span { color: #92e456; }
+.farming-preview-topright { display: flex; justify-content: flex-end; align-items: center; gap: .45vw; height: 72%; }
+.farming-preview-wallet,
+.farming-preview-topbtn {
+  height: 72%;
+  padding: 0 .85vw;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: #1b4352;
+  color: #dce7e6;
+  font-weight: 900;
+  font-size: clamp(8px,.78vw,13px);
+}
+.farming-preview-wallet { display: flex; align-items: center; }
+.farming-preview-wallet strong { color: #fff2a5; margin-left: 4px; }
+.farming-preview-topbtn { cursor: pointer; }
+.farming-preview-topbtn:hover { background: linear-gradient(#69b74a,#3b8037); border-color: #aee866; }
+
+.farming-preview-layout {
+  position: absolute;
+  z-index: 2;
+  left: 1.1%;
+  right: 1.1%;
+  top: 11.8%;
+  bottom: 24.1%;
+  display: grid;
+  grid-template-columns: 19% 1fr 23%;
+  gap: 1%;
+}
+
+.farming-preview-panel,
+.farming-preview-center {
+  border: 2px solid rgba(154,210,164,.55);
+  border-radius: 16px;
+  box-shadow: 0 7px 18px rgba(0,0,0,.32), inset 0 1px rgba(255,255,255,.06);
+}
+.farming-preview-panel { overflow: hidden; background: linear-gradient(var(--fp-panel),var(--fp-panel-dark)); }
+.farming-preview-center { overflow: hidden; background: linear-gradient(180deg,rgba(24,66,63,.23),rgba(7,30,37,.5)); padding: 2.4% 3.2%; }
+
+.farming-preview-panel-title {
+  height: 13%;
+  display: flex;
+  align-items: center;
+  padding: 0 7%;
+  background: linear-gradient(90deg,rgba(78,128,72,.35),transparent);
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  color: var(--fp-cream);
+  font-weight: 950;
+  font-size: clamp(9px,.94vw,15px);
+}
+
+.farming-preview-items { height: 87%; padding: 3.4% 5%; display: flex; flex-direction: column; gap: 2.2%; }
+.farming-preview-item {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  align-items: center;
+  gap: .55vw;
+  padding: 0 5%;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: linear-gradient(90deg,rgba(255,255,255,.055),rgba(255,255,255,.015));
+}
+.farming-preview-item img { width: 38px; height: 38px; object-fit: contain; filter: drop-shadow(0 3px 2px rgba(0,0,0,.45)); }
+.farming-preview-item strong { display: block; font-size: clamp(8px,.76vw,12px); }
+.farming-preview-item small { display: block; margin-top: 1px; color: #8ea5a8; font-size: clamp(6px,.52vw,8px); line-height: 1.15; }
+.farming-preview-item b { color: #fff2bd; font-size: clamp(9px,.82vw,13px); }
+
+.farming-preview-empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.farming-preview-seedmark { width: 8.5vh; height: 8.5vh; min-width: 50px; min-height: 50px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 35% 30%,#e2ffa0,#70b843 58%,#315d2f); border: 3px solid #d9f29f; font-size: clamp(24px,2.8vw,45px); box-shadow: 0 8px 20px rgba(0,0,0,.32),0 0 22px rgba(161,233,88,.32); }
+.farming-preview-empty-state h1 { margin: 1.4vh 0 .4vh; color: var(--fp-cream); font-size: clamp(18px,2vw,34px); }
+.farming-preview-empty-state p { max-width: 72%; margin: 0; color: #b0c4c1; font-size: clamp(8px,.76vw,12px); line-height: 1.35; }
+.farming-preview-entry-actions { margin-top: 2vh; width: 84%; display: grid; grid-template-columns: 1fr 1fr; gap: 1vw; }
+.farming-preview-choice { display: grid; grid-template-columns: auto 1fr; gap: .65vw; align-items: center; padding: 1.15vh 1vw; text-align: left; border-radius: 14px; background: linear-gradient(160deg,#214955,#153642); border: 2px solid rgba(119,157,128,.4); color: white; cursor: pointer; }
+.farming-preview-choice:hover { border-color: #afe766; transform: translateY(-1px); }
+.farming-preview-choice > span { font-size: clamp(24px,2.8vw,46px); }
+.farming-preview-choice strong { color: var(--fp-cream); font-size: clamp(11px,1.05vw,17px); }
+.farming-preview-choice small { display: block; margin-top: .25vh; color: #a6babc; font-size: clamp(7px,.64vw,10px); }
+.farming-preview-choice b { grid-column: 1 / -1; width: 100%; margin-top: .5vh; padding: .62vh; text-align: center; border-radius: 8px; border: 1px solid #84d4eb; background: linear-gradient(#33b7df,#187ba9); font-size: clamp(8px,.72vw,11px); }
+.farming-preview-choice--buy b { border-color: #a1dc66; background: linear-gradient(#77c849,#408c36); }
+
+.farming-preview-explore { height: 100%; }
+.farming-preview-explore-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1vw; }
+.farming-preview-explore-head h1 { margin: 0; color: var(--fp-cream); font-size: clamp(17px,1.72vw,28px); }
+.farming-preview-explore-head p { margin: .3vh 0 0; color: #a7bcbc; font-size: clamp(8px,.72vw,11px); }
+.farming-preview-back { padding: .5vh .7vw; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; background: #1b4353; color: white; font-weight: 900; font-size: clamp(7px,.65vw,10px); cursor: pointer; }
+
+.farming-preview-rarity-tabs { display: flex; gap: .45vw; margin: .9vh 0 1.1vh; }
+.farming-preview-rarity-tab { padding: .58vh .8vw; border-radius: 9px; border: 1px solid rgba(255,255,255,.13); background: #183c49; color: #b8c8c8; font-weight: 950; font-size: clamp(8px,.72vw,11px); cursor: pointer; }
+.farming-preview-rarity-tab--common.is-active { background: #4d8438; border-color: #9fdc64; color: white; }
+.farming-preview-rarity-tab--rare.is-active { background: #245b8e; border-color: #6cb7ff; color: white; }
+.farming-preview-rarity-tab--epic.is-active { background: #6b3d91; border-color: #c68cff; color: white; }
+.farming-preview-rarity-tab--legendary.is-active { background: #86651f; border-color: #ffd462; color: white; }
+
+.farming-preview-land-grid { height: calc(100% - 10.4vh); display: grid; grid-template-columns: repeat(5,1fr); grid-template-rows: repeat(2,1fr); gap: .75vh .7vw; }
+.farming-preview-land-card { display: grid; grid-template-columns: 42% 1fr; align-items: center; padding: .5vh .45vw; border-radius: 12px; border: 2px solid rgba(120,156,128,.4); background: linear-gradient(#214955,#153641); color: white; text-align: left; cursor: pointer; overflow: hidden; }
+.farming-preview-land-card:hover,.farming-preview-land-card.is-selected { border-color: #aee566; box-shadow: 0 0 14px rgba(139,217,77,.18); }
+.farming-preview-land-visual { display: grid; place-items: center; height: 78%; border-radius: 12px; background: radial-gradient(circle at 50% 34%,rgba(255,255,255,.14),transparent 52%),linear-gradient(150deg,#47654a,#283f32); font-size: clamp(28px,3.4vw,56px); }
+.farming-preview-land-card--rare .farming-preview-land-visual { background: linear-gradient(150deg,#355773,#263d53); }
+.farming-preview-land-card--epic .farming-preview-land-visual { background: linear-gradient(150deg,#625078,#34334e); }
+.farming-preview-land-card--legendary .farming-preview-land-visual { background: linear-gradient(150deg,#75643a,#463d2c); }
+.farming-preview-land-copy strong { display: block; color: var(--fp-cream); font-size: clamp(8px,.7vw,11px); }
+.farming-preview-land-copy span,.farming-preview-land-copy small,.farming-preview-land-copy em { display: block; margin-top: .22vh; font-size: clamp(6px,.53vw,8px); }
+.farming-preview-land-copy small { color: #a8bbbb; }
+.farming-preview-land-copy em { color: #78e5ff; font-style: normal; font-weight: 900; }
+
+.farming-preview-action-body { height: 87%; padding: 5.5% 7%; display: flex; flex-direction: column; }
+.farming-preview-no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.farming-preview-no-selection > div,.farming-preview-selected-icon { width: 7.4vh; height: 7.4vh; min-width: 44px; min-height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px dashed #7595a0; color: #9cb2b5; font-size: clamp(20px,2.2vw,35px); }
+.farming-preview-no-selection h2,.farming-preview-action-body h2 { margin: 1vh 0 .35vh; color: var(--fp-cream); font-size: clamp(10px,.96vw,15px); }
+.farming-preview-no-selection p { margin: 0 0 .7vh; color: #94aaae; font-size: clamp(7px,.64vw,10px); line-height: 1.35; }
+.farming-preview-no-selection button,.farming-preview-primary-action { width: 100%; margin-top: .65vh; padding: .65vh; border-radius: 9px; border: 1px solid #81d1e8; background: linear-gradient(#36b8df,#187aa8); color: white; font-weight: 950; font-size: clamp(8px,.7vw,11px); cursor: pointer; }
+.farming-preview-no-selection button:last-child { border-color: #9dd863; background: linear-gradient(#78c84a,#3e8a36); }
+.farming-preview-action-body dl { margin: 1vh 0; }
+.farming-preview-action-body dl div { display: flex; justify-content: space-between; gap: 1vw; padding: .45vh 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: clamp(7px,.65vw,10px); }
+.farming-preview-action-body dt { color: #9db2b5; }
+.farming-preview-action-body dd { margin: 0; color: white; font-weight: 900; text-align: right; }
+.farming-preview-selected-icon { border-style: solid; border-color: #8fcf63; color: white; }
+
+.farming-preview-bottom { position: absolute; z-index: 2; left: 1.1%; right: 1.1%; bottom: 1.5%; height: 20.9%; display: grid; grid-template-columns: repeat(4,1fr); gap: .65vw; padding: .65%; background: linear-gradient(var(--fp-panel),var(--fp-panel-dark)); border: 2px solid rgba(154,210,164,.55); border-radius: 16px; box-shadow: 0 -5px 16px rgba(0,0,0,.25); }
+.farming-preview-bottom button { display: grid; grid-template-columns: 38% 1fr; align-items: center; border: 2px solid rgba(119,155,128,.4); border-radius: 11px; background: linear-gradient(#214955,#153641); color: white; text-align: left; cursor: pointer; }
+.farming-preview-bottom button:hover { border-color: #aee565; }
+.farming-preview-bottom button > span { text-align: center; font-size: clamp(28px,3.2vw,52px); }
+.farming-preview-bottom strong { display: block; color: var(--fp-cream); font-size: clamp(8px,.7vw,11px); }
+.farming-preview-bottom small { display: block; margin-top: .2vh; color: #a6babb; font-size: clamp(6px,.52vw,8px); }
+
+@media (max-aspect-ratio: 1.65) {
+  .farming-preview-layout { grid-template-columns: 18% 1fr 22%; }
+  .farming-preview-item { grid-template-columns: 34px 1fr auto; }
+  .farming-preview-item img { width: 30px; height: 30px; }
+  .farming-preview-land-grid { grid-template-columns: repeat(4,1fr); }
+  .farming-preview-launcher { min-width: 125px; height: 48px; left: 1.4vw; }
+}
