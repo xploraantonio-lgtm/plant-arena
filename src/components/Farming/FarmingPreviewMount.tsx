@@ -1,33 +1,58 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import jardin from '../../assets/images/jardin.png'
 import FarmingPreview from './FarmingPreview'
 import './FarmingPreview.css'
+import './FarmingPreviewFixes.css'
 
 export default function FarmingPreviewMount() {
-  const [menuVisible, setMenuVisible] = useState(false)
+  const [launcherHost, setLauncherHost] = useState<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    const sync = () => setMenuVisible(Boolean(document.querySelector('.main-menu')))
+    let host: HTMLDivElement | null = null
+
+    const sync = () => {
+      const panel = document.querySelector<HTMLElement>('.main-menu .panel--left')
+
+      if (!panel) {
+        if (host?.parentElement) host.parentElement.removeChild(host)
+        host = null
+        setLauncherHost(null)
+        return
+      }
+
+      if (!host || !host.isConnected) {
+        host = document.createElement('div')
+        host.className = 'farming-preview-launcher-host'
+        panel.insertBefore(host, panel.firstChild)
+        setLauncherHost(host)
+      }
+    }
+
     sync()
     const observer = new MutationObserver(sync)
     observer.observe(document.body, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [])
 
-  if (!menuVisible && !open) return null
+    return () => {
+      observer.disconnect()
+      if (host?.parentElement) host.parentElement.removeChild(host)
+    }
+  }, [])
 
   return (
     <>
-      {!open && menuVisible && (
+      {!open && launcherHost && createPortal(
         <button
           type="button"
-          className="farming-preview-launcher"
+          className="banner-button farming-preview-menu-banner"
           onClick={() => setOpen(true)}
-          title="Abrir vista previa de Farming"
+          title="Abrir Farming"
         >
-          <span className="farming-preview-launcher__icon">🌾</span>
+          <img src={jardin} alt="" />
           <span>GRANJA</span>
-        </button>
+        </button>,
+        launcherHost
       )}
       {open && <FarmingPreview onClose={() => setOpen(false)} />}
     </>

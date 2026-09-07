@@ -1,0 +1,226 @@
+.farming-preview-launcher-host {
+  display: contents;
+}
+
+/* GRANJA reutiliza exactamente la geometría/banner del menú principal. */
+.farming-preview-menu-banner {
+  flex: 0 0 auto;
+}
+
+/* Farming vive dentro del mismo juego: no debe forzar un canvas mínimo mayor al viewport. */
+.farming-preview-screen {
+  z-index: 9000;
+  width: 100vw;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+}
+
+.farming-preview-logo-wrap {
+  height: 86%;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.farming-preview-logo-wrap img {
+  display: block;
+  max-width: 154px;
+  width: min(14vw, 154px);
+  max-height: 70%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.45));
+}
+
+.farming-preview-logo-wrap span {
+  margin-top: -2px;
+  color: #dff6b7;
+  font-size: clamp(7px,.58vw,10px);
+  font-weight: 950;
+  letter-spacing: .18em;
+  text-shadow: 0 2px 3px rgba(0,0,0,.55);
+}
+
+.farming-preview-topright {
+  min-width: 0;
+}
+
+.farming-preview-wallet {
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.farming-preview-wallet img {
+  width: clamp(15px,1.25vw,21px);
+  height: clamp(15px,1.25vw,21px);
+  object-fit: contain;
+}
+
+.farming-preview-wallet--gold {
+  border-color: rgba(255,215,107,.35);
+}
+
+/* Landscape corto (móviles): compactar verticalmente y mantener visible el módulo inferior. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .farming-preview-topbar {
+    top: 1.2%;
+    height: 11.5%;
+    padding: 0 .65%;
+    border-radius: 10px;
+  }
+
+  .farming-preview-logo-wrap img {
+    width: min(12vw, 112px);
+    max-height: 68%;
+  }
+
+  .farming-preview-layout {
+    top: 14.2%;
+    bottom: 25.2%;
+    grid-template-columns: 19% minmax(0,1fr) 22.5%;
+    gap: .7%;
+  }
+
+  .farming-preview-panel,
+  .farming-preview-center {
+    border-radius: 11px;
+  }
+
+  .farming-preview-center {
+    padding: 1.5% 2%;
+  }
+
+  .farming-preview-panel-title {
+    height: 15%;
+    padding: 0 5%;
+    font-size: clamp(7px,1.15vw,10px);
+  }
+
+  .farming-preview-items {
+    height: 85%;
+    padding: 2.2% 4%;
+    gap: 1.2%;
+  }
+
+  .farming-preview-item {
+    grid-template-columns: 29px minmax(0,1fr) auto;
+    gap: .35vw;
+    padding: 0 4%;
+    border-radius: 7px;
+  }
+
+  .farming-preview-item img {
+    width: 27px;
+    height: 27px;
+  }
+
+  .farming-preview-item strong {
+    font-size: clamp(7px,1.05vw,9px);
+  }
+
+  .farming-preview-item small {
+    font-size: clamp(5px,.78vw,7px);
+    line-height: 1.05;
+  }
+
+  .farming-preview-empty-state h1 {
+    margin: .7vh 0 .2vh;
+    font-size: clamp(15px,2.5vw,22px);
+  }
+
+  .farming-preview-seedmark {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    font-size: 23px;
+  }
+
+  .farming-preview-entry-actions {
+    width: 88%;
+    margin-top: 1vh;
+    gap: .6vw;
+  }
+
+  .farming-preview-choice {
+    padding: .7vh .7vw;
+    border-radius: 9px;
+  }
+
+  .farming-preview-choice > span {
+    font-size: clamp(20px,3vw,30px);
+  }
+
+  .farming-preview-action-body {
+    height: 85%;
+    padding: 3.5% 5%;
+  }
+
+  .farming-preview-bottom {
+    left: 1.1%;
+    right: 1.1%;
+    bottom: 1.2%;
+    height: 22.6%;
+    gap: .45vw;
+    padding: .45%;
+    border-radius: 11px;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+  }
+
+  .farming-preview-bottom button {
+    min-width: 0;
+    overflow: hidden;
+    grid-template-columns: 32% minmax(0,1fr);
+    padding: 0 .25vw;
+    border-radius: 8px;
+  }
+
+  .farming-preview-bottom button > span {
+    font-size: clamp(22px,3.8vw,34px);
+  }
+
+  .farming-preview-bottom strong {
+    font-size: clamp(7px,1.05vw,9px);
+    white-space: nowrap;
+  }
+
+  .farming-preview-bottom small {
+    font-size: clamp(5px,.78vw,7px);
+    white-space: nowrap;
+  }
+
+  .farming-preview-topbtn,
+  .farming-preview-wallet {
+    padding: 0 .55vw;
+    font-size: clamp(7px,1vw,9px);
+  }
+}
+
+@media (max-width: 820px) and (orientation: landscape) {
+  .farming-preview-topbar {
+    grid-template-columns: .8fr auto 1.45fr;
+  }
+
+  .farming-preview-logo-wrap {
+    min-width: 105px;
+  }
+
+  .farming-preview-topright {
+    gap: .25vw;
+  }
+
+  .farming-preview-land-grid {
+    grid-template-columns: repeat(4,minmax(0,1fr));
+  }
+}
+
+/* Igual que PvP: en teléfono vertical manda RotateOverlay (z-index 9999). */
+@media (max-width: 900px) and (orientation: portrait) {
+  .farming-preview-screen {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}

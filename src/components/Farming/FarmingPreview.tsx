@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react'
+import logo from '../../assets/images/logo.png'
+import gema from '../../assets/ico/gema.png'
+import moneda from '../../assets/ico/moneda.png'
 import {
   FARMING_ITEM_DEFINITIONS,
   type FarmingInventory,
@@ -51,6 +54,7 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
   const [rarity, setRarity] = useState<RarityKey>('common')
   const [selectedLand, setSelectedLand] = useState<number | null>(null)
   const [demoGems] = useState(2500)
+  const [demoGold] = useState(3000)
 
   const rarityData = RARITIES[rarity]
   const lands = useMemo(
@@ -67,9 +71,21 @@ export default function FarmingPreview({ onClose }: FarmingPreviewProps) {
     <div className="farming-preview-screen" role="dialog" aria-modal="true" aria-label="Vista previa de Farming">
       <header className="farming-preview-topbar">
         <button type="button" className="farming-preview-topbtn" onClick={onClose}>← INICIO</button>
-        <div className="farming-preview-brand">PLANT <span>ARENA</span> · FARMING</div>
+
+        <div className="farming-preview-logo-wrap" aria-label="Plant Arena Farming">
+          <img src={logo} alt="Plant Arena" />
+          <span>FARMING</span>
+        </div>
+
         <div className="farming-preview-topright">
-          <div className="farming-preview-wallet">💎 <strong>{demoGems}</strong></div>
+          <div className="farming-preview-wallet" title="Gemas">
+            <img src={gema} alt="Gemas" />
+            <strong>{demoGems}</strong>
+          </div>
+          <div className="farming-preview-wallet farming-preview-wallet--gold" title="Oro">
+            <img src={moneda} alt="Oro" />
+            <strong>{demoGold}</strong>
+          </div>
           <button type="button" className="farming-preview-topbtn">MIS LANDS (0)</button>
           <button type="button" className="farming-preview-topbtn">MIS ALQUILERES (0)</button>
         </div>
