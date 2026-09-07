@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import jardin from '../../assets/images/jardin.png'
-import FarmingPreviewCorrections from './FarmingPreviewCorrections'
 import './FarmingPreview.css'
 import './FarmingPreviewFixes.css'
 
@@ -49,7 +48,6 @@ export default function FarmingPreviewMount() {
       )}
       {open && (
         <Suspense fallback={<div className="farming-preview-loading">CARGANDO FARMING…</div>}>
-          <FarmingPreviewCorrections />
           <FarmingPreview onClose={() => setOpen(false)} />
           <FarmingSlotOverlay />
         </Suspense>
