@@ -117,15 +117,8 @@ CREATE INDEX IF NOT EXISTS idx_clan_audit_logs_clan
 CREATE INDEX IF NOT EXISTS idx_clan_audit_logs_action 
   ON public.clan_audit_logs(action, created_at DESC);
 
--- ── 5. ACTUALIZAR CHECK CONSTRAINT EN TRANSACTIONS ───────────────────────────
+-- ── 5. FLEXIBILIZAR TIPO DE TRANSACCIÓN EN public.transactions ───────────────
 ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
-ALTER TABLE public.transactions ADD CONSTRAINT transactions_type_check 
-  CHECK (type IN (
-    'deposit', 'withdrawal', 'colosseum_win', 'colosseum_bet', 
-    'tournament_fee', 'marketplace_buy', 'marketplace_sell', 
-    'clan_deposit', 'shop_purchase', 'admin_gift',
-    'clan_create', 'clan_join', 'clan_repair'
-  ));
 
 -- ── 6. RLS & POLICIES ────────────────────────────────────────────────────────
 ALTER TABLE public.clans ENABLE ROW LEVEL SECURITY;
