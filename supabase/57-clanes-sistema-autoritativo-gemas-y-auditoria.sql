@@ -20,22 +20,60 @@
 
 BEGIN;
 
--- ── 1. AJUSTES EN LA TABLA public.clans ───────────────────────────────────────
+-- ── 1. ASEGURAR TABLAS BASE public.clans Y public.clan_members ───────────────
+CREATE TABLE IF NOT EXISTS public.clans (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         TEXT NOT NULL,
+  tag          TEXT NOT NULL,
+  leader_id    UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.clan_members (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  clan_id      UUID NOT NULL REFERENCES public.clans(id) ON DELETE CASCADE,
+  user_id      UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  role         TEXT NOT NULL DEFAULT 'member',
+  joined_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_clan_user UNIQUE (clan_id, user_id)
+);
+
+-- ── 2. AJUSTES Y COLUMNAS EN LA TABLA public.clans ───────────────────────────
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS badge TEXT DEFAULT '👑';
+ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS description TEXT DEFAULT 'Clan competitivo de Plant Arena.';
+ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS vault_gems NUMERIC(12, 2) DEFAULT 0.00;
+ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS base_hp INTEGER DEFAULT 500;
+ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS max_base_hp INTEGER DEFAULT 500;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS shield_until TIMESTAMPTZ;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{"privacy": "public", "minElo": 0, "warPermission": "leaders", "autoAccept": true}'::jsonb;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
--- Normalizar estado
+-- Normalizar estado y saldo
 UPDATE public.clans SET status = 'active' WHERE status IS NULL;
 UPDATE public.clans SET is_active = TRUE WHERE is_active IS NULL;
+UPDATE public.clans SET vault_gems = 0.00 WHERE vault_gems IS NULL;
 
--- ── 2. AJUSTES EN public.clan_members ─────────────────────────────────────────
+-- Si la tabla tenía vault_balance, migrar valores existentes
+DO $$ 
+BEGIN 
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'clans' AND column_name = 'vault_balance'
+  ) THEN 
+    UPDATE public.clans 
+       SET vault_gems = COALESCE(vault_balance, 0) 
+     WHERE (vault_gems IS NULL OR vault_gems = 0) AND vault_balance IS NOT NULL;
+  END IF; 
+END $$;
+
+-- ── 3. AJUSTES EN public.clan_members ─────────────────────────────────────────
 ALTER TABLE public.clan_members ADD COLUMN IF NOT EXISTS donated_count INTEGER DEFAULT 0;
+ALTER TABLE public.clan_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMPTZ DEFAULT NOW();
 
 -- ── 3. DONACIONES DE PLANTAS EN EL CLAN ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.clan_donations (
