@@ -174,6 +174,7 @@ export const AD_REWARD_SLOTS: AdRewardSlot[] = [
 
 interface ShopProps {
   userTokens: number
+  userElo?: number
   userGold?: number
   hasVipPass?: boolean
   inventoryPacks: InventoryPack[]
@@ -201,6 +202,7 @@ interface ShopProps {
 
 export default function Shop({
   userTokens,
+  userElo,
   userGold = 50000,
   hasVipPass = false,
   inventoryPacks,
@@ -959,6 +961,7 @@ export default function Shop({
           <div className="shop-tab-pane" style={{ padding: 0, height: '100%' }}>
             <Marketplace
               userTokens={userTokens}
+              userElo={userElo}
               hasVipPass={hasVipPass}
               plantCopies={plantCopies as Record<PlantId, number>}
               plantLevels={plantLevels as Record<PlantId, number>}

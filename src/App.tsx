@@ -976,6 +976,7 @@ function App() {
         {screen === 'shop' && (
           <Shop
             userTokens={userTokens}
+            userElo={userElo}
             userGold={userGold}
             hasVipPass={hasVipPass}
             inventoryPacks={inventoryPacks}
@@ -1143,6 +1144,7 @@ function App() {
           >
             <Marketplace
               userTokens={userTokens}
+              userElo={userElo}
               hasVipPass={hasVipPass}
               plantCopies={plantCopies}
               plantLevels={plantLevels}

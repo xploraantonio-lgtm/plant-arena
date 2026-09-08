@@ -1342,6 +1342,35 @@ export const SupabaseService = {
     }
   },
 
+  /** Consulta autoritativa en backend sobre si el usuario tiene acceso al mercado (Pase PvP o 1350 copas) */
+  async checkMarketplaceAccess(): Promise<{
+    hasAccess: boolean
+    hasVipPass?: boolean
+    copas?: number
+    copasRequired?: number
+    unlockedBy?: 'vip_pass' | 'copas' | 'none'
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { hasAccess: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('check_marketplace_access')
+      if (error) {
+        logError('checkMarketplaceAccess', error)
+        return { hasAccess: false, error: error.message }
+      }
+      return data as {
+        hasAccess: boolean
+        hasVipPass?: boolean
+        copas?: number
+        copasRequired?: number
+        unlockedBy?: 'vip_pass' | 'copas' | 'none'
+      }
+    } catch (e: any) {
+      logError('checkMarketplaceAccess', e)
+      return { hasAccess: false, error: e?.message }
+    }
+  },
+
   // ---------------------------------------------------------------------------
   // CLAN TREASURY DEPOSIT (RPC) & CLANS
   // ---------------------------------------------------------------------------

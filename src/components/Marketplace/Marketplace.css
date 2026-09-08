@@ -85,6 +85,37 @@
   line-height: 1.3;
 }
 
+.market-copas-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.market-copas-progress-text {
+  font-size: 10px;
+  font-weight: 800;
+  color: #38bdf8;
+  white-space: nowrap;
+}
+
+.market-copas-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 100px;
+}
+
+.market-copas-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8 0%, #4ade80 100%);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
 .market-vip-buy-btn {
   background: linear-gradient(180deg, #ca8a04 0%, #a16207 100%);
   border: 1.5px solid #fef08a;
