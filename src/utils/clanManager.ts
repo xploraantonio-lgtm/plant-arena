@@ -71,6 +71,7 @@ export interface ClanData {
   leader: string
   members: ClanMember[]
   vaultUsd: number
+  vaultGems?: number
   status: 'active' | 'defeated' // Defeated if vault <= 0
   shieldUntil?: number // 24h shield timestamp
   wins: number

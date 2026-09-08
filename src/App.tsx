@@ -1124,6 +1124,7 @@ function App() {
               onDonatePlant={donatePlantCopy}
               onAddPacks={addPacksToInventory}
               onBackToMenu={() => setScreen('menu')}
+              onRefreshUserData={refreshFromServer}
             />
           </div>
         )}

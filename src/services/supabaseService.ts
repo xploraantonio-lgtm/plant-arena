@@ -1403,6 +1403,139 @@ export const SupabaseService = {
     }
   },
 
+  async createClan(name: string, tag: string, badge?: string, description?: string): Promise<{ success: boolean; clan_id?: string; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('create_clan', {
+        p_name: name,
+        p_tag: tag,
+        p_badge: badge || '👑',
+        p_description: description || 'Clan competitivo de Plant Arena.',
+      })
+      if (error) {
+        logError('createClan', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; clan_id?: string }
+    } catch (e: any) {
+      logError('createClan', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async joinClan(clanId: string): Promise<{ success: boolean; clan_id?: string; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('join_clan', {
+        p_clan_id: clanId,
+      })
+      if (error) {
+        logError('joinClan', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; clan_id?: string }
+    } catch (e: any) {
+      logError('joinClan', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async leaveClan(clanId: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('leave_clan', {
+        p_clan_id: clanId,
+      })
+      if (error) {
+        logError('leaveClan', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean }
+    } catch (e: any) {
+      logError('leaveClan', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async repairClanBase(): Promise<{ success: boolean; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('repair_clan_base')
+      if (error) {
+        logError('repairClanBase', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean }
+    } catch (e: any) {
+      logError('repairClanBase', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async requestClanPlantDonation(plantId: string): Promise<{ success: boolean; donation_id?: string; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('request_clan_plant_donation', {
+        p_plant_id: plantId,
+      })
+      if (error) {
+        logError('requestClanPlantDonation', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; donation_id?: string }
+    } catch (e: any) {
+      logError('requestClanPlantDonation', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async donateClanPlantCopy(donationId: string): Promise<{ success: boolean; plant_id?: string; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('donate_clan_plant_copy', {
+        p_donation_id: donationId,
+      })
+      if (error) {
+        logError('donateClanPlantCopy', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; plant_id?: string }
+    } catch (e: any) {
+      logError('donateClanPlantCopy', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async getClansList(): Promise<any[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_clans_list')
+      if (error) {
+        logError('getClansList', error)
+        return []
+      }
+      return Array.isArray(data) ? data : []
+    } catch (e: any) {
+      logError('getClansList', e)
+      return []
+    }
+  },
+
+  async getMyClanDetails(): Promise<{ clan?: any; members?: any[]; donations?: any[]; deposits?: any[] } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_my_clan_details')
+      if (error) {
+        logError('getMyClanDetails', error)
+        return null
+      }
+      return data
+    } catch (e: any) {
+      logError('getMyClanDetails', e)
+      return null
+    }
+  },
+
   // ---------------------------------------------------------------------------
   // TOURNAMENTS
   // ---------------------------------------------------------------------------
@@ -2635,4 +2768,6 @@ export const SupabaseService = {
     }
   },
 }
+
+export const supabaseService = SupabaseService
 
