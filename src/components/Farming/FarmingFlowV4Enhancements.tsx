@@ -32,13 +32,14 @@ export default function FarmingFlowV4Enhancements() {
   const [confirm, setConfirm] = useState<ConfirmState>(null)
 
   useEffect(() => {
-    let raf = 0
     const syncHome = () => {
-      setHomeHost(document.querySelector<HTMLElement>('.fv4-home-center'))
-      raf = window.requestAnimationFrame(syncHome)
+      const next = document.querySelector<HTMLElement>('.fv4-home-center')
+      setHomeHost((current) => current === next ? current : next)
     }
-    raf = window.requestAnimationFrame(syncHome)
-    return () => window.cancelAnimationFrame(raf)
+    syncHome()
+    const observer = new MutationObserver(syncHome)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export default function FarmingFlowV4Enhancements() {
 
       const label = button.textContent?.trim().toUpperCase() ?? ''
       const isBuy = label.startsWith('COMPRAR')
-      const isRent = label.includes('ALQUILAR') && button.closest('.fv4-block')
+      const isRent = label.includes('ALQUILAR') && Boolean(button.closest('.fv4-block'))
       if (!isBuy && !isRent) return
 
       if (isBuy) {
