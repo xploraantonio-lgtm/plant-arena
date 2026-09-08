@@ -96,7 +96,14 @@ export default function FarmingFlowV4Enhancements() {
 
   const homePromo = useMemo(() => homeHost ? createPortal(
     <div className="fv4-home-promo">
-      <div className="fv4-home-promo-copy" aria-hidden="true" />
+      <div className="fv4-home-promo-copy" aria-hidden="true">
+        <img
+          src="/game-assets/farming/farming-invitation-hq.webp"
+          alt=""
+          draggable={false}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      </div>
       <button className="fv4-home-explore" type="button" onClick={() => {
         const buy = Array.from(document.querySelectorAll<HTMLButtonElement>('.fv4-home-actions button'))
           .find((item) => item.textContent?.includes('COMPRAR'))
