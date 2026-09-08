@@ -50,6 +50,7 @@ ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS shield_until TIMESTAMPTZ;
+ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS min_elo INTEGER DEFAULT 0;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{"privacy": "public", "minElo": 0, "warPermission": "leaders", "autoAccept": true}'::jsonb;
 ALTER TABLE public.clans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
