@@ -36,7 +36,7 @@ interface ReferralLeaderboardUser {
   username: string
   clan: string
   referredCount: number
-  earnedUsd: number
+  earnedUsd?: number
   tierBadge: string
   avatar: string
   isCurrentUser?: boolean
@@ -795,7 +795,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                         <th>JUGADOR</th>
                         <th>CLAN</th>
                         <th style={{ textAlign: 'center' }}>AMIGOS ACTIVOS</th>
-                        <th style={{ textAlign: 'center' }}>GANANCIAS (USD)</th>
+                        <th style={{ textAlign: 'center' }}>REWARDS</th>
                         <th style={{ textAlign: 'right' }}>RANGO DE EMBAJADOR</th>
                       </tr>
                     </thead>
@@ -827,7 +827,6 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                             👥 {usr.referredCount} Amigos
                           </td>
                           <td style={{ textAlign: 'center', fontWeight: 900, color: '#4ade80' }}>
-                            ${usr.earnedUsd.toFixed(2)} USD
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <span className="referral-tier-pill">{usr.tierBadge}</span>
