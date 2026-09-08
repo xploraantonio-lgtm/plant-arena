@@ -1,75 +1,523 @@
-/* Responsive polish for Farming V4. Keep the desktop three-panel composition in landscape. */
-.fv4-home-promo-copy{
-  background-image:linear-gradient(180deg,rgba(5,17,22,.01) 0%,rgba(5,17,22,.03) 68%,rgba(5,17,22,.62) 100%),url('/game-assets/farming/farming-invitation-hq.webp')!important;
-  background-size:contain!important;
-  background-position:center!important;
-  background-repeat:no-repeat!important;
-  background-color:#0c3037;
-  transform:none!important;
-}
-.fv4-layout{
-  grid-template-areas:'inventory center right' 'landbar landbar landbar'!important;
-}
-.fv4-inventory,.fv4-center,.fv4-right,.fv4-center-card,.fv4-panel{min-width:0!important;min-height:0!important}
-.fv4-right,.fv4-detail-body{overflow-x:hidden!important}
-.fv4-landbar{width:100%!important;min-width:0!important}
+/* Responsive and typography polish for Farming V4 */
 
-@media (max-width:1100px) and (orientation:landscape){
-  .fv4-screen{padding:.45vh .45vw!important;gap:.45vh!important}
-  .fv4-top{flex-basis:9.5vh!important;min-height:48px!important}
-  .fv4-layout{
-    grid-template-columns:17% minmax(0,1fr) 22%!important;
-    grid-template-rows:minmax(0,1fr) minmax(48px,9.5vh)!important;
-    gap:.45vh .45vw!important;
-  }
-  .fv4-home-btn{height:62%!important;padding:0 .65vw!important;font-size:clamp(8px,1.05vw,12px)!important}
-  .fv4-logo{height:78%!important}
-  .fv4-logo img{max-width:122px!important}
-  .fv4-wallets{height:62%!important;gap:.25vw!important}
-  .fv4-wallets>div,.fv4-wallets>button{padding:0 .32vw!important;font-size:clamp(7px,.88vw,10px)!important}
-  .fv4-wallets img{width:17px!important;height:17px!important}
-  .fv4-panel>h3{padding:.62vh .45vw!important;font-size:clamp(9px,1vw,12px)!important}
-  .fv4-items{padding:.3vh .3vw!important;gap:.28vh!important}
-  .fv4-item{min-height:32px!important;grid-template-columns:22px minmax(0,1fr) auto!important;gap:.28vw!important;padding:.22vh .3vw!important}
-  .fv4-item img{width:20px!important;height:20px!important}.fv4-seed{font-size:18px!important}
-  .fv4-item strong{font-size:clamp(7px,.88vw,10px)!important}.fv4-item small{font-size:clamp(5px,.68vw,8px)!important}.fv4-item b{font-size:clamp(9px,1vw,12px)!important}
-  .fv4-home-promo{padding:.7vh .8vw!important}
-  .fv4-home-promo-copy{inset:0 0 34px!important;background-size:contain!important}
-  .fv4-home-explore{min-width:42%!important;padding:.55vh .9vw!important;font-size:clamp(11px,1.35vw,16px)!important;border-radius:11px!important}
-  .fv4-landbar{padding:.2vh .28vw!important;gap:.28vw!important}
-  .fv4-landbar-card{grid-template-columns:30% 1fr!important;padding:.12vh .25vw!important;gap:.2vw!important}
-  .fv4-landbar-card img{max-height:38px!important}.fv4-landbar-card strong{font-size:clamp(7px,.9vw,10px)!important}.fv4-landbar-card small{font-size:clamp(5px,.7vw,8px)!important}
-  .fv4-land{grid-template-columns:18% minmax(0,1fr) auto!important;gap:.4vw!important;padding:.2vh .35vw!important}
-  .fv4-land-copy h2{font-size:clamp(9px,1.15vw,13px)!important}.fv4-land-copy p,.fv4-land-meta{font-size:clamp(6px,.8vw,9px)!important}
-  .fv4-land-actions button,.fv4-action{min-width:70px!important;padding:.35vh .35vw!important;font-size:clamp(7px,.8vw,9px)!important}
-  .fv4-world-head{flex-basis:8.5vh!important;min-height:42px!important}.fv4-world-head h1{font-size:clamp(12px,1.6vw,19px)!important}.fv4-world-head>span{font-size:clamp(6px,.75vw,8px)!important;padding:.32vh .4vw!important}
-  .fv4-slot-grid{gap:.35vh .35vw!important;padding:.3vh 0!important}
-  .fv4-slot{grid-template-columns:42% minmax(0,1fr)!important;gap:.3vw!important;padding:.25vh .3vw!important}
-  .fv4-slot-copy strong{font-size:clamp(9px,1.05vw,12px)!important}.fv4-slot-copy small,.fv4-slot-copy p{font-size:clamp(6px,.75vw,9px)!important}
-  .fv4-crop{font-size:clamp(20px,2.5vw,34px)!important}.fv4-crow{font-size:clamp(17px,2vw,28px)!important}
-  .fv4-dots i{width:6px!important;height:6px!important}
-  .fv4-detail-body{padding:.55vh .5vw!important;gap:.3vh!important}.fv4-detail-body h2{font-size:clamp(11px,1.3vw,16px)!important}.fv4-detail-body dl div{font-size:clamp(7px,.82vw,9px)!important;padding:.28vh 0!important}
-  .fv4-block{gap:.22vh!important;margin-top:.25vh!important;padding-top:.25vh!important}.fv4-block h4{font-size:clamp(7px,.85vw,10px)!important}
-  .fv4-rent-options button{padding:.25vh .1vw!important}.fv4-rent-options b,.fv4-rent-options span{font-size:clamp(6px,.75vw,8px)!important}
+/* Base desktop polish for prominent typography */
+.fv4-landbar {
+  grid-area: landbar !important;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
-@media (max-width:760px) and (orientation:landscape){
-  .fv4-screen{padding:.3vh .3vw!important;gap:.3vh!important}
-  .fv4-top{flex-basis:10vh!important;min-height:42px!important}
-  .fv4-layout{
-    grid-template-columns:18% minmax(0,1fr) 23%!important;
-    grid-template-rows:minmax(0,1fr) minmax(42px,10vh)!important;
-    gap:.3vh .3vw!important;
+.fv4-landbar-card {
+  display: grid !important;
+  grid-template-columns: auto 1fr !important;
+  align-items: center !important;
+  gap: 0.6vw !important;
+  padding: 0.4vh 0.7vw !important;
+  min-width: 0 !important;
+}
+
+.fv4-landbar-card img {
+  width: auto !important;
+  height: 100% !important;
+  max-height: 56px !important;
+  object-fit: contain !important;
+  filter: drop-shadow(0 3px 4px #0007) !important;
+  flex-shrink: 0 !important;
+}
+
+.fv4-landbar-card strong {
+  display: block !important;
+  color: #fff1b8 !important;
+  font-size: clamp(14px, 1.2vw, 19px) !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.04em !important;
+  line-height: 1.15 !important;
+  text-transform: uppercase !important;
+}
+
+.fv4-landbar-card small {
+  display: block !important;
+  margin-top: 2px !important;
+  color: #a8ebd1 !important;
+  font-size: clamp(11px, 0.92vw, 14px) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  white-space: nowrap !important;
+}
+
+/* Item typography in inventory */
+.fv4-item {
+  min-height: 50px !important;
+  display: grid !important;
+  grid-template-columns: 32px 1fr auto !important;
+  align-items: center !important;
+  gap: 0.5vw !important;
+  padding: 0.45vh 0.55vw !important;
+}
+
+.fv4-item strong {
+  display: block !important;
+  color: #ffffff !important;
+  font-size: clamp(13px, 1.02vw, 16px) !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+.fv4-item small {
+  display: block !important;
+  color: #b4cccc !important;
+  font-size: clamp(10px, 0.8vw, 12px) !important;
+  font-weight: 600 !important;
+}
+
+.fv4-item b {
+  color: #fff0b5 !important;
+  font-size: clamp(13px, 1.05vw, 17px) !important;
+  font-weight: 950 !important;
+}
+
+/* Layout structure */
+.fv4-home-promo-copy {
+  background-color: #0c3037;
+  transform: none !important;
+}
+
+.fv4-layout {
+  grid-template-areas: 'inventory center right' 'landbar landbar landbar' !important;
+}
+
+.fv4-inventory, .fv4-center, .fv4-right, .fv4-center-card, .fv4-panel {
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.fv4-right, .fv4-detail-body {
+  overflow-x: hidden !important;
+}
+
+/* ==========================================================================
+   TABLET & COMPACT SCREENS (max-width: 1100px)
+   ========================================================================== */
+@media (max-width: 1100px) and (orientation: landscape) {
+  .fv4-screen {
+    padding: 0.4vh 0.45vw !important;
+    gap: 0.4vh !important;
   }
-  .fv4-logo img{max-width:92px!important}.fv4-logo span{display:none!important}
-  .fv4-wallets>button{max-width:76px!important;overflow:hidden!important;text-overflow:ellipsis!important}
-  .fv4-home-promo-copy{inset:0 0 30px!important;background-size:contain!important}
-  .fv4-home-explore{min-width:46%!important;padding:.4vh .7vw!important;font-size:clamp(9px,1.55vw,13px)!important}
-  .fv4-landbar-card{grid-template-columns:28% 1fr!important}.fv4-landbar-card img{max-height:31px!important}
-  .fv4-landbar-card small{display:none!important}
-  .fv4-item small{display:none!important}
-  .fv4-slot{grid-template-columns:39% minmax(0,1fr)!important}
-  .fv4-slot-copy small{line-height:1.05!important}
-  .fv4-detail-land{height:13vh!important}
-  .fv4-empty-detail span{width:38px!important;height:38px!important;font-size:18px!important}
+  .fv4-top {
+    flex-basis: 9.5vh !important;
+    min-height: 46px !important;
+  }
+  .fv4-layout {
+    grid-template-columns: 18% minmax(0, 1fr) 23% !important;
+    grid-template-rows: minmax(0, 1fr) minmax(48px, 10vh) !important;
+    gap: 0.4vh 0.4vw !important;
+  }
+  .fv4-home-btn {
+    height: 64% !important;
+    padding: 0 0.65vw !important;
+    font-size: clamp(8px, 1.05vw, 12px) !important;
+  }
+  .fv4-logo {
+    height: 78% !important;
+  }
+  .fv4-logo img {
+    max-width: 122px !important;
+  }
+  .fv4-wallets {
+    height: 64% !important;
+    gap: 0.25vw !important;
+  }
+  .fv4-wallets > div, .fv4-wallets > button {
+    padding: 0 0.35vw !important;
+    font-size: clamp(8px, 0.9vw, 11px) !important;
+  }
+  .fv4-wallets img {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  .fv4-panel > h3 {
+    padding: 0.55vh 0.45vw !important;
+    font-size: clamp(10px, 1.05vw, 13px) !important;
+  }
+  .fv4-items {
+    padding: 0.3vh 0.3vw !important;
+    gap: 0.3vh !important;
+    overflow-y: auto !important;
+  }
+  .fv4-item {
+    min-height: 38px !important;
+    grid-template-columns: 24px minmax(0, 1fr) auto !important;
+    gap: 0.3vw !important;
+    padding: 0.25vh 0.35vw !important;
+  }
+  .fv4-item img {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  .fv4-seed {
+    font-size: 19px !important;
+  }
+  .fv4-item strong {
+    font-size: clamp(11px, 1.2vw, 13px) !important;
+  }
+  .fv4-item small {
+    display: block !important;
+    font-size: clamp(9px, 0.95vw, 11px) !important;
+  }
+  .fv4-item b {
+    font-size: clamp(11px, 1.15vw, 14px) !important;
+  }
+
+  /* Landbar cards */
+  .fv4-landbar {
+    padding: 0.2vh 0.35vw !important;
+    gap: 0.35vw !important;
+  }
+  .fv4-landbar-card {
+    grid-template-columns: auto 1fr !important;
+    padding: 0.15vh 0.35vw !important;
+    gap: 0.35vw !important;
+  }
+  .fv4-landbar-card img {
+    max-height: 40px !important;
+    width: auto !important;
+  }
+  .fv4-landbar-card strong {
+    font-size: clamp(11px, 1.3vw, 15px) !important;
+    line-height: 1.15 !important;
+  }
+  .fv4-landbar-card small {
+    display: block !important;
+    font-size: clamp(9px, 1.05vw, 12px) !important;
+  }
+
+  /* Market lands list mobile fix (no clipping, smooth vertical scroll) */
+  .fv4-market-center {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+  }
+  .fv4-land-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+    overflow-y: auto !important;
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    padding: 3px 5px !important;
+    scrollbar-width: thin !important;
+  }
+  .fv4-land {
+    min-height: 52px !important;
+    height: auto !important;
+    grid-template-columns: 44px minmax(0, 1fr) auto !important;
+    gap: 7px !important;
+    padding: 4px 8px !important;
+    flex-shrink: 0 !important;
+    border-radius: 11px !important;
+    align-items: center !important;
+  }
+  .fv4-land > img {
+    width: 42px !important;
+    height: 42px !important;
+    max-height: 42px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+  }
+  .fv4-land-copy {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    min-width: 0 !important;
+  }
+  .fv4-land-copy h2 {
+    font-size: clamp(11px, 1.25vw, 14px) !important;
+    font-weight: 900 !important;
+    line-height: 1.15 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .fv4-owner {
+    display: inline-block !important;
+    width: fit-content !important;
+    font-size: clamp(8px, 0.85vw, 10px) !important;
+    padding: 1px 6px !important;
+    border-radius: 999px !important;
+    margin: 0 !important;
+    line-height: 1.3 !important;
+  }
+  .fv4-land-copy p {
+    display: none !important;
+  }
+  .fv4-land-meta {
+    font-size: clamp(8px, 0.85vw, 10px) !important;
+    gap: 6px !important;
+    margin: 0 !important;
+  }
+  .fv4-land-actions button, .fv4-action {
+    min-width: 66px !important;
+    padding: 5px 8px !important;
+    font-size: clamp(9px, 1.05vw, 11px) !important;
+  }
+
+  /* World slots view mobile distribution */
+  .fv4-world-center {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    padding: 0.4vh 0.5vw !important;
+  }
+  .fv4-world-head {
+    flex: 0 0 auto !important;
+    min-height: 38px !important;
+    padding: 0 0.3vw !important;
+  }
+  .fv4-world-head h1 {
+    font-size: clamp(12px, 1.4vw, 17px) !important;
+  }
+  .fv4-world-head > span {
+    font-size: clamp(7px, 0.8vw, 9px) !important;
+    padding: 0.25vh 0.4vw !important;
+  }
+  .fv4-slot-grid {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-auto-rows: minmax(66px, 1fr) !important;
+    gap: 6px !important;
+    padding: 3px !important;
+    overflow-y: auto !important;
+    scrollbar-width: thin !important;
+  }
+  .fv4-slot {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 5px 8px !important;
+    min-height: 64px !important;
+    border-radius: 11px !important;
+    overflow: hidden !important;
+  }
+  .fv4-slot-art {
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+    display: grid !important;
+    place-items: center !important;
+  }
+  .fv4-slot-art > img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+  }
+  .fv4-crop {
+    font-size: 22px !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 48% !important;
+    transform: translate(-50%, -50%) !important;
+  }
+  .fv4-crow {
+    font-size: 18px !important;
+    position: absolute !important;
+    right: 2% !important;
+    top: 4% !important;
+  }
+  .fv4-slot-copy {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 2px !important;
+  }
+  .fv4-slot-copy > div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 4px !important;
+  }
+  .fv4-slot-copy strong {
+    font-size: clamp(10px, 1.15vw, 13px) !important;
+    font-weight: 950 !important;
+    color: #fff0b5 !important;
+    white-space: nowrap !important;
+  }
+  .fv4-slot-copy b {
+    font-size: clamp(7px, 0.8vw, 9px) !important;
+    padding: 1px 5px !important;
+    border-radius: 999px !important;
+    white-space: nowrap !important;
+  }
+  .fv4-slot-copy small {
+    display: block !important;
+    font-size: clamp(8px, 0.88vw, 10px) !important;
+    color: #a8bcbd !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.15 !important;
+    margin: 0 !important;
+  }
+  .fv4-slot-copy p {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 2px !important;
+    font-size: clamp(8px, 0.85vw, 10px) !important;
+    margin: 0 !important;
+    line-height: 1 !important;
+  }
+  .fv4-dots {
+    display: inline-flex !important;
+    gap: 2px !important;
+  }
+  .fv4-dots i {
+    width: 5px !important;
+    height: 5px !important;
+  }
+  .fv4-detail-body {
+    padding: 0.45vh 0.45vw !important;
+    gap: 0.25vh !important;
+  }
+  .fv4-detail-body h2 {
+    font-size: clamp(11px, 1.25vw, 15px) !important;
+  }
+  .fv4-detail-body dl div {
+    font-size: clamp(8px, 0.85vw, 10px) !important;
+    padding: 0.22vh 0 !important;
+  }
+  .fv4-block {
+    gap: 0.2vh !important;
+    margin-top: 0.2vh !important;
+    padding-top: 0.2vh !important;
+  }
+  .fv4-block h4 {
+    font-size: clamp(8px, 0.9vw, 11px) !important;
+  }
+  .fv4-rent-options button {
+    padding: 0.25vh 0.1vw !important;
+  }
+  .fv4-rent-options b, .fv4-rent-options span {
+    font-size: clamp(7px, 0.8vw, 9px) !important;
+  }
+}
+
+/* ==========================================================================
+   MOBILE PHONES & SMALL SCREENS (max-width: 760px)
+   ========================================================================== */
+@media (max-width: 760px) and (orientation: landscape) {
+  .fv4-screen {
+    padding: 0.25vh 0.3vw !important;
+    gap: 0.25vh !important;
+  }
+  .fv4-top {
+    flex-basis: 9vh !important;
+    min-height: 40px !important;
+  }
+  .fv4-layout {
+    grid-template-columns: 19% minmax(0, 1fr) 24% !important;
+    grid-template-rows: minmax(0, 1fr) minmax(42px, 10vh) !important;
+    gap: 0.25vh 0.28vw !important;
+  }
+  .fv4-logo img {
+    max-width: 88px !important;
+  }
+  .fv4-logo span {
+    display: none !important;
+  }
+  .fv4-wallets > button {
+    max-width: 76px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .fv4-home-promo {
+    padding: 0.6vh 0.7vw !important;
+  }
+  .fv4-home-promo-copy {
+    inset: 0 !important;
+  }
+  .fv4-home-explore {
+    min-width: 50% !important;
+    padding: 0.45vh 0.7vw !important;
+    font-size: clamp(10px, 1.5vw, 14px) !important;
+  }
+  .fv4-landbar {
+    padding: 0.15vh 0.25vw !important;
+    gap: 0.25vw !important;
+  }
+  .fv4-landbar-card {
+    grid-template-columns: auto 1fr !important;
+    padding: 0.1vh 0.25vw !important;
+    gap: 0.25vw !important;
+  }
+  .fv4-landbar-card img {
+    max-height: 34px !important;
+    width: auto !important;
+  }
+  .fv4-landbar-card strong {
+    font-size: clamp(10px, 1.3vw, 13px) !important;
+    line-height: 1.1 !important;
+  }
+  .fv4-landbar-card small {
+    display: block !important;
+    font-size: clamp(8px, 1vw, 10px) !important;
+    line-height: 1.1 !important;
+  }
+  .fv4-item {
+    min-height: 34px !important;
+    padding: 0.18vh 0.25vw !important;
+  }
+  .fv4-item strong {
+    font-size: clamp(10px, 1.2vw, 12px) !important;
+  }
+  .fv4-item small {
+    display: block !important;
+    font-size: clamp(8px, 0.9vw, 10px) !important;
+  }
+  .fv4-item b {
+    font-size: clamp(10px, 1.1vw, 13px) !important;
+  }
+  .fv4-slot {
+    min-height: 58px !important;
+    padding: 3px 5px !important;
+    gap: 5px !important;
+  }
+  .fv4-slot-art {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+  .fv4-crop {
+    font-size: 19px !important;
+  }
+  .fv4-crow {
+    font-size: 16px !important;
+  }
+  .fv4-slot-copy strong {
+    font-size: clamp(9px, 1.1vw, 12px) !important;
+  }
+  .fv4-slot-copy b {
+    font-size: clamp(6px, 0.75vw, 8px) !important;
+    padding: 1px 4px !important;
+  }
+  .fv4-slot-copy small {
+    font-size: clamp(7px, 0.8vw, 9px) !important;
+  }
+  .fv4-slot-copy p {
+    font-size: clamp(7px, 0.8vw, 9px) !important;
+  }
+  .fv4-detail-land {
+    height: 13vh !important;
+  }
+  .fv4-empty-detail span {
+    width: 38px !important;
+    height: 38px !important;
+    font-size: 18px !important;
+  }
 }
