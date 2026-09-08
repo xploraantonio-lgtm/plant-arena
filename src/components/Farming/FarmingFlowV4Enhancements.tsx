@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useState } from 'react'
 import './FarmingFlowV4Enhancements.css'
+import './FarmingInvitationInline.css'
 
 type ConfirmState = {
   title: string
