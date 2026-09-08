@@ -54,7 +54,10 @@ export default function Clan({
   onRefreshUserData,
 }: ClanProps) {
   const userGems = Math.floor(userTokens)
-  const [userClan, setUserClan] = useState<ClanData | null>(() => ClanManager.getUserClan())
+  const [userClan, setUserClan] = useState<ClanData | null>(() => {
+    const c = ClanManager.getUserClan()
+    return c && ClanManager.isValidUuid(c.id) ? c : null
+  })
   const [allClans, setAllClans] = useState<ClanData[]>(() => ClanManager.getClans())
   const [activeTab, setActiveTab] = useState<'members' | 'wars' | 'donations' | 'rewards'>('members')
   const [noClanTab, setNoClanTab] = useState<'browse' | 'create'>('browse')
@@ -196,11 +199,16 @@ export default function Clan({
   }
 
   const refreshClanData = async () => {
-    // 1. Estado local inmediato para fluidez de UI
+    // 1. Estado local inmediato para fluidez de UI (solo si es un UUID válido)
     const updated = ClanManager.getUserClan()
-    setUserClan(updated)
+    if (updated && !ClanManager.isValidUuid(updated.id)) {
+      ClanManager.setUserClanId(null)
+      setUserClan(null)
+    } else {
+      setUserClan(updated)
+    }
     setAllClans(ClanManager.getClans())
-    if (updated) {
+    if (updated && ClanManager.isValidUuid(updated.id)) {
       setDonationRequests(ClanManager.getDonationRequests(updated.id))
       setVaultDeposits(ClanManager.getVaultDeposits(updated.id))
       setWarLogs(ClanManager.getWarLogs())
@@ -219,7 +227,7 @@ export default function Clan({
         supabaseService.getMyClanDetails(),
       ])
 
-      if (myClanData && myClanData.clan) {
+      if (myClanData && myClanData.clan && ClanManager.isValidUuid(myClanData.clan.id)) {
         const clanObj: ClanData = {
           id: myClanData.clan.id,
           name: myClanData.clan.name,
@@ -272,37 +280,40 @@ export default function Clan({
             reason: dep.reason,
           })))
         }
-      } else if (myClanData === null) {
+      } else {
+        // En Supabase el usuario no pertenece a ningún clan
         setUserClan(null)
         ClanManager.setUserClanId(null)
       }
 
-      if (remoteList && remoteList.length > 0) {
-        const mappedList: ClanData[] = remoteList.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          tag: c.tag,
-          badge: c.badge || '👑',
-          description: c.description || '',
-          leader: c.leader || 'Líder',
-          members: Array(c.member_count || 1).fill({}).map((_, i) => ({
-            id: `mem-${i}`,
-            name: i === 0 ? c.leader : `Miembro ${i + 1}`,
-            role: i === 0 ? 'Líder' : 'Miembro',
-            elo: 1000,
-            donatedCount: 0,
-            joinedAt: '',
-          })),
-          vaultGems: Number(c.vaultGems || 0),
-          vaultUsd: Number(c.vaultGems || 0),
-          status: c.status || 'active',
-          wins: Number(c.wins || 0),
-          losses: Number(c.losses || 0),
-          createdAt: typeof c.created_at === 'string' ? c.created_at.split('T')[0] : '',
-          fullBonusClaimedMembers: [],
-          seasonPayoutClaimedMembers: [],
-          settings: c.settings,
-        }))
+      if (remoteList && Array.isArray(remoteList)) {
+        const mappedList: ClanData[] = remoteList
+          .filter((c: any) => ClanManager.isValidUuid(c?.id))
+          .map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            tag: c.tag,
+            badge: c.badge || '👑',
+            description: c.description || '',
+            leader: c.leader || 'Líder',
+            members: Array(c.member_count || 1).fill({}).map((_, i) => ({
+              id: `mem-${i}`,
+              name: i === 0 ? c.leader : `Miembro ${i + 1}`,
+              role: i === 0 ? 'Líder' : 'Miembro',
+              elo: 1000,
+              donatedCount: 0,
+              joinedAt: '',
+            })),
+            vaultGems: Number(c.vaultGems || 0),
+            vaultUsd: Number(c.vaultGems || 0),
+            status: c.status || 'active',
+            wins: Number(c.wins || 0),
+            losses: Number(c.losses || 0),
+            createdAt: typeof c.created_at === 'string' ? c.created_at.split('T')[0] : '',
+            fullBonusClaimedMembers: [],
+            seasonPayoutClaimedMembers: [],
+            settings: c.settings,
+          }))
         setAllClans(mappedList)
         ClanManager.saveClans(mappedList)
       }
@@ -411,6 +422,9 @@ export default function Clan({
 
       soundManager.playSound('victory', 0.8)
       showModalAlert('¡CLAN CREADO!', `¡El clan "${newClanName.trim().toUpperCase()}" ha sido fundado con éxito!\nSe descontaron 5 Gemas 💎 y se depositaron en el Tesoro del Clan.`, '🎉', 'success')
+      if (res.clan_id) {
+        ClanManager.setUserClanId(res.clan_id)
+      }
       await refreshClanData()
       setNoClanTab('browse')
     } catch (err: any) {
@@ -420,6 +434,10 @@ export default function Clan({
 
   // JOIN CLAN (2 Gemas 💎)
   const handleJoinClan = (clan: ClanData) => {
+    if (!ClanManager.isValidUuid(clan.id)) {
+      showModalAlert('CLAN NO VÁLIDO', 'Este clan no existe en el servidor.', '⚠️', 'warning')
+      return
+    }
     if (clan.members.length >= 15) {
       showModalAlert('CLAN LLENO', 'Este clan ya ha alcanzado el límite máximo de 15/15 miembros.', '⚠️', 'warning')
       return
@@ -475,6 +493,7 @@ export default function Clan({
             '🎉',
             'success'
           )
+          ClanManager.setUserClanId(res.clan_id || clan.id)
           await refreshClanData()
         } catch (err: any) {
           showModalAlert('ERROR', err?.message || 'Error al comunicarse con el servidor.', '❌', 'error')
@@ -494,17 +513,39 @@ export default function Clan({
       '🚪',
       async () => {
         try {
-          const res = await supabaseService.leaveClan(userClan.id)
-          if (res.success) {
+          // Si el ID del clan no es un UUID válido (clan fantasma local previo a la migración)
+          if (!ClanManager.isValidUuid(userClan.id)) {
             setUserClan(null)
             ClanManager.leaveClan(userClan.id, playerName)
+            ClanManager.setUserClanId(null)
+            showModalAlert('HAS SALIDO DEL CLAN', `Has dejado el clan local "${userClan.name}".`, 'ℹ️', 'info')
+            await refreshClanData()
+            return
+          }
+
+          const res = await supabaseService.leaveClan(userClan.id)
+          // Si se completó con éxito, o si el servidor indica que el clan no existe o no somos miembros
+          if (
+            res.success ||
+            res.error?.includes('CLAN_NOT_FOUND') ||
+            res.error?.includes('NOT_CLAN_MEMBER') ||
+            res.error?.includes('uuid')
+          ) {
+            setUserClan(null)
+            ClanManager.leaveClan(userClan.id, playerName)
+            ClanManager.setUserClanId(null)
             showModalAlert('HAS SALIDO DEL CLAN', `Has dejado el clan "${userClan.name}".`, 'ℹ️', 'info')
             await refreshClanData()
           } else {
             showModalAlert('ERROR', res.error || 'No se pudo salir del clan.', '❌', 'error')
           }
         } catch (e: any) {
-          showModalAlert('ERROR', e?.message || 'Error de conexión al salir.', '❌', 'error')
+          // Si hubo error imprevisto, se limpia el estado local para no dejar bloqueado al usuario
+          setUserClan(null)
+          ClanManager.leaveClan(userClan.id, playerName)
+          ClanManager.setUserClanId(null)
+          showModalAlert('HAS SALIDO DEL CLAN', 'Se ha restablecido tu estado de clan.', 'ℹ️', 'info')
+          await refreshClanData()
         }
       },
       'SÍ, SALIR',

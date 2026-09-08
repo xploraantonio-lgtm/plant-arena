@@ -53,4 +53,21 @@ describe('ClanManager & Gem Valuations', () => {
     expect(res.isProtected).toBe(true)
     expect(res.reasonCode).toBe('PROTECTED_ACTIVE_WARRIOR')
   })
+
+  it('purges legacy non-UUID clan IDs (e.g. clan-1788870332951) and returns null', () => {
+    mockLocalStorage.setItem('plant_arena_user_clan_id', 'clan-1788870332951')
+    expect(ClanManager.isValidUuid('clan-1788870332951')).toBe(false)
+    
+    // getUserClanId must purge invalid id and return null
+    const clanId = ClanManager.getUserClanId()
+    expect(clanId).toBeNull()
+    expect(mockLocalStorage.getItem('plant_arena_user_clan_id')).toBeNull()
+  })
+
+  it('accepts and preserves valid UUIDs', () => {
+    const validUuid = 'c38a74e5-9b2e-4b6e-8d99-826048d0cf13'
+    expect(ClanManager.isValidUuid(validUuid)).toBe(true)
+    mockLocalStorage.setItem('plant_arena_user_clan_id', validUuid)
+    expect(ClanManager.getUserClanId()).toBe(validUuid)
+  })
 })

@@ -92,11 +92,30 @@ const STORAGE_KEYS = {
 }
 
 export class ClanManager {
+  static isValidUuid(id?: string | null): boolean {
+    if (!id || typeof id !== 'string') return false
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  }
+
+  static generateUuid(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0
+      const v = c === 'x' ? r : (r & 0x3) | 0x8
+      return v.toString(16)
+    })
+  }
+
   static getClans(): ClanData[] {
     const saved = localStorage.getItem(STORAGE_KEYS.CLANS_LIST)
     if (saved) {
       try {
-        return JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          return parsed.filter((c: any) => this.isValidUuid(c?.id))
+        }
       } catch (e) {
         console.error('Error parsing clans', e)
       }
@@ -109,7 +128,12 @@ export class ClanManager {
   }
 
   static getUserClanId(): string | null {
-    return localStorage.getItem(STORAGE_KEYS.USER_CLAN_ID)
+    const id = localStorage.getItem(STORAGE_KEYS.USER_CLAN_ID)
+    if (id && !this.isValidUuid(id)) {
+      localStorage.removeItem(STORAGE_KEYS.USER_CLAN_ID)
+      return null
+    }
+    return id
   }
 
   static setUserClanId(clanId: string | null) {
@@ -139,7 +163,7 @@ export class ClanManager {
     playerElo: number
   ): ClanData {
     const newClan: ClanData = {
-      id: `clan-${Date.now()}`,
+      id: this.generateUuid(),
       name: name.trim().toUpperCase(),
       tag: tag.trim().toUpperCase().startsWith('#') ? tag.trim().toUpperCase() : `#${tag.trim().toUpperCase()}`,
       badge: badge || '🌿',

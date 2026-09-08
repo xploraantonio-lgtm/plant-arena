@@ -1425,6 +1425,10 @@ export const SupabaseService = {
 
   async joinClan(clanId: string): Promise<{ success: boolean; clan_id?: string; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    const isUuid = !!clanId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clanId)
+    if (!isUuid) {
+      return { success: false, error: 'ID de clan inválido' }
+    }
     try {
       const { data, error } = await (supabase.rpc as any)('join_clan', {
         p_clan_id: clanId,
@@ -1442,6 +1446,12 @@ export const SupabaseService = {
 
   async leaveClan(clanId: string): Promise<{ success: boolean; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    // Si no es un UUID válido (ej. un clan fantasma local antiguo tipo "clan-1788870332951"),
+    // no se envía a Postgres y se retorna success para que el cliente limpie su estado sin error.
+    const isUuid = !!clanId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clanId)
+    if (!isUuid) {
+      return { success: true }
+    }
     try {
       const { data, error } = await (supabase.rpc as any)('leave_clan', {
         p_clan_id: clanId,

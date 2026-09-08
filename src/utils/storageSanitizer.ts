@@ -24,6 +24,31 @@ export function sanitizeLocalStorage(): void {
   // propósito: no debe depender de que se suba SANITIZED_VERSION.
   try {
     CLAVES_OBSOLETAS.forEach((k) => localStorage.removeItem(k))
+
+    // Purgar clanes antiguos con ID no-UUID (ej: "clan-1788870332951") que bloquean al usuario
+    const userClanId = localStorage.getItem('plant_arena_user_clan_id')
+    const isValidUuid = (id: string | null) =>
+      !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
+    if (userClanId && !isValidUuid(userClanId)) {
+      console.log('[StorageSanitizer] Purgando ID de clan no-UUID obsoleto:', userClanId)
+      localStorage.removeItem('plant_arena_user_clan_id')
+    }
+
+    const savedClans = localStorage.getItem('plant_arena_clans_list')
+    if (savedClans) {
+      try {
+        const parsed = JSON.parse(savedClans)
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((c: any) => isValidUuid(c?.id))
+          if (filtered.length !== parsed.length) {
+            localStorage.setItem('plant_arena_clans_list', JSON.stringify(filtered))
+          }
+        }
+      } catch {
+        localStorage.removeItem('plant_arena_clans_list')
+      }
+    }
   } catch {
     // Si localStorage no está disponible, no hay nada que purgar.
   }
