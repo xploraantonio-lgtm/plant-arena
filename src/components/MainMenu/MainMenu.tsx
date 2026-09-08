@@ -469,6 +469,7 @@ export default function MainMenu({
       </div>
 
       <div className="panel panel--left">
+        <div id="farming-preview-launcher-slot" className="farming-preview-launcher-host" />
         <button className="banner-button" type="button" onClick={onOpenJardin}>
           <img src={jardin} alt="" />
           <span>JARDÍN</span>

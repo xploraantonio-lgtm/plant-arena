@@ -13,28 +13,16 @@ export default function FarmingPreviewMount() {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    let host: HTMLDivElement | null = null
     const sync = () => {
-      const panel = document.querySelector<HTMLElement>('.main-menu .panel--left')
-      if (!panel) {
-        if (host?.parentElement) host.parentElement.removeChild(host)
-        host = null
-        setLauncherHost(null)
-        return
-      }
-      if (!host || !host.isConnected) {
-        host = document.createElement('div')
-        host.className = 'farming-preview-launcher-host'
-        panel.insertBefore(host, panel.firstChild)
-        setLauncherHost(host)
-      }
+      const slot = document.getElementById('farming-preview-launcher-slot')
+      setLauncherHost((prev) => (prev === slot ? prev : slot))
     }
     sync()
     const observer = new MutationObserver(sync)
     observer.observe(document.body, { childList: true, subtree: true })
     return () => {
       observer.disconnect()
-      if (host?.parentElement) host.parentElement.removeChild(host)
+      setLauncherHost(null)
     }
   }, [])
 
