@@ -729,7 +729,7 @@
 /* 4 CHEST SLOTS ON STONE FLOOR BELOW PLAY BUTTON */
 .main-menu-chest-slots {
   position: absolute;
-  bottom: 50px;
+  bottom: 74px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;

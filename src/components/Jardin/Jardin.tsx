@@ -165,6 +165,23 @@ export default function Jardin({
   }
 
   const [openQuantities, setOpenQuantities] = useState<Record<string, number>>({})
+  const [isFarmingCollapsed, setIsFarmingCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('plant_arena_jardin_farming_collapsed') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const handleToggleFarmingCollapse = () => {
+    setIsFarmingCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('plant_arena_jardin_farming_collapsed', String(next))
+      } catch {}
+      return next
+    })
+  }
 
   const groupedPacks = useMemo(() => {
     const map = new Map<PackId, InventoryPack[]>()
@@ -635,42 +652,64 @@ export default function Jardin({
         )}
 
         <div className="jardin-farming-resources">
-<div className="jardin-section-header jardin-section-header--farming">
-  <div>
-    <h3 className="jardin-section-title">🌾 RECURSOS DE FARMING</h3>
-    <p className="jardin-farming-subtitle">Inventario autoritativo de Supabase · los recursos PvP aparecen aquí al abrir sobres.</p>
-  </div>
-</div>
-<div className="jardin-farming-grid">
-  {(Object.entries(FARMING_ITEM_DEFINITIONS) as Array<[keyof FarmingInventory, (typeof FARMING_ITEM_DEFINITIONS)[keyof typeof FARMING_ITEM_DEFINITIONS]]>).map(([itemId, def]) => (
-    <div key={itemId} className={`jardin-farming-card jardin-farming-card--${itemId}`}>
-      <div className="jardin-farming-card__art">
-        <img
-          src={def.icon}
-          alt={def.label}
-          onError={(e) => { e.currentTarget.style.display = 'none' }}
-        />
-        <span>{def.fallback}</span>
-      </div>
-      <strong>{def.label}</strong>
-      <span className="jardin-farming-card__qty">x{Number(farmingItems[itemId] || 0).toLocaleString()}</span>
-      <small>{def.description}</small>
-    </div>
-  ))}
-  <div className="jardin-farming-card jardin-farming-card--gold">
-    <div className="jardin-farming-card__art">
-      <img
-        src="/game-assets/farming/gold_coin.webp"
-        alt="Oro"
-        onError={(e) => { e.currentTarget.style.display = 'none' }}
-      />
-      <span>🪙</span>
-    </div>
-    <strong>Monedas de Oro</strong>
-    <span className="jardin-farming-card__qty">x{userGold.toLocaleString()}</span>
-    <small>Sirve para acelerar, fusionar y futuros crafts de farming.</small>
-  </div>
-</div>
+          <div
+            className="jardin-section-header jardin-section-header--farming"
+            onClick={handleToggleFarmingCollapse}
+            style={{ cursor: 'pointer', userSelect: 'none' }}
+            title={isFarmingCollapsed ? 'Clic para expandir recursos de farming' : 'Clic para minimizar recursos de farming'}
+          >
+            <div>
+              <h3 className="jardin-section-title">
+                🌾 RECURSOS DE FARMING {isFarmingCollapsed && <span className="jardin-farming-pill">MINIMIZADO</span>}
+              </h3>
+              <p className="jardin-farming-subtitle">
+                Inventario autoritativo de Supabase · los recursos PvP aparecen aquí al abrir sobres.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="jardin-farming-toggle-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleToggleFarmingCollapse()
+              }}
+              title={isFarmingCollapsed ? 'Expandir recursos de farming' : 'Minimizar recursos de farming'}
+            >
+              {isFarmingCollapsed ? '➕ MOSTRAR' : '➖ MINIMIZAR'}
+            </button>
+          </div>
+          {!isFarmingCollapsed && (
+            <div className="jardin-farming-grid">
+              {(Object.entries(FARMING_ITEM_DEFINITIONS) as Array<[keyof FarmingInventory, (typeof FARMING_ITEM_DEFINITIONS)[keyof typeof FARMING_ITEM_DEFINITIONS]]>).map(([itemId, def]) => (
+                <div key={itemId} className={`jardin-farming-card jardin-farming-card--${itemId}`}>
+                  <div className="jardin-farming-card__art">
+                    <img
+                      src={def.icon}
+                      alt={def.label}
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                    <span>{def.fallback}</span>
+                  </div>
+                  <strong>{def.label}</strong>
+                  <span className="jardin-farming-card__qty">x{Number(farmingItems[itemId] || 0).toLocaleString()}</span>
+                  <small>{def.description}</small>
+                </div>
+              ))}
+              <div className="jardin-farming-card jardin-farming-card--gold">
+                <div className="jardin-farming-card__art">
+                  <img
+                    src="/game-assets/farming/gold_coin.webp"
+                    alt="Oro"
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  />
+                  <span>🪙</span>
+                </div>
+                <strong>Monedas de Oro</strong>
+                <span className="jardin-farming-card__qty">x{userGold.toLocaleString()}</span>
+                <small>Sirve para acelerar, fusionar y futuros crafts de farming.</small>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ACTIVE BATTLE DECK (3 TO 6 SLOTS) */}

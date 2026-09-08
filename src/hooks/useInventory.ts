@@ -6,7 +6,7 @@ import {
   type PackId,
   type PackDropResult,
 } from '../utils/packDropManager'
-import { createEmptySlots, type FreePackSlot, type PlayerRewardPack } from '../utils/freePackManager'
+import { createEmptySlots, normalizePackSlots, type FreePackSlot, type PlayerRewardPack } from '../utils/freePackManager'
 import { inventoryService } from '../services/inventoryService'
 import { profileService } from '../services/profileService'
 import { supabase } from '../lib/supabaseClient'
@@ -573,7 +573,7 @@ export function useInventory() {
     const saved = localStorage.getItem('plant_arena_free_pack_slots')
     if (saved) {
       try {
-        return JSON.parse(saved)
+        return normalizePackSlots(JSON.parse(saved))
       } catch {
         return createEmptySlots()
       }
@@ -639,8 +639,8 @@ export function useInventory() {
   const awardVictoryPack = async (
     _playerElo: number
   ): Promise<{ awarded: boolean; durationHours?: FreePackSlot['durationHours']; arenaLevel?: number; isSlotsFull?: boolean }> => {
-    const prevSlots = freePackSlots
-    const tieneHuecoVacio = prevSlots.some((s) => s.status === 'empty')
+    const prevSlots = normalizePackSlots(freePackSlots)
+    const tieneHuecoVacio = prevSlots.length < 4 || prevSlots.some((s) => s.status === 'empty')
 
     // Si ya se tienen los 4 slots llenos, no pedir cofre ni mostrar premio de sobre
     if (!tieneHuecoVacio) {
@@ -649,15 +649,16 @@ export function useInventory() {
 
     const res = await inventoryService.awardVictoryChest()
 
-    // 1. Adoptar siempre los cofres tal como quedaron en el servidor.
+    // 1. Adoptar siempre los cofres tal como quedaron en el servidor normalizados a 4 slots
     let remoteSlots: FreePackSlot[] | null = null
     const uid = currentUserIdRef.current ?? (await supabase.auth.getUser()).data?.user?.id
     if (uid) {
       currentUserIdRef.current = uid
       remoteSlots = await inventoryService.getUserPackSlots(uid)
       if (remoteSlots && remoteSlots.length > 0) {
-        setFreePackSlots(remoteSlots)
-        localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))
+        const normalized = normalizePackSlots(remoteSlots)
+        setFreePackSlots(normalized)
+        localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(normalized))
       }
     }
 
@@ -866,7 +867,9 @@ export function useInventory() {
       currentUserIdRef.current = profile.id
       inventoryService.getUserPackSlots(profile.id).then((remoteSlots) => {
         if (remoteSlots && remoteSlots.length > 0) {
-          setFreePackSlots(remoteSlots)
+          const normalized = normalizePackSlots(remoteSlots)
+          setFreePackSlots(normalized)
+          localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(normalized))
         }
       }).catch(() => {})
     }
@@ -972,8 +975,9 @@ export function useInventory() {
     currentUserIdRef.current = uid
     const remoteSlots = await inventoryService.getUserPackSlots(uid)
     if (remoteSlots && remoteSlots.length > 0) {
-      setFreePackSlots(remoteSlots)
-      localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(remoteSlots))
+      const normalized = normalizePackSlots(remoteSlots)
+      setFreePackSlots(normalized)
+      localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(normalized))
     }
   }
 
@@ -1107,12 +1111,36 @@ export function useInventory() {
 
     if (drops.length === 0) return null
 
-    await refreshFromServer()
+    // 1. Liberar inmediatamente el slot en UI para respuesta instantánea
+    setFreePackSlots((prev) => {
+      const updated = prev.map((s) => (s.slotId === slotIndex ? { ...s, status: 'empty' as const, unlockStartedAt: undefined } : s))
+      const normalized = normalizePackSlots(updated)
+      localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(normalized))
+      return normalized
+    })
+
+    // 2. Actualizar recompensas de farming y oro de inmediato si vinieron en la respuesta
     if (res.farmingItems) setFarmingItems(parseFarmingInventory(res.farmingItems))
-    if (currentUserIdRef.current) {
-      const remoteSlots = await inventoryService.getUserPackSlots(currentUserIdRef.current)
-      if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
+    if (res.goldBalance !== undefined && Number.isFinite(Number(res.goldBalance))) {
+      setUserGold(Number(res.goldBalance))
     }
+
+    // 3. Revalidar datos completos del servidor en segundo plano sin congelar la apertura
+    void (async () => {
+      try {
+        await refreshFromServer()
+        if (currentUserIdRef.current) {
+          const remoteSlots = await inventoryService.getUserPackSlots(currentUserIdRef.current)
+          if (remoteSlots && remoteSlots.length > 0) {
+            const normalized = normalizePackSlots(remoteSlots)
+            setFreePackSlots(normalized)
+            localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(normalized))
+          }
+        }
+      } catch (err) {
+        console.warn('[claimSlotOnServer] Background refresh error:', err)
+      }
+    })()
 
     return drops
   }
@@ -1124,10 +1152,23 @@ export function useInventory() {
     const res = await inventoryService.instantUnlockPackSlot(slotIndex)
     if (!res.success) return { success: false, error: res.error }
 
-    await refreshBalance()
+    // Marcar de inmediato como 'ready' en UI
+    setFreePackSlots((prev) => {
+      const updated = prev.map((s) => (s.slotId === slotIndex ? { ...s, status: 'ready' as const } : s))
+      const normalized = normalizePackSlots(updated)
+      localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(normalized))
+      return normalized
+    })
+
+    void refreshBalance()
     if (currentUserIdRef.current) {
-      const remoteSlots = await inventoryService.getUserPackSlots(currentUserIdRef.current)
-      if (remoteSlots && remoteSlots.length > 0) setFreePackSlots(remoteSlots)
+      void inventoryService.getUserPackSlots(currentUserIdRef.current).then((remoteSlots) => {
+        if (remoteSlots && remoteSlots.length > 0) {
+          const normalized = normalizePackSlots(remoteSlots)
+          setFreePackSlots(normalized)
+          localStorage.setItem('plant_arena_free_pack_slots', JSON.stringify(normalized))
+        }
+      }).catch(() => {})
     }
 
     return { success: true, goldSpent: res.goldSpent }
@@ -1160,7 +1201,8 @@ export function useInventory() {
     const res = await inventoryService.claimRewardPack(packId)
     if (!res.success || !res.plantId) return null
 
-    await refreshFromServer()
+    // Revalidación en segundo plano para no demorar la animación de la carta
+    void refreshFromServer()
 
     return {
       plantId: res.plantId as PlantId,

@@ -24,6 +24,29 @@ export function createEmptySlots(): FreePackSlot[] {
   ]
 }
 
+/**
+ * Normaliza cualquier array de slots (de PostgreSQL, localStorage o de estado)
+ * para garantizar que SIEMPRE existan los 4 slots de Plant Arena (0, 1, 2, 3).
+ * Cualquier slot faltante se rellena automáticamente con status 'empty'.
+ */
+export function normalizePackSlots(slots?: FreePackSlot[] | null): FreePackSlot[] {
+  const base = createEmptySlots()
+  if (!slots || !Array.isArray(slots) || slots.length === 0) {
+    return base
+  }
+  return base.map((emptySlot) => {
+    const found = slots.find((s) => s && s.slotId === emptySlot.slotId)
+    if (!found) return emptySlot
+    return {
+      slotId: emptySlot.slotId,
+      status: found.status || 'empty',
+      durationHours: (found.durationHours || emptySlot.durationHours) as FreePackSlot['durationHours'],
+      arenaLevel: found.arenaLevel || 1,
+      unlockStartedAt: found.unlockStartedAt,
+    }
+  })
+}
+
 // Rewards are rolled exclusively by Supabase. The browser only renders the persisted result.
 
 // Calculate formatted remaining time string

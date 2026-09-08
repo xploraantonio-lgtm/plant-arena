@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import type { Database } from '../types/database.types'
-import type { FreePackSlot, PlayerRewardPack } from '../utils/freePackManager'
+import { type FreePackSlot, type PlayerRewardPack, normalizePackSlots } from '../utils/freePackManager'
 import type { DatosDeRepeticion } from '../engine/replay'
 import { parseLeaderboardRow, type ParsedLeaderboardRow } from '../utils/leaderboardParser'
 import { validateMatchClock } from '../utils/matchClock'
@@ -2112,14 +2112,15 @@ export const SupabaseService = {
         .select('*')
         .eq('user_id', userId)
         .order('slot_index', { ascending: true })
-      if (error || !data || data.length === 0) return null
-      return data.map((row: any) => ({
+      if (error) return null
+      const parsedSlots: FreePackSlot[] = (data || []).map((row: any) => ({
         slotId: Number(row.slot_index),
         status: row.status as FreePackSlot['status'],
-        durationHours: Number(row.duration_hours) as FreePackSlot['durationHours'],
+        durationHours: Number(row.duration_hours || 1) as FreePackSlot['durationHours'],
         arenaLevel: Number(row.arena_level || 1),
         unlockStartedAt: row.unlock_started_at ? new Date(row.unlock_started_at).getTime() : undefined,
       }))
+      return normalizePackSlots(parsedSlots)
     } catch {
       return null
     }
@@ -2162,7 +2163,7 @@ export const SupabaseService = {
         arenaLevel: Number(row.arenaLevel || 1),
         unlockStartedAt: row.unlockStartedAt ? Number(row.unlockStartedAt) : undefined,
       }))
-      return { slots: authoritative, rejected: data?.rechazados || [] }
+      return { slots: normalizePackSlots(authoritative), rejected: data?.rechazados || [] }
     } catch (e) {
       logError('syncPackSlots', e)
       return { slots: null, rejected: [] }
