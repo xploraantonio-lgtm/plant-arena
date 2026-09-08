@@ -46,7 +46,7 @@ export default function FarmingFlowV4Enhancements() {
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('button')
-      if (!button || button.dataset.fv4Confirmed === 'true') return
+      if (!button || button.dataset.fv4Confirmed === 'true' || button.closest('.fv4-confirm-wrap')) return
 
       const label = button.textContent?.trim().toUpperCase() ?? ''
       const isBuy = label.startsWith('COMPRAR')
