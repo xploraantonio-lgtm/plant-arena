@@ -4,6 +4,7 @@ import jardin from '../../assets/images/jardin.webp'
 import FarmingFlowV4Enhancements from './FarmingFlowV4Enhancements'
 import './FarmingPreview.css'
 import './FarmingPreviewFixes.css'
+import './FarmingFlowV4Responsive.css'
 
 const FarmingFlowV4 = lazy(() => import('./FarmingFlowV4'))
 

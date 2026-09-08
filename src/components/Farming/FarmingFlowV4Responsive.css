@@ -1,0 +1,75 @@
+/* Responsive polish for Farming V4. Keep the desktop three-panel composition in landscape. */
+.fv4-home-promo-copy{
+  background-image:linear-gradient(180deg,rgba(5,17,22,.01) 0%,rgba(5,17,22,.03) 68%,rgba(5,17,22,.62) 100%),url('/game-assets/farming/farming-invitation.webp')!important;
+  background-size:contain!important;
+  background-position:center!important;
+  background-repeat:no-repeat!important;
+  background-color:#0c3037;
+  transform:none!important;
+}
+.fv4-layout{
+  grid-template-areas:'inventory center right' 'landbar landbar landbar'!important;
+}
+.fv4-inventory,.fv4-center,.fv4-right,.fv4-center-card,.fv4-panel{min-width:0!important;min-height:0!important}
+.fv4-right,.fv4-detail-body{overflow-x:hidden!important}
+.fv4-landbar{width:100%!important;min-width:0!important}
+
+@media (max-width:1100px) and (orientation:landscape){
+  .fv4-screen{padding:.45vh .45vw!important;gap:.45vh!important}
+  .fv4-top{flex-basis:9.5vh!important;min-height:48px!important}
+  .fv4-layout{
+    grid-template-columns:17% minmax(0,1fr) 22%!important;
+    grid-template-rows:minmax(0,1fr) minmax(48px,9.5vh)!important;
+    gap:.45vh .45vw!important;
+  }
+  .fv4-home-btn{height:62%!important;padding:0 .65vw!important;font-size:clamp(8px,1.05vw,12px)!important}
+  .fv4-logo{height:78%!important}
+  .fv4-logo img{max-width:122px!important}
+  .fv4-wallets{height:62%!important;gap:.25vw!important}
+  .fv4-wallets>div,.fv4-wallets>button{padding:0 .32vw!important;font-size:clamp(7px,.88vw,10px)!important}
+  .fv4-wallets img{width:17px!important;height:17px!important}
+  .fv4-panel>h3{padding:.62vh .45vw!important;font-size:clamp(9px,1vw,12px)!important}
+  .fv4-items{padding:.3vh .3vw!important;gap:.28vh!important}
+  .fv4-item{min-height:32px!important;grid-template-columns:22px minmax(0,1fr) auto!important;gap:.28vw!important;padding:.22vh .3vw!important}
+  .fv4-item img{width:20px!important;height:20px!important}.fv4-seed{font-size:18px!important}
+  .fv4-item strong{font-size:clamp(7px,.88vw,10px)!important}.fv4-item small{font-size:clamp(5px,.68vw,8px)!important}.fv4-item b{font-size:clamp(9px,1vw,12px)!important}
+  .fv4-home-promo{padding:.7vh .8vw!important}
+  .fv4-home-promo-copy{inset:0 0 34px!important;background-size:contain!important}
+  .fv4-home-explore{min-width:42%!important;padding:.55vh .9vw!important;font-size:clamp(11px,1.35vw,16px)!important;border-radius:11px!important}
+  .fv4-landbar{padding:.2vh .28vw!important;gap:.28vw!important}
+  .fv4-landbar-card{grid-template-columns:30% 1fr!important;padding:.12vh .25vw!important;gap:.2vw!important}
+  .fv4-landbar-card img{max-height:38px!important}.fv4-landbar-card strong{font-size:clamp(7px,.9vw,10px)!important}.fv4-landbar-card small{font-size:clamp(5px,.7vw,8px)!important}
+  .fv4-land{grid-template-columns:18% minmax(0,1fr) auto!important;gap:.4vw!important;padding:.2vh .35vw!important}
+  .fv4-land-copy h2{font-size:clamp(9px,1.15vw,13px)!important}.fv4-land-copy p,.fv4-land-meta{font-size:clamp(6px,.8vw,9px)!important}
+  .fv4-land-actions button,.fv4-action{min-width:70px!important;padding:.35vh .35vw!important;font-size:clamp(7px,.8vw,9px)!important}
+  .fv4-world-head{flex-basis:8.5vh!important;min-height:42px!important}.fv4-world-head h1{font-size:clamp(12px,1.6vw,19px)!important}.fv4-world-head>span{font-size:clamp(6px,.75vw,8px)!important;padding:.32vh .4vw!important}
+  .fv4-slot-grid{gap:.35vh .35vw!important;padding:.3vh 0!important}
+  .fv4-slot{grid-template-columns:42% minmax(0,1fr)!important;gap:.3vw!important;padding:.25vh .3vw!important}
+  .fv4-slot-copy strong{font-size:clamp(9px,1.05vw,12px)!important}.fv4-slot-copy small,.fv4-slot-copy p{font-size:clamp(6px,.75vw,9px)!important}
+  .fv4-crop{font-size:clamp(20px,2.5vw,34px)!important}.fv4-crow{font-size:clamp(17px,2vw,28px)!important}
+  .fv4-dots i{width:6px!important;height:6px!important}
+  .fv4-detail-body{padding:.55vh .5vw!important;gap:.3vh!important}.fv4-detail-body h2{font-size:clamp(11px,1.3vw,16px)!important}.fv4-detail-body dl div{font-size:clamp(7px,.82vw,9px)!important;padding:.28vh 0!important}
+  .fv4-block{gap:.22vh!important;margin-top:.25vh!important;padding-top:.25vh!important}.fv4-block h4{font-size:clamp(7px,.85vw,10px)!important}
+  .fv4-rent-options button{padding:.25vh .1vw!important}.fv4-rent-options b,.fv4-rent-options span{font-size:clamp(6px,.75vw,8px)!important}
+}
+
+@media (max-width:760px) and (orientation:landscape){
+  .fv4-screen{padding:.3vh .3vw!important;gap:.3vh!important}
+  .fv4-top{flex-basis:10vh!important;min-height:42px!important}
+  .fv4-layout{
+    grid-template-columns:18% minmax(0,1fr) 23%!important;
+    grid-template-rows:minmax(0,1fr) minmax(42px,10vh)!important;
+    gap:.3vh .3vw!important;
+  }
+  .fv4-logo img{max-width:92px!important}.fv4-logo span{display:none!important}
+  .fv4-wallets>button{max-width:76px!important;overflow:hidden!important;text-overflow:ellipsis!important}
+  .fv4-home-promo-copy{inset:0 0 30px!important;background-size:contain!important}
+  .fv4-home-explore{min-width:46%!important;padding:.4vh .7vw!important;font-size:clamp(9px,1.55vw,13px)!important}
+  .fv4-landbar-card{grid-template-columns:28% 1fr!important}.fv4-landbar-card img{max-height:31px!important}
+  .fv4-landbar-card small{display:none!important}
+  .fv4-item small{display:none!important}
+  .fv4-slot{grid-template-columns:39% minmax(0,1fr)!important}
+  .fv4-slot-copy small{line-height:1.05!important}
+  .fv4-detail-land{height:13vh!important}
+  .fv4-empty-detail span{width:38px!important;height:38px!important;font-size:18px!important}
+}
