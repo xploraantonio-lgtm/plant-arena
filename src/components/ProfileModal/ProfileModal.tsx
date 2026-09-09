@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import {
   UserManager,
   PRESET_AVATARS,
@@ -442,7 +441,7 @@ export default function ProfileModal({
 
   if (!isOpen) return null
 
-  const modalContent = (
+  return (
     <div className="profile-modal-backdrop" onClick={onClose}>
       <div className="profile-modal-box" onClick={(e) => e.stopPropagation()}>
         {/* MODAL HEADER */}
@@ -1081,10 +1080,4 @@ export default function ProfileModal({
       )}
     </div>
   )
-
-  if (typeof document !== 'undefined') {
-    return createPortal(modalContent, document.body)
-  }
-
-  return modalContent
 }
