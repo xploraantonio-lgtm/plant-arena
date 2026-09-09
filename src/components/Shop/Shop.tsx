@@ -231,6 +231,7 @@ export default function Shop({
   const [goldSlideIndex, setGoldSlideIndex] = useState<number>(0)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
 
+  const [isPurchasingPack, setIsPurchasingPack] = useState<boolean>(false)
   const [buyQuantities, setBuyQuantities] = useState<Record<PackId, number>>({
     basic: 1,
     epic: 1,
@@ -272,6 +273,7 @@ export default function Shop({
   }
 
   const handleBuyPacksBatch = async (packId: PackId) => {
+    if (isPurchasingPack) return
     const qty = getQty(packId)
     const totalCost = packPrice(packId) * qty
 
@@ -287,23 +289,28 @@ export default function Shop({
       return
     }
 
-    // Una sola llamada por lote: el servidor cobra qty × precio de una vez, así
-    // que no hay ventana para gastar el saldo a medias.
-    const res = await onBuyPack(packId, qty)
+    setIsPurchasingPack(true)
+    try {
+      // Una sola llamada por lote: el servidor cobra qty × precio de una vez, así
+      // que no hay ventana para gastar el saldo a medias.
+      const res = await onBuyPack(packId, qty)
 
-    if (!res.success) {
-      setThemedAlert({
-        title: 'COMPRA RECHAZADA',
-        message: res.error || 'El servidor rechazó la compra.',
-        icon: '⚠️',
-      })
-      return
-    }
+      if (!res.success) {
+        setThemedAlert({
+          title: 'COMPRA RECHAZADA',
+          message: res.error || 'El servidor rechazó la compra.',
+          icon: '⚠️',
+        })
+        return
+      }
 
-    const bought = res.packs || []
-    if (bought.length > 0) {
-      soundManager.playSound('plantation', 0.8)
-      setPurchasedPacksList(bought)
+      const bought = res.packs || []
+      if (bought.length > 0) {
+        soundManager.playSound('plantation', 0.8)
+        setPurchasedPacksList(bought)
+      }
+    } finally {
+      setIsPurchasingPack(false)
     }
   }
 
@@ -498,9 +505,12 @@ export default function Shop({
                 <button
                   className="shop-pack-btn"
                   type="button"
+                  disabled={isPurchasingPack}
                   onClick={() => handleBuyPacksBatch('basic')}
                 >
-                  COMPRAR ({getQty('basic')}) — {packPrice('basic') * getQty('basic')} 💎 Gemas
+                  {isPurchasingPack
+                    ? '⏳ PROCESANDO...'
+                    : `COMPRAR (${getQty('basic')}) — ${packPrice('basic') * getQty('basic')} 💎 Gemas`}
                 </button>
               </div>
 
@@ -537,9 +547,12 @@ export default function Shop({
                 <button
                   className="shop-pack-btn shop-pack-btn--epic"
                   type="button"
+                  disabled={isPurchasingPack}
                   onClick={() => handleBuyPacksBatch('epic')}
                 >
-                  COMPRAR ({getQty('epic')}) — {packPrice('epic') * getQty('epic')} 💎 Gemas
+                  {isPurchasingPack
+                    ? '⏳ PROCESANDO...'
+                    : `COMPRAR (${getQty('epic')}) — ${packPrice('epic') * getQty('epic')} 💎 Gemas`}
                 </button>
               </div>
 
@@ -576,9 +589,12 @@ export default function Shop({
                 <button
                   className="shop-pack-btn shop-pack-btn--legendary"
                   type="button"
+                  disabled={isPurchasingPack}
                   onClick={() => handleBuyPacksBatch('legendary')}
                 >
-                  COMPRAR ({getQty('legendary')}) — {packPrice('legendary') * getQty('legendary')} 💎 Gemas
+                  {isPurchasingPack
+                    ? '⏳ PROCESANDO...'
+                    : `COMPRAR (${getQty('legendary')}) — ${packPrice('legendary') * getQty('legendary')} 💎 Gemas`}
                 </button>
               </div>
             </div>
@@ -1119,21 +1135,16 @@ export default function Shop({
                 <button
                   type="button"
                   className="shop-pack-btn"
+                  disabled={isPurchasingPack}
                   onClick={() => {
                     const target = selectedPackDetails
                     setSelectedPackDetails(null)
                     handleBuyPacksBatch(target)
                   }}
                 >
-                  🛒 COMPRAR ({getQty(selectedPackDetails)}) POR $
-                  {(
-                    (selectedPackDetails === 'basic'
-                      ? 3
-                      : selectedPackDetails === 'epic'
-                      ? 5
-                      : 10) * getQty(selectedPackDetails)
-                  ).toFixed(2)}{' '}
-                  USD
+                  {isPurchasingPack
+                    ? '⏳ PROCESANDO...'
+                    : `🛒 COMPRAR (${getQty(selectedPackDetails)}) — ${packPrice(selectedPackDetails) * getQty(selectedPackDetails)} 💎 Gemas`}
                 </button>
               </div>
             </div>

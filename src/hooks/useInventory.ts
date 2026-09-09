@@ -1003,7 +1003,25 @@ export function useInventory() {
     const res = await inventoryService.buyPacks(packId, qty)
     if (!res.success) return { success: false, error: res.error }
 
-    await refreshFromServer()
+    // Deducción autoritativa inmediata del valor cobrado por el servidor
+    const spentGems = typeof res.spent === 'number' ? res.spent : 0
+    if (spentGems > 0) {
+      setUserTokens((prev) => {
+        const next = Math.max(0, prev - spentGems)
+        try {
+          localStorage.setItem(STORAGE_KEYS.TOKENS, next.toString())
+        } catch {}
+        return next
+      })
+      window.dispatchEvent(new Event('refresh_user_balance'))
+    }
+
+    try {
+      await refreshFromServer()
+    } catch (err) {
+      console.warn('[useInventory] Error refrescando estado tras compra de sobres:', err)
+      await refreshBalance().catch(() => {})
+    }
 
     const def = PACK_DEFINITIONS[packId]
     const packs: InventoryPack[] = (res.packIds || []).map((id) => ({
@@ -1023,14 +1041,50 @@ export function useInventory() {
   ): Promise<{ success: boolean; goldAdded?: number; error?: string }> => {
     const res = await inventoryService.buyGold(packageId)
     if (!res.success) return { success: false, error: res.error }
-    await refreshBalance()
+
+    const spentGems = typeof res.spent === 'number' ? res.spent : 0
+    if (spentGems > 0) {
+      setUserTokens((prev) => {
+        const next = Math.max(0, prev - spentGems)
+        try {
+          localStorage.setItem(STORAGE_KEYS.TOKENS, next.toString())
+        } catch {}
+        return next
+      })
+    }
+    if (typeof res.goldAdded === 'number' && res.goldAdded > 0) {
+      setUserGold((prev) => {
+        const next = prev + (res.goldAdded ?? 0)
+        try {
+          localStorage.setItem(STORAGE_KEYS.GOLD, next.toString())
+        } catch {}
+        return next
+      })
+    }
+    window.dispatchEvent(new Event('refresh_user_balance'))
+
+    await refreshBalance().catch(() => {})
     return { success: true, goldAdded: res.goldAdded }
   }
 
   const buyVipPass = async (): Promise<{ success: boolean; error?: string }> => {
     const res = await inventoryService.buyVipPass()
     if (!res.success) return { success: false, error: res.error }
-    await refreshBalance()
+
+    const spentGems = typeof res.spent === 'number' ? res.spent : 0
+    if (spentGems > 0) {
+      setUserTokens((prev) => {
+        const next = Math.max(0, prev - spentGems)
+        try {
+          localStorage.setItem(STORAGE_KEYS.TOKENS, next.toString())
+        } catch {}
+        return next
+      })
+    }
+    setHasVipPass(true)
+    window.dispatchEvent(new Event('refresh_user_balance'))
+
+    await refreshBalance().catch(() => {})
     return { success: true }
   }
 

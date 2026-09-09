@@ -19,6 +19,7 @@ export type ModoPartida = 'ranked' | 'friendly' | 'colosseum' | 'tournament'
 export const MODOS_CON_EMPAREJAMIENTO: ReadonlySet<ModoPartida> = new Set<ModoPartida>([
   'ranked',
   'friendly',
+  'tournament',
 ])
 
 /** ¿Este modo busca rival, o va directo a la simulación local? */

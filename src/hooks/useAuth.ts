@@ -95,6 +95,34 @@ export function useAuth() {
     }
   }, [])
 
+  useEffect(() => {
+    const handleRefreshBalance = async () => {
+      if (!user?.id) return
+      const b = await profileService.myBalance()
+      if (b) {
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                gems_balance: Number(b.gems_balance),
+                gold_balance: Number(b.gold_balance),
+                colosseum_tickets: Number(b.colosseum_tickets),
+                has_vip_pass: Boolean(b.has_vip_pass),
+                claimed_vip_levels: b.claimed_vip_levels || [],
+                colosseum_current_streak: Number(b.colosseum_current_streak),
+                colosseum_max_streak: Number(b.colosseum_max_streak),
+                elo_rating: Number(b.elo_rating),
+              }
+            : prev
+        )
+      }
+    }
+    window.addEventListener('refresh_user_balance', handleRefreshBalance)
+    return () => {
+      window.removeEventListener('refresh_user_balance', handleRefreshBalance)
+    }
+  }, [user?.id])
+
   /**
    * ¿Hay que pedirle nick y contraseña?
    *

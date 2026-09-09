@@ -205,3 +205,61 @@ export interface ColosseumLeaderboardEntry {
 
 export type { EngineVersion } from '../engine/simulate'
 export { parseEngineVersion } from '../engine/simulate'
+
+// ── SISTEMA DE TORNEOS AUTORITATIVO ───────────────────────────────────────────
+export type TournamentStatus = 'scheduled' | 'live' | 'ended' | 'cancelled'
+
+export interface TournamentModel {
+  id: string
+  title: string
+  description?: string
+  creator_id?: string | null
+  creator_name: string
+  prize_pool_gems: number
+  prize_distribution?: { top1?: number; top2?: number; top3?: number }
+  status: TournamentStatus
+  entry_fee_gems: number
+  start_time: string
+  end_time: string
+  duration_minutes: number
+  max_losses: number
+  prizes_distributed: boolean
+  participants_count?: number
+  active_participants_count?: number
+}
+
+export interface TournamentLeaderboardItem {
+  rank: number
+  user_id: string
+  username: string
+  wins: number
+  losses: number
+  is_eliminated: boolean
+  is_me: boolean
+  prize_awarded_gems: number
+}
+
+export interface TournamentMyParticipation {
+  registered: boolean
+  deck?: PlantId[]
+  wins?: number
+  losses?: number
+  is_eliminated?: boolean
+  prize_awarded_gems?: number
+}
+
+export interface TournamentDetailsResponse {
+  tournament: TournamentModel
+  leaderboard: TournamentLeaderboardItem[]
+  my_participation: TournamentMyParticipation
+}
+
+export interface CreateTournamentInput {
+  title: string
+  description?: string
+  prize_pool_gems?: number
+  entry_fee_gems?: number
+  start_time?: string
+  duration_minutes?: number
+  prize_distribution?: { top1?: number; top2?: number; top3?: number }
+}

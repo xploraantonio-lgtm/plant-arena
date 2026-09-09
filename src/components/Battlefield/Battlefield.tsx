@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { PlantId, ColosseumMatchConfig, EngineVersion } from '../../types/game'
 import { parseEngineVersion } from '../../types/game'
 import { TournamentManager, type ActiveTournamentSession } from '../../utils/tournamentManager'
+import { tournamentService } from '../../services/tournamentService'
 import { useGameEngine } from '../../hooks/useGameEngine'
 import { useAuth } from '../../hooks/useAuth'
 import { battleService } from '../../services/battleService'
@@ -113,6 +114,7 @@ interface BattlefieldProps {
   matchMode?: 'ranked' | 'colosseum' | 'tournament' | 'strategic_test'
   colosseumConfig?: ColosseumMatchConfig | null
   tournamentOpponent?: { name: string; tournamentId: string } | null
+  tournamentDeck?: PlantId[] | null
   onColosseumComplete?: (won: boolean) => { payoutGems: number; newStreak: number; newMaxStreak: number; isNewRecord: boolean }
   strategicPlaytestConfig?: StrategicPlaytestConfig | null
   onPlayAgainPlaytest?: () => void
@@ -186,6 +188,7 @@ export default function Battlefield({
   engineVersion = null,
   colosseumConfig,
   tournamentOpponent,
+  tournamentDeck,
   onColosseumComplete,
   strategicPlaytestConfig = null,
   onPlayAgainPlaytest,
@@ -354,11 +357,14 @@ export default function Battlefield({
 
   const allCatalogCards = useMemo(() => Object.keys(PLANT_CONFIGS) as PlantId[], [])
   const effectiveDeck = useMemo(() => {
+    if (matchMode === 'tournament' && tournamentDeck && tournamentDeck.length > 0) {
+      return tournamentDeck
+    }
     if (activeDeck && activeDeck.length > 0) {
       return activeDeck
     }
     return allCatalogCards.slice(0, 6)
-  }, [activeDeck, allCatalogCards])
+  }, [matchMode, tournamentDeck, activeDeck, allCatalogCards])
 
   // ── EL REGISTRO DE ACCIONES ────────────────────────────────────────────────
   //
@@ -879,9 +885,39 @@ export default function Battlefield({
 
       // Handle Tournament match resolution
       if (matchMode === 'tournament') {
-        const tourneyId = tournamentOpponent?.tournamentId || 'tourney_free_1'
-        const resolved = TournamentManager.resolveMatch(tourneyId, gameStatus === 'victory')
-        setTournamentResult(resolved)
+        const tourneyId = tournamentOpponent?.tournamentId || 'tourney_official_1'
+        const oppName = tournamentOpponent?.name || 'Rival de Torneo'
+        const isVictory = gameStatus === 'victory'
+
+        void tournamentService.submitMatchResult(tourneyId, isVictory, oppName).then((res) => {
+          if (res.success && res.wins !== undefined && res.losses !== undefined) {
+            setTournamentResult((prev) => {
+              const base = prev || TournamentManager.getSession(tourneyId) || {
+                tournamentId: tourneyId,
+                tournamentName: 'Torneo',
+                registered: true,
+                startTimeMs: 0,
+                endTimeMs: 0,
+                userWins: 0,
+                userLosses: 0,
+                maxLosses: 3,
+                isEliminated: false,
+                leaderboard: [],
+              }
+              return {
+                ...base,
+                userWins: res.wins ?? base.userWins,
+                userLosses: res.losses ?? base.userLosses,
+                isEliminated: Boolean(res.is_eliminated),
+              }
+            })
+          }
+        })
+
+        const resolved = TournamentManager.resolveMatch(tourneyId, isVictory)
+        if (resolved) {
+          setTournamentResult(resolved)
+        }
       }
 
       // Ranked sin roomId = entrenamiento/bot (el cliente calcula ELO local).

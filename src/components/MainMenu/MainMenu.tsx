@@ -52,7 +52,7 @@ interface MainMenuProps {
   /** Duelo amistoso: código de sala privada y apuesta opcional. */
   onPlayFriendly?: (roomCode: string, betGems: number) => void
   onStartColosseumMatch?: (betGems: ColosseumBetAmount, usedTicket: boolean) => void
-  onStartTournamentMatch?: (opponentName: string, tournamentId: string) => void
+  onStartTournamentMatch?: (opponentName: string, tournamentId: string, tournamentDeck?: PlantId[]) => void
   onOpenCollection?: () => void
   onOpenJardin?: () => void
   onOpenShop?: () => void
@@ -613,13 +613,14 @@ export default function MainMenu({
         isOpen={isTournamentModalOpen}
         onClose={() => setIsTournamentModalOpen(false)}
         userTokens={userTokens}
+        isAdmin={isAdmin}
         onDeductTokens={(amount) => {
           if (onDeductTokens) return onDeductTokens(amount)
           return false
         }}
-        onStartTournamentMatch={(oppName, tourneyId) => {
+        onStartTournamentMatch={(oppName, tourneyId, tourneyDeck) => {
           if (onStartTournamentMatch) {
-            onStartTournamentMatch(oppName, tourneyId)
+            onStartTournamentMatch(oppName, tourneyId, tourneyDeck)
           }
         }}
       />

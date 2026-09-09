@@ -36,7 +36,7 @@ import AdminPanel from './components/Admin/AdminPanel'
 import { UserManager } from './utils/userManager'
 import { useVersionDelJuego } from './hooks/useVersionDelJuego'
 import UpdateModal from './components/UpdateModal/UpdateModal'
-import { parseEngineVersion, type EngineVersion } from './types/game'
+import { parseEngineVersion, type EngineVersion, type PlantId } from './types/game'
 import { StrategicPlaytestLauncherModal } from './components/StrategicPlaytest/StrategicPlaytestLauncherModal'
 import type { StrategicPlaytestConfig } from './engine/strategicPlaytest'
 import { SeasonManager } from './utils/seasonManager'
@@ -303,6 +303,7 @@ function App() {
   const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum' | 'tournament' | 'strategic_test'>('ranked')
   const [colosseumConfig, setColosseumConfig] = useState<import('./types/game').ColosseumMatchConfig | null>(null)
   const [tournamentOpponent, setTournamentOpponent] = useState<{ name: string; tournamentId: string } | null>(null)
+  const [tournamentDeck, setTournamentDeck] = useState<PlantId[] | null>(null)
   const [isStrategicPlaytestModalOpen, setIsStrategicPlaytestModalOpen] = useState<boolean>(false)
   const [strategicPlaytestConfig, setStrategicPlaytestConfig] = useState<StrategicPlaytestConfig | null>(null)
 
@@ -411,6 +412,7 @@ function App() {
     setEngineVersionSala(null)
     setCustomArenaBg(undefined)
     setTournamentOpponent(null)
+    setTournamentDeck(null)
     setPracticePlantId(null)
   }, [])
 
@@ -614,13 +616,27 @@ function App() {
     void refreshFromServer()
   }
 
-  const handleStartTournamentMatch = (opponentName: string, tournamentId: string) => {
+  const handleStartTournamentMatch = async (opponentName: string, tournamentId: string, tourneyDeck?: PlantId[]) => {
     setBattleMatchMode('tournament')
     setColosseumConfig(null)
-    setTournamentOpponent({ name: opponentName, tournamentId })
+    setTournamentOpponent({ name: opponentName || 'Rival del Torneo', tournamentId })
+    setTournamentDeck(tourneyDeck || null)
     setPracticePlantId(null)
     setCustomArenaBg(undefined)
-    setScreen('battle')
+    setSalaId(null)
+    setSemillaPartida(undefined)
+    setRivalId(null)
+    setNombresEnPartida(null)
+    setMazosDeLaSala(null)
+
+    if (!buscaRival('tournament')) {
+      setScreen('battle')
+      return
+    }
+
+    setModoBuscando('tournament')
+    setScreen('searching')
+    void buscar('tournament', { roomCode: tournamentId })
   }
 
   const handleStartStrategicPlaytest = (config: StrategicPlaytestConfig) => {
@@ -914,6 +930,7 @@ function App() {
             matchMode={battleMatchMode}
             colosseumConfig={colosseumConfig}
             tournamentOpponent={tournamentOpponent}
+            tournamentDeck={tournamentDeck}
             strategicPlaytestConfig={strategicPlaytestConfig}
             onPlayAgainPlaytest={() => setIsStrategicPlaytestModalOpen(true)}
             /* Con sala, la partida es real: misma semilla para los dos y el

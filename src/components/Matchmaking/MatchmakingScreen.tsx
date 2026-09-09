@@ -32,7 +32,7 @@ const SUBTITULOS: Record<ModoPartida, string> = {
   ranked:     'En juego: puntos de arena y un cofre si ganas.',
   friendly:   'Sin puntos ni recompensas. Sólo por jugar.',
   colosseum:  'Sólo contra jugadores reales.',
-  tournament: 'Emparejando dentro de tu torneo.',
+  tournament: 'Sólo contra jugadores reales del torneo. Cero bots.',
 }
 
 function reloj(segundos: number): string {
