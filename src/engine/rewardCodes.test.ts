@@ -10,6 +10,7 @@ interface DbRewardCodeRow {
   normalized_code: string
   reward_type: string
   reward_value: number
+  reward_plant_id?: string | null
   max_uses: number
   used_count: number
   active: boolean
@@ -134,7 +135,54 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
       return { success: false, error: 'CODE_LIMIT_REACHED' }
     }
 
-    // Calcular arena level
+    // Recompensa directa de Oro
+    if (codeRow.reward_type === 'gold') {
+      const goldAmt = codeRow.reward_value || 100
+      const profile = profilesTable.get(userId)
+      if (profile) {
+        profile.gold_balance += goldAmt
+      }
+      rewardCodeClaimsTable.set(claimKey, {
+        id: `claim-${Date.now()}`,
+        user_id: userId,
+        reward_code_id: codeRow.id,
+        claimed_at: new Date(),
+      })
+      codeRow.used_count += 1
+      return {
+        success: true,
+        code: cleanCode,
+        rewardType: 'gold',
+        goldAmount: goldAmt,
+      }
+    }
+
+    // Recompensa directa de Carta
+    if (codeRow.reward_type === 'plant') {
+      const plantId = codeRow.reward_plant_id || 'peashooter'
+      const plantKey = `${userId}:${plantId}`
+      const existing = plantCopiesTable.get(plantKey)
+      if (existing) {
+        existing.copies += 1
+      } else {
+        plantCopiesTable.set(plantKey, { user_id: userId, plant_id: plantId, copies: 1 })
+      }
+      rewardCodeClaimsTable.set(claimKey, {
+        id: `claim-${Date.now()}`,
+        user_id: userId,
+        reward_code_id: codeRow.id,
+        claimed_at: new Date(),
+      })
+      codeRow.used_count += 1
+      return {
+        success: true,
+        code: cleanCode,
+        rewardType: 'plant',
+        plantId,
+      }
+    }
+
+    // Calcular arena level para sobre PvP
     const profile = profilesTable.get(userId)
     const elo = profile?.elo_rating ?? 1000
     let arenaLevel = 1
@@ -173,6 +221,7 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
     return {
       success: true,
       code: cleanCode,
+      rewardType: 'pvp_pack',
       packId,
       status: 'pending',
       arenaLevel,
@@ -423,6 +472,60 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
     const res = rpcClaimRewardCode('user-1', '  flame  ')
     expect(res.success).toBe(true)
     expect(res.code).toBe('FLAME')
+  })
+
+  it('13. Código de recompensa directa de ORO suma gold_balance al usuario', () => {
+    rewardCodesTable.set('UNDEATHGOLD', {
+      id: 'code-gold-1',
+      code: 'UNDEATHGOLD',
+      normalized_code: 'UNDEATHGOLD',
+      reward_type: 'gold',
+      reward_value: 500,
+      reward_plant_id: null,
+      max_uses: 10,
+      used_count: 0,
+      active: true,
+      created_at: new Date(),
+      expires_at: null,
+    })
+
+    const profile = profilesTable.get('user-1')!
+    const goldBefore = profile.gold_balance
+
+    const res = rpcClaimRewardCode('user-1', 'UNDEATHGOLD')
+    expect(res.success).toBe(true)
+    expect(res.rewardType).toBe('gold')
+    expect(res.goldAmount).toBe(500)
+    expect(profile.gold_balance).toBe(goldBefore + 500)
+
+    // Intento repetido falla
+    const retry = rpcClaimRewardCode('user-1', 'UNDEATHGOLD')
+    expect(retry.success).toBe(false)
+    expect(retry.error).toBe('CODE_ALREADY_CLAIMED')
+  })
+
+  it('14. Código de recompensa directa de CARTA agrega la carta a la colección', () => {
+    rewardCodesTable.set('POCOCOMUN77', {
+      id: 'code-plant-1',
+      code: 'POCOCOMUN77',
+      normalized_code: 'POCOCOMUN77',
+      reward_type: 'plant',
+      reward_value: 1,
+      reward_plant_id: 'bonkchoy',
+      max_uses: 10,
+      used_count: 0,
+      active: true,
+      created_at: new Date(),
+      expires_at: null,
+    })
+
+    const res = rpcClaimRewardCode('user-1', 'POCOCOMUN77')
+    expect(res.success).toBe(true)
+    expect(res.rewardType).toBe('plant')
+    expect(res.plantId).toBe('bonkchoy')
+
+    const copyRow = plantCopiesTable.get('user-1:bonkchoy')
+    expect(copyRow?.copies).toBe(1)
   })
 
   // ── AUDITORÍA ESTÁTICA DEL ARCHIVO SQL DE LA MIGRACIÓN 50 ──────────────────

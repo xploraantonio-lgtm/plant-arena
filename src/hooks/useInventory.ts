@@ -912,13 +912,16 @@ export function useInventory() {
     const handleRefresh = () => void refreshBalance()
     const handleRefreshSlots = () => void refreshPackSlots()
     const handleRefreshRewardPacks = () => void refreshRewardPacks()
+    const handleRefreshInventory = () => void refreshInventory()
     window.addEventListener('refresh_user_balance', handleRefresh)
     window.addEventListener('refresh_pack_slots', handleRefreshSlots)
     window.addEventListener('refresh_reward_packs', handleRefreshRewardPacks)
+    window.addEventListener('refresh_user_inventory', handleRefreshInventory)
     return () => {
       window.removeEventListener('refresh_user_balance', handleRefresh)
       window.removeEventListener('refresh_pack_slots', handleRefreshSlots)
       window.removeEventListener('refresh_reward_packs', handleRefreshRewardPacks)
+      window.removeEventListener('refresh_user_inventory', handleRefreshInventory)
     }
   }, [])
 

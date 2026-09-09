@@ -2636,6 +2636,12 @@ export const SupabaseService = {
     packId?: string
     status?: 'pending'
     arenaLevel?: number
+    rewardType?: 'gold' | 'plant' | 'pvp_pack'
+    goldAmount?: number
+    plantId?: string
+    rarity?: string
+    isNew?: boolean
+    message?: string
     error?: string
     errorCode?: 'CODE_NOT_FOUND' | 'CODE_DISABLED' | 'CODE_EXPIRED' | 'CODE_LIMIT_REACHED' | 'CODE_ALREADY_CLAIMED' | 'NOT_AUTHENTICATED' | 'UNKNOWN'
   }> {
@@ -2676,6 +2682,12 @@ export const SupabaseService = {
         packId: data?.packId,
         status: data?.status,
         arenaLevel: data?.arenaLevel,
+        rewardType: data?.rewardType,
+        goldAmount: data?.goldAmount,
+        plantId: data?.plantId,
+        rarity: data?.rarity,
+        isNew: data?.isNew,
+        message: data?.message,
       }
     } catch (e: any) {
       logError('claimRewardCode', e)

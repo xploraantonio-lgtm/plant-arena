@@ -203,11 +203,21 @@ export default function ProfileModal({
       if (res.success) {
         soundManager.playSound('victory', 0.9)
         setPromoCodeInput('')
-        setCodeFeedback({ text: '🎉 ¡Recompensa añadida al jardín!', type: 'success' })
-        showFeedback('🎉 ¡Recompensa añadida al jardín!', 'success')
+        let msg = res.message || '🎉 ¡Recompensa recibida con éxito!'
+        if (res.rewardType === 'gold') {
+          msg = `💰 ¡Has recibido +${res.goldAmount?.toLocaleString() || ''} de Oro!`
+        } else if (res.rewardType === 'plant') {
+          msg = `🌿 ¡Carta ${res.plantId || ''} añadida a tu inventario!`
+        } else if (res.rewardType === 'pvp_pack') {
+          msg = '🎉 ¡Sobre PvP añadido al jardín!'
+        }
+        setCodeFeedback({ text: msg, type: 'success' })
+        showFeedback(msg, 'success')
         window.dispatchEvent(new Event('refresh_reward_packs'))
         window.dispatchEvent(new Event('refresh_pack_slots'))
         window.dispatchEvent(new Event('refresh_user_balance'))
+        window.dispatchEvent(new Event('refresh_user_inventory'))
+        window.dispatchEvent(new Event('player_profile_updated'))
       } else {
         soundManager.playSound('error', 0.5)
         let msg = 'Código no encontrado.'
