@@ -1,0 +1,403 @@
+/* ==============================================================================
+   PLANT ARENA · FLASH OFFER MODAL (JALAPEÑO FLAME EDITION)
+   ============================================================================== */
+
+.flash-offer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: flashOfferFadeIn 0.25s ease-out;
+}
+
+@keyframes flashOfferFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.flash-offer-card {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  background: linear-gradient(160deg, #1c0a0a 0%, #120404 40%, #1f0b08 100%);
+  border: 2px solid #ef4444;
+  border-radius: 20px;
+  padding: 24px 20px 20px;
+  box-shadow:
+    0 0 30px rgba(239, 68, 68, 0.35),
+    0 10px 40px rgba(0, 0, 0, 0.9),
+    inset 0 0 20px rgba(239, 68, 68, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: flashOfferPop 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  box-sizing: border-box;
+  color: #fff;
+  overflow: hidden;
+}
+
+@keyframes flashOfferPop {
+  from { transform: scale(0.88); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.flash-offer-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.12) 0%, transparent 60%);
+  pointer-events: none;
+  animation: flameRotate 12s linear infinite;
+}
+
+@keyframes flameRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.flash-offer-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(40, 10, 10, 0.85);
+  border: 1px solid #f87171;
+  color: #fca5a5;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 5;
+}
+
+.flash-offer-close-btn:hover {
+  background: #dc2626;
+  color: #ffffff;
+  transform: scale(1.1);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+}
+
+/* HEADER TAGS */
+.flash-offer-header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #f97316 100%);
+  border: 1px solid #fdba74;
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.6);
+  animation: flamePulse 1.8s ease-in-out infinite alternate;
+  z-index: 2;
+}
+
+@keyframes flamePulse {
+  0% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); transform: scale(1); }
+  100% { box-shadow: 0 0 22px rgba(249, 115, 22, 0.9); transform: scale(1.03); }
+}
+
+.flash-offer-title {
+  font-family: 'Luckiest Guy', cursive, sans-serif;
+  font-size: 24px;
+  letter-spacing: 1.5px;
+  color: #fef08a;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.9),
+    0 0 12px rgba(245, 158, 11, 0.6);
+  margin: 0;
+  text-align: center;
+  z-index: 2;
+}
+
+/* ARTWORK SHOWCASE */
+.flash-offer-art-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 140px;
+  height: 140px;
+  margin: 2px 0;
+  z-index: 2;
+}
+
+.flash-offer-glow-ring {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.5) 0%, rgba(249, 115, 22, 0.2) 60%, transparent 80%);
+  filter: blur(10px);
+  animation: flameRingPulse 2s ease-in-out infinite;
+}
+
+@keyframes flameRingPulse {
+  0%, 100% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.flash-offer-plant-img {
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.8));
+  z-index: 2;
+  animation: jalapenoHover 3s ease-in-out infinite;
+}
+
+@keyframes jalapenoHover {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-6px) rotate(2deg); }
+}
+
+.flash-offer-rarity-pill {
+  position: absolute;
+  bottom: 0;
+  background: #1e3a8a;
+  border: 1.5px solid #60a5fa;
+  color: #bfdbfe;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  z-index: 3;
+}
+
+/* DESCRIPTION & STATS */
+.flash-offer-desc {
+  font-size: 12.5px;
+  color: #fed7aa;
+  text-align: center;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0 10px;
+  z-index: 2;
+}
+
+.flash-offer-feature-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  z-index: 2;
+}
+
+.flash-offer-chip {
+  background: rgba(50, 15, 15, 0.8);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+
+/* STATUS & LIMIT BAR */
+.flash-offer-stock-box {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid #7f1d1d;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+.flash-offer-stock-label {
+  font-size: 12px;
+  color: #fca5a5;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.flash-offer-stock-counter {
+  font-family: monospace, system-ui;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fde047;
+}
+
+.flash-offer-stock-counter--soldout {
+  color: #ef4444;
+}
+
+/* QUANTITY CONTROLLER */
+.flash-offer-qty-section {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(30, 10, 10, 0.7);
+  border: 1.5px solid #b91c1c;
+  border-radius: 14px;
+  padding: 8px 14px;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+.flash-offer-qty-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fed7aa;
+}
+
+.flash-offer-qty-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flash-offer-qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #7f1d1d;
+  border: 1px solid #f87171;
+  color: #fff;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.flash-offer-qty-btn:hover:not(:disabled) {
+  background: #dc2626;
+  transform: scale(1.08);
+}
+
+.flash-offer-qty-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.flash-offer-qty-value {
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* PRICE SUMMARY & USER GEMS */
+.flash-offer-summary-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  z-index: 2;
+  font-size: 12.5px;
+}
+
+.flash-offer-my-gems {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #bae6fd;
+}
+
+.flash-offer-total-cost {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 900;
+  font-size: 15px;
+  color: #fde047;
+}
+
+/* BUY BUTTON */
+.flash-offer-buy-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #ea580c 0%, #dc2626 50%, #b91c1c 100%);
+  border: 2px solid #fdba74;
+  border-radius: 14px;
+  padding: 12px;
+  color: #ffffff;
+  font-family: 'Luckiest Guy', cursive, sans-serif;
+  font-size: 18px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.6);
+  transition: all 0.2s ease;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.flash-offer-buy-btn:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.85);
+  border-color: #fef08a;
+}
+
+.flash-offer-buy-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
+}
+
+.flash-offer-buy-btn:disabled {
+  background: #374151;
+  border-color: #6b7280;
+  color: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.flash-offer-buy-btn--soldout {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+/* NOTIFICATION / ALERT */
+.flash-offer-alert {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+.flash-offer-alert--error {
+  background: rgba(153, 27, 27, 0.85);
+  border: 1px solid #f87171;
+  color: #fee2e2;
+}
+
+.flash-offer-alert--success {
+  background: rgba(22, 101, 52, 0.85);
+  border: 1px solid #4ade80;
+  color: #dcfce7;
+  animation: flashOfferPop 0.25s ease-out;
+}

@@ -2148,6 +2148,205 @@ export const SupabaseService = {
     }
   },
 
+  /**
+   * Consulta el estado de una oferta flash en el servidor (o fallback local).
+   */
+  async getFlashOfferStatus(offerId: string = 'flash_jalapeno_30'): Promise<{
+    success: boolean
+    offerId: string
+    title: string
+    description?: string
+    plantId: string
+    priceGems: number
+    maxPurchasesPerUser: number
+    userBought: number
+    remainingPurchases: number
+    isActive: boolean
+    isSoldOut: boolean
+    error?: string
+  }> {
+    const DEFAULT_OFFER = {
+      success: true,
+      offerId,
+      title: 'Oferta Flash: Jalapeño Explosivo',
+      description: '¡Consigue hasta 3 unidades de Jalapeño por 30 gemas cada una!',
+      plantId: 'jalapeno',
+      priceGems: 30,
+      maxPurchasesPerUser: 3,
+      userBought: 0,
+      remainingPurchases: 3,
+      isActive: true,
+      isSoldOut: false,
+    }
+
+    if (!isSupabaseConfigured()) {
+      try {
+        const savedCount = parseInt(localStorage.getItem(`plant_arena_flash_${offerId}_bought`) || '0', 10)
+        const userBought = Number.isFinite(savedCount) ? Math.max(0, savedCount) : 0
+        const remainingPurchases = Math.max(0, DEFAULT_OFFER.maxPurchasesPerUser - userBought)
+        return {
+          ...DEFAULT_OFFER,
+          userBought,
+          remainingPurchases,
+          isSoldOut: remainingPurchases <= 0,
+        }
+      } catch {
+        return DEFAULT_OFFER
+      }
+    }
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_flash_offer_status', {
+        p_offer_id: offerId,
+      })
+      if (error) {
+        // Fallback local si la función RPC aún no está migrada en la base
+        const savedCount = parseInt(localStorage.getItem(`plant_arena_flash_${offerId}_bought`) || '0', 10)
+        const userBought = Number.isFinite(savedCount) ? Math.max(0, savedCount) : 0
+        const remainingPurchases = Math.max(0, DEFAULT_OFFER.maxPurchasesPerUser - userBought)
+        return {
+          ...DEFAULT_OFFER,
+          userBought,
+          remainingPurchases,
+          isSoldOut: remainingPurchases <= 0,
+        }
+      }
+      return data || DEFAULT_OFFER
+    } catch (e: any) {
+      logError('getFlashOfferStatus', e)
+      return DEFAULT_OFFER
+    }
+  },
+
+  /**
+   * Garantizador local de compra de oferta flash para entornos sin conexión o con migración pendiente.
+   */
+  buyFlashOfferLocal(offerId: string = 'flash_jalapeno_30', qty: number = 1): {
+    success: boolean
+    offerId?: string
+    plantId?: string
+    quantity?: number
+    priceGems?: number
+    totalGemsSpent?: number
+    userTotalBought?: number
+    remainingPurchases?: number
+    error?: string
+  } {
+    try {
+      const key = `plant_arena_flash_${offerId}_bought`
+      const savedCount = parseInt(localStorage.getItem(key) || '0', 10)
+      const currentBought = Number.isFinite(savedCount) ? Math.max(0, savedCount) : 0
+      if (currentBought + qty > 3) {
+        return {
+          success: false,
+          error: `Límite alcanzado: máximo 3 compras por usuario (llevas ${currentBought}, intentas ${qty})`,
+        }
+      }
+
+      const priceGems = 30
+      const totalGems = priceGems * qty
+      const curTokens = parseFloat(localStorage.getItem('plant_arena_user_tokens') || '0')
+      if (curTokens < totalGems) {
+        return {
+          success: false,
+          error: `Gemas insuficientes: necesitas ${totalGems} y tienes ${curTokens}`,
+        }
+      }
+
+      // Deducción local
+      const nextTokens = Math.max(0, Number((curTokens - totalGems).toFixed(2)))
+      localStorage.setItem('plant_arena_user_tokens', String(nextTokens))
+
+      // Entrega de Jalapeño
+      const copiesKey = 'plant_arena_plant_copies'
+      let copiesObj: Record<string, number> = {}
+      try {
+        copiesObj = JSON.parse(localStorage.getItem(copiesKey) || '{}')
+      } catch {}
+      const prevCopies = copiesObj['jalapeno'] || 0
+      copiesObj['jalapeno'] = prevCopies + qty
+      localStorage.setItem(copiesKey, JSON.stringify(copiesObj))
+
+      const unlockedKey = 'plant_arena_unlocked_plants'
+      let unlockedArr: string[] = []
+      try {
+        unlockedArr = JSON.parse(localStorage.getItem(unlockedKey) || '[]')
+      } catch {}
+      if (!unlockedArr.includes('jalapeno')) {
+        unlockedArr.push('jalapeno')
+        localStorage.setItem(unlockedKey, JSON.stringify(unlockedArr))
+      }
+
+      const nextBought = currentBought + qty
+      localStorage.setItem(key, String(nextBought))
+
+      return {
+        success: true,
+        offerId,
+        plantId: 'jalapeno',
+        quantity: qty,
+        priceGems,
+        totalGemsSpent: totalGems,
+        userTotalBought: nextBought,
+        remainingPurchases: Math.max(0, 3 - nextBought),
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error local al comprar' }
+    }
+  },
+
+  /**
+   * Ejecuta la compra de una oferta flash con garantía autoritativa de backend.
+   */
+  async buyFlashOffer(offerId: string = 'flash_jalapeno_30', qty: number = 1): Promise<{
+    success: boolean
+    offerId?: string
+    plantId?: string
+    quantity?: number
+    priceGems?: number
+    totalGemsSpent?: number
+    userTotalBought?: number
+    remainingPurchases?: number
+    error?: string
+  }> {
+    if (qty <= 0) return { success: false, error: 'Cantidad inválida' }
+
+    if (!isSupabaseConfigured()) {
+      return this.buyFlashOfferLocal(offerId, qty)
+    }
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('buy_flash_offer', {
+        p_offer_id: offerId,
+        p_qty: qty,
+      })
+
+      if (error) {
+        if (
+          error.code === 'PGRST202' ||
+          error.message?.includes('buy_flash_offer') ||
+          error.message?.includes('schema cache')
+        ) {
+          console.warn('[SupabaseService] buy_flash_offer aún no migrada en Supabase remoto, aplicando garantizador local')
+          return this.buyFlashOfferLocal(offerId, qty)
+        }
+        logError('buyFlashOffer', error)
+        return { success: false, error: error.message }
+      }
+
+      if (data?.success) {
+        try {
+          localStorage.setItem(`plant_arena_flash_${offerId}_bought`, String(data.userTotalBought ?? 3))
+        } catch {}
+      }
+
+      return data
+    } catch (e: any) {
+      logError('buyFlashOffer', e)
+      return { success: false, error: e?.message || 'Error al conectar con el servidor' }
+    }
+  },
+
   /** Abre un sobre. El sorteo de rareza lo hace Postgres con su random(), así
    *  que no se puede repetir hasta obtener la carta deseada. */
   async openPack(packRowId: string): Promise<{

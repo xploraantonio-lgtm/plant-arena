@@ -25,4 +25,6 @@ export const inventoryService = {
   claimRewardPack: SupabaseService.claimRewardPack.bind(SupabaseService),
   claimBattlePassLevel: SupabaseService.claimBattlePassLevel.bind(SupabaseService),
   claimAllBattlePassLevels: SupabaseService.claimAllBattlePassLevels.bind(SupabaseService),
+  getFlashOfferStatus: SupabaseService.getFlashOfferStatus.bind(SupabaseService),
+  buyFlashOffer: SupabaseService.buyFlashOffer.bind(SupabaseService),
 } as const

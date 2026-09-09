@@ -820,7 +820,7 @@ export default function Battlefield({
   // quedabas jugando contra un campo vacío sin saber que ya habías ganado: el
   // resultado existía en la base y en su pantalla, pero no en la tuya.
   useEffect(() => {
-    if (!roomId || !currentUserId) return
+    if (!roomId || !currentUserId || isAsyncMatch) return
     let cerrado = false
     let comprobando = false
     let timerComprobar: ReturnType<typeof setTimeout> | null = null
@@ -866,7 +866,7 @@ export default function Battlefield({
       if (timerComprobar) clearTimeout(timerComprobar)
       dejarDeEscuchar()
     }
-  }, [roomId, currentUserId, terminarPorOrdenDelServidor, sessionGeneration])
+  }, [roomId, currentUserId, terminarPorOrdenDelServidor, sessionGeneration, isAsyncMatch])
 
   // ── AVISO AL CERRAR EL NAVEGADOR ───────────────────────────────────────────
   //
