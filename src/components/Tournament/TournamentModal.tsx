@@ -280,7 +280,7 @@ export default function TournamentModal({
         <div className="tourney-header">
           <div className="tourney-header__title-box">
             <span className="tourney-header__icon">🏆</span>
-            <div>
+            <div className="tourney-header__title-text">
               <h2 className="tourney-header__title">Lobby de Torneos</h2>
               <p className="tourney-header__subtitle">
                 Entrada gratuita • Todos contra todos • Todas las cartas desbloqueadas • Límite 3 derrotas
@@ -677,8 +677,23 @@ export default function TournamentModal({
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-              Selecciona un torneo de la lista.
+            <div className="tourney-detail-empty">
+              <div className="tourney-detail-empty__icon">🏆</div>
+              <h3 className="tourney-detail-empty__title">Panel de Información</h3>
+              <p className="tourney-detail-empty__desc">
+                Selecciona un torneo de la lista para ver los premios, consultar la clasificación en tiempo real y entrar a la batalla.
+              </p>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="tourney-btn-create"
+                  style={{ marginTop: 14 }}
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  <span>➕</span>
+                  <span>Crear Nuevo Torneo</span>
+                </button>
+              )}
             </div>
           )}
         </div>
