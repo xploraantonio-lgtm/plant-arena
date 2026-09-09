@@ -170,17 +170,19 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
       .then(async (profiles) => {
         const userPlantsMap = new Map<string, string>()
         try {
-          const userIds = profiles.map((p) => p.id)
-          const { data: instances } = await supabase
-            .from('plant_instances')
-            .select('owner_id, plant_id, level, is_in_deck')
-            .in('owner_id', userIds)
-            .order('level', { ascending: false })
+          const topUserIds = profiles.slice(0, 10).map((p) => p.id)
+          if (topUserIds.length > 0) {
+            const { data: instances } = await supabase
+              .from('plant_instances')
+              .select('owner_id, plant_id, level, is_in_deck')
+              .in('owner_id', topUserIds)
+              .order('level', { ascending: false })
 
-          if (Array.isArray(instances)) {
-            for (const inst of instances) {
-              if (inst.owner_id && inst.plant_id && !userPlantsMap.has(inst.owner_id)) {
-                userPlantsMap.set(inst.owner_id, inst.plant_id)
+            if (Array.isArray(instances)) {
+              for (const inst of instances) {
+                if (inst.owner_id && inst.plant_id && !userPlantsMap.has(inst.owner_id)) {
+                  userPlantsMap.set(inst.owner_id, inst.plant_id)
+                }
               }
             }
           }
