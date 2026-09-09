@@ -1178,6 +1178,11 @@ export default function Battlefield({
     <div
       className={`battlefield ${selectedCard === 'shovel' ? 'battlefield--shovel-mode' : ''}`}
       style={{ backgroundImage: `url(${activeBgImage})` }}
+      onPointerDown={(e) => {
+        if (selectedCard && e.button === 0 && e.target === e.currentTarget) {
+          setSelectedCard(null, null)
+        }
+      }}
       onContextMenu={(e) => {
         e.preventDefault()
         if (selectedCard) {
@@ -1389,10 +1394,15 @@ export default function Battlefield({
             {Array.from({ length: TOTAL_COLUMNS }).map((_, col) => {
               const isP1Side = col < P1_COLUMNS
               const isCellSelected = Boolean(selectedCard && isP1Side)
-              const isCellOccupied =
-                plants.some((p) => p.lane === lane.id && p.col === col) ||
-                pendingOwnPlants.some((p) => p.lane === lane.id && p.col === col)
-              const isPlantDestination = isCellSelected && (selectedCard === 'shovel' ? isCellOccupied : !isCellOccupied)
+              // Detección estricta alineada al motor: sólo plantas estáticas bloquean el terreno
+              const isCellOccupiedByPlant = plants.some((p) => p.lane === lane.id && p.col === col && !p.isWalking)
+              const isCellPendingSprout = pendingOwnPlants.some((p) => p.lane === lane.id && p.col === col)
+              const isCellOccupied = isCellOccupiedByPlant || isCellPendingSprout
+
+              // Para la pala sólo son válidas plantas ya materializadas (no brotes en vuelo)
+              const isPlantDestination = isCellSelected && (selectedCard === 'shovel' ? isCellOccupiedByPlant : !isCellOccupied)
+              const isPlantCard = selectedCard && selectedCard !== 'shovel'
+              const previewPlantConfig = isPlantCard && isPlantDestination ? PLANT_CONFIGS[selectedCard] : null
 
               const handleCellAction = () => {
                 if (!isPlantDestination) return
@@ -1434,14 +1444,25 @@ export default function Battlefield({
                   } ${isPlantDestination ? 'lane__cell--selectable' : ''}`}
                   style={{
                     width: `${100 / TOTAL_COLUMNS}%`,
-                    zIndex: isPlantDestination ? (selectedCard === 'shovel' ? 10 : 70) : 1,
-                    pointerEvents: isP1Side ? 'auto' : 'none',
+                    zIndex: isPlantDestination ? (selectedCard === 'shovel' ? 10 : 70) : (selectedCard ? 5 : 1),
+                    pointerEvents: selectedCard || isP1Side ? 'auto' : 'none',
                   }}
                   onPointerDown={(e) => {
                     if (e.button !== 0) return
                     if (isPlantDestination) {
                       lastPointerCellActionRef.current = Date.now()
                       handleCellAction()
+                    } else if (selectedCard) {
+                      lastPointerCellActionRef.current = Date.now()
+                      if (!isP1Side) {
+                        // Tocar el lado rival cancela la selección de forma natural
+                        setSelectedCard(null, null)
+                      } else if (isCellOccupied) {
+                        // Feedback háptico ligero de rechazo en casilla ocupada sin tirar la carta
+                        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                          try { navigator.vibrate([15, 20]) } catch {}
+                        }
+                      }
                     }
                   }}
                   onClick={(e) => {
@@ -1451,9 +1472,20 @@ export default function Battlefield({
                     }
                     if (isPlantDestination) {
                       handleCellAction()
+                    } else if (selectedCard && !isP1Side) {
+                      setSelectedCard(null, null)
                     }
                   }}
-                />
+                >
+                  {previewPlantConfig && (
+                    <img
+                      className="lane__cell-ghost-preview"
+                      src={previewPlantConfig.sprite || previewPlantConfig.icon}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  )}
+                </div>
               )
             })}
           </div>
