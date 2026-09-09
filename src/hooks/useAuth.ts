@@ -179,10 +179,10 @@ export function useAuth() {
 
       // Insert exactly 4 Starter Plant Instances
       const starterPlants: Database['public']['Tables']['plant_instances']['Insert'][] = [
-        { owner_id: userId, plant_id: 'sunflower', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 0 },
-        { owner_id: userId, plant_id: 'peashooter', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 1 },
-        { owner_id: userId, plant_id: 'wallnut', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 2 },
-        { owner_id: userId, plant_id: 'chomper', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 3 }, // Cactus
+        { owner_id: userId, plant_id: 'sunflower', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 0, is_base: true },
+        { owner_id: userId, plant_id: 'peashooter', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 1, is_base: true },
+        { owner_id: userId, plant_id: 'wallnut', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 2, is_base: true },
+        { owner_id: userId, plant_id: 'chomper', rarity: 'common', star_level: 1, is_in_deck: true, deck_slot: 3, is_base: true }, // Cactus
       ]
       await (supabase.from('plant_instances') as any).insert(starterPlants)
     } catch (e) {

@@ -3,7 +3,7 @@
   inset: 0;
   background: rgba(10, 15, 30, 0.85);
   backdrop-filter: blur(8px);
-  z-index: 1000;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -466,3 +466,66 @@
   padding: 8px 12px;
   border-radius: 8px;
 }
+
+/* ── RESPONSIVE MOBILE STYLES ────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .colosseum-backdrop {
+    padding: 8px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .colosseum-modal-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 14px 12px;
+    max-height: 94vh;
+    gap: 12px;
+    border-radius: 16px;
+  }
+
+  .colosseum-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-bottom: 10px;
+  }
+
+  .colosseum-header__icon {
+    font-size: 1.6rem;
+  }
+
+  .colosseum-header__title {
+    font-size: 1.1rem;
+  }
+
+  .colosseum-header__subtitle {
+    font-size: 0.72rem;
+  }
+
+  .colosseum-header__stats {
+    gap: 4px;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .colosseum-rooms-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .colosseum-room-card {
+    padding: 12px 10px;
+  }
+
+  .colosseum-room-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .colosseum-btn {
+    width: 100%;
+    min-height: 40px;
+    font-size: 0.82rem;
+  }
+}
+

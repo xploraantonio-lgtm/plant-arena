@@ -240,7 +240,7 @@
 
 .lane__cell--selectable {
   cursor: pointer;
-  z-index: 75 !important;
+  z-index: 70;
   pointer-events: auto !important;
 }
 
@@ -642,13 +642,13 @@
 .sun-item {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 62px;
-  height: 62px;
+  width: 52px;
+  height: 52px;
   background: none;
   border: none;
-  padding: 6px;
+  padding: 4px;
   cursor: pointer;
-  z-index: 60;
+  z-index: 85;
   pointer-events: auto;
   user-select: none;
   touch-action: manipulation;
@@ -659,16 +659,20 @@
 .sun-item::before {
   content: '';
   position: absolute;
-  top: -12px;
-  left: -12px;
-  right: -12px;
-  bottom: -12px;
+  inset: 0;
   border-radius: 50%;
 }
 
-.sun-item:hover,
-.sun-item:active {
-  transform: translate(-50%, -50%) scale(1.3) !important;
+.sun-item--collecting {
+  pointer-events: none !important;
+  transform: translate(-50%, -50%) scale(0) !important;
+  opacity: 0 !important;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease-out !important;
+}
+
+.sun-item:hover:not(.sun-item--collecting),
+.sun-item:active:not(.sun-item--collecting) {
+  transform: translate(-50%, -50%) scale(1.18) !important;
 }
 
 .sun-item__icon {

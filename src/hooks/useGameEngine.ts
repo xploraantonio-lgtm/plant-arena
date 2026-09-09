@@ -666,7 +666,7 @@ export function useGameEngine() {
   }, [])
 
   const confirmarRecogidaSol = useCallback(
-    (sunId: string, issuedTick?: number, seq?: number, generation?: number): boolean => {
+    (sunId: string, issuedTick?: number, seq?: number, generation?: number, silent?: boolean): boolean => {
       const res = confirmarRecogidaSolConSesion({
         currentGeneration: sessionGenerationRef.current,
         callbackGeneration: generation,
@@ -696,7 +696,9 @@ export function useGameEngine() {
       }
 
       if (res.sunValue !== undefined) {
-        soundManager.playSound('points', 0.6)
+        if (!silent) {
+          soundManager.playSound('points', 0.6)
+        }
         forceRender()
         return true
       }

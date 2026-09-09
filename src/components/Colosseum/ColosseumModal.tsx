@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { ColosseumBetAmount, ColosseumLeaderboardEntry } from '../../types/game'
 import { soundManager } from '../../utils/audioManager'
 import { colosseumService } from '../../services/colosseumService'
@@ -68,7 +69,7 @@ export default function ColosseumModal({
     onStartColosseumMatch(bet, useTicket)
   }
 
-  return (
+  const modalContent = (
     <div className="colosseum-backdrop" onClick={onClose}>
       <div className="colosseum-modal-card" onClick={(e) => e.stopPropagation()}>
         {/* HEADER */}
@@ -381,4 +382,10 @@ export default function ColosseumModal({
       </div>
     </div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body)
+  }
+
+  return modalContent
 }

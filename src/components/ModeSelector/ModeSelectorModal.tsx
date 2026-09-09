@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { soundManager } from '../../utils/audioManager'
 import './ModeSelectorModal.css'
 
@@ -77,7 +78,7 @@ export default function ModeSelectorModal({
     }
   }
 
-  return (
+  const modalContent = (
     <div className="mode-selector-backdrop" onClick={handleClose}>
       <div
         className={`mode-selector-card ${subModal === 'friendly' ? 'mode-selector-card--friendly' : ''}`}
@@ -390,4 +391,10 @@ export default function ModeSelectorModal({
       </div>
     </div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body)
+  }
+
+  return modalContent
 }

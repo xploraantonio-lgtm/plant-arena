@@ -383,6 +383,8 @@ export default function Battlefield({
 
   const redBloqueadaRef = useRef(false)
   const [redBloqueada, setRedBloqueada] = useState(false)
+  const collectingSunIdsRef = useRef<Set<string>>(new Set())
+  const [collectingSunIds, setCollectingSunIds] = useState<Set<string>>(new Set())
   const outboxAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -411,8 +413,13 @@ export default function Battlefield({
     const capturedGeneration = sessionGenerationRef.current
     const capturedRoomId = roomId
 
-    redBloqueadaRef.current = true
-    setRedBloqueada(true)
+    // SÓLO bloquea el tablero para acciones de plantar o excavar (que deben esperar ack para el próximo despliegue).
+    // Las acciones de recolección de soles son independientes y NUNCA deben congelar la interacción ni descartar otros soles.
+    const bloqueaRed = action.kind === 'plant' || action.kind === 'dig'
+    if (bloqueaRed) {
+      redBloqueadaRef.current = true
+      setRedBloqueada(true)
+    }
 
     const result = await MatchActionOutbox.deliver(
       roomId,
@@ -431,7 +438,7 @@ export default function Battlefield({
     }
 
     // cancelled ocurre al desmontar; no hay que tocar un motor que ya no existe.
-    if (result.status !== 'cancelled') {
+    if (result.status !== 'cancelled' && bloqueaRed) {
       redBloqueadaRef.current = false
       setRedBloqueada(false)
     }
@@ -539,11 +546,18 @@ export default function Battlefield({
     }
 
     if (isAsyncMatch && rankedAsyncInconsistency) return
-    if (redBloqueadaRef.current) return
+
+    // Si ya estamos recolectando este sol, ignorar clics repetidos sobre el mismo
+    if (collectingSunIdsRef.current.has(sunId)) return
 
     // Sólo observa el tic y confirma que el sol existe. NO suma economía todavía.
     const issuedTick = prepararRecogidaSol(sunId)
     if (issuedTick === null) return
+
+    // Feedback visual y auditivo inmediato (0ms de latencia)
+    collectingSunIdsRef.current.add(sunId)
+    setCollectingSunIds(new Set(collectingSunIdsRef.current))
+    soundManager.playSound('points', 0.6)
 
     const capturedGeneration = sessionGenerationRef.current
     const capturedRoomId = roomId
@@ -562,9 +576,11 @@ export default function Battlefield({
       },
       {
         onAck: () => {
+          collectingSunIdsRef.current.delete(sunId)
+          setCollectingSunIds(new Set(collectingSunIdsRef.current))
           if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
-          // Registra la acción autoritativa con el seq inmutable capturado al enviarla
-          confirmarRecogidaSol(sunId, issuedTick, seqAccion, capturedGeneration)
+          // Registra la acción autoritativa con el seq inmutable capturado al enviarla (silent: true para no duplicar sonido)
+          confirmarRecogidaSol(sunId, issuedTick, seqAccion, capturedGeneration, true)
           setDiag((d) => ({
             ...d,
             enviadas: d.enviadas + 1,
@@ -572,6 +588,8 @@ export default function Battlefield({
           }))
         },
         onRejected: (error) => {
+          collectingSunIdsRef.current.delete(sunId)
+          setCollectingSunIds(new Set(collectingSunIdsRef.current))
           if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
           // No hay rollback: todavía NO habíamos sumado este sol.
           setDiag((d) => ({
@@ -1294,8 +1312,11 @@ export default function Battlefield({
             {Array.from({ length: TOTAL_COLUMNS }).map((_, col) => {
               const isP1Side = col < P1_COLUMNS
               const isCellSelected = Boolean(selectedCard && isP1Side)
+              const isCellOccupied = plants.some((p) => p.lane === lane.id && p.col === col)
+              const isPlantDestination = isCellSelected && (selectedCard === 'shovel' ? isCellOccupied : !isCellOccupied)
 
               const handleCellAction = () => {
+                if (!isPlantDestination) return
                 if (roomId && redBloqueadaRef.current) return
                 if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) return
                 if (selectedCard && isP1Side) {
@@ -1331,15 +1352,15 @@ export default function Battlefield({
                   key={col}
                   className={`lane__cell ${
                     isP1Side ? 'lane__cell--p1' : 'lane__cell--p2'
-                  } ${isCellSelected ? 'lane__cell--selectable' : ''}`}
+                  } ${isPlantDestination ? 'lane__cell--selectable' : ''}`}
                   style={{
                     width: `${100 / TOTAL_COLUMNS}%`,
-                    zIndex: isCellSelected ? (selectedCard === 'shovel' ? 10 : 75) : 1,
+                    zIndex: isPlantDestination ? (selectedCard === 'shovel' ? 10 : 70) : 1,
                     pointerEvents: isP1Side ? 'auto' : 'none',
                   }}
                   onPointerDown={(e) => {
                     if (e.button !== 0) return
-                    if (isCellSelected) {
+                    if (isPlantDestination) {
                       lastPointerCellActionRef.current = Date.now()
                       handleCellAction()
                     }
@@ -1349,7 +1370,9 @@ export default function Battlefield({
                       e.preventDefault()
                       return
                     }
-                    handleCellAction()
+                    if (isPlantDestination) {
+                      handleCellAction()
+                    }
                   }}
                 />
               )
@@ -1550,36 +1573,40 @@ export default function Battlefield({
       ))}
 
       {/* Collectible Suns */}
-      {suns.map((sun) => (
-        <button
-          key={sun.id}
-          type="button"
-          // El último segundo antes de recogerse solo se avisa: si el sol
-          // desapareciera sin más, parecería que se ha perdido — y lo que pasa es
-          // justo lo contrario, que entra igual.
-          className={`sun-item ${
-            tick - sun.createdAt >= TICS_ANTES_DE_RECOGERSE_SOLO ? 'sun-item--se-va' : ''
-          }`}
-          style={{
-            left: `${sun.x}%`,
-            top: `${sun.y}%`,
-          }}
-          onMouseDown={(e) => {
-            e.stopPropagation()
-            recogerSolAutorizado(sun.id)
-          }}
-          onTouchStart={(e) => {
-            e.stopPropagation()
-            recogerSolAutorizado(sun.id)
-          }}
-          onClick={(e) => {
-            e.stopPropagation()
-            recogerSolAutorizado(sun.id)
-          }}
-        >
-          <img src={sunIcon} alt="Sol" className="sun-item__icon" />
-        </button>
-      ))}
+      {suns.map((sun) => {
+        const isCollecting = collectingSunIds.has(sun.id)
+        return (
+          <button
+            key={sun.id}
+            type="button"
+            // El último segundo antes de recogerse solo se avisa: si el sol
+            // desapareciera sin más, parecería que se ha perdido — y lo que pasa es
+            // justo lo contrario, que entra igual.
+            className={`sun-item ${
+              tick - sun.createdAt >= TICS_ANTES_DE_RECOGERSE_SOLO ? 'sun-item--se-va' : ''
+            } ${isCollecting ? 'sun-item--collecting' : ''}`}
+            style={{
+              left: `${sun.x}%`,
+              top: `${sun.y}%`,
+            }}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              e.stopPropagation()
+              recogerSolAutorizado(sun.id)
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation()
+              recogerSolAutorizado(sun.id)
+            }}
+            onClick={(e) => {
+              e.stopPropagation()
+              recogerSolAutorizado(sun.id)
+            }}
+          >
+            <img src={sunIcon} alt="Sol" className="sun-item__icon" />
+          </button>
+        )
+      })}
 
       {/* El reloj de la partida y la cuenta atrás hasta la muerte súbita. Sin
           esto el plazo existía pero no se veía, y un plazo que no se ve no se
