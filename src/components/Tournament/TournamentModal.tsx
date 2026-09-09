@@ -294,11 +294,6 @@ export default function TournamentModal({
       return
     }
 
-    if (createPrizeGems > 0 && userTokens < createPrizeGems) {
-      setCreateError(`No tienes suficientes Gemas (${createPrizeGems} 💎 requeridas). Tu saldo es: ${userTokens} 💎.`)
-      return
-    }
-
     setIsCreating(true)
     try {
       // Calculate start time
@@ -328,10 +323,6 @@ export default function TournamentModal({
       if (!res.success) {
         setCreateError(res.error || 'Error al crear torneo')
         return
-      }
-
-      if (createPrizeGems > 0) {
-        onDeductTokens(createPrizeGems)
       }
 
       soundManager.playSound('plantation', 0.8)
@@ -832,8 +823,8 @@ export default function TournamentModal({
                     value={createPrizeGems}
                     onChange={(e) => setCreatePrizeGems(Number(e.target.value))}
                   />
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                    Se descontará de tu saldo ({userTokens} 💎 disponibles) para garantizar el premio inicial (Top 1, 2 y 3).
+                  <span style={{ fontSize: '0.75rem', color: '#c084fc' }}>
+                    💎 Pozo oficial asignado por administración para premiar a los ganadores (Top 1: 50% • Top 2: 30% • Top 3: 20%). No se descuenta de tu saldo personal.
                   </span>
                 </div>
 

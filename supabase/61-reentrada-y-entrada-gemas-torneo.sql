@@ -64,20 +64,9 @@ BEGIN
     RAISE EXCEPTION 'ONLY_ADMIN_CAN_CREATE_TOURNAMENTS';
   END IF;
 
-  -- Si el creador aporta gemas al pozo inicial, validar y descontar
-  IF v_pool > 0 THEN
-    IF v_user.gems_balance IS NULL OR v_user.gems_balance < v_pool THEN
-      RAISE EXCEPTION 'INSUFFICIENT_GEMS';
-    END IF;
-
-    UPDATE public.profiles
-       SET gems_balance = gems_balance - v_pool,
-           updated_at   = NOW()
-     WHERE id = v_uid;
-
-    INSERT INTO public.transactions (user_id, type, amount_gems, description, status)
-    VALUES (v_uid, 'tournament_create_fund', v_pool, 'Fondeo de pozo de torneo: ' || v_clean_name, 'completed');
-  END IF;
+  -- NOTA: Como administrador del juego, el pozo oficial de gemas es garantizado
+  -- por el sistema y se entregará a los ganadores (Top 1, 2 y 3) al concluir el torneo.
+  -- NO se descuenta del saldo personal del admin.
 
   -- Calcular fin del torneo
   v_end_time := v_start_time + (v_duration || ' minutes')::INTERVAL;
