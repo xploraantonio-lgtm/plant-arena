@@ -849,6 +849,10 @@ export default function MainMenu({
         onPurchaseSuccess={() => {
           void loadFlashOfferStatus()
         }}
+        onRechargeGems={() => {
+          setIsFlashOfferOpen(false)
+          setIsProfileModalOpen(true)
+        }}
       />
     </div>
   )

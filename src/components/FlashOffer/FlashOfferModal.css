@@ -1,18 +1,20 @@
 /* ==============================================================================
-   PLANT ARENA · FLASH OFFER MODAL (JALAPEÑO FLAME EDITION)
+   PLANT ARENA · FLASH OFFER MODAL (PRO 16:9 LANDSCAPE GAMING EDITION)
+   Ajustado para el stage de 960x540 y adaptable a móviles y laptops
    ============================================================================== */
 
 .flash-offer-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
+  z-index: 100000;
+  background: rgba(8, 4, 4, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  animation: flashOfferFadeIn 0.25s ease-out;
+  padding: 12px;
+  animation: flashOfferFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes flashOfferFadeIn {
@@ -23,257 +25,368 @@
 .flash-offer-card {
   position: relative;
   width: 100%;
-  max-width: 460px;
-  background: linear-gradient(160deg, #1c0a0a 0%, #120404 40%, #1f0b08 100%);
-  border: 2px solid #ef4444;
+  max-width: 660px;
+  max-height: calc(100% - 16px);
+  background: radial-gradient(circle at 50% 0%, #2a0a0a 0%, #160404 60%, #0d0202 100%);
+  border: 2px solid #f97316;
   border-radius: 20px;
-  padding: 24px 20px 20px;
+  padding: 18px 22px 18px;
   box-shadow:
-    0 0 30px rgba(239, 68, 68, 0.35),
-    0 10px 40px rgba(0, 0, 0, 0.9),
-    inset 0 0 20px rgba(239, 68, 68, 0.15);
+    0 0 35px rgba(239, 68, 68, 0.4),
+    0 16px 40px rgba(0, 0, 0, 0.9),
+    inset 0 0 25px rgba(249, 115, 22, 0.2);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  animation: flashOfferPop 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  gap: 12px;
+  animation: flashOfferPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   box-sizing: border-box;
   color: #fff;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(249, 115, 22, 0.6) rgba(20, 5, 5, 0.7);
 }
 
 @keyframes flashOfferPop {
-  from { transform: scale(0.88); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+  from { transform: scale(0.92) translateY(10px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
+/* Borde superior luminoso animado */
 .flash-offer-card::before {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.12) 0%, transparent 60%);
-  pointer-events: none;
-  animation: flameRotate 12s linear infinite;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ef4444, #f97316, #fde047, #f97316, #ef4444);
+  background-size: 200% 100%;
+  animation: flameBorderGlow 3s linear infinite;
+  z-index: 5;
 }
 
-@keyframes flameRotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+@keyframes flameBorderGlow {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
 }
 
+/* BOTÓN CERRAR */
 .flash-offer-close-btn {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 12px;
+  right: 12px;
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(40, 10, 10, 0.85);
-  border: 1px solid #f87171;
+  background: rgba(50, 15, 15, 0.9);
+  border: 1.5px solid #ef4444;
   color: #fca5a5;
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  z-index: 5;
+  z-index: 10;
 }
 
 .flash-offer-close-btn:hover {
   background: #dc2626;
   color: #ffffff;
-  transform: scale(1.1);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+  transform: scale(1.12);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.8);
 }
 
-/* HEADER TAGS */
+/* TOP HEADER ROW */
+.flash-offer-top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 36px;
+  flex-shrink: 0;
+}
+
 .flash-offer-header-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #f97316 100%);
+  background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #ea580c 100%);
   border: 1px solid #fdba74;
   border-radius: 20px;
-  padding: 4px 14px;
-  font-size: 12px;
+  padding: 3px 12px;
+  font-size: 11px;
   font-weight: 900;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
   color: #fff;
-  box-shadow: 0 0 15px rgba(249, 115, 22, 0.6);
-  animation: flamePulse 1.8s ease-in-out infinite alternate;
-  z-index: 2;
+  box-shadow: 0 0 14px rgba(234, 88, 12, 0.6);
+  animation: flameBadgePulse 2s infinite alternate;
 }
 
-@keyframes flamePulse {
-  0% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); transform: scale(1); }
-  100% { box-shadow: 0 0 22px rgba(249, 115, 22, 0.9); transform: scale(1.03); }
+@keyframes flameBadgePulse {
+  0% { transform: scale(1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+  100% { transform: scale(1.03); box-shadow: 0 0 18px rgba(249, 115, 22, 0.85); }
+}
+
+.flash-offer-timer-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30, 10, 10, 0.85);
+  border: 1px solid #f87171;
+  color: #fef08a;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+/* 2-COLUMN MAIN CONTENT */
+.flash-offer-main-layout {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 580px) {
+  .flash-offer-main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==============================================================================
+   LEFT COLUMN: SEED PACKET CARD SHOWCASE
+   ============================================================================== */
+.flash-offer-card-showcase {
+  background: linear-gradient(180deg, rgba(40, 15, 10, 0.85) 0%, rgba(20, 5, 5, 0.95) 100%);
+  border: 2px solid #ea580c;
+  border-radius: 16px;
+  padding: 12px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+  position: relative;
+  overflow: hidden;
+}
+
+.flash-offer-card-showcase::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.35) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.flash-offer-seed-frame {
+  position: relative;
+  width: 130px;
+  height: 145px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flash-offer-sun-badge {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  background: radial-gradient(circle, #fde047 0%, #f59e0b 80%, #b45309 100%);
+  border: 1.5px solid #ffffff;
+  color: #451a03;
+  font-weight: 900;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 10px rgba(253, 224, 71, 0.8);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 5;
+}
+
+.flash-offer-packet-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.85));
+  animation: cardHoverFloat 3s ease-in-out infinite;
+}
+
+@keyframes cardHoverFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.02); }
+}
+
+.flash-offer-card-rarity-badge {
+  position: absolute;
+  bottom: 0px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+  border: 1.5px solid #93c5fd;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  z-index: 5;
+}
+
+/* STATS MINI-GRID */
+.flash-offer-stats-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.flash-offer-stat-item {
+  background: rgba(10, 3, 3, 0.7);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 8px;
+  padding: 3px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.flash-offer-stat-label {
+  font-size: 8.5px;
+  color: #fca5a5;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.flash-offer-stat-val {
+  font-size: 10.5px;
+  font-weight: 900;
+  color: #fde047;
+  font-family: monospace, system-ui;
+}
+
+/* ==============================================================================
+   RIGHT COLUMN: OFFER DETAILS, SLOTS TRACKER & BUY CONTROLS
+   ============================================================================== */
+.flash-offer-details-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .flash-offer-title {
   font-family: 'Luckiest Guy', cursive, sans-serif;
-  font-size: 24px;
-  letter-spacing: 1.5px;
+  font-size: 22px;
+  letter-spacing: 1px;
   color: #fef08a;
   text-shadow:
     0 2px 4px rgba(0, 0, 0, 0.9),
-    0 0 12px rgba(245, 158, 11, 0.6);
+    0 0 10px rgba(245, 158, 11, 0.5);
   margin: 0;
-  text-align: center;
-  z-index: 2;
+  line-height: 1.1;
 }
 
-/* ARTWORK SHOWCASE */
-.flash-offer-art-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 140px;
-  height: 140px;
-  margin: 2px 0;
-  z-index: 2;
-}
-
-.flash-offer-glow-ring {
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.5) 0%, rgba(249, 115, 22, 0.2) 60%, transparent 80%);
-  filter: blur(10px);
-  animation: flameRingPulse 2s ease-in-out infinite;
-}
-
-@keyframes flameRingPulse {
-  0%, 100% { transform: scale(0.95); opacity: 0.7; }
-  50% { transform: scale(1.15); opacity: 1; }
-}
-
-.flash-offer-plant-img {
-  width: 110px;
-  height: 110px;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.8));
-  z-index: 2;
-  animation: jalapenoHover 3s ease-in-out infinite;
-}
-
-@keyframes jalapenoHover {
-  0%, 100% { transform: translateY(0) rotate(-1deg); }
-  50% { transform: translateY(-6px) rotate(2deg); }
-}
-
-.flash-offer-rarity-pill {
-  position: absolute;
-  bottom: 0;
-  background: #1e3a8a;
-  border: 1.5px solid #60a5fa;
-  color: #bfdbfe;
-  font-size: 10px;
-  font-weight: 900;
-  padding: 2px 8px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
-  z-index: 3;
-}
-
-/* DESCRIPTION & STATS */
 .flash-offer-desc {
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: #fed7aa;
-  text-align: center;
-  line-height: 1.4;
+  line-height: 1.35;
   margin: 0;
-  padding: 0 10px;
-  z-index: 2;
 }
 
-.flash-offer-feature-chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-  z-index: 2;
-}
-
-.flash-offer-chip {
-  background: rgba(50, 15, 15, 0.8);
-  border: 1px solid rgba(248, 113, 113, 0.4);
-  color: #fecaca;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 10px;
-}
-
-/* STATUS & LIMIT BAR */
-.flash-offer-stock-box {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.55);
-  border: 1px solid #7f1d1d;
+/* 3-SLOT VISUAL PURCHASE TRACKER */
+.flash-offer-slots-tracker {
+  background: rgba(15, 4, 4, 0.75);
+  border: 1.5px solid #991b1b;
   border-radius: 12px;
-  padding: 10px 14px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.flash-offer-slots-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-sizing: border-box;
-  z-index: 2;
-}
-
-.flash-offer-stock-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #fca5a5;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  font-weight: 700;
 }
 
-.flash-offer-stock-counter {
+.flash-offer-slots-count {
   font-family: monospace, system-ui;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
   color: #fde047;
 }
 
-.flash-offer-stock-counter--soldout {
-  color: #ef4444;
+.flash-offer-slots-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
 }
 
-/* QUANTITY CONTROLLER */
-.flash-offer-qty-section {
-  width: 100%;
+.flash-offer-slot-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.flash-offer-slot-chip--available {
+  background: rgba(30, 58, 138, 0.35);
+  border: 1px solid #3b82f6;
+  color: #93c5fd;
+}
+
+.flash-offer-slot-chip--bought {
+  background: rgba(22, 101, 52, 0.4);
+  border: 1px solid #22c55e;
+  color: #86efac;
+}
+
+/* QUANTITY CONTROLS */
+.flash-offer-qty-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(30, 10, 10, 0.7);
-  border: 1.5px solid #b91c1c;
-  border-radius: 14px;
-  padding: 8px 14px;
-  box-sizing: border-box;
-  z-index: 2;
+  background: rgba(25, 8, 8, 0.7);
+  border: 1px solid #b91c1c;
+  border-radius: 12px;
+  padding: 6px 12px;
 }
 
 .flash-offer-qty-label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #fed7aa;
 }
 
-.flash-offer-qty-selector {
+.flash-offer-qty-btns {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.flash-offer-qty-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+.flash-offer-qty-step-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   background: #7f1d1d;
   border: 1px solid #f87171;
   color: #fff;
@@ -286,43 +399,88 @@
   transition: all 0.15s;
 }
 
-.flash-offer-qty-btn:hover:not(:disabled) {
+.flash-offer-qty-step-btn:hover:not(:disabled) {
   background: #dc2626;
   transform: scale(1.08);
 }
 
-.flash-offer-qty-btn:disabled {
-  opacity: 0.4;
+.flash-offer-qty-step-btn:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.flash-offer-qty-value {
-  font-size: 16px;
+.flash-offer-qty-num {
+  font-size: 15px;
   font-weight: 900;
   color: #ffffff;
   min-width: 20px;
   text-align: center;
 }
 
-/* PRICE SUMMARY & USER GEMS */
-.flash-offer-summary-row {
-  width: 100%;
+.flash-offer-qty-pill-btn {
+  background: rgba(50, 15, 15, 0.85);
+  border: 1px solid #f87171;
+  color: #fecaca;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.flash-offer-qty-pill-btn:hover:not(:disabled) {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.flash-offer-qty-pill-btn--active {
+  background: #ea580c !important;
+  border-color: #fde047 !important;
+  color: #ffffff !important;
+}
+
+.flash-offer-qty-pill-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* FINANCIAL SUMMARY ROW */
+.flash-offer-finance-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
-  z-index: 2;
-  font-size: 12.5px;
+  padding: 2px 2px;
+  font-size: 12px;
 }
 
-.flash-offer-my-gems {
+.flash-offer-user-balance {
   display: flex;
   align-items: center;
   gap: 5px;
   color: #bae6fd;
 }
 
-.flash-offer-total-cost {
+.flash-offer-recharge-link-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1px solid #7dd3fc;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.5);
+}
+
+.flash-offer-recharge-link-btn:hover {
+  background: #0284c7;
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+}
+
+.flash-offer-total-display {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -331,38 +489,37 @@
   color: #fde047;
 }
 
-/* BUY BUTTON */
-.flash-offer-buy-btn {
+/* PRIMARY ACTION BUTTON */
+.flash-offer-action-btn {
   width: 100%;
   background: linear-gradient(135deg, #ea580c 0%, #dc2626 50%, #b91c1c 100%);
   border: 2px solid #fdba74;
   border-radius: 14px;
-  padding: 12px;
+  padding: 11px;
   color: #ffffff;
   font-family: 'Luckiest Guy', cursive, sans-serif;
-  font-size: 18px;
-  letter-spacing: 1px;
+  font-size: 17px;
+  letter-spacing: 0.8px;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.6);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.6);
   transition: all 0.2s ease;
-  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 
-.flash-offer-buy-btn:hover:not(:disabled) {
+.flash-offer-action-btn:hover:not(:disabled) {
   transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.85);
+  box-shadow: 0 6px 22px rgba(239, 68, 68, 0.85);
   border-color: #fef08a;
 }
 
-.flash-offer-buy-btn:active:not(:disabled) {
+.flash-offer-action-btn:active:not(:disabled) {
   transform: translateY(1px) scale(0.98);
 }
 
-.flash-offer-buy-btn:disabled {
+.flash-offer-action-btn:disabled {
   background: #374151;
   border-color: #6b7280;
   color: #9ca3af;
@@ -371,31 +528,44 @@
   transform: none;
 }
 
-.flash-offer-buy-btn--soldout {
-  background: #1f2937;
-  border-color: #4b5563;
-  color: #9ca3af;
+.flash-offer-action-btn--recharge {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  border-color: #7dd3fc !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.6) !important;
+  cursor: pointer !important;
 }
 
-/* NOTIFICATION / ALERT */
-.flash-offer-alert {
+.flash-offer-action-btn--recharge:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: 0 6px 22px rgba(56, 189, 248, 0.85) !important;
+  border-color: #e0f2fe !important;
+}
+
+.flash-offer-action-btn--soldout {
+  background: #1f2937 !important;
+  border-color: #4b5563 !important;
+  color: #9ca3af !important;
+}
+
+/* NOTIFICACIONES */
+.flash-offer-status-alert {
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
   font-weight: 700;
   text-align: center;
   box-sizing: border-box;
-  z-index: 2;
 }
 
-.flash-offer-alert--error {
+.flash-offer-status-alert--error {
   background: rgba(153, 27, 27, 0.85);
   border: 1px solid #f87171;
   color: #fee2e2;
 }
 
-.flash-offer-alert--success {
+.flash-offer-status-alert--success {
   background: rgba(22, 101, 52, 0.85);
   border: 1px solid #4ade80;
   color: #dcfce7;
