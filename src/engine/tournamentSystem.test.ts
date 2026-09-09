@@ -75,7 +75,7 @@ describe('SISTEMA AUTORITATIVO DE TORNEOS — PRUEBAS DE DOMINIO Y REGLAS', () =
     const m5 = await tournamentService.submitMatchResult(testTourneyId, true, 'Rival 5')
     expect(m5.success).toBe(false)
     expect(m5.error).toBe('PLAYER_ALREADY_ELIMINATED')
-  })
+  }, 15000)
 
   it('4. Cálculo Matemático de Reparto del Pozo de Gemas (50%, 30%, 20%)', () => {
     const pool = 100

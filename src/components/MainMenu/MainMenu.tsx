@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import background from '../../assets/images/background.webp'
 import logo from '../../assets/images/logo.webp'
 import plant1 from '../../assets/images/plant1.webp'
@@ -27,7 +27,8 @@ import ProfileModal from '../ProfileModal/ProfileModal'
 import ModeSelectorModal from '../ModeSelector/ModeSelectorModal'
 import ColosseumModal from '../Colosseum/ColosseumModal'
 import TournamentModal from '../Tournament/TournamentModal'
-import type { ColosseumBetAmount, PlantId } from '../../types/game'
+import { tournamentService } from '../../services/tournamentService'
+import type { ColosseumBetAmount, PlantId, TournamentModel } from '../../types/game'
 import './MainMenu.css'
 
 interface MainMenuProps {
@@ -115,7 +116,8 @@ export default function MainMenu({
   const [isColosseumModalOpen, setIsColosseumModalOpen] = useState(false)
   const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
-  const [, setTicker] = useState<number>(0)
+  const [ticker, setTicker] = useState<number>(0)
+  const [upcomingTournament, setUpcomingTournament] = useState<TournamentModel | null>(null)
   const [activeAlert, setActiveAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
   const [slotToAccelerate, setSlotToAccelerate] = useState<FreePackSlot | null>(null)
   const [isAccelerating, setIsAccelerating] = useState<boolean>(false)
@@ -178,6 +180,99 @@ export default function MainMenu({
     }, 1000)
     return () => clearInterval(interval)
   }, [])
+
+  const loadUpcomingTournament = useCallback(async () => {
+    try {
+      const list = await tournamentService.listTournaments()
+      const now = Date.now()
+
+      // 1. Torneo en vivo actualmente
+      const liveTourney = list.find((t) => {
+        if (t.status === 'live') return true
+        const start = new Date(t.start_time).getTime()
+        const end = new Date(t.end_time).getTime()
+        return now >= start && now < end
+      })
+
+      if (liveTourney) {
+        setUpcomingTournament(liveTourney)
+        return
+      }
+
+      // 2. Próximo torneo programado en el futuro más cercano
+      const scheduled = list
+        .filter((t) => {
+          if (t.status === 'ended' || t.status === 'cancelled') return false
+          const start = new Date(t.start_time).getTime()
+          return start > now
+        })
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+
+      setUpcomingTournament(scheduled[0] || null)
+    } catch (err) {
+      console.warn('Error al cargar próximo torneo:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadUpcomingTournament()
+    const intv = setInterval(() => {
+      void loadUpcomingTournament()
+    }, 20000)
+    return () => clearInterval(intv)
+  }, [loadUpcomingTournament])
+
+  // Recargar al cerrar o abrir el modal de torneos
+  useEffect(() => {
+    if (!isTournamentModalOpen) {
+      void loadUpcomingTournament()
+    }
+  }, [isTournamentModalOpen, loadUpcomingTournament])
+
+  const upcomingTourneyInfo = useMemo(() => {
+    if (!upcomingTournament) return null
+    const now = Date.now()
+    const startMs = new Date(upcomingTournament.start_time).getTime()
+    const endMs = new Date(upcomingTournament.end_time).getTime()
+
+    const isLive = (upcomingTournament.status === 'live') || (now >= startMs && now < endMs)
+    const isScheduled = now < startMs
+
+    if (!isLive && !isScheduled) {
+      return null
+    }
+
+    const targetMs = isLive ? endMs : startMs
+    const diffSecs = Math.max(0, Math.floor((targetMs - now) / 1000))
+    const days = Math.floor(diffSecs / 86400)
+    const h = Math.floor((diffSecs % 86400) / 3600)
+    const m = Math.floor((diffSecs % 3600) / 60)
+    const s = diffSecs % 60
+
+    let countdownStr = ''
+    if (days > 0) {
+      countdownStr = `${days}d ${h.toString().padStart(2, '0')}h ${m.toString().padStart(2, '0')}m`
+    } else if (h > 0) {
+      countdownStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    } else {
+      countdownStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    }
+
+    const d = new Date(upcomingTournament.start_time)
+    const day = d.getUTCDate().toString().padStart(2, '0')
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    const mon = months[d.getUTCMonth()]
+    const hour = d.getUTCHours().toString().padStart(2, '0')
+    const min = d.getUTCMinutes().toString().padStart(2, '0')
+    const dateStr = `${day} ${mon}, ${hour}:${min} UTC`
+
+    return {
+      isLive,
+      countdownStr,
+      dateStr,
+      title: upcomingTournament.title,
+    }
+  }, [ticker, upcomingTournament])
 
   return (
     <div
@@ -343,6 +438,46 @@ export default function MainMenu({
               </button>
             )}
           </div>
+
+          {/* TOURNAMENT COUNTDOWN HEADER UNDER SEASON ROW */}
+          {upcomingTourneyInfo ? (
+            <div
+              className={`tourney-countdown-header ${upcomingTourneyInfo.isLive ? 'tourney-countdown-header--live' : ''}`}
+              onClick={() => {
+                soundManager.playSound('click', 0.5)
+                setIsTournamentModalOpen(true)
+              }}
+              title="🏆 Clic para abrir el Lobby de Torneos"
+            >
+              <span className="tourney-countdown-header__icon">
+                {upcomingTourneyInfo.isLive ? '🔥' : '🏆'}
+              </span>
+              <span className="tourney-countdown-header__label">
+                {upcomingTourneyInfo.isLive ? 'TORNEO EN VIVO:' : 'PRÓXIMO TORNEO EN:'}
+              </span>
+              <span className="tourney-countdown-header__time">
+                {upcomingTourneyInfo.countdownStr}
+              </span>
+              {!upcomingTourneyInfo.isLive && (
+                <span className="tourney-countdown-header__date">
+                  ({upcomingTourneyInfo.dateStr})
+                </span>
+              )}
+            </div>
+          ) : (
+            <div
+              className="tourney-countdown-header"
+              onClick={() => {
+                soundManager.playSound('click', 0.5)
+                setIsTournamentModalOpen(true)
+              }}
+              title="🏆 Clic para abrir el Lobby de Torneos"
+            >
+              <span className="tourney-countdown-header__icon">🏆</span>
+              <span className="tourney-countdown-header__label">PRÓXIMO TORNEO:</span>
+              <span className="tourney-countdown-header__time">Próximamente</span>
+            </div>
+          )}
         </div>
       </div>
 

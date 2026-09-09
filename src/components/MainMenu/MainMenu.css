@@ -187,6 +187,74 @@
   letter-spacing: 0.5px;
 }
 
+/* TOURNAMENT COUNTDOWN HEADER UNDER SEASON ROW */
+.tourney-countdown-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.92) 0%, rgba(15, 23, 42, 0.96) 100%);
+  border: 1.5px solid #c084fc;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 10px;
+  color: #f3e8ff;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  animation: tourneyHeaderPulse 3s ease-in-out infinite;
+  max-width: 100%;
+}
+
+@keyframes tourneyHeaderPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(192, 132, 252, 0.55);
+  }
+}
+
+.tourney-countdown-header:hover {
+  transform: translateY(-1px) scale(1.03);
+  border-color: #e9d5ff;
+  box-shadow: 0 0 18px rgba(192, 132, 252, 0.65);
+}
+
+.tourney-countdown-header--live {
+  background: linear-gradient(135deg, rgba(20, 83, 45, 0.92) 0%, rgba(10, 25, 20, 0.96) 100%);
+  border-color: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+}
+
+.tourney-countdown-header__icon {
+  font-size: 11px;
+  filter: drop-shadow(0 0 4px #a855f7);
+}
+
+.tourney-countdown-header__label {
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: #d8b4fe;
+}
+
+.tourney-countdown-header--live .tourney-countdown-header__label {
+  color: #86efac;
+}
+
+.tourney-countdown-header__time {
+  font-weight: 900;
+  color: #ffffff;
+  font-family: monospace, system-ui, sans-serif;
+  font-size: 11px;
+}
+
+.tourney-countdown-header__date {
+  font-size: 9px;
+  color: #cbd5e1;
+  opacity: 0.85;
+}
+
 .card--stat-gold {
   border-color: #f59e0b !important;
   color: #fde047 !important;
