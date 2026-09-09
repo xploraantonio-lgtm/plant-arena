@@ -149,4 +149,36 @@ describe('SISTEMA AUTORITATIVO DE TORNEOS — PRUEBAS DE DOMINIO Y REGLAS', () =
     expect(details?.my_participation.losses).toBe(1)
     expect(details?.tournament.prize_pool_gems).toBe(30) // No se suma al pozo del torneo
   })
+
+  it('8. Creación de Torneo con Fecha UTC Específica del Año Actual y Estado Programado', async () => {
+    const currentYear = new Date().getUTCFullYear()
+    // Programar para mañana a las 18:00 UTC
+    const tomorrow = new Date(Date.now() + 24 * 3600 * 1000)
+    const utcStartTime = new Date(Date.UTC(
+      currentYear,
+      tomorrow.getUTCMonth(),
+      tomorrow.getUTCDate(),
+      18,
+      0,
+      0
+    )).toISOString()
+
+    const created = await tournamentService.createTournament({
+      title: 'Torneo Programado UTC Mañana',
+      prize_pool_gems: 40,
+      entry_fee_gems: 0,
+      start_time: utcStartTime,
+      duration_minutes: 90,
+    })
+
+    expect(created.success).toBe(true)
+    const details = await tournamentService.getTournamentDetails(created.tournament_id!)
+    expect(details).not.toBeNull()
+    expect(details?.tournament.status).toBe('scheduled')
+    expect(details?.tournament.start_time).toBe(utcStartTime)
+
+    // El tiempo restante hasta el inicio debe ser positivo (mayor a 0)
+    const diffMs = new Date(details!.tournament.start_time).getTime() - Date.now()
+    expect(diffMs).toBeGreaterThan(0)
+  })
 })

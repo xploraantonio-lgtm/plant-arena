@@ -791,6 +791,101 @@
   color: #fff;
 }
 
+/* Custom UTC Date Picker */
+.tourney-utc-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  animation: tourneyFadeIn 0.2s ease-out;
+}
+
+.tourney-utc-picker {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 10px;
+  padding: 8px 10px;
+  flex-wrap: wrap;
+}
+
+.tourney-utc-picker__item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tourney-utc-picker__item label {
+  font-size: 0.68rem;
+  color: #c084fc;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.tourney-utc-year-pill {
+  background: rgba(168, 85, 247, 0.25);
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #f3e8ff;
+  text-align: center;
+  user-select: none;
+  line-height: 1.2;
+}
+
+.tourney-utc-select {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  line-height: 1.2;
+}
+
+.tourney-utc-select:focus {
+  border-color: #c084fc;
+}
+
+.tourney-utc-select option {
+  background: #0f172a;
+  color: #fff;
+}
+
+.tourney-utc-preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  background: rgba(147, 51, 234, 0.15);
+  border: 1px dashed rgba(192, 132, 252, 0.4);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  flex-wrap: wrap;
+}
+
+.tourney-utc-preview__date {
+  color: #f3e8ff;
+}
+
+.tourney-utc-preview__countdown.is-valid {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.tourney-utc-preview__countdown.is-invalid {
+  color: #f87171;
+  font-weight: 700;
+}
+
 /* Matchmaking Modal Overlay */
 .tourney-searching-overlay {
   position: fixed;

@@ -19,6 +19,33 @@ interface TournamentModalProps {
   ) => void
 }
 
+const MONTHS_ES = [
+  { value: 1, label: '01 - Enero' },
+  { value: 2, label: '02 - Febrero' },
+  { value: 3, label: '03 - Marzo' },
+  { value: 4, label: '04 - Abril' },
+  { value: 5, label: '05 - Mayo' },
+  { value: 6, label: '06 - Junio' },
+  { value: 7, label: '07 - Julio' },
+  { value: 8, label: '08 - Agosto' },
+  { value: 9, label: '09 - Septiembre' },
+  { value: 10, label: '10 - Octubre' },
+  { value: 11, label: '11 - Noviembre' },
+  { value: 12, label: '12 - Diciembre' },
+]
+
+function formatUtcDateTime(isoOrMs: string | number): string {
+  const d = new Date(isoOrMs)
+  if (isNaN(d.getTime())) return ''
+  const day = d.getUTCDate().toString().padStart(2, '0')
+  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const mon = months[d.getUTCMonth()]
+  const year = d.getUTCFullYear()
+  const h = d.getUTCHours().toString().padStart(2, '0')
+  const m = d.getUTCMinutes().toString().padStart(2, '0')
+  return `${day} ${mon} ${year}, ${h}:${m} UTC`
+}
+
 export default function TournamentModal({
   isOpen,
   onClose,
@@ -48,6 +75,37 @@ export default function TournamentModal({
   const [isCreating, setIsCreating] = useState<boolean>(false)
   const [isReentering, setIsReentering] = useState<boolean>(false)
 
+  // Custom UTC Date States (Siempre del año actual)
+  const [startMode, setStartMode] = useState<'quick' | 'custom_utc'>('quick')
+  const currentYear = useMemo(() => new Date().getUTCFullYear(), [])
+  const [customMonth, setCustomMonth] = useState<number>(() => new Date().getUTCMonth() + 1)
+  const [customDay, setCustomDay] = useState<number>(() => new Date().getUTCDate())
+  const [customHour, setCustomHour] = useState<number>(() => {
+    const h = new Date().getUTCHours()
+    const m = new Date().getUTCMinutes()
+    return m >= 50 ? (h + 1) % 24 : h
+  })
+  const [customMinute, setCustomMinute] = useState<number>(() => {
+    const m = new Date().getUTCMinutes() + 15
+    return m % 60
+  })
+
+  // Días máximos según el mes seleccionado del año actual
+  const maxDaysInSelectedMonth = useMemo(() => {
+    if (customMonth === 2) {
+      const isLeap = (currentYear % 4 === 0 && currentYear % 100 !== 0) || (currentYear % 400 === 0)
+      return isLeap ? 29 : 28
+    }
+    if ([4, 6, 9, 11].includes(customMonth)) return 30
+    return 31
+  }, [customMonth, currentYear])
+
+  useEffect(() => {
+    if (customDay > maxDaysInSelectedMonth) {
+      setCustomDay(maxDaysInSelectedMonth)
+    }
+  }, [maxDaysInSelectedMonth, customDay])
+
   // Ticker for countdowns
   const [currentTime, setCurrentTime] = useState<number>(Date.now())
 
@@ -57,6 +115,13 @@ export default function TournamentModal({
     }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Timestamp meta para la fecha UTC personalizada
+  const customUtcTargetMs = useMemo(() => {
+    return Date.UTC(currentYear, customMonth - 1, customDay, customHour, customMinute, 0)
+  }, [currentYear, customMonth, customDay, customHour, customMinute])
+
+  const isCustomUtcInFuture = customUtcTargetMs > currentTime
 
   // Load tournaments list
   const loadTournaments = useCallback(async () => {
@@ -121,9 +186,13 @@ export default function TournamentModal({
 
   const formatCountdown = (targetMs: number) => {
     const diffSecs = Math.max(0, Math.floor((targetMs - currentTime) / 1000))
-    const h = Math.floor(diffSecs / 3600)
+    const days = Math.floor(diffSecs / 86400)
+    const h = Math.floor((diffSecs % 86400) / 3600)
     const m = Math.floor((diffSecs % 3600) / 60)
     const s = diffSecs % 60
+    if (days > 0) {
+      return `${days}d ${h.toString().padStart(2, '0')}h ${m.toString().padStart(2, '0')}m`
+    }
     if (h > 0) {
       return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
     }
@@ -163,28 +232,28 @@ export default function TournamentModal({
 
     setIsReentering(true)
     try {
-      soundManager.playSound('click', 0.5)
+      soundManager.playSound('victory', 0.8)
       const res = await tournamentService.reenterTournament(selectedTourney.id)
       if (res.success) {
         onDeductTokens(reentryCost)
-        soundManager.playSound('victory', 0.7)
         await loadDetails(selectedTourney.id)
         await loadTournaments()
       } else {
         alert(res.error || 'No se pudo procesar la reentrada.')
       }
     } catch (err: any) {
-      alert(err?.message || 'Error al procesar reentrada')
+      alert(err?.message || 'Error en reentrada')
     } finally {
       setIsReentering(false)
     }
   }
 
-  // Deck save handler
+  // Deck save handler (authoritative 5-plant tourney deck)
   const handleSaveDeck = async (newDeck: PlantId[]) => {
     if (!selectedTourney) return
     const res = await tournamentService.updateTournamentDeck(selectedTourney.id, newDeck)
     if (res.success) {
+      setShowDeckBuilder(false)
       await loadDetails(selectedTourney.id)
     } else {
       alert(res.error || 'No se pudo guardar el mazo.')
@@ -233,7 +302,18 @@ export default function TournamentModal({
     setIsCreating(true)
     try {
       // Calculate start time
-      const startTime = new Date(Date.now() + createStartOffsetMin * 60 * 1000).toISOString()
+      let startTime: string
+      if (startMode === 'custom_utc') {
+        const targetMs = Date.UTC(currentYear, customMonth - 1, customDay, customHour, customMinute, 0)
+        if (targetMs <= Date.now()) {
+          setCreateError('La fecha y hora en UTC debe ser en el futuro (posterior al momento actual).')
+          setIsCreating(false)
+          return
+        }
+        startTime = new Date(targetMs).toISOString()
+      } else {
+        startTime = new Date(Date.now() + createStartOffsetMin * 60 * 1000).toISOString()
+      }
       const entryFee = createEntryType === 'gems' ? createEntryFeeGems : 0
 
       const res = await tournamentService.createTournament({
@@ -414,7 +494,10 @@ export default function TournamentModal({
                       {tLive ? (
                         <>🔥 Termina en: {formatCountdown(tEnd)}</>
                       ) : tSched ? (
-                        <>⏳ Inicia en: {formatCountdown(tStart)}</>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span>⏳ Inicia en: {formatCountdown(tStart)}</span>
+                          <span style={{ fontSize: '0.7rem', color: '#cbd5e1' }}>📅 {formatUtcDateTime(tStart)}</span>
+                        </div>
                       ) : (
                         <span style={{ color: '#94a3b8' }}>Torneo concluido</span>
                       )}
@@ -454,6 +537,11 @@ export default function TournamentModal({
                       ? formatCountdown(startMs)
                       : 'FINALIZADO'}
                   </div>
+                  {isScheduled && (
+                    <div style={{ fontSize: '0.66rem', color: '#cbd5e1', marginTop: 2 }}>
+                      📅 {formatUtcDateTime(startMs)}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -801,13 +889,120 @@ export default function TournamentModal({
                       <button
                         key={opt.min}
                         type="button"
-                        className={`tourney-quick-btn ${createStartOffsetMin === opt.min ? 'active' : ''}`}
-                        onClick={() => setCreateStartOffsetMin(opt.min)}
+                        className={`tourney-quick-btn ${startMode === 'quick' && createStartOffsetMin === opt.min ? 'active' : ''}`}
+                        onClick={() => {
+                          setStartMode('quick')
+                          setCreateStartOffsetMin(opt.min)
+                          const target = new Date(Date.now() + opt.min * 60 * 1000)
+                          setCustomMonth(target.getUTCMonth() + 1)
+                          setCustomDay(target.getUTCDate())
+                          setCustomHour(target.getUTCHours())
+                          setCustomMinute(target.getUTCMinutes())
+                        }}
                       >
                         {opt.label}
                       </button>
                     ))}
+
+                    <button
+                      type="button"
+                      className={`tourney-quick-btn ${startMode === 'custom_utc' ? 'active' : ''}`}
+                      style={
+                        startMode === 'custom_utc'
+                          ? { background: 'linear-gradient(135deg, #a855f7, #7e22ce)', borderColor: '#c084fc', color: '#fff' }
+                          : undefined
+                      }
+                      onClick={() => setStartMode('custom_utc')}
+                    >
+                      📅 Fecha y Hora UTC
+                    </button>
                   </div>
+
+                  {startMode === 'custom_utc' ? (
+                    <div className="tourney-utc-container">
+                      <div className="tourney-utc-picker">
+                        <div className="tourney-utc-picker__item" style={{ width: 84 }}>
+                          <label>Año (Fijo)</label>
+                          <div className="tourney-utc-year-pill">{currentYear}</div>
+                        </div>
+
+                        <div className="tourney-utc-picker__item" style={{ flex: 1.5, minWidth: 120 }}>
+                          <label>Mes</label>
+                          <select
+                            className="tourney-utc-select"
+                            value={customMonth}
+                            onChange={(e) => setCustomMonth(Number(e.target.value))}
+                          >
+                            {MONTHS_ES.map((m) => (
+                              <option key={m.value} value={m.value}>
+                                {m.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="tourney-utc-picker__item" style={{ width: 68 }}>
+                          <label>Día</label>
+                          <select
+                            className="tourney-utc-select"
+                            value={customDay}
+                            onChange={(e) => setCustomDay(Number(e.target.value))}
+                          >
+                            {Array.from({ length: maxDaysInSelectedMonth }, (_, i) => i + 1).map((d) => (
+                              <option key={d} value={d}>
+                                {d.toString().padStart(2, '0')}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="tourney-utc-picker__item" style={{ width: 75 }}>
+                          <label>Hora UTC</label>
+                          <select
+                            className="tourney-utc-select"
+                            value={customHour}
+                            onChange={(e) => setCustomHour(Number(e.target.value))}
+                          >
+                            {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                              <option key={h} value={h}>
+                                {h.toString().padStart(2, '0')}:00
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="tourney-utc-picker__item" style={{ width: 75 }}>
+                          <label>Min UTC</label>
+                          <select
+                            className="tourney-utc-select"
+                            value={customMinute}
+                            onChange={(e) => setCustomMinute(Number(e.target.value))}
+                          >
+                            {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                              <option key={m} value={m}>
+                                :{m.toString().padStart(2, '0')}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="tourney-utc-preview">
+                        <div className="tourney-utc-preview__date">
+                          🌐 Inicio: <strong>{customDay.toString().padStart(2, '0')}/{customMonth.toString().padStart(2, '0')}/{currentYear} {customHour.toString().padStart(2, '0')}:{customMinute.toString().padStart(2, '0')} UTC</strong>
+                        </div>
+                        <div className={`tourney-utc-preview__countdown ${isCustomUtcInFuture ? 'is-valid' : 'is-invalid'}`}>
+                          {isCustomUtcInFuture
+                            ? `⏳ Cuenta regresiva: ${formatCountdown(customUtcTargetMs)}`
+                            : '⚠️ La fecha debe ser posterior al momento actual.'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.74rem', color: '#cbd5e1', marginTop: 4 }}>
+                      🌐 Inicio UTC calculado: <strong>{formatUtcDateTime(Date.now() + createStartOffsetMin * 60 * 1000)}</strong>
+                    </div>
+                  )}
                 </div>
 
                 <div className="tourney-form-group">
