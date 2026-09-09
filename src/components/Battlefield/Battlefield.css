@@ -245,12 +245,6 @@
   pointer-events: auto !important;
 }
 
-.lane__cell--selectable:hover {
-  background-color: rgba(158, 224, 82, 0.38);
-  border: 2.5px solid #9ee052;
-  box-shadow: inset 0 0 16px rgba(158, 224, 82, 0.7);
-}
-
 .lane__cell-ghost-preview {
   display: none;
   position: absolute;
@@ -266,14 +260,47 @@
   z-index: 2;
 }
 
-.lane__cell--selectable:hover .lane__cell-ghost-preview {
-  display: block;
-  animation: ghostBob 1s ease-in-out infinite alternate;
+@media (hover: hover) and (pointer: fine) {
+  .lane__cell--selectable:hover {
+    background-color: rgba(158, 224, 82, 0.38);
+    border: 2.5px solid #9ee052;
+    box-shadow: inset 0 0 16px rgba(158, 224, 82, 0.7);
+  }
+
+  .lane__cell--selectable:hover .lane__cell-ghost-preview {
+    display: block;
+    animation: ghostBob 1s ease-in-out infinite alternate;
+  }
 }
 
 @keyframes ghostBob {
   0% { transform: translate(-50%, -50%) scale(0.94); opacity: 0.4; }
   100% { transform: translate(-50%, -50%) scale(1.06); opacity: 0.6; }
+}
+
+/* Field Plant Level Badge */
+.plant-unit__level-badge {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1px solid #7dd3fc;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+  padding: 0.5px 3.5px;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), 0 0 6px rgba(2, 132, 199, 0.8);
+  z-index: 20;
+  pointer-events: none;
+  line-height: 11px;
+  letter-spacing: 0.2px;
+}
+
+.plant-unit__level-badge--gold {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  border-color: #fde047;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), 0 0 8px rgba(217, 119, 6, 0.9);
 }
 
 /* Center Line */

@@ -246,7 +246,6 @@ export default function Battlefield({
   sessionGenerationRef.current = sessionGeneration ?? 0
   const roomIdRef = useRef<string | null>(roomId ?? null)
   roomIdRef.current = roomId ?? null
-  const lastPointerCellActionRef = useRef<number>(0)
 
   /**
    * Lo que dijo el servidor al liquidar la partida real.
@@ -1395,19 +1394,40 @@ export default function Battlefield({
             {Array.from({ length: TOTAL_COLUMNS }).map((_, col) => {
               const isP1Side = col < P1_COLUMNS
               const isCellSelected = Boolean(selectedCard && isP1Side)
+              const isPlantCard = selectedCard && selectedCard !== 'shovel'
+              const selectedCardConfig = isPlantCard ? PLANT_CONFIGS[selectedCard] : null
+              const isWalkingPlantCard = Boolean(
+                selectedCardConfig &&
+                (selectedCardConfig.category === 'melee' ||
+                  Boolean(selectedCardConfig.moveSpeed) ||
+                  selectedCard === 'chomper')
+              )
+
               // Detección estricta alineada al motor: sólo plantas estáticas bloquean el terreno
               const isCellOccupiedByPlant = plants.some((p) => p.lane === lane.id && p.col === col && !p.isWalking)
               const isCellPendingSprout = pendingOwnPlants.some((p) => p.lane === lane.id && p.col === col)
               const isCellOccupied = isCellOccupiedByPlant || isCellPendingSprout
 
               // Para la pala sólo son válidas plantas ya materializadas (no brotes en vuelo)
-              const isPlantDestination = isCellSelected && (selectedCard === 'shovel' ? isCellOccupiedByPlant : !isCellOccupied)
-              const isPlantCard = selectedCard && selectedCard !== 'shovel'
-              const previewPlantConfig = isPlantCard && isPlantDestination ? PLANT_CONFIGS[selectedCard] : null
+              // Para plantas caminantes/melee (Bonk Choy, Chomper), se pueden plantar en cualquier columna de nuestro lado
+              // Para plantas estáticas (Girasol, Nuez, Lanzaguisantes), la casilla debe estar libre
+              const isPlantDestination = isCellSelected && (
+                selectedCard === 'shovel'
+                  ? isCellOccupiedByPlant
+                  : isWalkingPlantCard
+                  ? true
+                  : !isCellOccupied
+              )
+              const previewPlantConfig = isPlantCard && isPlantDestination ? selectedCardConfig : null
 
               const handleCellAction = () => {
                 if (!isPlantDestination) return
-                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) return
+                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) {
+                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                    try { navigator.vibrate([20, 30]) } catch {}
+                  }
+                  return
+                }
                 if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) return
                 if (selectedCard && isP1Side) {
                   if (selectedCard === 'shovel') {
@@ -1451,33 +1471,19 @@ export default function Battlefield({
                     zIndex: isPlantDestination ? (selectedCard === 'shovel' ? 10 : 70) : (selectedCard ? 5 : 1),
                     pointerEvents: selectedCard || isP1Side ? 'auto' : 'none',
                   }}
-                  onPointerDown={(e) => {
-                    if (e.button !== 0) return
+                  onClick={() => {
                     if (isPlantDestination) {
-                      lastPointerCellActionRef.current = Date.now()
                       handleCellAction()
                     } else if (selectedCard) {
-                      lastPointerCellActionRef.current = Date.now()
                       if (!isP1Side) {
                         // Tocar el lado rival cancela la selección de forma natural
                         setSelectedCard(null, null)
                       } else if (isCellOccupied) {
-                        // Feedback háptico ligero de rechazo en casilla ocupada sin tirar la carta
+                        // Feedback háptico ligero de rechazo en casilla ocupada para plantas estáticas
                         if (typeof navigator !== 'undefined' && navigator.vibrate) {
                           try { navigator.vibrate([15, 20]) } catch {}
                         }
                       }
-                    }
-                  }}
-                  onClick={(e) => {
-                    if (Date.now() - lastPointerCellActionRef.current < 400) {
-                      e.preventDefault()
-                      return
-                    }
-                    if (isPlantDestination) {
-                      handleCellAction()
-                    } else if (selectedCard && !isP1Side) {
-                      setSelectedCard(null, null)
                     }
                   }}
                 >
@@ -1533,29 +1539,15 @@ export default function Battlefield({
               top: `${laneConfig.topPct + laneConfig.heightPct / 2}%`,
               pointerEvents: isShovelActive ? 'auto' : 'none',
             }}
-            onPointerDown={(e) => {
-              if (isShovelActive && e.button === 0) {
-                e.stopPropagation()
-                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) return
-                lastPointerCellActionRef.current = Date.now()
-                const seq = roomId ? ++ordenRef.current : undefined
-                const casilla = digPlant(plant.id, seq)
-                if (casilla) {
-                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                    try { navigator.vibrate(15) } catch {}
-                  }
-                  registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
-                }
-              }
-            }}
             onClick={(e) => {
               e.stopPropagation()
-              if (Date.now() - lastPointerCellActionRef.current < 400) {
-                e.preventDefault()
-                return
-              }
               if (isShovelActive) {
-                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) return
+                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) {
+                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                    try { navigator.vibrate([20, 30]) } catch {}
+                  }
+                  return
+                }
                 const seq = roomId ? ++ordenRef.current : undefined
                 const casilla = digPlant(plant.id, seq)
                 if (casilla) {
@@ -1581,16 +1573,34 @@ export default function Battlefield({
               </div>
             ) : (
               <>
-                {/* Subtle Base Ground Aura for Leveled Plants */}
-                {getBattlefieldPlantLevel(plant.plantId) > 0 && (
-                  <div
-                    className={`plant-base-halo ${
-                      getBattlefieldPlantLevel(plant.plantId) >= 3
-                        ? 'plant-base-halo--gold'
-                        : 'plant-base-halo--emerald'
-                    }`}
-                  />
-                )}
+                {(() => {
+                  const plantLevel = plant.level ?? getBattlefieldPlantLevel(plant.plantId)
+                  return (
+                    <>
+                      {/* Subtle Base Ground Aura for Leveled Plants */}
+                      {plantLevel > 0 && (
+                        <div
+                          className={`plant-base-halo ${
+                            plantLevel >= 3
+                              ? 'plant-base-halo--gold'
+                              : 'plant-base-halo--emerald'
+                          }`}
+                        />
+                      )}
+                      {/* Field Plant Level Badge */}
+                      {plantLevel > 0 && (
+                        <div
+                          className={`plant-unit__level-badge ${
+                            plantLevel >= 3 ? 'plant-unit__level-badge--gold' : ''
+                          }`}
+                          title={`Nivel ${plantLevel}`}
+                        >
+                          ⭐{plantLevel}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 <img
                   className={`plant-unit__sprite ${
                     plant.plantId === 'melonpult' ? 'plant-unit__sprite--melon' : ''
@@ -1630,6 +1640,7 @@ export default function Battlefield({
         const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
         const x = BASE_LEFT_END_X + pp.col * colWidth + colWidth / 2
         const y = laneConfig.topPct + laneConfig.heightPct / 2
+        const sproutLevel = pp.level ?? getBattlefieldPlantLevel(pp.plantId)
 
         return (
           <div
@@ -1642,6 +1653,15 @@ export default function Battlefield({
               zIndex: 65,
             }}
           >
+            {sproutLevel > 0 && (
+              <div
+                className={`plant-unit__level-badge ${
+                  sproutLevel >= 3 ? 'plant-unit__level-badge--gold' : ''
+                }`}
+              >
+                ⭐{sproutLevel}
+              </div>
+            )}
             <img
               className="plant-unit__sprite"
               src={config.sprite || config.icon}
@@ -1678,6 +1698,17 @@ export default function Battlefield({
               top: `${laneConfig.topPct + laneConfig.heightPct / 2}%`,
             }}
           >
+            {/* Enemy Level Badge */}
+            {enemy.level !== undefined && enemy.level > 0 && (
+              <div
+                className={`plant-unit__level-badge ${
+                  enemy.level >= 3 ? 'plant-unit__level-badge--gold' : ''
+                }`}
+                title={`Nivel ${enemy.level}`}
+              >
+                ⭐{enemy.level}
+              </div>
+            )}
             <div className="entity__hp">
               <div
                 className="entity__hp-fill entity__hp-fill--enemy"
@@ -1716,7 +1747,7 @@ export default function Battlefield({
         />
       ))}
 
-      {/* Collectible Suns */}
+      {/* Collectible Suns (Plant-generated and Sky-fallen across both sides) */}
       {suns.map((sun) => {
         const isCollecting = collectingSunIds.has(sun.id)
         return (
@@ -1738,13 +1769,8 @@ export default function Battlefield({
               e.stopPropagation()
               recogerSolAutorizado(sun.id)
             }}
-            onTouchStart={(e) => {
-              e.stopPropagation()
-              recogerSolAutorizado(sun.id)
-            }}
             onClick={(e) => {
               e.stopPropagation()
-              recogerSolAutorizado(sun.id)
             }}
           >
             <img src={sunIcon} alt="Sol" className="sun-item__icon" />
