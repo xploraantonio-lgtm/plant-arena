@@ -251,8 +251,9 @@ export default function MainMenu({
   useEffect(() => {
     void loadUpcomingTournament()
     const intv = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       void loadUpcomingTournament()
-    }, 20000)
+    }, 60000)
     return () => clearInterval(intv)
   }, [loadUpcomingTournament])
 
