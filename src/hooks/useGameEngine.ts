@@ -1684,6 +1684,10 @@ export function useGameEngine() {
     collectSun,
     placePlant,
     digPlant,
+    pendingOwnPlants: (stateRef.current.pending || []).filter(
+      (p): p is { atTick: number; kind: 'own_plant'; plantId: PlantId; lane: number; col: number; statRolls?: PlantStatKey[]; level?: number } =>
+        p.kind === 'own_plant' && typeof p.col === 'number'
+    ),
     encolarAccionDelRival,
     terminarPorOrdenDelServidor,
     /**

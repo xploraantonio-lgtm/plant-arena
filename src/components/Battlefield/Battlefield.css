@@ -326,6 +326,22 @@
   cursor: pointer;
 }
 
+.plant-unit--sprouting {
+  opacity: 0.88;
+  filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.8));
+  animation: plantSproutPulse 0.28s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes plantSproutPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.03);
+  }
+}
+
 /* Ground Base Aura for Leveled Plants */
 .plant-base-halo {
   position: absolute;

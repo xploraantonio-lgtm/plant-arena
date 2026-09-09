@@ -65,6 +65,7 @@ export function useMatchmaking() {
   const claimingRef = useRef<boolean>(false)
   const vivoRef = useRef<boolean>(true)
   const buscandoRef = useRef<boolean>(false)
+  const sondeandoRef = useRef<boolean>(false)
 
   const pararSondeo = useCallback(() => {
     if (intervaloRef.current) {
@@ -78,12 +79,20 @@ export function useMatchmaking() {
     pararSondeo()
     buscandoRef.current = false
     claimingRef.current = false
+    sondeandoRef.current = false
     if (vivoRef.current) setEstado(ESTADO_INICIAL)
     await MatchmakingService.cancelMatchmaking()
   }, [pararSondeo])
 
   const sondear = useCallback(async () => {
-    const r = await MatchmakingService.pollMatchmaking()
+    if (sondeandoRef.current) return
+    sondeandoRef.current = true
+    let r: any
+    try {
+      r = await MatchmakingService.pollMatchmaking()
+    } finally {
+      sondeandoRef.current = false
+    }
     if (!vivoRef.current) return
 
     if (r.error) {

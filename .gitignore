@@ -24,6 +24,7 @@ supabase/*
 !supabase/migrations/
 !supabase/60-sistema-torneos-autoritativo.sql
 !supabase/61-reentrada-y-entrada-gemas-torneo.sql
+!supabase/62-optimizacion-feed-intenciones-ranked.sql
 
 # Editor directories and files
 .vscode/*

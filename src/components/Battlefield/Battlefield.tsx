@@ -225,6 +225,7 @@ export default function Battlefield({
     collectSun,
     placePlant,
     digPlant,
+    pendingOwnPlants = [],
     encolarAccionDelRival,
     descartarAccionPropia,
     confirmarAccionP1,
@@ -381,6 +382,9 @@ export default function Battlefield({
   const ultimaSeqAsyncRef = useRef<number>(0)
   const aplicadasRef = useRef<Set<number>>(new Set())
 
+  const MAX_IN_FLIGHT_ACTIONS = 3
+  const inFlightCountRef = useRef(0)
+  const [, setInFlightCount] = useState(0)
   const redBloqueadaRef = useRef(false)
   const [redBloqueada, setRedBloqueada] = useState(false)
   const collectingSunIdsRef = useRef<Set<string>>(new Set())
@@ -413,12 +417,16 @@ export default function Battlefield({
     const capturedGeneration = sessionGenerationRef.current
     const capturedRoomId = roomId
 
-    // SÓLO bloquea el tablero para acciones de plantar o excavar (que deben esperar ack para el próximo despliegue).
-    // Las acciones de recolección de soles son independientes y NUNCA deben congelar la interacción ni descartar otros soles.
+    // Control de capacidad concurrente sin congelar la interacción del usuario:
+    // Permite que el jugador siga interactuando y colocando cartas/soles fluidamente
+    // hasta un máximo razonable de acciones simultáneas en vuelo (3).
     const bloqueaRed = action.kind === 'plant' || action.kind === 'dig'
     if (bloqueaRed) {
-      redBloqueadaRef.current = true
-      setRedBloqueada(true)
+      inFlightCountRef.current += 1
+      setInFlightCount(inFlightCountRef.current)
+      const saturado = inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS
+      redBloqueadaRef.current = saturado
+      setRedBloqueada(saturado)
     }
 
     const result = await MatchActionOutbox.deliver(
@@ -439,8 +447,11 @@ export default function Battlefield({
 
     // cancelled ocurre al desmontar; no hay que tocar un motor que ya no existe.
     if (result.status !== 'cancelled' && bloqueaRed) {
-      redBloqueadaRef.current = false
-      setRedBloqueada(false)
+      inFlightCountRef.current = Math.max(0, inFlightCountRef.current - 1)
+      setInFlightCount(inFlightCountRef.current)
+      const saturado = inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS
+      redBloqueadaRef.current = saturado
+      setRedBloqueada(saturado)
     }
   }
 
@@ -667,88 +678,139 @@ export default function Battlefield({
     const capturedGeneration = sessionGenerationRef.current
     const capturedRoomId = roomId
 
-    // Red de seguridad: al entrar se recoge lo que ya hubiera, y cada 3 s se
+    // Red de seguridad: al entrar se recoge lo que ya hubiera, y periódicamente se
     // comprueba si se perdió algún mensaje. Sin esto, una sola acción perdida
     // dejaría las dos partidas divergentes hasta el final.
+    let recuperando = false
+    let timerRecuperar: ReturnType<typeof setTimeout> | null = null
+
+    const programarRecuperar = () => {
+      if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
+      timerRecuperar = setTimeout(async () => {
+        if (!recuperando) {
+          recuperando = true
+          try {
+            await recuperar()
+          } finally {
+            recuperando = false
+            programarRecuperar()
+          }
+        }
+      }, 3000)
+    }
+
     const recuperar = async () => {
       if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
-      const todas = await battleService.matchActionsSince(capturedRoomId, 0)
+      // Consulta incremental eficiente: solicita únicamente acciones posteriores a la última conocida
+      const desdeId = ultimaAccionRef.current
+      const nuevas = await battleService.matchActionsSince(capturedRoomId, desdeId)
       if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
-      setDiag((d) => ({
-        ...d,
-        enSala: todas.length,
-        misEnSala: todas.filter((a) => a.userId === currentUserId).length,
-      }))
-      const pendientes = todas.filter((a) => a.id > ultimaAccionRef.current)
-      for (const a of pendientes) {
-        aplicar({
-          id: a.id,
-          user_id: a.userId,
-          seq: a.seq,
-          tick: a.tick,
-          issued_tick: a.issuedTick,
-          kind: a.kind,
-          plant_id: a.plantId,
-          lane: a.lane,
-          col: a.col,
-          slot: a.slot,
-          target_id: a.targetId,
-        })
+      if (nuevas.length > 0) {
+        setDiag((d) => ({
+          ...d,
+          enSala: d.enSala + nuevas.length,
+          misEnSala: d.misEnSala + nuevas.filter((a) => a.userId === currentUserId).length,
+        }))
+        const pendientes = nuevas.filter((a) => a.id > ultimaAccionRef.current)
+        for (const a of pendientes) {
+          aplicar({
+            id: a.id,
+            user_id: a.userId,
+            seq: a.seq,
+            tick: a.tick,
+            issued_tick: a.issuedTick,
+            kind: a.kind,
+            plant_id: a.plantId,
+            lane: a.lane,
+            col: a.col,
+            slot: a.slot,
+            target_id: a.targetId,
+          })
+        }
       }
     }
     void recuperar()
-    const reloj = setInterval(() => { void recuperar() }, 3000)
+    programarRecuperar()
 
     return () => {
       dejarDeEscuchar()
-      clearInterval(reloj)
+      if (timerRecuperar) clearTimeout(timerRecuperar)
     }
   }, [roomId, currentUserId, encolarAccionDelRival, isAsyncMatch, sessionGeneration])
 
   // ── FEED DE INTENCIONES ASÍNCRONAS (RIVAL SEMILLA RANKED) ──────────────────
-  // En lugar de descargar todo el plan futuro al inicio, se consulta periódicamente
-  // una ventana acotada (~600 ms) autorizada por el servidor con seq incremental.
+  // En lugar de saturar PostgreSQL con peticiones en paralelo sobrecargadas,
+  // se utiliza un ciclo adaptativo con protección in-flight que evita apilamiento.
   useEffect(() => {
     if (!roomId || !isAsyncMatch) return
     ultimaSeqAsyncRef.current = 0
     let cancelado = false
+    let enVuelo = false
+    let timerId: ReturnType<typeof setTimeout> | null = null
     const capturedRoomId = roomId
 
+    const programarSiguiente = (delayMs: number) => {
+      if (cancelado) return
+      timerId = setTimeout(() => {
+        void refrescarIntencionesAsync()
+      }, delayMs)
+    }
+
     const refrescarIntencionesAsync = async () => {
+      if (cancelado || enVuelo || capturedRoomId !== roomIdRef.current) return
       const requestGeneration = sessionGenerationRef.current
-      if (cancelado || capturedRoomId !== roomIdRef.current) return
-      const res = await battleService.pollRankedAsyncIntents(
-        capturedRoomId,
-        ultimaSeqAsyncRef.current
-      )
-      if (
-        cancelado ||
-        requestGeneration !== sessionGenerationRef.current ||
-        capturedRoomId !== roomIdRef.current
-      ) return
+      enVuelo = true
+      let nextDelayMs = 450
 
-      // A) Error de red / transporte / res inexistente / res.ok === false -> Reintentar en el siguiente ciclo sin marcar corrupción
-      if (!res || res.ok === false) return
-
-      // B) res.ok === true pero res.intents no es array o intenciones malformadas -> PROTOCOL_INCONSISTENCY / INVALID_ASYNC_PLAN
-      // incorporarIntencionesAsync valida res.intents y si es inválido marca inconsistencia, congela el bucle y devuelve ok: false
-      const resultado = incorporarIntencionesAsync(res.intents, requestGeneration)
-      if (resultado.ok && typeof resultado.maxAcceptedSeq === 'number') {
-        ultimaSeqAsyncRef.current = Math.max(
-          ultimaSeqAsyncRef.current,
-          resultado.maxAcceptedSeq
+      try {
+        const res = await battleService.pollRankedAsyncIntents(
+          capturedRoomId,
+          ultimaSeqAsyncRef.current
         )
+        if (
+          cancelado ||
+          requestGeneration !== sessionGenerationRef.current ||
+          capturedRoomId !== roomIdRef.current
+        ) return
+
+        // A) Error de red / transporte / res inexistente / res.ok === false -> Reintentar en el siguiente ciclo sin marcar corrupción
+        if (res && res.ok !== false) {
+          // B) res.ok === true pero res.intents no es array o intenciones malformadas -> PROTOCOL_INCONSISTENCY / INVALID_ASYNC_PLAN
+          const resultado = incorporarIntencionesAsync(res.intents, requestGeneration)
+          if (resultado.ok && typeof resultado.maxAcceptedSeq === 'number') {
+            ultimaSeqAsyncRef.current = Math.max(
+              ultimaSeqAsyncRef.current,
+              resultado.maxAcceptedSeq
+            )
+          }
+
+          // Adaptación dinámica de sondeo según la holgura autorizada por el servidor
+          if (typeof res.maxRevealedTick === 'number' && typeof res.serverTick === 'number') {
+            const holgura = res.maxRevealedTick - res.serverTick
+            if (holgura > 30) {
+              nextDelayMs = 800
+            } else if (holgura > 18) {
+              nextDelayMs = 500
+            }
+          }
+        } else {
+          nextDelayMs = 600
+        }
+      } catch {
+        nextDelayMs = 600
+      } finally {
+        enVuelo = false
+        if (!cancelado) {
+          programarSiguiente(nextDelayMs)
+        }
       }
     }
 
     void refrescarIntencionesAsync()
-    const reloj = setInterval(() => {
-      void refrescarIntencionesAsync()
-    }, 350)
 
     return () => {
       cancelado = true
-      clearInterval(reloj)
+      if (timerId) clearTimeout(timerId)
     }
   }, [roomId, isAsyncMatch, sessionGeneration, incorporarIntencionesAsync])
 
@@ -760,8 +822,25 @@ export default function Battlefield({
   useEffect(() => {
     if (!roomId || !currentUserId) return
     let cerrado = false
+    let comprobando = false
+    let timerComprobar: ReturnType<typeof setTimeout> | null = null
     const capturedGeneration = sessionGenerationRef.current
     const capturedRoomId = roomId
+
+    const programarComprobar = () => {
+      if (cerrado) return
+      timerComprobar = setTimeout(async () => {
+        if (!comprobando && !cerrado) {
+          comprobando = true
+          try {
+            await comprobar()
+          } finally {
+            comprobando = false
+            programarComprobar()
+          }
+        }
+      }, 4000)
+    }
 
     const comprobar = async () => {
       if (cerrado || capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) return
@@ -780,14 +859,12 @@ export default function Battlefield({
     }
 
     const dejarDeEscuchar = battleService.subscribeToRoomEnd(capturedRoomId, () => { void comprobar() })
-    // Y se pregunta cada 4 s por si el mensaje de Realtime se perdió. Sin esta red
-    // un mensaje perdido dejaría a alguien peleando contra un campo vacío.
-    const reloj = setInterval(() => { void comprobar() }, 4000)
+    programarComprobar()
 
     return () => {
       cerrado = true
+      if (timerComprobar) clearTimeout(timerComprobar)
       dejarDeEscuchar()
-      clearInterval(reloj)
     }
   }, [roomId, currentUserId, terminarPorOrdenDelServidor, sessionGeneration])
 
@@ -1312,12 +1389,14 @@ export default function Battlefield({
             {Array.from({ length: TOTAL_COLUMNS }).map((_, col) => {
               const isP1Side = col < P1_COLUMNS
               const isCellSelected = Boolean(selectedCard && isP1Side)
-              const isCellOccupied = plants.some((p) => p.lane === lane.id && p.col === col)
+              const isCellOccupied =
+                plants.some((p) => p.lane === lane.id && p.col === col) ||
+                pendingOwnPlants.some((p) => p.lane === lane.id && p.col === col)
               const isPlantDestination = isCellSelected && (selectedCard === 'shovel' ? isCellOccupied : !isCellOccupied)
 
               const handleCellAction = () => {
                 if (!isPlantDestination) return
-                if (roomId && redBloqueadaRef.current) return
+                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) return
                 if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) return
                 if (selectedCard && isP1Side) {
                   if (selectedCard === 'shovel') {
@@ -1421,7 +1500,7 @@ export default function Battlefield({
             onPointerDown={(e) => {
               if (isShovelActive && e.button === 0) {
                 e.stopPropagation()
-                if (roomId && redBloqueadaRef.current) return
+                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) return
                 lastPointerCellActionRef.current = Date.now()
                 const seq = roomId ? ++ordenRef.current : undefined
                 const casilla = digPlant(plant.id, seq)
@@ -1440,7 +1519,7 @@ export default function Battlefield({
                 return
               }
               if (isShovelActive) {
-                if (roomId && redBloqueadaRef.current) return
+                if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) return
                 const seq = roomId ? ++ordenRef.current : undefined
                 const casilla = digPlant(plant.id, seq)
                 if (casilla) {
@@ -1503,6 +1582,35 @@ export default function Battlefield({
             {plant.plantId === 'iceberglettuce' && plant.spriteOverride?.includes('burst') && (
               <div className="iceberg-burst-fx">⚡ ❄️ ¡RÁFAGA HELADA!</div>
             )}
+          </div>
+        )
+      })}
+
+      {/* Plantas Propias en fase de Brote / Siembra (Feedback visual instantáneo a 0ms) */}
+      {pendingOwnPlants.map((pp, idx) => {
+        const config = PLANT_CONFIGS[pp.plantId]
+        const laneConfig = LANES_CONFIG[pp.lane]
+        if (!laneConfig || !config) return null
+        const colWidth = FIELD_WIDTH_PCT / TOTAL_COLUMNS
+        const x = BASE_LEFT_END_X + pp.col * colWidth + colWidth / 2
+        const y = laneConfig.topPct + laneConfig.heightPct / 2
+
+        return (
+          <div
+            key={`pending-plant-${pp.lane}-${pp.col}-${idx}`}
+            className="entity plant-unit plant-unit--sprouting"
+            style={{
+              left: `${x}%`,
+              top: `${y}%`,
+              pointerEvents: 'none',
+              zIndex: 65,
+            }}
+          >
+            <img
+              className="plant-unit__sprite"
+              src={config.sprite || config.icon}
+              alt={config.name}
+            />
           </div>
         )
       })}
