@@ -34,6 +34,7 @@ import { toggleFullscreen } from '../../utils/fullscreen'
 import { resolverLiquidacionPartida } from '../../engine/asyncOpponent'
 import { StrategicPlaytestPostMatch } from '../StrategicPlaytest/StrategicPlaytestPostMatch'
 import type { StrategicPlaytestConfig } from '../../engine/strategicPlaytest'
+import { recordPlantPlacement } from '../../utils/plantUsageTracker'
 import './Battlefield.css'
 
 /** Un segundo antes de que el sol se recoja solo: momento de avisar. */
@@ -1426,11 +1427,14 @@ export default function Battlefield({
                     const slot = selectedSlotIndex
                     const seq = roomId ? ++ordenRef.current : undefined
                     const enTic = placePlant(lane.id, col, undefined, undefined, seq)
-                    if (enTic !== null && slot !== null) {
-                      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                        try { navigator.vibrate(15) } catch {}
+                    if (enTic !== null) {
+                      recordPlantPlacement(carta)
+                      if (slot !== null) {
+                        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                          try { navigator.vibrate(15) } catch {}
+                        }
+                        registrarPlantacion(carta, lane.id, col, enTic, slot, seq)
                       }
-                      registrarPlantacion(carta, lane.id, col, enTic, slot, seq)
                     }
                   }
                 }
