@@ -19,7 +19,7 @@ import {
   P1_COLUMNS,
   INITIAL_BASE_HP,
 } from '../../utils/gameConstants'
-import { getArenaForElo } from '../../utils/arenaManager'
+import { getArenaForElo, getEloDeltasForElo, getTrophyGateForElo } from '../../utils/arenaManager'
 const sunIcon = '/game-assets/greenfoot/sun1.webp'
 const peaImg = '/game-assets/images/Plants/PB00.webp'
 const melonImg = '/game-assets/images/Plants/melon_pult.webp'
@@ -244,6 +244,7 @@ export default function Battlefield({
   sessionGenerationRef.current = sessionGeneration ?? 0
   const roomIdRef = useRef<string | null>(roomId ?? null)
   roomIdRef.current = roomId ?? null
+  const lastPointerCellActionRef = useRef<number>(0)
 
   /**
    * Lo que dijo el servidor al liquidar la partida real.
@@ -923,9 +924,6 @@ export default function Battlefield({
       // Ranked sin roomId = entrenamiento/bot (el cliente calcula ELO local).
       // Ranked con roomId = el servidor calcula ELO autoritativo, pero el cofre de victoria se sincroniza inmediatamente.
       // Strategic Test Match está 100% aislado (sin ELO, sin cofres, sin settlement).
-      const reparteElCliente =
-        !roomId && matchMode !== 'ranked' && matchMode !== 'strategic_test'
-
       if (gameStatus === 'victory') {
         if (onBattleComplete && matchMode !== 'strategic_test') {
           void (async () => {
@@ -933,8 +931,8 @@ export default function Battlefield({
             if (res) {
               setBattleSummaryResult((prev) => ({
                 ...prev,
-                eloChange: reparteElCliente ? res.winElo : prev?.eloChange,
-                newElo: reparteElCliente ? res.newElo : prev?.newElo,
+                eloChange: prev?.eloChange ?? res.winElo,
+                newElo: prev?.newElo ?? res.newElo,
                 packResult: res.packResult,
               }))
             }
@@ -947,8 +945,8 @@ export default function Battlefield({
             if (res) {
               setBattleSummaryResult((prev) => ({
                 ...prev,
-                eloChange: reparteElCliente ? -(res.loseElo || 8) : prev?.eloChange,
-                newElo: reparteElCliente ? res.newElo : prev?.newElo,
+                eloChange: prev?.eloChange ?? -(res.loseElo || 8),
+                newElo: prev?.newElo ?? res.newElo,
               }))
             }
           })()
@@ -1295,7 +1293,38 @@ export default function Battlefield({
           >
             {Array.from({ length: TOTAL_COLUMNS }).map((_, col) => {
               const isP1Side = col < P1_COLUMNS
-              const isCellSelected = selectedCard && isP1Side
+              const isCellSelected = Boolean(selectedCard && isP1Side)
+
+              const handleCellAction = () => {
+                if (roomId && redBloqueadaRef.current) return
+                if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) return
+                if (selectedCard && isP1Side) {
+                  if (selectedCard === 'shovel') {
+                    // Igual que al plantar: sólo se registra si aquí de verdad
+                    // se excavó algo. Registrar un pico que no quitó nada haría
+                    // que el rival borrara una planta que en tu pantalla sigue.
+                    const seq = roomId ? ++ordenRef.current : undefined
+                    const casilla = digPlant({ lane: lane.id, col }, seq)
+                    if (casilla) {
+                      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                        try { navigator.vibrate(15) } catch {}
+                      }
+                      registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
+                    }
+                  } else {
+                    const carta = selectedCard
+                    const slot = selectedSlotIndex
+                    const seq = roomId ? ++ordenRef.current : undefined
+                    const enTic = placePlant(lane.id, col, undefined, undefined, seq)
+                    if (enTic !== null && slot !== null) {
+                      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                        try { navigator.vibrate(15) } catch {}
+                      }
+                      registrarPlantacion(carta, lane.id, col, enTic, slot, seq)
+                    }
+                  }
+                }
+              }
 
               return (
                 <div
@@ -1305,30 +1334,22 @@ export default function Battlefield({
                   } ${isCellSelected ? 'lane__cell--selectable' : ''}`}
                   style={{
                     width: `${100 / TOTAL_COLUMNS}%`,
-                    zIndex: isCellSelected ? (selectedCard === 'shovel' ? 10 : 40) : 1,
+                    zIndex: isCellSelected ? (selectedCard === 'shovel' ? 10 : 75) : 1,
                     pointerEvents: isP1Side ? 'auto' : 'none',
                   }}
-                  onClick={() => {
-                    if (roomId && redBloqueadaRef.current) return
-                    if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) return
-                    if (selectedCard && isP1Side) {
-                      if (selectedCard === 'shovel') {
-                        // Igual que al plantar: sólo se registra si aquí de verdad
-                        // se excavó algo. Registrar un pico que no quitó nada haría
-                        // que el rival borrara una planta que en tu pantalla sigue.
-                        const seq = roomId ? ++ordenRef.current : undefined
-                        const casilla = digPlant({ lane: lane.id, col }, seq)
-                        if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
-                      } else {
-                        const carta = selectedCard
-                        const slot = selectedSlotIndex
-                        const seq = roomId ? ++ordenRef.current : undefined
-                        const enTic = placePlant(lane.id, col, undefined, undefined, seq)
-                        if (enTic !== null && slot !== null) {
-                          registrarPlantacion(carta, lane.id, col, enTic, slot, seq)
-                        }
-                      }
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return
+                    if (isCellSelected) {
+                      lastPointerCellActionRef.current = Date.now()
+                      handleCellAction()
                     }
+                  }}
+                  onClick={(e) => {
+                    if (Date.now() - lastPointerCellActionRef.current < 400) {
+                      e.preventDefault()
+                      return
+                    }
+                    handleCellAction()
                   }}
                 />
               )
@@ -1374,23 +1395,37 @@ export default function Battlefield({
               top: `${laneConfig.topPct + laneConfig.heightPct / 2}%`,
               pointerEvents: isShovelActive ? 'auto' : 'none',
             }}
-            onClick={(e) => {
-              if (isShovelActive) {
-                if (roomId && redBloqueadaRef.current) {
-                  e.stopPropagation()
-                  return
-                }
+            onPointerDown={(e) => {
+              if (isShovelActive && e.button === 0) {
                 e.stopPropagation()
-                // Y ESTE pico también se registra.
-                //
-                // Aquí faltaba: excavar pulsando la casilla sí se mandaba al
-                // servidor, pero pulsando la planta directamente no. La planta
-                // desaparecía en tu pantalla y seguía en pie y disparando en la del
-                // rival — dos partidas distintas desde ese momento, y la mitad de
-                // los jugadores usa el pico así.
+                if (roomId && redBloqueadaRef.current) return
+                lastPointerCellActionRef.current = Date.now()
                 const seq = roomId ? ++ordenRef.current : undefined
                 const casilla = digPlant(plant.id, seq)
-                if (casilla) registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
+                if (casilla) {
+                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                    try { navigator.vibrate(15) } catch {}
+                  }
+                  registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
+                }
+              }
+            }}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (Date.now() - lastPointerCellActionRef.current < 400) {
+                e.preventDefault()
+                return
+              }
+              if (isShovelActive) {
+                if (roomId && redBloqueadaRef.current) return
+                const seq = roomId ? ++ordenRef.current : undefined
+                const casilla = digPlant(plant.id, seq)
+                if (casilla) {
+                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                    try { navigator.vibrate(15) } catch {}
+                  }
+                  registrarExcavacion(casilla.lane, casilla.col, casilla.tick, seq)
+                }
               }
             }}
           >
@@ -1586,9 +1621,7 @@ export default function Battlefield({
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="game-card__title">
-              {esperandoConfirmacionServidor
-                ? 'CARGANDO...'
-                : resultadoEnRevision
+              {resultadoEnRevision
                 ? 'PARTIDA EN REVISIÓN'
                 : resultadoEmpatado
                 ? '¡EMPATE!'
@@ -1600,9 +1633,8 @@ export default function Battlefield({
             </h2>
 
             {/* PARTIDA REAL: LO QUE DICE EL SERVIDOR
-                Sólo aparece cuando hay sala. El premio no se da por hecho: hasta
-                que el rival reporta, no hay nada repartido, y el jugador tiene que
-                verlo en lugar de creer que ya cobró. */}
+                Sólo aparece cuando hay sala. Mientras confirma enseña el spinner
+                y al responder enseña las copas autoritativas calculadas. */}
             {roomId && (
               <div className="resultado-servidor">
                 {esperandoConfirmacionServidor && (
@@ -1611,7 +1643,7 @@ export default function Battlefield({
                       className="resultado-servidor__spinner"
                       aria-hidden="true"
                     />
-                    <span>Cargando...</span>
+                    <span>Calculando copas con el servidor...</span>
                   </div>
                 )}
 
@@ -1627,31 +1659,37 @@ export default function Battlefield({
                   </p>
                 )}
 
-                {resultadoServidor?.status === 'liquidada' && (
-                  <p className="resultado-servidor__ok">
-                    ✅ Partida Confirmada:
+                {!esperandoConfirmacionServidor && resultadoServidor?.status === 'liquidada' && (() => {
+                  const fallbackDeltas = getEloDeltasForElo(userElo)
+                  const fallbackDelta = gameStatus === 'victory' ? fallbackDeltas.winElo : -fallbackDeltas.loseElo
+                  const fallbackTotal = Math.max(
+                    getTrophyGateForElo(userElo),
+                    userElo + fallbackDelta
+                  )
 
-                    {typeof resultadoServidor.eloDelta === 'number' && (
-                      resultadoServidor.eloDelta >= 0
-                        ? ` +${resultadoServidor.eloDelta} 🏆`
-                        : ` ${resultadoServidor.eloDelta} 🏆`
-                    )}
+                  const delta =
+                    typeof resultadoServidor.eloDelta === 'number'
+                      ? resultadoServidor.eloDelta
+                      : typeof resultadoServidor.eloGained === 'number'
+                      ? resultadoServidor.eloGained
+                      : typeof resultadoServidor.eloLost === 'number' && resultadoServidor.eloLost > 0
+                      ? -resultadoServidor.eloLost
+                      : battleSummaryResult?.eloChange ?? fallbackDelta
 
-                    {typeof resultadoServidor.eloDelta !== 'number' && typeof resultadoServidor.eloGained === 'number' &&
-                      ` +${resultadoServidor.eloGained} 🏆`}
+                  const total =
+                    typeof resultadoServidor.eloAfter === 'number'
+                      ? resultadoServidor.eloAfter
+                      : battleSummaryResult?.newElo ?? fallbackTotal
 
-                    {typeof resultadoServidor.eloDelta !== 'number' && typeof resultadoServidor.eloLost === 'number' &&
-                      resultadoServidor.eloLost > 0 &&
-                      ` -${resultadoServidor.eloLost} 🏆`}
-
-                    {typeof resultadoServidor.eloAfter === 'number' &&
-                      ` (Total: ${resultadoServidor.eloAfter.toLocaleString('en-US')} 🏆)`}
-
-                    {typeof resultadoServidor.payout === 'number' &&
-                      resultadoServidor.payout > 0 &&
-                      ` · +${resultadoServidor.payout} 💎`}
-                  </p>
-                )}
+                  return (
+                    <p className="resultado-servidor__ok">
+                      ✅ {delta >= 0 ? `+${delta} 🏆` : `${delta} 🏆`} (Total: {total.toLocaleString('en-US')} 🏆)
+                      {typeof resultadoServidor.payout === 'number' &&
+                        resultadoServidor.payout > 0 &&
+                        ` · +${resultadoServidor.payout} 💎`}
+                    </p>
+                  )
+                })()}
 
                 {!esperandoConfirmacionServidor &&
                   resultadoServidor?.status !== 'revision_servidor' &&
@@ -1663,10 +1701,9 @@ export default function Battlefield({
               </div>
             )}
 
-            {!esperandoConfirmacionServidor && (
-              <>
-                {/* ELO BADGE */}
-                {battleSummaryResult?.eloChange !== undefined && (
+            <>
+              {/* ELO BADGE (sólo para partidas sin sala / offline) */}
+              {!roomId && battleSummaryResult?.eloChange !== undefined && (
                   <div
                     className={`elo-result-badge ${
                       battleSummaryResult.eloChange >= 0
@@ -1830,7 +1867,6 @@ export default function Battlefield({
                   )}
                 </div>
               </>
-            )}
           </div>
         </div>
       )}

@@ -55,7 +55,7 @@ export default function PackOpeningModal({
               </div>
             ) : (
               <div className="pack-reveal-card__new-tag" style={{ borderColor: '#60a5fa', color: '#60a5fa' }}>
-                🌱 +1 COPIA ALMACENADA (LISTO PARA FUSIÓN)
+                🃏 +1 COPIA ALMACENADA (LISTO PARA FUSIÓN)
               </div>
             )}
           </div>
@@ -135,7 +135,7 @@ export default function PackOpeningModal({
           <div className="pack-reveal-card__new-tag">
             {newCount > 0
               ? `✨ ¡${newCount} NUEVAS PLANTAS DESBLOQUEADAS!`
-              : `🌱 ${resultsList.length * 10} SEMILLAS RECOLECTADAS`}
+              : `🃏 ${resultsList.length} CARTAS OBTENIDAS`}
           </div>
         </div>
 
@@ -158,7 +158,7 @@ export default function PackOpeningModal({
                 {drop.isNew ? (
                   <span className="pack-reveal-multi-new">✨ ¡NUEVA!</span>
                 ) : (
-                  <span className="pack-reveal-multi-dup">+10 Semillas</span>
+                  <span className="pack-reveal-multi-dup">✓ OBTENIDA</span>
                 )}
               </div>
             )

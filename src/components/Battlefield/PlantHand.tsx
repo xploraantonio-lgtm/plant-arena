@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { PlantId } from '../../types/game'
 import { msToTicks } from '../../engine/time'
 import {
@@ -138,6 +138,94 @@ export default function PlantHand({
   }
 
   const visibleCards = cardsToRender.slice(safeStartIndex, safeStartIndex + VISIBLE_COUNT)
+  const lastPointerSelectRef = useRef<number>(0)
+  const [deniedSlot, setDeniedSlot] = useState<number | null>(null)
+
+  const triggerSelect = useCallback(
+    (cardId: PlantId | 'shovel' | null, slotIndex: number | null = null, isDis = false) => {
+      if (isDis) {
+        // Feedback háptico de rechazo (vibración doble corta)
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate([25, 35, 25])
+          } catch {}
+        }
+        if (slotIndex !== null) {
+          setDeniedSlot(slotIndex)
+          setTimeout(() => {
+            setDeniedSlot((prev) => (prev === slotIndex ? null : prev))
+          }, 260)
+        }
+        return
+      }
+
+      // Feedback háptico ligero (confirmación de selección instantánea)
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+          navigator.vibrate(12)
+        } catch {}
+      }
+
+      if (cardId === 'shovel') {
+        onSelectCard(selectedCard === 'shovel' ? null : 'shovel')
+      } else if (cardId) {
+        const isCurrentlySelected =
+          selectedCard === cardId &&
+          (selectedSlotIndex === undefined ||
+            selectedSlotIndex === null ||
+            selectedSlotIndex === slotIndex)
+        onSelectCard(isCurrentlySelected ? null : cardId, isCurrentlySelected ? null : slotIndex)
+      } else {
+        onSelectCard(null, null)
+      }
+    },
+    [selectedCard, selectedSlotIndex, onSelectCard]
+  )
+
+  // Atajos de teclado en PC (Teclas 1 a 6 para cartas visibles, Q o S para pala, Esc para cancelar)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const targetTag = (e.target as HTMLElement)?.tagName
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA') return
+
+      if (e.key >= '1' && e.key <= '6') {
+        const num = parseInt(e.key, 10) - 1
+        if (num < visibleCards.length) {
+          const targetCard = visibleCards[num]
+          const realSlotIndex = safeStartIndex + num
+          const config = PLANT_CONFIGS[targetCard]
+          if (config) {
+            const slotCd =
+              slotCooldowns && slotCooldowns[realSlotIndex] !== undefined
+                ? slotCooldowns[realSlotIndex]
+                : 0
+            const cdTime = isDeckActive ? slotCd : (cooldowns[targetCard] || 0)
+            const isOnCooldown = cdTime > now
+            const canAfford = sunBank >= config.cost
+            const isDis = !canAfford || isOnCooldown
+            triggerSelect(targetCard, realSlotIndex, isDis)
+          }
+        }
+      } else if (e.key === 'q' || e.key === 'Q' || e.key === 's' || e.key === 'S') {
+        triggerSelect('shovel')
+      } else if (e.key === 'Escape') {
+        onSelectCard(null, null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    visibleCards,
+    safeStartIndex,
+    isDeckActive,
+    slotCooldowns,
+    cooldowns,
+    now,
+    sunBank,
+    triggerSelect,
+    onSelectCard,
+  ])
 
   return (
     <div className="plant-hand-container">
@@ -199,11 +287,20 @@ export default function PlantHand({
                 type="button"
                 className={`plant-hand__card ${
                   isSelected ? 'plant-hand__card--selected' : ''
-                } ${isDisabled ? 'plant-hand__card--disabled' : ''}`}
-                onClick={() => {
-                  if (!isDisabled) {
-                    onSelectCard(cardId, realSlotIndex)
+                } ${isDisabled ? 'plant-hand__card--disabled' : ''} ${
+                  deniedSlot === realSlotIndex ? 'plant-hand__card--denied' : ''
+                }`}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return
+                  lastPointerSelectRef.current = Date.now()
+                  triggerSelect(cardId, realSlotIndex, isDisabled)
+                }}
+                onClick={(e) => {
+                  if (Date.now() - lastPointerSelectRef.current < 400) {
+                    e.preventDefault()
+                    return
                   }
+                  triggerSelect(cardId, realSlotIndex, isDisabled)
                 }}
               >
                 {/* Level Badge in top-right corner of seed packet */}
@@ -215,6 +312,9 @@ export default function PlantHand({
                     ⭐{cardData.level}
                   </div>
                 )}
+
+                {/* PC Keyboard Hotkey Badge */}
+                <span className="plant-hand__hotkey-badge">{vIdx + 1}</span>
 
                 {/* Card Seed Packet */}
                 <div className="plant-hand__packet-wrap">
@@ -274,11 +374,21 @@ export default function PlantHand({
         className={`plant-hand__card plant-hand__shovel ${
           selectedCard === 'shovel' ? 'plant-hand__card--selected' : ''
         }`}
-        onClick={() =>
-          onSelectCard(selectedCard === 'shovel' ? null : 'shovel')
-        }
-        title="Pala: Haz clic aquí y luego en cualquier planta del campo para quitarla"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return
+          lastPointerSelectRef.current = Date.now()
+          triggerSelect('shovel')
+        }}
+        onClick={(e) => {
+          if (Date.now() - lastPointerSelectRef.current < 400) {
+            e.preventDefault()
+            return
+          }
+          triggerSelect('shovel')
+        }}
+        title="Pala (Tecla Q): Haz clic aquí o presiona Q y luego en cualquier planta del campo para quitarla"
       >
+        <span className="plant-hand__hotkey-badge">Q</span>
         <img className="plant-hand__shovel-icon" src={shovelIcon} alt="Pala" />
         <span className="plant-hand__shovel-name">PALA</span>
       </button>
