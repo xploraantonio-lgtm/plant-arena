@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
-import { FARMING_ITEM_DEFINITIONS, type PvpRewardDrop } from '../../utils/pvpRewardManager'
+import { FARMING_ITEM_DEFINITIONS, type FarmingItemId, type PvpRewardDrop } from '../../utils/pvpRewardManager'
 import { soundManager } from '../../utils/audioManager'
 import './PvpRewardOpeningModal.css'
 
@@ -16,7 +16,7 @@ function DropContent({ drop }: { drop: PvpRewardDrop }) {
     return (
       <>
         <span className={`pvp-drop-rarity pvp-drop-rarity--${drop.rarity}`}>
-{drop.rarity === 'uncommon' ? 'POCO COMÚN' : 'COMÚN'}
+          {drop.rarity === 'uncommon' ? 'POCO COMÚN' : 'COMÚN'}
         </span>
         <img className="pvp-drop-img" src={plant.icon} alt={plant.name} />
         <strong className="pvp-drop-name">{plant.name}</strong>
@@ -25,36 +25,41 @@ function DropContent({ drop }: { drop: PvpRewardDrop }) {
     )
   }
 
-  if (drop.type === 'gold') {
+  if (drop.type === 'gold' || (drop as any).itemId === 'gold') {
     return (
       <>
         <span className="pvp-drop-rarity pvp-drop-rarity--gold">ORO</span>
         <img
-className="pvp-drop-img"
-src="/game-assets/farming/gold_coin.webp"
-alt="Oro"
-onError={(e) => { e.currentTarget.style.display = 'none' }}
+          className="pvp-drop-img"
+          src="/game-assets/farming/gold_coin.webp"
+          alt="Oro"
+          onError={(e) => { e.currentTarget.style.display = 'none' }}
         />
         <strong className="pvp-drop-name">Monedas de Oro</strong>
-        <span className="pvp-drop-quantity">+{drop.quantity.toLocaleString()}</span>
+        <span className="pvp-drop-quantity">+{(drop.quantity || 0).toLocaleString()}</span>
       </>
     )
   }
 
-  const item = FARMING_ITEM_DEFINITIONS[drop.itemId]
+  const itemId = (drop as any).itemId as FarmingItemId
+  const item = FARMING_ITEM_DEFINITIONS[itemId] as (typeof FARMING_ITEM_DEFINITIONS)[keyof typeof FARMING_ITEM_DEFINITIONS] | undefined
+  const iconSrc = item?.icon || '/game-assets/farming/water.webp'
+  const labelText = item?.label || 'Recurso'
+  const fallbackText = item?.fallback || '📦'
+
   return (
     <>
       <span className="pvp-drop-rarity pvp-drop-rarity--resource">RECURSO FARMING</span>
       <div className="pvp-drop-img-wrap">
         <img
-className="pvp-drop-img"
-src={item.icon}
-alt={item.label}
-onError={(e) => { e.currentTarget.style.display = 'none' }}
+          className="pvp-drop-img"
+          src={iconSrc}
+          alt={labelText}
+          onError={(e) => { e.currentTarget.style.display = 'none' }}
         />
-        <span className="pvp-drop-fallback">{item.fallback}</span>
+        <span className="pvp-drop-fallback">{fallbackText}</span>
       </div>
-      <strong className="pvp-drop-name">{item.label}</strong>
+      <strong className="pvp-drop-name">{labelText}</strong>
       <span className="pvp-drop-quantity">+{drop.quantity}</span>
     </>
   )

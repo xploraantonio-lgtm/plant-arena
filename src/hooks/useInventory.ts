@@ -1151,7 +1151,15 @@ export function useInventory() {
     slotIndex: number
   ): Promise<PvpRewardDrop[] | null> => {
     const res = await inventoryService.claimPackSlot(slotIndex)
-    if (!res.success) return null
+    if (!res.success) {
+      console.warn('[claimSlotOnServer] Error al reclamar slot:', res.error)
+      if (res.error?.includes('SLOT_NOT_READY')) {
+        alert('⏳ El cofre aún está sincronizando su tiempo con el servidor. Por favor intenta de nuevo en unos segundos.')
+      } else if (res.error) {
+        alert(`⚠️ No se pudo abrir el cofre: ${res.error}`)
+      }
+      return null
+    }
 
     // Compatibilidad con claim_pack_slot v1 durante el despliegue del SQL.
     const drops: PvpRewardDrop[] = Array.isArray(res.drops)

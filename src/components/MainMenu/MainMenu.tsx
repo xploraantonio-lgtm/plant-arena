@@ -523,11 +523,18 @@ export default function MainMenu({
       {/* 4 FREE BATTLE PACK SLOTS (CLASH ROYALE STYLE) */}
       <div className="main-menu-chest-slots">
         {freePackSlots.map((slot) => {
-          const remainingText = getRemainingTimeString(slot)
+          const isTimerFinished = Boolean(
+            slot.status === 'unlocking' &&
+            slot.unlockStartedAt &&
+            Date.now() - slot.unlockStartedAt >= slot.durationHours * 3600 * 1000
+          )
+          const isSlotReady = slot.status === 'ready' || isTimerFinished
+          const remainingText = isSlotReady ? '¡LISTO!' : getRemainingTimeString(slot)
+
           return (
             <div
               key={slot.slotId}
-              className={`chest-slot chest-slot--${slot.status}`}
+              className={`chest-slot chest-slot--${isSlotReady ? 'ready' : slot.status}`}
               onClick={() => {
                 if (slot.status === 'locked' && onStartSlotUnlock) {
                   const res = onStartSlotUnlock(slot.slotId)
@@ -536,54 +543,20 @@ export default function MainMenu({
                   } else {
                     soundManager.playSound('click', 0.5)
                   }
+                } else if (isSlotReady) {
+                  if (onOpenSlotPack) {
+                    soundManager.playSound('click', 0.5)
+                    onOpenSlotPack(slot.slotId)
+                  }
                 } else if (slot.status === 'unlocking') {
                   if (onFastUnlockSlot) {
                     soundManager.playSound('click', 0.5)
                     setSlotToAccelerate(slot)
                   }
-                } else if (slot.status === 'ready' && onOpenSlotPack) {
-                  onOpenSlotPack(slot.slotId)
                 }
               }}
             >
-              {slot.status === 'empty' && (
-                <div className="chest-slot__empty">
-                  <span className="chest-slot__empty-icon">📦</span>
-                  <span className="chest-slot__empty-label">SLOT VACÍO</span>
-                </div>
-              )}
-
-              {slot.status === 'locked' && (
-                <div className="chest-slot__content">
-                  <span className="chest-slot__arena-tag">ARENA {slot.arenaLevel}</span>
-                  <img
-                    src="/game-assets/greenfoot/seed_pack_pvp.webp"
-                    alt="Sobre PvP"
-                    className="chest-slot__pack-img"
-                  />
-                  <span className="chest-slot__timer">⏳ {slot.durationHours}h</span>
-                  <span className="chest-slot__btn-hint">DESBLOQUEAR</span>
-                </div>
-              )}
-
-              {slot.status === 'unlocking' && (
-                <div className="chest-slot__content chest-slot__content--unlocking">
-                  <span className="chest-slot__arena-tag">DESBLOQUEANDO</span>
-                  <img
-                    src="/game-assets/greenfoot/seed_pack_pvp.webp"
-                    alt="Sobre PvP"
-                    className="chest-slot__pack-img chest-slot__pack-img--pulsing"
-                  />
-                  <span className="chest-slot__timer chest-slot__timer--active">
-                    ⏱️ {remainingText}
-                  </span>
-                  <span className="chest-slot__btn-hint chest-slot__btn-hint--unlocking">
-                    ⚡ ACELERAR
-                  </span>
-                </div>
-              )}
-
-              {slot.status === 'ready' && (
+              {isSlotReady ? (
                 <div className="chest-slot__content chest-slot__content--ready">
                   <span className="chest-slot__arena-tag chest-slot__arena-tag--ready">
                     ¡LISTO!
@@ -597,6 +570,45 @@ export default function MainMenu({
                     ✨ ABRIR
                   </span>
                 </div>
+              ) : (
+                <>
+                  {slot.status === 'empty' && (
+                    <div className="chest-slot__empty">
+                      <span className="chest-slot__empty-icon">📦</span>
+                      <span className="chest-slot__empty-label">SLOT VACÍO</span>
+                    </div>
+                  )}
+
+                  {slot.status === 'locked' && (
+                    <div className="chest-slot__content">
+                      <span className="chest-slot__arena-tag">ARENA {slot.arenaLevel}</span>
+                      <img
+                        src="/game-assets/greenfoot/seed_pack_pvp.webp"
+                        alt="Sobre PvP"
+                        className="chest-slot__pack-img"
+                      />
+                      <span className="chest-slot__timer">⏳ {slot.durationHours}h</span>
+                      <span className="chest-slot__btn-hint">DESBLOQUEAR</span>
+                    </div>
+                  )}
+
+                  {slot.status === 'unlocking' && (
+                    <div className="chest-slot__content chest-slot__content--unlocking">
+                      <span className="chest-slot__arena-tag">DESBLOQUEANDO</span>
+                      <img
+                        src="/game-assets/greenfoot/seed_pack_pvp.webp"
+                        alt="Sobre PvP"
+                        className="chest-slot__pack-img chest-slot__pack-img--pulsing"
+                      />
+                      <span className="chest-slot__timer chest-slot__timer--active">
+                        ⏱️ {remainingText}
+                      </span>
+                      <span className="chest-slot__btn-hint chest-slot__btn-hint--unlocking">
+                        ⚡ ACELERAR
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )
