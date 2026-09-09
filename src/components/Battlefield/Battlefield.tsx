@@ -1629,7 +1629,7 @@ export default function Battlefield({
 
                 {resultadoServidor?.status === 'liquidada' && (
                   <p className="resultado-servidor__ok">
-                    ✅ Partida Confirmada
+                    ✅ Partida Confirmada:
 
                     {typeof resultadoServidor.eloDelta === 'number' && (
                       resultadoServidor.eloDelta >= 0
@@ -1645,7 +1645,7 @@ export default function Battlefield({
                       ` -${resultadoServidor.eloLost} 🏆`}
 
                     {typeof resultadoServidor.eloAfter === 'number' &&
-                      ` (Total: ${resultadoServidor.eloAfter} 🏆)`}
+                      ` (Total: ${resultadoServidor.eloAfter.toLocaleString('en-US')} 🏆)`}
 
                     {typeof resultadoServidor.payout === 'number' &&
                       resultadoServidor.payout > 0 &&

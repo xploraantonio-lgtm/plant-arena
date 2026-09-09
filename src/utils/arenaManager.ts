@@ -73,17 +73,26 @@ export function getArenaForElo(elo: number): ArenaInfo {
   return found || ARENAS[0]
 }
 
+export function getTrophyGateForElo(elo: number): number {
+  if (elo >= 4000) return 4000
+  if (elo >= 3000) return 3000
+  if (elo >= 2000) return 2000
+  if (elo >= 1600) return 1600
+  if (elo >= 1000) return 1000
+  return 0
+}
+
 export function getEloDeltasForElo(elo: number): { winElo: number; loseElo: number; surrenderElo: number } {
   if (elo <= 1600) {
-    return { winElo: 15, loseElo: 8, surrenderElo: 8 }
+    return { winElo: 15, loseElo: 5, surrenderElo: 5 }
   } else if (elo <= 2000) {
-    return { winElo: 12, loseElo: 8, surrenderElo: 8 }
+    return { winElo: 18, loseElo: 8, surrenderElo: 8 }
   } else if (elo <= 3000) {
-    return { winElo: 10, loseElo: 8, surrenderElo: 8 }
+    return { winElo: 20, loseElo: 12, surrenderElo: 12 }
   } else if (elo <= 4000) {
-    return { winElo: 8, loseElo: 7, surrenderElo: 7 }
+    return { winElo: 25, loseElo: 20, surrenderElo: 20 }
   } else {
-    return { winElo: 6, loseElo: 6, surrenderElo: 6 }
+    return { winElo: 30, loseElo: 30, surrenderElo: 30 }
   }
 }
 

@@ -18,8 +18,7 @@ import { useInventory } from './hooks/useInventory'
 import type { PackDropResult, PackId } from './utils/packDropManager'
 import background from './assets/images/background.webp'
 import { soundManager } from './utils/audioManager'
-
-import { getEloDeltasForElo } from './utils/arenaManager'
+import { getEloDeltasForElo, getTrophyGateForElo } from './utils/arenaManager'
 import MatchmakingScreen from './components/Matchmaking/MatchmakingScreen'
 import MisPartidas from './components/Repeticiones/MisPartidas'
 import VerRepeticion from './components/Repeticiones/VerRepeticion'
@@ -757,17 +756,21 @@ function App() {
       const packResult = await awardVictoryPack(newElo)
       return { winElo: deltas.winElo, newElo, packResult }
     } else {
-      const newElo = Math.max(0, userElo - deltas.loseElo)
+      const gate = getTrophyGateForElo(userElo)
+      const newElo = Math.max(gate, userElo - deltas.loseElo)
+      const effectiveLoss = userElo - newElo
       setUserElo(newElo)
-      return { loseElo: deltas.loseElo, newElo }
+      return { loseElo: effectiveLoss, newElo }
     }
   }
 
   const handleSurrender = () => {
     const deltas = getEloDeltasForElo(userElo)
-    const newElo = Math.max(0, userElo - deltas.surrenderElo)
+    const gate = getTrophyGateForElo(userElo)
+    const newElo = Math.max(gate, userElo - deltas.surrenderElo)
+    const effectiveLoss = userElo - newElo
     setUserElo(newElo)
-    return { surrenderElo: deltas.surrenderElo, newElo }
+    return { surrenderElo: effectiveLoss, newElo }
   }
 
   const handleServerEloUpdated = (newElo: number) => {
