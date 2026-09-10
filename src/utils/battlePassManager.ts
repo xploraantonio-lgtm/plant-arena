@@ -1,12 +1,14 @@
 import type { PlantId } from '../types/game'
 import type { PackId } from './packDropManager'
+import monedaImg from '../assets/ico/moneda.webp'
 
 export interface PassReward {
-  type: 'pack' | 'copies' | 'plant' | 'badge'
+  type: 'pack' | 'copies' | 'plant' | 'badge' | 'gold'
   packId?: PackId
   packCount?: number
   plantId?: PlantId
   copiesCount?: number
+  goldAmount?: number
   label: string
   icon: string
 }
@@ -47,7 +49,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 5,
     requiredElo: 1750,
     arenaName: 'Desierto Nocturno',
-    reward: { type: 'copies', plantId: 'jalapeno', copiesCount: 1, label: 'x1 Jalapeño Garantizado', icon: '/game-assets/plants/jalapeno_hd.webp' },
+    reward: { type: 'gold', goldAmount: 500, label: '500 Monedas de Oro', icon: monedaImg },
   },
   {
     level: 6,
@@ -65,7 +67,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 8,
     requiredElo: 2200,
     arenaName: 'Rascacielos Cyberpunk',
-    reward: { type: 'copies', plantId: 'tallnut', copiesCount: 1, label: 'x1 Nuez Alta', icon: '/game-assets/greenfoot/transparenttallnut.webp' },
+    reward: { type: 'pack', packId: 'basic', packCount: 2, label: '2x Sobres Básicos', icon: '/game-assets/greenfoot/seed_pack_common_whitebg.webp' },
   },
   {
     level: 9,
@@ -131,7 +133,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 19,
     requiredElo: 3850,
     arenaName: 'Olimpo de Leyendas',
-    reward: { type: 'pack', packId: 'basic', packCount: 2, label: '2x Sobres Básicos', icon: '/game-assets/greenfoot/seed_pack_common_whitebg.webp' },
+    reward: { type: 'copies', plantId: 'tallnut', copiesCount: 1, label: 'x1 Nuez Alta', icon: '/game-assets/greenfoot/transparenttallnut.webp' },
   },
   {
     level: 20,

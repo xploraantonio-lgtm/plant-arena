@@ -20,7 +20,7 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
     }
   })
 
-  it('FASE 3 — Las copias de plantas en niveles 2, 3, 6, 7, 8, 11, 12 están en 1x', () => {
+  it('FASE 3 — Recompensas del pase: Nivel 5 Oro, Nivel 8 Sobres, y copias 1x en 2, 3, 6, 7, 11, 12, 19', () => {
     const lvl2 = BATTLE_PASS_LEVELS.find((l) => l.level === 2)!
     expect(lvl2.reward).toEqual({
       type: 'copies',
@@ -38,6 +38,11 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
       label: 'x1 Bonk Choy',
       icon: '/game-assets/greenfoot/bonkchoy1.webp',
     })
+
+    const lvl5 = BATTLE_PASS_LEVELS.find((l) => l.level === 5)!
+    expect(lvl5.reward.type).toBe('gold')
+    expect(lvl5.reward.goldAmount).toBe(500)
+    expect(lvl5.reward.label).toBe('500 Monedas de Oro')
 
     const lvl6 = BATTLE_PASS_LEVELS.find((l) => l.level === 6)!
     expect(lvl6.reward).toEqual({
@@ -59,11 +64,11 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
 
     const lvl8 = BATTLE_PASS_LEVELS.find((l) => l.level === 8)!
     expect(lvl8.reward).toEqual({
-      type: 'copies',
-      plantId: 'tallnut',
-      copiesCount: 1,
-      label: 'x1 Nuez Alta',
-      icon: '/game-assets/greenfoot/transparenttallnut.webp',
+      type: 'pack',
+      packId: 'basic',
+      packCount: 2,
+      label: '2x Sobres Básicos',
+      icon: '/game-assets/greenfoot/seed_pack_common_whitebg.webp',
     })
 
     const lvl11 = BATTLE_PASS_LEVELS.find((l) => l.level === 11)!
@@ -77,6 +82,15 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
 
     const lvl12 = BATTLE_PASS_LEVELS.find((l) => l.level === 12)!
     expect(lvl12.reward).toEqual({
+      type: 'copies',
+      plantId: 'tallnut',
+      copiesCount: 1,
+      label: 'x1 Nuez Alta',
+      icon: '/game-assets/greenfoot/transparenttallnut.webp',
+    })
+
+    const lvl19 = BATTLE_PASS_LEVELS.find((l) => l.level === 19)!
+    expect(lvl19.reward).toEqual({
       type: 'copies',
       plantId: 'tallnut',
       copiesCount: 1,
@@ -127,11 +141,11 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
     expect(lvl17.reward.packCount).toBe(2)
     expect(lvl17.reward.label).toBe('2x Sobre Básico')
 
-    const lvl19 = BATTLE_PASS_LEVELS.find((l) => l.level === 19)!
-    expect(lvl19.reward.type).toBe('pack')
-    expect(lvl19.reward.packId).toBe('basic')
-    expect(lvl19.reward.packCount).toBe(2)
-    expect(lvl19.reward.label).toBe('2x Sobres Básicos')
+    const lvl8 = BATTLE_PASS_LEVELS.find((l) => l.level === 8)!
+    expect(lvl8.reward.type).toBe('pack')
+    expect(lvl8.reward.packId).toBe('basic')
+    expect(lvl8.reward.packCount).toBe(2)
+    expect(lvl8.reward.label).toBe('2x Sobres Básicos')
   })
 
   it('FASE 5 — Cero legendarias en el Pase VIP y solo Tall-nut como épica', () => {
