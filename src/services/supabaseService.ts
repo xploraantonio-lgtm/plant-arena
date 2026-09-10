@@ -3106,7 +3106,110 @@ export const SupabaseService = {
       return { success: false, error: e?.message }
     }
   },
+
+  /**
+   * Obtiene el feed global de transacciones y actividad económica:
+   * Ventas de mercado P2P (quién compró a quién), retiros validados (>= $10),
+   * compras de sobres/oro en tienda y premios.
+   */
+  async getGlobalTransactions(limite = 60): Promise<GlobalTransactionItem[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_global_transactions', {
+        p_limit: limite,
+      })
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data as GlobalTransactionItem[]
+      }
+      if (error) {
+        logError('getGlobalTransactions:rpc_fallback', error)
+      }
+    } catch (e) {
+      logError('getGlobalTransactions:exception', e)
+    }
+
+    // Fallback resiliente: consultar directamente marketplace_listings cerrados
+    try {
+      const { data: soldListings } = await supabase
+        .from('marketplace_listings')
+        .select('id, price_gems, closed_at, buyer_id, seller_id, plant_instance_id')
+        .eq('status', 'sold')
+        .not('closed_at', 'is', null)
+        .order('closed_at', { ascending: false })
+        .limit(limite)
+
+      if (!soldListings || soldListings.length === 0) return []
+
+      const userIds = Array.from(
+        new Set(
+          soldListings
+            .flatMap((l: any) => [l.buyer_id, l.seller_id])
+            .filter(Boolean)
+        )
+      )
+      const instanceIds = Array.from(
+        new Set(
+          soldListings
+            .map((l: any) => l.plant_instance_id)
+            .filter(Boolean)
+        )
+      )
+
+      const [profilesRes, plantsRes] = await Promise.all([
+        userIds.length > 0
+          ? supabase.from('profiles').select('id, username').in('id', userIds)
+          : Promise.resolve({ data: [] as any[] }),
+        instanceIds.length > 0
+          ? supabase.from('plant_instances').select('id, plant_id, level, rarity').in('id', instanceIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ])
+
+      const profilesMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p.username]))
+      const plantsMap = new Map((plantsRes.data || []).map((pi: any) => [pi.id, pi]))
+
+      return soldListings.map((l: any) => {
+        const buyerName = profilesMap.get(l.buyer_id) || 'Jugador'
+        const sellerName = profilesMap.get(l.seller_id) || 'Vendedor'
+        const plant = plantsMap.get(l.plant_instance_id)
+        return {
+          id: l.id,
+          type: 'marketplace_sale' as const,
+          createdAt: l.closed_at,
+          userName: buyerName,
+          targetUserName: sellerName,
+          title: 'Compra en Mercado P2P',
+          description: `${buyerName} compró a ${sellerName}`,
+          itemId: plant?.plant_id || null,
+          itemLevel: plant?.level || 0,
+          itemRarity: plant?.rarity || 'common',
+          amountGems: Number(l.price_gems || 0),
+          amountUsd: null,
+          status: 'completed',
+        }
+      })
+    } catch (err) {
+      logError('getGlobalTransactions:fallback_error', err)
+      return []
+    }
+  },
+}
+
+export interface GlobalTransactionItem {
+  id: string
+  type: 'marketplace_sale' | 'withdrawal' | 'shop_pack' | 'shop_gold' | 'lottery_win' | 'reward_code' | 'tournament_reward' | string
+  createdAt: string
+  userName: string
+  targetUserName?: string | null
+  title: string
+  description: string
+  itemId?: string | null
+  itemLevel?: number | null
+  itemRarity?: string | null
+  amountGems?: number | null
+  amountUsd?: number | null
+  status: string
 }
 
 export const supabaseService = SupabaseService
+
 

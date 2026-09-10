@@ -853,7 +853,14 @@ export interface Database {
         }
         Returns: Json
       }
+      get_global_transactions: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: Json
+      }
     }
+
     Enums: {
       [_ in never]: never
     }

@@ -794,3 +794,417 @@
   transform: scale(1.02);
   filter: brightness(1.1);
 }
+
+/* =============================================================================
+   TAB 3: TRANSACCIONES GLOBALES FEED
+   ============================================================================= */
+
+.market-tx-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* Header Bar & Stat Chips */
+.market-tx-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.market-tx-summary-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.market-tx-stat-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.market-tx-stat-chip__label {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+}
+
+.market-tx-stat-chip__val {
+  font-size: 11.5px;
+  font-weight: 900;
+  color: #f1f5f9;
+}
+
+.market-tx-stat-chip--gold {
+  border-color: rgba(234, 179, 8, 0.5);
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.market-tx-stat-chip--gold .market-tx-stat-chip__val {
+  color: #fbbf24;
+}
+
+.market-tx-stat-chip--emerald {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.market-tx-stat-chip--emerald .market-tx-stat-chip__val {
+  color: #34d399;
+}
+
+.market-tx-refresh-btn {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border: 1.5px solid #38bdf8;
+  color: #38bdf8;
+  font-size: 10.5px;
+  font-weight: 900;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+
+.market-tx-refresh-btn:hover:not(:disabled) {
+  transform: scale(1.04);
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #7dd3fc;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+}
+
+.market-tx-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Filter Bar Chips */
+.market-tx-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.market-tx-filter-bar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.market-tx-filter-bar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 2px;
+}
+
+.market-tx-filter-chip {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.market-tx-filter-chip:hover {
+  color: #f1f5f9;
+  border-color: #64748b;
+}
+
+.market-tx-filter-chip--active {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(30, 64, 175, 0.4) 100%);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(56, 189, 248, 0.3);
+}
+
+/* Feed List Scrollable */
+.market-tx-feed-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.market-tx-feed-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.market-tx-feed-list::-webkit-scrollbar-thumb {
+  background: #4ade80;
+  border-radius: 3px;
+}
+
+/* Individual Card */
+.market-tx-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(20, 30, 48, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1.5px solid #1e293b;
+  border-radius: 12px;
+  padding: 10px 14px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.market-tx-card:hover {
+  transform: translateY(-1px);
+  border-color: #334155;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.market-tx-card--marketplace_sale {
+  border-left: 3.5px solid #22c55e;
+}
+
+.market-tx-card--withdrawal {
+  border-left: 3.5px solid #38bdf8;
+  background: linear-gradient(135deg, rgba(14, 40, 65, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+}
+
+.market-tx-card--shop_pack,
+.market-tx-card--shop_gold {
+  border-left: 3.5px solid #eab308;
+}
+
+.market-tx-card--lottery_win,
+.market-tx-card--reward_code,
+.market-tx-card--tournament_reward {
+  border-left: 3.5px solid #a855f7;
+}
+
+/* Card Left Section */
+.market-tx-card__left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.market-tx-badge {
+  font-size: 9px;
+  font-weight: 900;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.market-tx-badge--marketplace_sale {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.market-tx-badge--withdrawal {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.market-tx-badge--shop_pack,
+.market-tx-badge--shop_gold {
+  background: rgba(234, 179, 8, 0.18);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+}
+
+.market-tx-badge--lottery_win,
+.market-tx-badge--reward_code,
+.market-tx-badge--tournament_reward {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(192, 132, 252, 0.4);
+}
+
+.market-tx-time {
+  font-size: 9.5px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+/* Card Center Section */
+.market-tx-card__center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.market-tx-users-flow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  flex-wrap: wrap;
+}
+
+.market-tx-buyer-name,
+.market-tx-user-name {
+  color: #38bdf8;
+  font-weight: 900;
+}
+
+.market-tx-arrow,
+.market-tx-action-text {
+  color: #94a3b8;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.market-tx-seller-name {
+  color: #fbbf24;
+  font-weight: 900;
+}
+
+.market-tx-desc-text {
+  font-size: 10px;
+  color: #cbd5e1;
+  line-height: 1.25;
+}
+
+.market-tx-validated-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 9.5px;
+  font-weight: 900;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Plant Preview in P2P */
+.market-tx-plant-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 8px;
+  padding: 3px 8px;
+  align-self: flex-start;
+}
+
+.market-tx-plant-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+.market-tx-plant-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.market-tx-plant-name {
+  font-size: 11px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.market-tx-plant-sub {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+/* Card Right Section: Amounts */
+.market-tx-card__right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 100px;
+}
+
+.market-tx-amount-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.market-tx-amount-box--gems .market-tx-amount-num {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fbbf24;
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+}
+
+.market-tx-amount-box--usd .market-tx-amount-num {
+  font-size: 13px;
+  font-weight: 900;
+  color: #38bdf8;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.market-tx-amount-sub {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.market-tx-amount-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .market-tx-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .market-tx-card__left {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .market-tx-card__right {
+    justify-content: flex-start;
+  }
+  .market-tx-amount-box {
+    align-items: flex-start;
+  }
+}
+

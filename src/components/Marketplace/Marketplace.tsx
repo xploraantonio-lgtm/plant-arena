@@ -4,12 +4,28 @@ import {
   getPlantRarityAndMinPrice,
   type PlantRarity,
 } from '../../utils/marketplaceManager'
-import { marketplaceService } from '../../services/marketplaceService'
+import { marketplaceService, type GlobalTransactionItem } from '../../services/marketplaceService'
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
 import type { PlantId, PlantCardInstance } from '../../types/game'
 import { PLANT_CONFIGS, STAT_LABELS, VIP_PASS_PRECIO_GEMAS, type PlantStatKey } from '../../utils/gameConstants'
 import { evaluateMarketplaceAccess } from '../../utils/marketplaceAccess'
 import './Marketplace.css'
+
+function formatTxTime(dateStr?: string): string {
+  if (!dateStr) return 'Reciente'
+  const diffMs = Date.now() - new Date(dateStr).getTime()
+  if (isNaN(diffMs)) return 'Reciente'
+  const secs = Math.floor(diffMs / 1000)
+  if (secs < 60) return 'Hace un momento'
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `Hace ${mins} min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `Hace ${hours} h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `Hace ${days} d`
+  return new Date(dateStr).toLocaleDateString()
+}
+
 
 interface MarketplaceProps {
   /** Ya no se usa para cobrar: el saldo lo mueve el servidor. Se deja para
@@ -93,12 +109,16 @@ export default function Marketplace({
   onBuyVipPass,
   onBackToMenu,
 }: MarketplaceProps) {
-  const [activeTab, setActiveTab] = useState<'browse' | 'sell'>('browse')
+  const [activeTab, setActiveTab] = useState<'browse' | 'sell' | 'transactions'>('browse')
   const [listings, setListings] = useState<OfertaDelMercado[]>([])
+  const [transactions, setTransactions] = useState<GlobalTransactionItem[]>([])
+  const [txLoading, setTxLoading] = useState(false)
+  const [txFilter, setTxFilter] = useState<'all' | 'marketplace' | 'withdrawal' | 'shop' | 'reward'>('all')
   /** La comisión la manda el servidor: así el número no vive duplicado aquí. */
   const [comisionPct, setComisionPct] = useState<number>(10)
   const [cargando, setCargando] = useState(true)
   const [activeDialog, setActiveDialog] = useState<MarketModalDialog | null>(null)
+
 
   const accessInfo = useMemo(() => {
     return evaluateMarketplaceAccess(hasVipPass, userElo)
@@ -226,9 +246,56 @@ export default function Marketplace({
     setCargando(false)
   }
 
+  const refreshTransactions = async () => {
+    setTxLoading(true)
+    try {
+      const data = await marketplaceService.getGlobalTransactions(60)
+      setTransactions(data || [])
+    } catch (e) {
+      console.warn('Error cargando transacciones globales:', e)
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
   useEffect(() => {
     void refreshListings()
+    void refreshTransactions()
   }, [])
+
+  useEffect(() => {
+    if (activeTab === 'transactions') {
+      void refreshTransactions()
+    }
+  }, [activeTab])
+
+  const filteredTransactions = useMemo(() => {
+    if (txFilter === 'all') return transactions
+    if (txFilter === 'marketplace') return transactions.filter((t) => t.type === 'marketplace_sale')
+    if (txFilter === 'withdrawal') return transactions.filter((t) => t.type === 'withdrawal')
+    if (txFilter === 'shop') return transactions.filter((t) => t.type === 'shop_pack' || t.type === 'shop_gold')
+    if (txFilter === 'reward') return transactions.filter((t) => t.type === 'lottery_win' || t.type === 'reward_code' || t.type === 'tournament_reward')
+    return transactions
+  }, [transactions, txFilter])
+
+  const txStats = useMemo(() => {
+    let totalP2pGems = 0
+    let totalWithdrawUsdt = 0
+    transactions.forEach((t) => {
+      if (t.type === 'marketplace_sale' && t.amountGems) {
+        totalP2pGems += t.amountGems
+      }
+      if (t.type === 'withdrawal' && t.amountUsd) {
+        totalWithdrawUsdt += t.amountUsd
+      }
+    })
+    return {
+      total: transactions.length,
+      p2pGems: totalP2pGems,
+      withdrawUsdt: totalWithdrawUsdt,
+    }
+  }, [transactions])
+
 
   // Sin servidor no hay mercado. Antes había una versión en localStorage y eso
   // era peor que nada: cada jugador veía sus propias ofertas inventadas.
@@ -312,11 +379,13 @@ Ya está en tu Jardín.`,
           'success'
         )
         await refreshListings()
+        void refreshTransactions()
         onServerChange?.()
       },
       `COMPRAR (${item.precio} 💎)`,
       'CANCELAR'
     )
+
   }
 
   // SELL / LIST A CARD ON MARKETPLACE
@@ -508,7 +577,7 @@ Recibirás ${neto} 💎 cuando se venda.`,
             setActiveTab('browse')
           }}
         >
-          🛒 EXPLORAR MERCADO ({listings.length} OFERTAS)
+          🛒 COMERCIO ({listings.length})
         </button>
         <button
           type="button"
@@ -534,7 +603,18 @@ Recibirás ${neto} 💎 cuando se venda.`,
         >
           {!hasAccess ? '🔒 VENDER (PASE PVP / 1,350 COPAS)' : '🏷️ VENDER'}
         </button>
+        <button
+          type="button"
+          className={`market-tab-btn ${activeTab === 'transactions' ? 'market-tab-btn--active' : ''}`}
+          onClick={() => {
+            soundManager.playSound('click', 0.5)
+            setActiveTab('transactions')
+          }}
+        >
+          📜 TRANSACCIONES
+        </button>
       </div>
+
 
       {/* TAB 1: BROWSE LISTINGS */}
       {activeTab === 'browse' && (
@@ -828,6 +908,193 @@ Recibirás ${neto} 💎 cuando se venda.`,
           </div>
         </div>
       )}
+
+      {/* TAB 3: GLOBAL TRANSACTIONS FEED */}
+      {activeTab === 'transactions' && (
+        <div className="market-tx-container">
+          {/* Header Bar with Stats & Refresh */}
+          <div className="market-tx-header-bar">
+            <div className="market-tx-summary-chips">
+              <div className="market-tx-stat-chip">
+                <span className="market-tx-stat-chip__label">ACTIVIDAD TOTAL</span>
+                <span className="market-tx-stat-chip__val">{txStats.total}</span>
+              </div>
+              <div className="market-tx-stat-chip market-tx-stat-chip--gold">
+                <span className="market-tx-stat-chip__label">VOLUMEN P2P</span>
+                <span className="market-tx-stat-chip__val">{txStats.p2pGems.toLocaleString()} 💎</span>
+              </div>
+              <div className="market-tx-stat-chip market-tx-stat-chip--emerald">
+                <span className="market-tx-stat-chip__label">RETIROS OFICIALES ($10+ MIN)</span>
+                <span className="market-tx-stat-chip__val">${txStats.withdrawUsdt.toFixed(2)} USDT</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="market-tx-refresh-btn"
+              onClick={() => {
+                soundManager.playSound('click', 0.4)
+                void refreshTransactions()
+              }}
+              disabled={txLoading}
+              title="Refrescar transacciones en vivo"
+            >
+              {txLoading ? '⏳ ACTUALIZANDO...' : '🔄 ACTUALIZAR'}
+            </button>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="market-tx-filter-bar">
+            <button
+              type="button"
+              className={`market-tx-filter-chip ${txFilter === 'all' ? 'market-tx-filter-chip--active' : ''}`}
+              onClick={() => setTxFilter('all')}
+            >
+              🌐 TODOS ({transactions.length})
+            </button>
+            <button
+              type="button"
+              className={`market-tx-filter-chip ${txFilter === 'marketplace' ? 'market-tx-filter-chip--active' : ''}`}
+              onClick={() => setTxFilter('marketplace')}
+            >
+              🛒 MERCADO P2P ({transactions.filter((t) => t.type === 'marketplace_sale').length})
+            </button>
+            <button
+              type="button"
+              className={`market-tx-filter-chip ${txFilter === 'withdrawal' ? 'market-tx-filter-chip--active' : ''}`}
+              onClick={() => setTxFilter('withdrawal')}
+            >
+              💳 RETIROS VALIDADOS ({transactions.filter((t) => t.type === 'withdrawal').length})
+            </button>
+            <button
+              type="button"
+              className={`market-tx-filter-chip ${txFilter === 'shop' ? 'market-tx-filter-chip--active' : ''}`}
+              onClick={() => setTxFilter('shop')}
+            >
+              🎒 TIENDA & ORO ({transactions.filter((t) => t.type === 'shop_pack' || t.type === 'shop_gold').length})
+            </button>
+            <button
+              type="button"
+              className={`market-tx-filter-chip ${txFilter === 'reward' ? 'market-tx-filter-chip--active' : ''}`}
+              onClick={() => setTxFilter('reward')}
+            >
+              🎁 PREMIOS & RULETA ({transactions.filter((t) => t.type === 'lottery_win' || t.type === 'reward_code' || t.type === 'tournament_reward').length})
+            </button>
+          </div>
+
+          {/* Transactions Feed Scroll List */}
+          <div className="market-tx-feed-list">
+            {txLoading && transactions.length === 0 ? (
+              <div className="market-empty-state">
+                <span>⏳ Cargando registro de transacciones globales…</span>
+              </div>
+            ) : filteredTransactions.length === 0 ? (
+              <div className="market-empty-state">
+                <span>📜 No hay transacciones registradas en esta categoría aún.</span>
+              </div>
+            ) : (
+              filteredTransactions.map((tx) => {
+                const plantDef = tx.itemId && PLANT_CONFIGS[tx.itemId as PlantId] ? PLANT_CONFIGS[tx.itemId as PlantId] : null
+                const plantIcon = plantDef?.packetActive || plantDef?.icon
+                const rInfo = tx.itemId && PLANT_CONFIGS[tx.itemId as PlantId] ? getPlantRarityAndMinPrice(tx.itemId as PlantId) : null
+
+                return (
+                  <div key={tx.id} className={`market-tx-card market-tx-card--${tx.type}`}>
+                    {/* Left: Type badge & timestamp */}
+                    <div className="market-tx-card__left">
+                      <span className={`market-tx-badge market-tx-badge--${tx.type}`}>
+                        {tx.type === 'marketplace_sale' && '🛒 MERCADO P2P'}
+                        {tx.type === 'withdrawal' && '💳 RETIRO BNB CHAIN'}
+                        {tx.type === 'shop_pack' && '🎒 TIENDA · SOBRE'}
+                        {tx.type === 'shop_gold' && '🪙 TIENDA · ORO'}
+                        {tx.type === 'lottery_win' && '🎰 RULETA JACKPOT'}
+                        {tx.type === 'reward_code' && '🎁 CÓDIGO ESPECIAL'}
+                        {tx.type === 'tournament_reward' && '🏆 CÓDIGO SECRETO'}
+                      </span>
+                      <span className="market-tx-time">{formatTxTime(tx.createdAt)}</span>
+                    </div>
+
+                    {/* Center: Event Details */}
+                    <div className="market-tx-card__center">
+                      {tx.type === 'marketplace_sale' ? (
+                        <div className="market-tx-details-p2p">
+                          <div className="market-tx-users-flow">
+                            <span className="market-tx-buyer-name">{tx.userName}</span>
+                            <span className="market-tx-arrow">compró a</span>
+                            <span className="market-tx-seller-name">{tx.targetUserName || 'Vendedor'}</span>
+                          </div>
+                          {plantDef && (
+                            <div className="market-tx-plant-preview">
+                              {plantIcon && <img src={plantIcon} alt={plantDef.name} className="market-tx-plant-icon" />}
+                              <div className="market-tx-plant-text">
+                                <span className="market-tx-plant-name">{plantDef.name}</span>
+                                <span className="market-tx-plant-sub" style={{ color: rInfo?.color || '#94a3b8' }}>
+                                  {rInfo?.label || tx.itemRarity || 'Planta'} · Lv. {tx.itemLevel || 0}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : tx.type === 'withdrawal' ? (
+                        <div className="market-tx-details-custom">
+                          <div className="market-tx-users-flow">
+                            <span className="market-tx-user-name">{tx.userName}</span>
+                            <span className="market-tx-action-text">realizó un retiro oficial</span>
+                          </div>
+                          <span className="market-tx-desc-text">{tx.description}</span>
+                          <span className="market-tx-validated-tag">✓ Mínimo $10 USD Validado (BNB Chain)</span>
+                        </div>
+                      ) : (
+                        <div className="market-tx-details-custom">
+                          <div className="market-tx-users-flow">
+                            <span className="market-tx-user-name">{tx.userName}</span>
+                            <span className="market-tx-action-text">
+                              {tx.type.startsWith('shop') ? 'compró en Tienda' : 'recibió recompensa'}
+                            </span>
+                          </div>
+                          <span className="market-tx-desc-text">
+                            {tx.title} {tx.description && tx.description !== tx.title ? `— ${tx.description}` : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Amount in Gems or USD */}
+                    <div className="market-tx-card__right">
+                      {tx.type === 'withdrawal' ? (
+                        <div className="market-tx-amount-box market-tx-amount-box--usd">
+                          <span className="market-tx-amount-num">
+                            ${tx.amountUsd ? tx.amountUsd.toFixed(2) : ((tx.amountGems || 0) / 100).toFixed(2)} USDT
+                          </span>
+                          {tx.amountGems && (
+                            <span className="market-tx-amount-sub">
+                              {tx.amountGems.toLocaleString()} 💎
+                            </span>
+                          )}
+                        </div>
+                      ) : tx.amountGems ? (
+                        <div className="market-tx-amount-box market-tx-amount-box--gems">
+                          <span className="market-tx-amount-num">
+                            {tx.amountGems.toLocaleString()} 💎
+                          </span>
+                          <span className="market-tx-amount-sub">
+                            (${((tx.amountGems) / 100).toFixed(2)} USD)
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="market-tx-amount-box">
+                          <span className="market-tx-amount-tag">OFICIAL</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+
 
       {/* CUSTOM IN-GAME POPUP DIALOG */}
       {activeDialog && (
