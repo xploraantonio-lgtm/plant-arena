@@ -36,24 +36,24 @@ export function getPlantRarityAndMinPrice(plantId: PlantId): {
   minPrice: number
   color: string
 } {
-  // Comunes: min 50 gemas
+  // Comunes: min 500 gemas
   if (['sunflower', 'peashooter', 'wallnut', 'chomper'].includes(plantId)) {
-    return { rarity: 'COMÚN', minPrice: 50, color: '#4ade80' }
+    return { rarity: 'COMÚN', minPrice: 500, color: '#4ade80' }
   }
-  // Poco Comunes (PC): min 80 gemas
+  // Poco Comunes (PC): min 800 gemas
   if (['garlic', 'bonkchoy', 'repeater', 'melonpult', 'squash'].includes(plantId)) {
-    return { rarity: 'POCO COMÚN', minPrice: 80, color: '#38bdf8' }
+    return { rarity: 'POCO COMÚN', minPrice: 800, color: '#38bdf8' }
   }
-  // Raras: min 100 gemas
+  // Raras: min 1000 gemas
   if (['twinsunflower', 'jalapeno'].includes(plantId)) {
-    return { rarity: 'RARA', minPrice: 100, color: '#a855f7' }
+    return { rarity: 'RARA', minPrice: 1000, color: '#a855f7' }
   }
-  // Épicas: min 150 gemas
+  // Épicas: min 1500 gemas
   if (['aloe', 'tallnut'].includes(plantId)) {
-    return { rarity: 'ÉPICA', minPrice: 150, color: '#ec4899' }
+    return { rarity: 'ÉPICA', minPrice: 1500, color: '#ec4899' }
   }
-  // Legendarias: min 200 gemas
-  return { rarity: 'LEGENDARIA', minPrice: 200, color: '#fbbf24' }
+  // Legendarias: min 2000 gemas
+  return { rarity: 'LEGENDARIA', minPrice: 2000, color: '#fbbf24' }
 }
 
 const STORAGE_KEY = 'plant_arena_market_listings'

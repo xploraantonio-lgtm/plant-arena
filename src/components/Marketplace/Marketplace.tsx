@@ -273,7 +273,7 @@ export default function Marketplace({
 
   const selectedItem = sellableItems.find((c) => c.id === selectedItemId) || sellableItems[0]
 
-  const currentMinPrice = selectedItem ? selectedItem.minPrice : 50
+  const currentMinPrice = selectedItem ? selectedItem.minPrice : 100
   const [sellPriceGems, setSellPriceGems] = useState<number>(currentMinPrice)
 
   // Asegurar que el precio de venta sea al menos el mínimo permitido para este ítem
