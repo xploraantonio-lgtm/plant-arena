@@ -391,7 +391,7 @@ export default function ModeSelectorModal({
                 <span className="friendly-panel__gemas">💎</span>
 
                 <div className="friendly-presets">
-                  {[0, 1, 5, 10].map((preset) => (
+                  {[0, 10, 50, 100].map((preset) => (
                     <button
                       key={preset}
                       type="button"

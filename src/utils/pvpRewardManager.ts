@@ -77,6 +77,25 @@ export const FARMING_ITEM_DEFINITIONS: Record<
   },
 }
 
+export const PVP_ALLOWED_COMMON_PLANTS: PlantId[] = ['sunflower', 'peashooter', 'wallnut', 'chomper']
+export const PVP_ALLOWED_UNCOMMON_PLANTS: PlantId[] = ['garlic', 'bonkchoy', 'repeater', 'melonpult', 'squash']
+export const PVP_ALLOWED_PLANTS: PlantId[] = [...PVP_ALLOWED_COMMON_PLANTS, ...PVP_ALLOWED_UNCOMMON_PLANTS]
+
+// Plantas de rareza RARA, ÉPICA y LEGENDARIA expresamente prohibidas en Packs/Cofres PvP
+export const FORBIDDEN_PVP_PLANTS: PlantId[] = [
+  'twinsunflower',
+  'jalapeno', // Raras (Jalapeño NO debe salir en packs PvP)
+  'aloe',
+  'tallnut', // Épicas
+  'iceberglettuce',
+  'threepeater', // Legendarias
+]
+
+export function isAllowedPvpPlant(plantId: unknown): plantId is PlantId {
+  if (typeof plantId !== 'string') return false
+  return (PVP_ALLOWED_PLANTS as string[]).includes(plantId)
+}
+
 export type PvpRewardDrop =
   | {
       type: 'plant'

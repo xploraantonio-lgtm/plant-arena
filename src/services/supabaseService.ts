@@ -2218,9 +2218,30 @@ export const SupabaseService = {
     }
   },
 
+  /** Obtiene los sectores activos de la ruleta para mostrarlos dinámicamente en el juego */
+  async getLotterySectors(): Promise<Database['public']['Tables']['lottery_sectors']['Row'][] | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await supabase
+        .from('lottery_sectors')
+        .select('*')
+        .eq('is_active', true)
+        .order('weight', { ascending: false })
+      if (error) {
+        logError('getLotterySectors', error)
+        return null
+      }
+      return data as Database['public']['Tables']['lottery_sectors']['Row'][]
+    } catch (e) {
+      logError('getLotterySectors', e)
+      return null
+    }
+  },
+
   /** Guarda todos los sectores de la ruleta y valida que los pesos sumen 100 */
   async adminSaveLotterySectors(sectors: Array<{
     sectorId: string
+    label?: string | null
     weight: number
     isActive: boolean
     gemsAmount?: number | null
@@ -2237,6 +2258,20 @@ export const SupabaseService = {
         logError('adminSaveLotterySectors', error)
         return { success: false, error: error.message }
       }
+
+      // Sincronizar etiquetas directamente en lottery_sectors para reflejar cambios inmediatamente
+      for (const s of sectors) {
+        if (s.label) {
+          const { error: labelErr } = await supabase
+            .from('lottery_sectors')
+            .update({ label: s.label })
+            .eq('sector_id', s.sectorId)
+          if (labelErr) {
+            logError('adminSaveLotterySectors_labelUpdate', labelErr)
+          }
+        }
+      }
+
       return data || { success: true }
     } catch (e: any) {
       logError('adminSaveLotterySectors', e)

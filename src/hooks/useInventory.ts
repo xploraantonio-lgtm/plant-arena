@@ -12,7 +12,13 @@ import { profileService } from '../services/profileService'
 import { supabase } from '../lib/supabaseClient'
 import { supabaseService } from '../services/supabaseService'
 import { STAT_LABELS, type PlantStatKey } from '../utils/gameConstants'
-import { EMPTY_FARMING_INVENTORY, parseFarmingInventory, type FarmingInventory, type PvpRewardDrop } from '../utils/pvpRewardManager'
+import {
+  EMPTY_FARMING_INVENTORY,
+  parseFarmingInventory,
+  isAllowedPvpPlant,
+  type FarmingInventory,
+  type PvpRewardDrop,
+} from '../utils/pvpRewardManager'
 
 // El servidor devuelve la rareza en inglés (columna plant_catalog.rarity).
 // Estas dos tablas la traducen a lo que ya espera la interfaz, para no tener que
@@ -1216,7 +1222,7 @@ export function useInventory() {
     }
 
     // Compatibilidad con claim_pack_slot v1 durante el despliegue del SQL.
-    const drops: PvpRewardDrop[] = Array.isArray(res.drops)
+    const rawDrops: PvpRewardDrop[] = Array.isArray(res.drops)
       ? res.drops
       : res.plantId
         ? [{
@@ -1227,6 +1233,17 @@ export function useInventory() {
   quantity: 1,
 }]
         : []
+
+    // FILTRO ESTRICTO: Los packs/cofres PvP NUNCA deben entregar cartas Raras (ej. Jalapeño), Épicas ni Legendarias
+    const drops: PvpRewardDrop[] = rawDrops.filter((d) => {
+      if (d.type === 'plant') {
+        if (!isAllowedPvpPlant(d.plantId)) {
+          console.error(`[PVP_PACK_SECURITY] Bloqueado intento de drop ilegal en cofre PvP: ${d.plantId}`)
+          return false
+        }
+      }
+      return true
+    })
 
     if (drops.length === 0) return null
 
@@ -1319,6 +1336,12 @@ export function useInventory() {
   const openRewardPack = async (packId: string): Promise<PackDropResult | null> => {
     const res = await inventoryService.claimRewardPack(packId)
     if (!res.success || !res.plantId) return null
+
+    // Validar estrictamente que un sobre PvP nunca entregue una carta no permitida
+    if (!isAllowedPvpPlant(res.plantId)) {
+      console.error(`[PVP_PACK_SECURITY] Bloqueado intento de drop ilegal en sobre de recompensa PvP: ${res.plantId}`)
+      return null
+    }
 
     // Revalidación en segundo plano para no demorar la animación de la carta
     void refreshFromServer()

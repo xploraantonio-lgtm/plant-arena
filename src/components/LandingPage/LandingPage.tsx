@@ -579,7 +579,7 @@ export default function LandingPage({
             <div className="landing-stat-item">
               <span className="landing-stat-item__icon">🏆</span>
               <div>
-                <strong>{seasonInfo ? `${seasonInfo.top1_elo_reward + seasonInfo.top2_elo_reward + seasonInfo.top3_elo_reward} 💎` : '175 💎'}</strong>
+                <strong>{seasonInfo ? `${(seasonInfo.top1_elo_reward + seasonInfo.top2_elo_reward + seasonInfo.top3_elo_reward).toLocaleString()} 💎` : '100,000 💎'}</strong>
                 <span>{lang === 'es' ? 'Bote de Premios Temporada' : 'Season Prize Pool'}</span>
               </div>
             </div>

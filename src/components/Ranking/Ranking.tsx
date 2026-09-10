@@ -114,6 +114,89 @@ function generatePageNumbers(current: number, total: number): (number | string)[
   return pages
 }
 
+export interface RankRewardInfo {
+  gems: number
+  pack: string | null
+  gold: number
+  badgeText: string
+  fullText: string
+  tierClass: string
+}
+
+export function getRankReward(rank: number): RankRewardInfo | null {
+  if (rank === 1) {
+    return {
+      gems: 40000,
+      pack: '1x Pack Legendario 👑',
+      gold: 0,
+      badgeText: '40k 💎 + 👑 Pack',
+      fullText: '40,000 Gemas 💎 + 1x Pack Legendario 👑',
+      tierClass: 'lb-reward-badge--top1',
+    }
+  }
+  if (rank === 2) {
+    return {
+      gems: 25000,
+      pack: '1x Pack Épico 🟣',
+      gold: 0,
+      badgeText: '25k 💎 + 🟣 Pack',
+      fullText: '25,000 Gemas 💎 + 1x Pack Épico 🟣',
+      tierClass: 'lb-reward-badge--top2',
+    }
+  }
+  if (rank === 3) {
+    return {
+      gems: 15000,
+      pack: '2x Packs Comunes 📦',
+      gold: 0,
+      badgeText: '15k 💎 + 📦 2 Packs',
+      fullText: '15,000 Gemas 💎 + 2x Packs Comunes 📦',
+      tierClass: 'lb-reward-badge--top3',
+    }
+  }
+  if (rank === 4) {
+    return {
+      gems: 12000,
+      pack: null,
+      gold: 2000,
+      badgeText: '12k 💎 + 2k 💰',
+      fullText: '12,000 Gemas 💎 + 2,000 Oro 💰',
+      tierClass: 'lb-reward-badge--top4',
+    }
+  }
+  if (rank === 5) {
+    return {
+      gems: 8000,
+      pack: null,
+      gold: 1000,
+      badgeText: '8k 💎 + 1k 💰',
+      fullText: '8,000 Gemas 💎 + 1,000 Oro 💰',
+      tierClass: 'lb-reward-badge--top5',
+    }
+  }
+  if (rank >= 6 && rank <= 10) {
+    return {
+      gems: 0,
+      pack: null,
+      gold: 500,
+      badgeText: '500 💰',
+      fullText: '500 Oro 💰',
+      tierClass: 'lb-reward-badge--gold-tier',
+    }
+  }
+  if (rank >= 11 && rank <= 20) {
+    return {
+      gems: 0,
+      pack: null,
+      gold: 250,
+      badgeText: '250 💰',
+      fullText: '250 Oro 💰',
+      tierClass: 'lb-reward-badge--gold-tier',
+    }
+  }
+  return null
+}
+
 export default function Ranking({ userElo, userProfile, hasVipPass = false, onBack }: RankingProps) {
   const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
@@ -585,21 +668,25 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           />
                         </div>
 
-                        <div className={`podium-v2-username ${leaderboardData[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                          {leaderboardData[0].isCurrentUser && hasVipPass && '👑 '}
-                          {leaderboardData[0].username} {leaderboardData[0].isCurrentUser && '(TÚ)'}
-                        </div>
-
-                        <div className="podium-v2-plant-pill" title={`Planta más usada: ${leaderboardData[0].bestPlantName}`}>
+                        <div className="podium-v2-user-row">
+                          <span className={`podium-v2-username ${leaderboardData[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                            {leaderboardData[0].isCurrentUser && hasVipPass && '👑 '}
+                            {leaderboardData[0].username} {leaderboardData[0].isCurrentUser && '(TÚ)'}
+                          </span>
                           <img
                             src={leaderboardData[0].bestPlantImg}
                             alt={leaderboardData[0].bestPlantName}
-                            className="podium-v2-plant-icon"
+                            className="podium-v2-plant-mini"
+                            title={`Planta favorita: ${leaderboardData[0].bestPlantName}`}
                             onError={(e) => {
                               e.currentTarget.src = '/game-assets/greenfoot/transparentsunflower.png'
                             }}
                           />
-                          <span>{leaderboardData[0].bestPlantName}</span>
+                        </div>
+
+                        <div className="podium-v2-prize-box podium-v2-prize-box--gold">
+                          <div className="podium-v2-gems-val">💎 40,000 GEMAS</div>
+                          <div className="podium-v2-pack-val">👑 1x Pack Legendario</div>
                         </div>
 
                         <div className="podium-v2-stats-row">
@@ -642,20 +729,24 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                               }}
                             />
                           </div>
-                          <div className={`podium-v2-sub-username ${leaderboardData[1].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                            {leaderboardData[1].isCurrentUser && hasVipPass && '👑 '}
-                            {leaderboardData[1].username}
-                          </div>
-                          <div className="podium-v2-plant-pill podium-v2-plant-pill--sm">
+                          <div className="podium-v2-user-row podium-v2-user-row--sub">
+                            <span className={`podium-v2-sub-username ${leaderboardData[1].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                              {leaderboardData[1].isCurrentUser && hasVipPass && '👑 '}
+                              {leaderboardData[1].username}
+                            </span>
                             <img
                               src={leaderboardData[1].bestPlantImg}
                               alt={leaderboardData[1].bestPlantName}
-                              className="podium-v2-plant-icon"
+                              className="podium-v2-plant-mini podium-v2-plant-mini--sub"
+                              title={`Planta favorita: ${leaderboardData[1].bestPlantName}`}
                               onError={(e) => {
                                 e.currentTarget.src = '/game-assets/greenfoot/transparentsunflower.png'
                               }}
                             />
-                            <span>{leaderboardData[1].bestPlantName}</span>
+                          </div>
+                          <div className="podium-v2-prize-box podium-v2-prize-box--silver">
+                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 25,000 GEMAS</div>
+                            <div className="podium-v2-pack-val podium-v2-pack-val--sub">🟣 1x Pack Épico</div>
                           </div>
                           <div className="podium-v2-sub-stats">
                             <span className="podium-v2-sub-cups">🏆 {leaderboardData[1].elo} Copas</span>
@@ -678,7 +769,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           title="Clic para ver perfil"
                         >
                           <div className="podium-v2-sub-rank podium-v2-sub-rank--bronze">
-                            🏆 #3
+                            🥉 #3
                           </div>
                           <div className="podium-v2-sub-avatar-wrap">
                             <img
@@ -690,20 +781,24 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                               }}
                             />
                           </div>
-                          <div className={`podium-v2-sub-username ${leaderboardData[2].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                            {leaderboardData[2].isCurrentUser && hasVipPass && '👑 '}
-                            {leaderboardData[2].username}
-                          </div>
-                          <div className="podium-v2-plant-pill podium-v2-plant-pill--sm">
+                          <div className="podium-v2-user-row podium-v2-user-row--sub">
+                            <span className={`podium-v2-sub-username ${leaderboardData[2].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                              {leaderboardData[2].isCurrentUser && hasVipPass && '👑 '}
+                              {leaderboardData[2].username}
+                            </span>
                             <img
                               src={leaderboardData[2].bestPlantImg}
                               alt={leaderboardData[2].bestPlantName}
-                              className="podium-v2-plant-icon"
+                              className="podium-v2-plant-mini podium-v2-plant-mini--sub"
+                              title={`Planta favorita: ${leaderboardData[2].bestPlantName}`}
                               onError={(e) => {
                                 e.currentTarget.src = '/game-assets/greenfoot/transparentsunflower.png'
                               }}
                             />
-                            <span>{leaderboardData[2].bestPlantName}</span>
+                          </div>
+                          <div className="podium-v2-prize-box podium-v2-prize-box--bronze">
+                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 15,000 GEMAS</div>
+                            <div className="podium-v2-pack-val podium-v2-pack-val--sub">📦 2x Packs Comunes</div>
                           </div>
                           <div className="podium-v2-sub-stats">
                             <span className="podium-v2-sub-cups">🏆 {leaderboardData[2].elo} Copas</span>
@@ -837,71 +932,82 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                             <tr>
                               <th style={{ width: '45px', textAlign: 'center' }}>#</th>
                               <th>JUGADOR</th>
-                              <th>CLAN</th>
+                              <th>REWARDS</th>
+                              <th style={{ width: '46px', textAlign: 'center' }}>PLANTA</th>
                               <th>COPAS</th>
                               <th>WIN RATE</th>
                               <th style={{ width: '60px', textAlign: 'center' }}></th>
                             </tr>
                           </thead>
                           <tbody>
-                            {paginatedLeaderboardUsers.map((usr) => (
-                              <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'lb-row--user' : ''}>
-                                <td className="lb-col-rank">#{usr.rank}</td>
-                                <td className="lb-col-player">
-                                  <div className="lb-player-cell">
-                                    <img
-                                      src={usr.avatar}
-                                      alt={usr.username}
-                                      className="lb-avatar-circle"
-                                      onError={(e) => {
-                                        e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
-                                      }}
-                                    />
-                                    <span className={`lb-player-name ${usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                                      {usr.isCurrentUser && hasVipPass && '👑 '}
-                                      {usr.username}
-                                      {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="lb-col-clan">
-                                  <span className="lb-plant-badge-pill" title={`Planta más usada: ${usr.bestPlantName}`}>
+                            {paginatedLeaderboardUsers.map((usr) => {
+                              const rew = getRankReward(usr.rank)
+                              return (
+                                <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'lb-row--user' : ''}>
+                                  <td className="lb-col-rank">#{usr.rank}</td>
+                                  <td className="lb-col-player">
+                                    <div className="lb-player-cell">
+                                      <img
+                                        src={usr.avatar}
+                                        alt={usr.username}
+                                        className="lb-avatar-circle"
+                                        onError={(e) => {
+                                          e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                                        }}
+                                      />
+                                      <span className={`lb-player-name ${usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                                        {usr.isCurrentUser && hasVipPass && '👑 '}
+                                        {usr.username}
+                                        {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="lb-col-rewards">
+                                    {rew ? (
+                                      <span className={`lb-reward-badge ${rew.tierClass}`} title={rew.fullText}>
+                                        {rew.badgeText}
+                                      </span>
+                                    ) : (
+                                      <span className="lb-reward-badge--none">-</span>
+                                    )}
+                                  </td>
+                                  <td className="lb-col-plant">
                                     <img
                                       src={usr.bestPlantImg}
                                       alt={usr.bestPlantName}
-                                      className="lb-plant-badge-img"
+                                      className="lb-plant-badge-only-img"
+                                      title={`Planta favorita: ${usr.bestPlantName}`}
                                       onError={(e) => {
                                         e.currentTarget.src = '/game-assets/greenfoot/transparentsunflower.png'
                                       }}
                                     />
-                                    <span>{usr.bestPlantName}</span>
-                                  </span>
-                                </td>
-                                <td className="lb-col-copas">
-                                  <span className="lb-copas-val">
-                                    <span className="lb-trophy-icon">🏆</span> {usr.elo}
-                                  </span>
-                                </td>
-                                <td className="lb-col-winrate">
-                                  <div className="lb-winrate-wrap">
-                                    <span className="lb-winrate-pct">{usr.winRate}</span>
-                                    <span className="lb-winrate-games">({usr.wins}W / {usr.losses}L)</span>
-                                  </div>
-                                </td>
-                                <td className="lb-col-action">
-                                  <button
-                                    type="button"
-                                    className="lb-btn-ver"
-                                    onClick={() => {
-                                      soundManager.playSound('click', 0.4)
-                                      setSelectedInspectUser(usr)
-                                    }}
-                                  >
-                                    Ver
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                                  </td>
+                                  <td className="lb-col-copas">
+                                    <span className="lb-copas-val">
+                                      <span className="lb-trophy-icon">🏆</span> {usr.elo}
+                                    </span>
+                                  </td>
+                                  <td className="lb-col-winrate">
+                                    <div className="lb-winrate-wrap">
+                                      <span className="lb-winrate-pct">{usr.winRate}</span>
+                                      <span className="lb-winrate-games">({usr.wins}W / {usr.losses}L)</span>
+                                    </div>
+                                  </td>
+                                  <td className="lb-col-action">
+                                    <button
+                                      type="button"
+                                      className="lb-btn-ver"
+                                      onClick={() => {
+                                        soundManager.playSound('click', 0.4)
+                                        setSelectedInspectUser(usr)
+                                      }}
+                                    >
+                                      Ver
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       ) : (

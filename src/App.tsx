@@ -323,7 +323,8 @@ function App() {
     }
   }, [loading, user])
 
-  const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'colosseum' | 'tournament' | 'strategic_test'>('ranked')
+  const [battleMatchMode, setBattleMatchMode] = useState<'ranked' | 'friendly' | 'colosseum' | 'tournament' | 'strategic_test'>('ranked')
+  const [friendlyBet, setFriendlyBet] = useState<number>(0)
   const [colosseumConfig, setColosseumConfig] = useState<import('./types/game').ColosseumMatchConfig | null>(null)
   const [tournamentOpponent, setTournamentOpponent] = useState<{ name: string; tournamentId: string } | null>(null)
   const [tournamentDeck, setTournamentDeck] = useState<PlantId[] | null>(null)
@@ -418,7 +419,10 @@ function App() {
         rival: soyP1 ? sala.p2Deck : sala.p1Deck,
       })
       setPartidaAsincrona(Boolean(sala.isAsyncMatch))
-      setBattleMatchMode(sala.mode === 'friendly' ? 'ranked' : (sala.mode as 'ranked' | 'colosseum' | 'tournament'))
+      setBattleMatchMode(sala.mode as 'ranked' | 'friendly' | 'colosseum' | 'tournament')
+      if (sala.mode === 'friendly') {
+        setFriendlyBet(Number((sala as any).colosseumBet) || 0)
+      }
       setPracticePlantId(null)
       setScreen('battle')
     })()
@@ -442,7 +446,8 @@ function App() {
   const handleRegresarAlMenu = useCallback(() => {
     limpiarEstadoPartida()
     setScreen('menu')
-  }, [limpiarEstadoPartida])
+    void refreshFromServer()
+  }, [limpiarEstadoPartida, refreshFromServer])
 
   /** Cancelar la búsqueda y volver al menú. */
   const salirDeLaCola = async () => {
@@ -486,7 +491,8 @@ function App() {
    * acuerdo sin necesidad de negociar.
    */
   const handlePlayFriendly = (roomCode: string, betGems: number) => {
-    setBattleMatchMode('ranked')   // el campo se pinta igual; el modo real es del servidor
+    setBattleMatchMode('friendly')
+    setFriendlyBet(betGems)
     setColosseumConfig(null)
     setTournamentOpponent(null)
     setPracticePlantId(null)
@@ -961,6 +967,7 @@ function App() {
             userElo={userElo}
             customBgImage={customArenaBg}
             matchMode={battleMatchMode}
+            friendlyBetGems={friendlyBet}
             colosseumConfig={colosseumConfig}
             tournamentOpponent={tournamentOpponent}
             tournamentDeck={tournamentDeck}

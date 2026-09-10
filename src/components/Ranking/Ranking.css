@@ -550,19 +550,34 @@
   cursor: default;
 }
 
-/* 1ST PLACE GOLDEN CARD */
+/* 1ST PLACE GOLDEN CARD WITH AURA GLOW */
+@keyframes gold-aura-pulse {
+  0% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.5), 0 0 35px rgba(245, 158, 11, 0.3), inset 0 0 12px rgba(251, 191, 36, 0.2);
+    border-color: #fbbf24;
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(251, 191, 36, 0.95), 0 0 60px rgba(245, 158, 11, 0.6), 0 0 85px rgba(253, 224, 71, 0.35), inset 0 0 18px rgba(251, 191, 36, 0.4);
+    border-color: #fef08a;
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.5), 0 0 35px rgba(245, 158, 11, 0.3), inset 0 0 12px rgba(251, 191, 36, 0.2);
+    border-color: #fbbf24;
+  }
+}
+
 .podium-card-v2--gold {
   border: 2px solid #fbbf24;
-  background: radial-gradient(ellipse at 50% 20%, rgba(55, 38, 10, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
-  box-shadow: 0 0 20px rgba(251, 191, 36, 0.4), inset 0 0 12px rgba(251, 191, 36, 0.15);
+  background: radial-gradient(ellipse at 50% 15%, rgba(65, 45, 10, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  animation: gold-aura-pulse 2.8s infinite ease-in-out;
   padding: 8px 10px 6px 10px;
-  flex: 1.22;
+  flex: 1.25;
   min-height: 0;
   justify-content: space-between;
 }
 
 .podium-card-v2--gold:hover {
-  box-shadow: 0 0 28px rgba(251, 191, 36, 0.6), inset 0 0 16px rgba(251, 191, 36, 0.25);
+  transform: translateY(-3px) scale(1.01);
 }
 
 .podium-v2-top {
@@ -631,6 +646,98 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 250px;
+}
+
+/* USER NICK + PLANT MINI ROW */
+.podium-v2-user-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-bottom: 2px;
+}
+
+.podium-v2-user-row--sub {
+  gap: 4px;
+}
+
+.podium-v2-plant-mini {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.9));
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+
+.podium-v2-plant-mini--sub {
+  width: 15px;
+  height: 15px;
+}
+
+/* PRIZE BOXES UNDER NICK IN PODIUM CARDS */
+.podium-v2-prize-box {
+  border-radius: 8px;
+  padding: 3px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin: 2px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  width: 90%;
+  box-sizing: border-box;
+}
+
+.podium-v2-prize-box--gold {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.28) 0%, rgba(180, 83, 9, 0.45) 100%);
+  border: 1.5px solid #fbbf24;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.45);
+}
+
+.podium-v2-prize-box--silver {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25) 0%, rgba(30, 58, 138, 0.4) 100%);
+  border: 1.2px solid #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.podium-v2-prize-box--bronze {
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.25) 0%, rgba(124, 45, 18, 0.4) 100%);
+  border: 1.2px solid #ea580c;
+  box-shadow: 0 0 8px rgba(234, 88, 12, 0.3);
+}
+
+.podium-v2-gems-val {
+  font-size: 11.5px;
+  font-weight: 900;
+  color: #fde047;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+
+.podium-v2-gems-val--sub {
+  font-size: 9.5px;
+}
+
+.podium-card-v2--silver .podium-v2-gems-val--sub {
+  color: #7dd3fc;
+}
+
+.podium-card-v2--bronze .podium-v2-gems-val--sub {
+  color: #fdba74;
+}
+
+.podium-v2-pack-val {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+
+.podium-v2-pack-val--sub {
+  font-size: 8px;
 }
 
 .podium-v2-plant-pill {
@@ -778,11 +885,11 @@
   font-size: 8px;
 }
 
-/* CARD #3 BRONZE */
+/* CARD #3 BRONZE / RUSTIC COPPER */
 .podium-card-v2--bronze {
-  border: 1.5px solid #f59e0b;
-  background: radial-gradient(ellipse at 50% 20%, rgba(45, 25, 10, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+  border: 1.5px solid #ea580c;
+  background: radial-gradient(ellipse at 50% 20%, rgba(55, 22, 10, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+  box-shadow: 0 0 12px rgba(234, 88, 12, 0.3);
   padding: 6px 6px 6px 6px;
   height: 100%;
   min-height: 0;
@@ -790,23 +897,23 @@
 }
 
 .podium-card-v2--bronze:hover {
-  box-shadow: 0 0 18px rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 18px rgba(234, 88, 12, 0.55);
 }
 
 .podium-v2-sub-rank--bronze {
-  color: #f59e0b;
-  text-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+  color: #ea580c;
+  text-shadow: 0 0 6px rgba(234, 88, 12, 0.6);
 }
 
 .podium-v2-sub-avatar--bronze {
   width: 38px;
   height: 38px;
-  border: 2px solid #f59e0b;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+  border: 2px solid #ea580c;
+  box-shadow: 0 0 8px rgba(234, 88, 12, 0.4);
 }
 
 .podium-card-v2--bronze .podium-v2-plant-pill {
-  border-color: #f59e0b;
+  border-color: #ea580c;
 }
 
 .podium-card-v2--user {
@@ -1065,6 +1172,90 @@
   height: 18px;
   object-fit: contain;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+
+/* PLANT COLUMN (COMPACT ICON ONLY) */
+.lb-col-plant {
+  text-align: center;
+  width: 46px;
+  padding: 4px 2px !important;
+}
+
+.lb-plant-badge-only-img {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
+  vertical-align: middle;
+  transition: transform 0.15s ease;
+}
+
+.lb-plant-badge-only-img:hover {
+  transform: scale(1.22);
+}
+
+/* REWARDS COLUMN & BADGES */
+.lb-col-rewards {
+  white-space: nowrap;
+}
+
+.lb-reward-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+.lb-reward-badge--top1 {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.28), rgba(180, 83, 9, 0.45));
+  border: 1.2px solid #fbbf24;
+  color: #fde047;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+}
+
+.lb-reward-badge--top2 {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(30, 58, 138, 0.4));
+  border: 1.2px solid #38bdf8;
+  color: #7dd3fc;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.lb-reward-badge--top3 {
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.25), rgba(124, 45, 18, 0.4));
+  border: 1.2px solid #ea580c;
+  color: #fdba74;
+  box-shadow: 0 0 8px rgba(234, 88, 12, 0.3);
+}
+
+.lb-reward-badge--top4 {
+  background: rgba(52, 211, 153, 0.18);
+  border: 1px solid #34d399;
+  color: #6ee7b7;
+}
+
+.lb-reward-badge--top5 {
+  background: rgba(167, 139, 250, 0.18);
+  border: 1px solid #a78bfa;
+  color: #c4b5fd;
+}
+
+.lb-reward-badge--gold-tier {
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  color: #fef08a;
+}
+
+.lb-reward-badge--none {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  padding-left: 6px;
 }
 
 .lb-col-copas {

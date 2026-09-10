@@ -29,14 +29,14 @@ interface WheelSector {
   type: 'token' | 'gold' | 'pack' | 'plant' | 'none'
   valueUsd?: number
   goldAmount?: number
-  packId?: 'basic' | 'epic' | 'legendary'
+  packId?: string
   packQty?: number
-  plantId?: PlantId
+  plantId?: string
   plantQty?: number
   rarity: 'common' | 'rare' | 'epic' | 'legendary' | 'jackpot'
 }
 
-const WHEEL_SECTORS: WheelSector[] = [
+const DEFAULT_WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'jackpot_5',
     label: '50 Gemas 💎',
@@ -205,6 +205,7 @@ export default function LotteryModal({
   })
   const [timeUntilFreeSpin, setTimeUntilFreeSpin] = useState<string>('')
   const [winningSector, setWinningSector] = useState<WheelSector | null>(null)
+  const [sectors, setSectors] = useState<WheelSector[]>(DEFAULT_WHEEL_SECTORS)
   const [showPrizeModal, setShowPrizeModal] = useState(false)
   const [showConfirmPaidModal, setShowConfirmPaidModal] = useState(false)
   const [showConfirmCodeBuyModal, setShowConfirmCodeBuyModal] = useState(false)
@@ -338,12 +339,67 @@ export default function LotteryModal({
     })
   }, [codeBoard, codeRound])
 
+  // Carga y sincroniza los sectores reales de la ruleta desde Supabase
+  const loadWheelSectors = async () => {
+    try {
+      const dbSectors = await lotteryService.getLotterySectors()
+      if (!dbSectors || dbSectors.length === 0) return
+
+      const standardOrder = ['jackpot_5', 'none_1', 'gold_500', 'none_2', 'pack_basic', 'gold_200', 'none_3', 'gold_50']
+
+      const mapped: WheelSector[] = dbSectors.map((row) => {
+        const tpl = DEFAULT_WHEEL_SECTORS.find((s) => s.id === row.sector_id)
+        if (tpl) {
+          return {
+            ...tpl,
+            label: row.label || tpl.label,
+            valueUsd: row.reward_type === 'gems' ? (Number(row.gems_amount) || tpl.valueUsd) : undefined,
+            goldAmount: row.reward_type === 'gold' ? (Number(row.gold_amount) || tpl.goldAmount) : undefined,
+            packId: row.pack_id || tpl.packId,
+            packQty: row.pack_qty ?? tpl.packQty,
+            plantId: row.plant_id || tpl.plantId,
+            plantQty: row.plant_qty ?? tpl.plantQty,
+          }
+        }
+        return {
+          id: row.sector_id,
+          label: row.label || row.sector_id,
+          icon: row.reward_type === 'gems' ? '💎' : row.reward_type === 'gold' ? '💰' : row.reward_type === 'pack' ? '👑' : row.reward_type === 'plant' ? '🌱' : '💨',
+          color: row.reward_type === 'gems' ? '#06b6d4' : row.reward_type === 'gold' ? '#f59e0b' : row.reward_type === 'pack' ? '#eab308' : row.reward_type === 'plant' ? '#10b981' : '#64748b',
+          textColor: '#ffffff',
+          type: row.reward_type === 'gems' ? 'token' : row.reward_type === 'gold' ? 'gold' : row.reward_type === 'pack' ? 'pack' : row.reward_type === 'plant' ? 'plant' : 'none',
+          valueUsd: row.gems_amount ? Number(row.gems_amount) : undefined,
+          goldAmount: row.gold_amount ? Number(row.gold_amount) : undefined,
+          packId: row.pack_id ?? undefined,
+          packQty: row.pack_qty ?? undefined,
+          plantId: row.plant_id ?? undefined,
+          plantQty: row.plant_qty ?? undefined,
+          rarity: row.reward_type === 'pack' ? 'jackpot' : row.reward_type === 'gems' ? 'epic' : row.reward_type === 'gold' ? 'rare' : 'common',
+        }
+      })
+
+      mapped.sort((a, b) => {
+        const idxA = standardOrder.indexOf(a.id)
+        const idxB = standardOrder.indexOf(b.id)
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB
+        if (idxA !== -1) return -1
+        if (idxB !== -1) return 1
+        return a.id.localeCompare(b.id)
+      })
+
+      setSectors(mapped)
+    } catch (e) {
+      console.warn('[LotteryModal] error al sincronizar sectores de ruleta:', e)
+    }
+  }
+
   // Se recarga al abrir el modal y al entrar en la pestaña del código, para que
-  // la clasificación refleje los intentos de los demás.
+  // la clasificación refleje los intentos de los demás y la ruleta los premios actuales.
   useEffect(() => {
     if (!isOpen) return
     LEGACY_CODE_KEYS.forEach((k) => localStorage.removeItem(k))
     void loadCodeData()
+    void loadWheelSectors()
   }, [isOpen, activeTab])
 
   if (!isOpen) return null
@@ -395,7 +451,7 @@ export default function LotteryModal({
       localStorage.setItem(STORAGE_KEYS.LAST_FREE_SPIN, String(Date.now()))
     }
 
-    const targetIndex = WHEEL_SECTORS.findIndex((s) => s.id === res.sectorId)
+    const targetIndex = sectors.findIndex((s) => s.id === res.sectorId)
     if (targetIndex === -1) {
       // El servidor devolvió un sector que la rueda no dibuja: no se puede
       // animar, pero el premio ya está entregado, así que se refresca y se avisa.
@@ -406,8 +462,8 @@ export default function LotteryModal({
       return
     }
 
-    const sectorToWin = WHEEL_SECTORS[targetIndex]
-    const sectorAngle = 360 / WHEEL_SECTORS.length
+    const sectorToWin = sectors[targetIndex]
+    const sectorAngle = 360 / sectors.length
     const extraSpins = 6 * 360
     const targetSectorCenter = targetIndex * sectorAngle
     const finalDegree =
@@ -610,8 +666,13 @@ export default function LotteryModal({
                       transition: isSpinning ? 'transform 4.5s cubic-bezier(0.15, 0.9, 0.2, 1)' : 'none',
                     }}
                   >
-                    {WHEEL_SECTORS.map((sec, idx) => {
-                      const angle = (360 / WHEEL_SECTORS.length) * idx
+                    {sectors.map((sec, idx) => {
+                      const angle = (360 / sectors.length) * idx
+                      const halfAngle = (180 / sectors.length) * (Math.PI / 180)
+                      const dx = 50 * Math.tan(halfAngle)
+                      const x1 = Math.max(0, 50 - dx)
+                      const x2 = Math.min(100, 50 + dx)
+                      const clipPath = sectors.length === 8 ? undefined : `polygon(50% 50%, ${x1.toFixed(2)}% 0%, ${x2.toFixed(2)}% 0%)`
                       return (
                         <div
                           key={sec.id}
@@ -619,6 +680,7 @@ export default function LotteryModal({
                           style={{
                             transform: `rotate(${angle}deg)`,
                             background: sec.color,
+                            ...(clipPath ? { clipPath } : {}),
                           }}
                         >
                           <div className="lottery-slice-content">

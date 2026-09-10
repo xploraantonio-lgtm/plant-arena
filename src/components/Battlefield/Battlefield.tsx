@@ -133,7 +133,8 @@ interface BattlefieldProps {
   activeDeck?: PlantId[]
   userElo?: number
   customBgImage?: string
-  matchMode?: 'ranked' | 'colosseum' | 'tournament' | 'strategic_test'
+  matchMode?: 'ranked' | 'colosseum' | 'tournament' | 'strategic_test' | 'friendly'
+  friendlyBetGems?: number
   colosseumConfig?: ColosseumMatchConfig | null
   tournamentOpponent?: { name: string; tournamentId: string } | null
   tournamentDeck?: PlantId[] | null
@@ -200,6 +201,7 @@ export default function Battlefield({
   userElo = 1000,
   customBgImage,
   matchMode = 'ranked',
+  friendlyBetGems,
   roomId = null,
   seed,
   opponentId = null,
@@ -971,10 +973,9 @@ export default function Battlefield({
         setResultadoServidor({ success: true, status: 'verificando' })
 
         void (async () => {
-          // En partidas humanas envía telemetría de reporte.
-          // En partidas contra Rival Semilla NO se reporta (no hay 2º cliente).
+          let reportRes: { success: boolean; status?: string; payout?: number; error?: string } | undefined
           if (!isAsyncMatch) {
-            await battleService.reportMatchResult(capturedRoomId, ganadorQueVioMiCliente)
+            reportRes = await battleService.reportMatchResult(capturedRoomId, ganadorQueVioMiCliente)
           }
 
           const verificacion = await battleService.verifyMatch(capturedRoomId)
@@ -990,6 +991,13 @@ export default function Battlefield({
             serverVerification: verificacion,
           })
 
+          const finalPayout =
+            typeof liq.payout === 'number' && liq.payout > 0
+              ? liq.payout
+              : (liq.resultadoFinal === 'victory' && typeof reportRes?.payout === 'number' && reportRes.payout > 0)
+                ? reportRes.payout
+                : 0
+
           setResultadoServidor({
             success: liq.statusServidor === 'liquidada' || liq.statusServidor === 'empate_verificado' || liq.statusServidor === 'verificacion_pendiente',
             status: liq.statusServidor,
@@ -999,7 +1007,7 @@ export default function Battlefield({
             eloAfter: liq.eloAfter,
             eloGained: liq.eloGained,
             eloLost: liq.eloLost,
-            payout: liq.payout,
+            payout: finalPayout,
             error: liq.error,
           })
 
@@ -1244,8 +1252,8 @@ export default function Battlefield({
         }
       }}
     >
-      {/* Top Controls Bar (Colosseum / Tournament Pill) */}
-      {(matchMode === 'colosseum' || matchMode === 'tournament') && (
+      {/* Top Controls Bar (Colosseum / Tournament / Friendly Pill) */}
+      {(matchMode === 'colosseum' || matchMode === 'tournament' || matchMode === 'friendly') && (
         <div className="battlefield-top-controls">
           {matchMode === 'colosseum' && (
             <div className="battlefield-colosseum-header-pill">
@@ -1263,6 +1271,25 @@ export default function Battlefield({
               <span>TORNEO EN VIVO</span>
               <span>•</span>
               <span style={{ color: '#d8b4fe' }}>vs {tournamentOpponent?.name || 'Rival'}</span>
+            </div>
+          )}
+          {matchMode === 'friendly' && (
+            <div className="battlefield-colosseum-header-pill" style={{ borderColor: '#34d399', boxShadow: '0 0 15px rgba(52, 211, 153, 0.4)' }}>
+              <span className="battlefield-colosseum-icon">🤝</span>
+              <span>DUELO AMISTOSO</span>
+              {friendlyBetGems !== undefined && friendlyBetGems > 0 ? (
+                <>
+                  <span>•</span>
+                  <span style={{ color: '#38bdf8' }}>Apuesta: {friendlyBetGems} 💎</span>
+                  <span>•</span>
+                  <span style={{ color: '#fbbf24' }}>Pozo: {friendlyBetGems * 2} 💎</span>
+                </>
+              ) : (
+                <>
+                  <span>•</span>
+                  <span style={{ color: '#a7f3d0' }}>Partida Gratuita</span>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -277,8 +277,32 @@ export interface Database {
           weight: number
           is_active: boolean
         }
-        Insert: never
-        Update: never
+        Insert: {
+          sector_id: string
+          label: string
+          reward_type: 'gems' | 'gold' | 'pack' | 'plant' | 'none'
+          gems_amount?: number | null
+          gold_amount?: number | null
+          pack_id?: string | null
+          pack_qty?: number | null
+          plant_id?: string | null
+          plant_qty?: number | null
+          weight: number
+          is_active?: boolean
+        }
+        Update: {
+          sector_id?: string
+          label?: string
+          reward_type?: 'gems' | 'gold' | 'pack' | 'plant' | 'none'
+          gems_amount?: number | null
+          gold_amount?: number | null
+          pack_id?: string | null
+          pack_qty?: number | null
+          plant_id?: string | null
+          plant_qty?: number | null
+          weight?: number
+          is_active?: boolean
+        }
         Relationships: []
       }
       colosseum_escrow: {

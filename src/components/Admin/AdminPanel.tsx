@@ -147,9 +147,9 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const [seasonNumber, setSeasonNumber] = useState(1)
   const [seasonName, setSeasonName] = useState('Temporada 1: Cosecha de Gloria')
   const [seasonDurationDays, setSeasonDurationDays] = useState(30)
-  const [top1EloReward, setTop1EloReward] = useState(100)
-  const [top2EloReward, setTop2EloReward] = useState(50)
-  const [top3EloReward, setTop3EloReward] = useState(25)
+  const [top1EloReward, setTop1EloReward] = useState(40000)
+  const [top2EloReward, setTop2EloReward] = useState(25000)
+  const [top3EloReward, setTop3EloReward] = useState(15000)
   const [top1ColoReward, setTop1ColoReward] = useState(50)
   const [top2ColoReward, setTop2ColoReward] = useState(25)
   const [top3ColoReward, setTop3ColoReward] = useState(10)
@@ -352,7 +352,19 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   // ── Handlers de Premios & Ruleta (SQL 09) ──────────────────────────────────
   const handleLotteryFieldChange = (sectorId: string, field: keyof LotterySectorRow, value: any) => {
     setLotterySectors((prev) =>
-      prev.map((s) => (s.sector_id === sectorId ? { ...s, [field]: value } : s))
+      prev.map((s) => {
+        if (s.sector_id !== sectorId) return s
+        const updated = { ...s, [field]: value }
+
+        // Si se modifica la cantidad de gemas u oro, actualizar automáticamente el label si sigue el formato estándar
+        if (field === 'gems_amount' && (s.label?.includes('Gemas') || !s.label)) {
+          updated.label = `${value} Gemas 💎`
+        } else if (field === 'gold_amount' && (s.label?.includes('Oro') || !s.label)) {
+          updated.label = `${value} Oro`
+        }
+
+        return updated
+      })
     )
   }
 
@@ -393,6 +405,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     setIsLoading(true)
     const payload = lotterySectors.map((s) => ({
       sectorId: s.sector_id,
+      label: s.label,
       weight: Number(s.weight),
       isActive: Boolean(s.is_active),
       gemsAmount: s.reward_type === 'gems' ? Number(s.gems_amount) || 0 : null,
@@ -1869,8 +1882,24 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                   {lotterySectors.map((sec) => (
                     <div key={sec.sector_id} className="admin-lottery-row">
                       <div>
-                        <strong>{sec.label || sec.sector_id}</strong>
-                        <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{sec.sector_id}</div>
+                        <input
+                          type="text"
+                          value={sec.label || ''}
+                          onChange={(e) => handleLotteryFieldChange(sec.sector_id, 'label', e.target.value)}
+                          placeholder="Nombre / Etiqueta"
+                          style={{
+                            fontWeight: 700,
+                            fontSize: '0.82rem',
+                            color: '#e2e8f0',
+                            background: '#0f172a',
+                            border: '1px solid #334155',
+                            borderRadius: '4px',
+                            padding: '4px 6px',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <div style={{ fontSize: '0.70rem', color: '#94a3b8', marginTop: '2px' }}>{sec.sector_id}</div>
                       </div>
                       <div>
                         <span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '0.75rem', color: '#c7d2fe' }}>
