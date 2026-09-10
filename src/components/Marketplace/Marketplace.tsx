@@ -1029,8 +1029,9 @@ Recibirás ${neto} 💎 cuando se venda.`,
                               <div className="market-tx-plant-text">
                                 <span className="market-tx-plant-name">{plantDef.name}</span>
                                 <span className="market-tx-plant-sub" style={{ color: rInfo?.color || '#94a3b8' }}>
-                                  {rInfo?.label || tx.itemRarity || 'Planta'} · Lv. {tx.itemLevel || 0}
+                                  {rInfo?.rarity || tx.itemRarity || 'Planta'} · Lv. {tx.itemLevel || 0}
                                 </span>
+
                               </div>
                             </div>
                           )}
