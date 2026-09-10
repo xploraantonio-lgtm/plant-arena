@@ -206,9 +206,11 @@ export default function ProfileModal({
         soundManager.playSound('victory', 0.9)
         setPromoCodeInput('')
         let msg = res.message || '🎉 ¡Recompensa recibida con éxito!'
-        if (res.rewardType === 'gold') {
+        if (res.rewardType === 'bundle') {
+          msg = res.message || `🎉 ¡Has recibido +${res.goldAmount?.toLocaleString() || ''} de Oro y 1 Sobre!`
+        } else if (res.rewardType === 'gold' && !res.message) {
           msg = `💰 ¡Has recibido +${res.goldAmount?.toLocaleString() || ''} de Oro!`
-        } else if (res.rewardType === 'plant') {
+        } else if (res.rewardType === 'plant' && !res.message) {
           msg = `🌿 ¡Carta ${res.plantId || ''} añadida a tu inventario!`
         } else if (res.rewardType === 'pvp_pack') {
           msg = '🎉 ¡Sobre PvP añadido al jardín!'

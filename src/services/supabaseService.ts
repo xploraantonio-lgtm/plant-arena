@@ -3325,7 +3325,8 @@ export const SupabaseService = {
     packId?: string
     status?: 'pending'
     arenaLevel?: number
-    rewardType?: 'gold' | 'plant' | 'pvp_pack'
+    rewardType?: 'gold' | 'plant' | 'pvp_pack' | 'bundle' | 'probabilistic'
+    packType?: string
     goldAmount?: number
     plantId?: string
     rarity?: string

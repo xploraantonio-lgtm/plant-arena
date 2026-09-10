@@ -9,7 +9,8 @@ interface DbRewardCodeRow {
   code: string
   normalized_code: string
   reward_type: string
-  reward_value: number
+  reward_value?: number | null
+  reward_pack_id?: string | null
   reward_plant_id?: string | null
   max_uses: number
   used_count: number
@@ -58,6 +59,7 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
   let playerRewardPacksTable: Map<string, DbPlayerRewardPackRow> // key: packId
   let plantCopiesTable: Map<string, DbPlantCopyRow> // key: `${userId}:${plantId}`
   let profilesTable: Map<string, DbProfileRow>
+  let playerPacksTable: Map<string, { id: string; user_id: string; pack_id: string; source: string }>
 
   const INITIAL_CODES = [
     // 10 Variantes TKSITO
@@ -80,6 +82,7 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
     playerRewardPacksTable = new Map()
     plantCopiesTable = new Map()
     profilesTable = new Map()
+    playerPacksTable = new Map()
 
     INITIAL_CODES.forEach((c) => {
       const id = `code-${c.toLowerCase()}`
@@ -115,7 +118,7 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
   })
 
   // ── SIMULACIÓN DE RPC claim_reward_code ───────────────────────────────────
-  function rpcClaimRewardCode(userId: string, inputCode: string) {
+  function rpcClaimRewardCode(userId: string, inputCode: string, options?: { customRoll?: number }) {
     const cleanCode = (inputCode || '').trim().toUpperCase()
     if (!cleanCode) return { success: false, error: 'CODE_EMPTY' }
 
@@ -179,6 +182,92 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
         code: cleanCode,
         rewardType: 'plant',
         plantId,
+      }
+    }
+
+    // Recompensa Bundle (MrCrypto: Oro + Sobre Común en Inventario)
+    if (codeRow.reward_type === 'bundle') {
+      const goldAmt = codeRow.reward_value || 2000
+      const packType = codeRow.reward_pack_id || 'basic'
+      const profile = profilesTable.get(userId)
+      if (profile && goldAmt > 0) {
+        profile.gold_balance += goldAmt
+      }
+      const invPackId = `pack-inv-${Date.now()}-${Math.random()}`
+      playerPacksTable.set(invPackId, {
+        id: invPackId,
+        user_id: userId,
+        pack_id: packType,
+        source: 'gift',
+      })
+      rewardCodeClaimsTable.set(claimKey, {
+        id: `claim-${Date.now()}`,
+        user_id: userId,
+        reward_code_id: codeRow.id,
+        claimed_at: new Date(),
+      })
+      codeRow.used_count += 1
+      return {
+        success: true,
+        code: cleanCode,
+        rewardType: 'bundle',
+        goldAmount: goldAmt,
+        packType,
+        packId: invPackId,
+      }
+    }
+
+    // Recompensa Probabilística (PRIMEROS100)
+    if (codeRow.reward_type === 'probabilistic') {
+      const roll = (options && options.customRoll !== undefined)
+        ? options.customRoll
+        : Math.random() * 100.0
+
+      let plantId: string | null = null
+      let rarity = 'common'
+      let goldAmt = 0
+
+      if (roll < 10.0) {
+        plantId = 'squash'
+        rarity = 'uncommon'
+      } else if (roll < 30.0) {
+        plantId = 'repeater'
+        rarity = 'uncommon'
+      } else if (roll < 50.0) {
+        goldAmt = 300
+        const profile = profilesTable.get(userId)
+        if (profile) profile.gold_balance += goldAmt
+      } else {
+        const pool = ['sunflower', 'peashooter', 'wallnut', 'chomper', 'garlic', 'bonkchoy', 'repeater', 'melonpult', 'squash']
+        plantId = pool[Math.floor(Math.random() * pool.length)]
+        rarity = ['garlic', 'bonkchoy', 'repeater', 'melonpult', 'squash'].includes(plantId) ? 'uncommon' : 'common'
+      }
+
+      if (plantId) {
+        const plantKey = `${userId}:${plantId}`
+        const existing = plantCopiesTable.get(plantKey)
+        if (existing) {
+          existing.copies += 1
+        } else {
+          plantCopiesTable.set(plantKey, { user_id: userId, plant_id: plantId, copies: 1 })
+        }
+      }
+
+      rewardCodeClaimsTable.set(claimKey, {
+        id: `claim-${Date.now()}`,
+        user_id: userId,
+        reward_code_id: codeRow.id,
+        claimed_at: new Date(),
+      })
+      codeRow.used_count += 1
+
+      return {
+        success: true,
+        code: cleanCode,
+        rewardType: goldAmt > 0 ? 'gold' : 'plant',
+        goldAmount: goldAmt > 0 ? goldAmt : undefined,
+        plantId: plantId || undefined,
+        rarity: plantId ? rarity : undefined,
       }
     }
 
@@ -526,6 +615,193 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
 
     const copyRow = plantCopiesTable.get('user-1:bonkchoy')
     expect(copyRow?.copies).toBe(1)
+  })
+
+  it('15. Códigos SalchiNFT otorgan 2000 de oro y tienen 1 solo uso', () => {
+    rewardCodesTable.set('SALCHINFT-01', {
+      id: 'salchi-01',
+      code: 'SALCHINFT-01',
+      normalized_code: 'SALCHINFT-01',
+      reward_type: 'gold',
+      reward_value: 2000,
+      max_uses: 1,
+      used_count: 0,
+      active: true,
+      created_at: new Date(),
+      expires_at: null,
+    })
+
+    const initialGold = profilesTable.get('user-1')?.gold_balance ?? 0
+    const res = rpcClaimRewardCode('user-1', 'SALCHINFT-01')
+    expect(res.success).toBe(true)
+    expect(res.rewardType).toBe('gold')
+    expect(res.goldAmount).toBe(2000)
+    expect(profilesTable.get('user-1')?.gold_balance).toBe(initialGold + 2000)
+
+    // Intento con otro usuario debe fallar porque max_uses = 1
+    const res2 = rpcClaimRewardCode('user-2', 'SALCHINFT-01')
+    expect(res2.success).toBe(false)
+    expect(res2.error).toBe('CODE_LIMIT_REACHED')
+  })
+
+  it('16. Códigos MrCrypto otorgan 2000 de oro + 1 Sobre Básico y tienen 1 solo uso', () => {
+    rewardCodesTable.set('MRCRYPTO-01', {
+      id: 'mrcrypto-01',
+      code: 'MRCRYPTO-01',
+      normalized_code: 'MRCRYPTO-01',
+      reward_type: 'bundle',
+      reward_value: 2000,
+      reward_pack_id: 'basic',
+      max_uses: 1,
+      used_count: 0,
+      active: true,
+      created_at: new Date(),
+      expires_at: null,
+    })
+
+    const initialGold = profilesTable.get('user-1')?.gold_balance ?? 0
+    const res = rpcClaimRewardCode('user-1', 'MRCRYPTO-01')
+    expect(res.success).toBe(true)
+    expect(res.rewardType).toBe('bundle')
+    expect(res.goldAmount).toBe(2000)
+    expect(res.packType).toBe('basic')
+    expect(profilesTable.get('user-1')?.gold_balance).toBe(initialGold + 2000)
+
+    // El sobre común debe estar en playerPacksTable
+    const userPacks = Array.from(playerPacksTable.values()).filter((p) => p.user_id === 'user-1')
+    expect(userPacks.length).toBe(1)
+    expect(userPacks[0].pack_id).toBe('basic')
+
+    // Intento con otro usuario debe fallar porque max_uses = 1
+    const res2 = rpcClaimRewardCode('user-2', 'MRCRYPTO-01')
+    expect(res2.success).toBe(false)
+    expect(res2.error).toBe('CODE_LIMIT_REACHED')
+  })
+
+  it('17. Código PRIMEROS100 tiene 10 usos en total y no permite doble canje al mismo usuario', () => {
+    rewardCodesTable.set('PRIMEROS100', {
+      id: 'primeros100',
+      code: 'PRIMEROS100',
+      normalized_code: 'PRIMEROS100',
+      reward_type: 'probabilistic',
+      max_uses: 10,
+      used_count: 0,
+      active: true,
+      created_at: new Date(),
+      expires_at: null,
+    })
+
+    // Usuario 1 canjea
+    const res1 = rpcClaimRewardCode('user-1', 'PRIMEROS100')
+    expect(res1.success).toBe(true)
+
+    // Usuario 1 intenta canjear de nuevo -> bloqueado
+    const retry1 = rpcClaimRewardCode('user-1', 'PRIMEROS100')
+    expect(retry1.success).toBe(false)
+    expect(retry1.error).toBe('CODE_ALREADY_CLAIMED')
+
+    // Usuario 2 puede canjearlo exitosamente
+    const res2 = rpcClaimRewardCode('user-2', 'PRIMEROS100')
+    expect(res2.success).toBe(true)
+  })
+
+  it('18. Código PRIMEROS100 cumple con las probabilidades exactas', () => {
+    rewardCodesTable.set('PRIMEROS100', {
+      id: 'primeros100',
+      code: 'PRIMEROS100',
+      normalized_code: 'PRIMEROS100',
+      reward_type: 'probabilistic',
+      max_uses: 10,
+      used_count: 0,
+      active: true,
+      created_at: new Date(),
+      expires_at: null,
+    })
+
+    // Roll 5% -> Squash (10%)
+    const resSquash = (rpcClaimRewardCode as any)('user-squash', 'PRIMEROS100', { customRoll: 5.0 })
+    expect(resSquash.success).toBe(true)
+    expect(resSquash.plantId).toBe('squash')
+
+    // Roll 20% -> Repetidora (20%)
+    const resRepeater = (rpcClaimRewardCode as any)('user-repeater', 'PRIMEROS100', { customRoll: 20.0 })
+    expect(resRepeater.success).toBe(true)
+    expect(resRepeater.plantId).toBe('repeater')
+
+    // Roll 40% -> 300 de Oro (20%)
+    const resGold = (rpcClaimRewardCode as any)('user-gold', 'PRIMEROS100', { customRoll: 40.0 })
+    expect(resGold.success).toBe(true)
+    expect(resGold.goldAmount).toBe(300)
+
+    // Roll 75% -> Planta Común o Poco Común (50%)
+    const resRandomPlant = (rpcClaimRewardCode as any)('user-random', 'PRIMEROS100', { customRoll: 75.0 })
+    expect(resRandomPlant.success).toBe(true)
+    expect(resRandomPlant.plantId).toBeDefined()
+  })
+
+  it('19. Códigos de comunidad de 200 de oro entregan el valor correcto', () => {
+    rewardCodesTable.set('ORO200-COM-1', {
+      id: 'oro200-1',
+      code: 'ORO200-COM-1',
+      normalized_code: 'ORO200-COM-1',
+      reward_type: 'gold',
+      reward_value: 200,
+      max_uses: 1,
+      used_count: 0,
+      active: true,
+      created_at: new Date(),
+      expires_at: null,
+    })
+
+    const initialGold = profilesTable.get('user-1')?.gold_balance ?? 0
+    const res = rpcClaimRewardCode('user-1', 'ORO200-COM-1')
+    expect(res.success).toBe(true)
+    expect(res.goldAmount).toBe(200)
+    expect(profilesTable.get('user-1')?.gold_balance).toBe(initialGold + 200)
+  })
+
+  // ── AUDITORÍA ESTÁTICA DE LA MIGRACIÓN 78 ───────────────────────────────────
+  describe('Auditoría estática de 78-streamer-community-codes-and-probabilistic-rolls.sql', () => {
+    const sqlPath = path.resolve(__dirname, '../../supabase/migrations/78-streamer-community-codes-and-probabilistic-rolls.sql')
+    it('Existe el archivo de la migración 78', () => {
+      expect(fs.existsSync(sqlPath)).toBe(true)
+    })
+
+    const sqlContent = fs.readFileSync(sqlPath, 'utf-8')
+
+    const SALCHI_CODES = [
+      'SALCHINETA', 'SALCHIPVP', 'SALCHIKING', 'SALCHIBOOST', 'SALCHIFIRE',
+      'SALCHIWAR', 'SALCHIPOWER', 'SALCHIDIOS', 'SALCHIGOD', 'SALCHIGOLD'
+    ]
+
+    const MRCRYPTO_CODES = [
+      'MRCRYPTOPVP', 'MRCRYPTOVIP', 'MRCRYPTOKING', 'MRCRYPTOGOD', 'MRCRYPTOORO'
+    ]
+
+    it('Contiene exactamente los 10 códigos llamativos de SalchiNFT', () => {
+      SALCHI_CODES.forEach((c) => {
+        expect(sqlContent).toContain(`'${c}'`)
+      })
+    })
+
+    it('Contiene exactamente los 5 códigos llamativos de MrCrypto', () => {
+      MRCRYPTO_CODES.forEach((c) => {
+        expect(sqlContent).toContain(`'${c}'`)
+      })
+    })
+
+    it('Contiene el código PRIMEROS100 con 10 usos', () => {
+      expect(sqlContent).toContain(`'PRIMEROS100'`)
+      expect(sqlContent).toContain(`10, 0, TRUE`)
+    })
+
+    it('Contiene la lógica de bundle y probabilidades en claim_reward_code', () => {
+      expect(sqlContent).toContain(`'bundle'`)
+      expect(sqlContent).toContain(`'probabilistic'`)
+      expect(sqlContent).toContain(`v_roll < 10.0`)
+      expect(sqlContent).toContain(`v_roll < 30.0`)
+      expect(sqlContent).toContain(`v_roll < 50.0`)
+    })
   })
 
   // ── AUDITORÍA ESTÁTICA DEL ARCHIVO SQL DE LA MIGRACIÓN 50 ──────────────────
