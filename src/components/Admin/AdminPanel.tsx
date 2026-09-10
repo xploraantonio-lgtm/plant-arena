@@ -83,9 +83,6 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const [codeRounds, setCodeRounds] = useState<CodeRoundRow[]>([])
   const [codeBoard, setCodeBoard] = useState<CodeBoardEntry[]>([])
   const [codePrizePool, setCodePrizePool] = useState(50)
-  const [codePrize1, setCodePrize1] = useState(50)
-  const [codePrize2, setCodePrize2] = useState(0)
-  const [codePrize3, setCodePrize3] = useState(0)
   const [codeFreeAttempts, setCodeFreeAttempts] = useState(3)
   const [codeAttemptCost, setCodeAttemptCost] = useState(10)
 
@@ -124,7 +121,6 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       if (field === 'amount' && copy[idx].place === 1 && copy[idx].currency === 'gems') {
         const numVal = Number(val) || 0
         setCodePrizePool(numVal)
-        setCodePrize1(numVal)
       }
       return copy
     })
@@ -177,13 +173,6 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   }
 
   // ── Rondas del código secreto ─────────────────────────────────────────────
-  //
-  // Se piden columnas explícitas y NO select('*'): la columna `secret` tiene el
-  // SELECT revocado, así que un '*' devolvería 401. Es intencional — el panel no
-  // debe poder ver la solución.
-  const CODE_ROUND_COLUMNS =
-    'id, round_number, status, free_attempts, prize_pool_gems, prize_1st, prize_2nd, prize_3rd, winner_id, created_at, finished_at'
-
   const loadCodeRounds = async () => {
     try {
       const rows = await adminService.adminGetSecretCodeRounds()
@@ -1068,7 +1057,6 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                               onChange={(e) => {
                                 const v = Number(e.target.value)
                                 setCodePrizePool(v)
-                                setCodePrize1(v)
                                 handleUpdatePrizeTier(0, 'amount', v)
                               }}
                             />
@@ -1232,7 +1220,6 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                             onChange={(e) => {
                               const v = Number(e.target.value)
                               setCodePrizePool(v)
-                              setCodePrize1(v)
                               handleUpdatePrizeTier(0, 'amount', v)
                             }}
                           />
