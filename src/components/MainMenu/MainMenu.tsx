@@ -79,10 +79,12 @@ interface MainMenuProps {
   // onAddTokens se eliminó al dejar el formulario de recarga como maqueta:
   // era la vía por la que ProfileModal se sumaba saldo sin cobrar nada.
   onDeductTokens?: (amountUsd: number) => boolean
+  onlineUsersCount?: number
 }
 
 export default function MainMenu({
   userProfile,
+  onlineUsersCount = 25,
   userElo = 1000,
   userTokens = 0,
   userGold = 0,
@@ -381,6 +383,13 @@ export default function MainMenu({
                 </svg>
                 Telegram
               </a>
+            </div>
+
+            {/* HEADER VISUAL DE USUARIOS EN LÍNEA */}
+            <div className="online-users-badge" title="Jugadores activos conectados a Plant Arena en tiempo real">
+              <span className="online-users-dot" />
+              <span className="online-users-count">{onlineUsersCount}</span>
+              <span className="online-users-label">en línea</span>
             </div>
           </div>
 

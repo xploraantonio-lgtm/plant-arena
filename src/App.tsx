@@ -41,6 +41,7 @@ import type { StrategicPlaytestConfig } from './engine/strategicPlaytest'
 import { SeasonManager } from './utils/seasonManager'
 import BetaPhaseModal from './components/BetaPhaseModal/BetaPhaseModal'
 import { isStrategicPlaytestAuthorized } from './utils/strategicPlaytestAuth'
+import { useOnlineUsers } from './hooks/useOnlineUsers'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -199,6 +200,8 @@ function App() {
     signInWithEmail,
     signOut,
   } = useAuth()
+
+  const onlineUsersCount = useOnlineUsers(user?.id)
 
   // Real-time synchronization of authenticated Supabase profile with game state
   useEffect(() => {
@@ -859,6 +862,7 @@ function App() {
       <GameFrame>
         {screen === 'menu' && (
           <MainMenu
+            onlineUsersCount={onlineUsersCount}
             userProfile={profile}
             userElo={userElo}
             userTokens={userTokens}
