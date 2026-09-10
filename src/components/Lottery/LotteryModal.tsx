@@ -36,13 +36,13 @@ interface WheelSector {
 const WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'jackpot_5',
-    label: '500 Gemas 💎',
-    icon: '👑',
-    color: '#eab308',
+    label: '50 Gemas 💎',
+    icon: '💎',
+    color: '#06b6d4',
     textColor: '#ffffff',
     type: 'token',
-    valueUsd: 500.0,
-    rarity: 'jackpot',
+    valueUsd: 50.0,
+    rarity: 'epic',
   },
   {
     id: 'none_1',
@@ -55,12 +55,12 @@ const WHEEL_SECTORS: WheelSector[] = [
   },
   {
     id: 'gold_500',
-    label: '500 Oro',
+    label: '150 Oro',
     icon: '🪙',
     color: '#f59e0b',
     textColor: '#ffffff',
     type: 'gold',
-    goldAmount: 500,
+    goldAmount: 150,
     rarity: 'rare',
   },
   {
@@ -75,22 +75,22 @@ const WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'pack_basic',
     label: 'Sobre Básico',
-    icon: '📦',
-    color: '#3b82f6',
+    icon: '👑',
+    color: '#eab308',
     textColor: '#ffffff',
     type: 'pack',
     packId: 'basic',
     packQty: 1,
-    rarity: 'common',
+    rarity: 'jackpot',
   },
   {
     id: 'gold_200',
-    label: '200 Oro',
+    label: '100 Oro',
     icon: '🪙',
     color: '#10b981',
     textColor: '#ffffff',
     type: 'gold',
-    goldAmount: 200,
+    goldAmount: 100,
     rarity: 'common',
   },
   {
@@ -113,6 +113,7 @@ const WHEEL_SECTORS: WheelSector[] = [
     rarity: 'common',
   },
 ]
+
 
 const ALL_PLANTS_LIST: PlantId[] = Object.keys(PLANT_CONFIGS) as PlantId[]
 
@@ -628,18 +629,19 @@ export default function LotteryModal({
                   <span className="lottery-prizes-title">🎁 PREMIOS EN ESTE SORTEO:</span>
                   <div className="lottery-prizes-tags-grid">
                     <div className="lottery-prize-tag lottery-prize-tag--jackpot">
-                      👑 500 Gemas 💎 (Jackpot)
+                      👑 Sobre Básico (Jackpot · 2%)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--legendary">
-                      📦 Sobre Básico
+                      💎 50 Gemas (8%)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--gold">
-                      🪙 500, 200 y 50 Oro
+                      🪙 150 Oro (10%) · 100 Oro (15%) · 50 Oro (10%)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--epic">
-                      💨 Sigue Intentando
+                      💨 Sigue Intentando (55%)
                     </div>
                   </div>
+
                 </div>
               </div>
             </div>

@@ -998,15 +998,45 @@ Recibirás ${neto} 💎 cuando se venda.`,
                 const plantIcon = plantDef?.packetActive || plantDef?.icon
                 const rInfo = tx.itemId && PLANT_CONFIGS[tx.itemId as PlantId] ? getPlantRarityAndMinPrice(tx.itemId as PlantId) : null
 
+                const isPack =
+                  tx.type === 'shop_pack' ||
+                  (tx.type === 'shop_gold' &&
+                    (tx.description?.toLowerCase().includes('sobre') ||
+                      tx.description?.toLowerCase().includes('semilla') ||
+                      tx.description?.toLowerCase().includes('pack')))
+
+                const cleanDesc = (() => {
+                  const desc = tx.description?.trim() || ''
+                  const title = tx.title?.trim() || ''
+                  if (desc) {
+                    if (
+                      title &&
+                      title.toLowerCase().includes('oro') &&
+                      (desc.toLowerCase().includes('sobre') || desc.toLowerCase().includes('semilla'))
+                    ) {
+                      return desc.charAt(0).toUpperCase() + desc.slice(1)
+                    }
+                    if (
+                      title &&
+                      !desc.toLowerCase().includes(title.toLowerCase()) &&
+                      !title.toLowerCase().includes(desc.toLowerCase())
+                    ) {
+                      return `${title} — ${desc}`
+                    }
+                    return desc.charAt(0).toUpperCase() + desc.slice(1)
+                  }
+                  return title
+                })()
+
                 return (
-                  <div key={tx.id} className={`market-tx-card market-tx-card--${tx.type}`}>
+                  <div key={tx.id} className={`market-tx-card market-tx-card--${isPack ? 'shop_pack' : tx.type}`}>
                     {/* Left: Type badge & timestamp */}
                     <div className="market-tx-card__left">
-                      <span className={`market-tx-badge market-tx-badge--${tx.type}`}>
+                      <span className={`market-tx-badge market-tx-badge--${isPack ? 'shop_pack' : tx.type}`}>
                         {tx.type === 'marketplace_sale' && '🛒 MERCADO P2P'}
                         {tx.type === 'withdrawal' && '💳 RETIRO BNB CHAIN'}
-                        {tx.type === 'shop_pack' && '🎒 TIENDA · SOBRE'}
-                        {tx.type === 'shop_gold' && '🪙 TIENDA · ORO'}
+                        {isPack && '🎒 TIENDA · SOBRE'}
+                        {!isPack && tx.type === 'shop_gold' && '🪙 TIENDA · ORO'}
                         {tx.type === 'lottery_win' && '🎰 RULETA JACKPOT'}
                         {tx.type === 'reward_code' && '🎁 CÓDIGO ESPECIAL'}
                         {tx.type === 'tournament_reward' && '🏆 CÓDIGO SECRETO'}
@@ -1031,7 +1061,6 @@ Recibirás ${neto} 💎 cuando se venda.`,
                                 <span className="market-tx-plant-sub" style={{ color: rInfo?.color || '#94a3b8' }}>
                                   {rInfo?.rarity || tx.itemRarity || 'Planta'} · Lv. {tx.itemLevel || 0}
                                 </span>
-
                               </div>
                             </div>
                           )}
@@ -1050,12 +1079,22 @@ Recibirás ${neto} 💎 cuando se venda.`,
                           <div className="market-tx-users-flow">
                             <span className="market-tx-user-name">{tx.userName}</span>
                             <span className="market-tx-action-text">
-                              {tx.type.startsWith('shop') ? 'compró en Tienda' : 'recibió recompensa'}
+                              {isPack
+                                ? 'compró sobre en Tienda'
+                                : tx.type === 'shop_gold'
+                                ? 'compró oro en Tienda'
+                                : tx.type.startsWith('shop')
+                                ? 'compró en Tienda'
+                                : tx.type === 'lottery_win'
+                                ? 'ganó en la Ruleta'
+                                : tx.type === 'reward_code'
+                                ? 'canjeó código promocional'
+                                : tx.type === 'tournament_reward'
+                                ? 'ganó en Código Secreto'
+                                : 'recibió recompensa'}
                             </span>
                           </div>
-                          <span className="market-tx-desc-text">
-                            {tx.title} {tx.description && tx.description !== tx.title ? `— ${tx.description}` : ''}
-                          </span>
+                          <span className="market-tx-desc-text">{cleanDesc}</span>
                         </div>
                       )}
                     </div>
