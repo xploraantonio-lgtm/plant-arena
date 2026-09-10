@@ -10,6 +10,7 @@ import { createEmptySlots, normalizePackSlots, type FreePackSlot, type PlayerRew
 import { inventoryService } from '../services/inventoryService'
 import { profileService } from '../services/profileService'
 import { supabase } from '../lib/supabaseClient'
+import { supabaseService } from '../services/supabaseService'
 import { STAT_LABELS, type PlantStatKey } from '../utils/gameConstants'
 import { EMPTY_FARMING_INVENTORY, parseFarmingInventory, type FarmingInventory, type PvpRewardDrop } from '../utils/pvpRewardManager'
 
@@ -1003,7 +1004,14 @@ export function useInventory() {
   }
 
   const refreshFromServer = async (): Promise<void> => {
-    await Promise.all([refreshBalance(), refreshInventory(), refreshFarmingInventory(), refreshPackSlots(), refreshRewardPacks()])
+    await Promise.all([
+      refreshBalance(),
+      refreshInventory(),
+      refreshFarmingInventory(),
+      refreshPackSlots(),
+      refreshRewardPacks(),
+      supabaseService.getMotherTreeState(),
+    ])
   }
 
   /** Compra sobres. El precio y el tope de cantidad los pone el servidor. */

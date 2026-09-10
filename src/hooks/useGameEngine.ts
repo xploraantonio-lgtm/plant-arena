@@ -591,18 +591,29 @@ export function useGameEngine() {
       }
     }
 
-    stateRef.current = {
-      tick: 0,
-      rng: createRng(1),
-      entityCounter: 0,
-      skySunSeq: 0,
-      engineVersion: 'auth-v2',
-      // En práctica el cartel dura 4 s.
-      pending: [{ atTick: msToTicks(4000), kind: 'clear_wave_banner' }],
-      timers: { lastSkySun: 0, lastP2PassiveSun: 0, lastEnemySpawn: 0, waveStart: 0 },
-      status: 'playing',
-      isPracticeMode: true,
-      p1BaseHp: INITIAL_BASE_HP,
+      let p1PracticeTreeBonusHp = 0
+      try {
+        const raw = localStorage.getItem('plant_arena_mother_tree')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (typeof parsed?.treeLevel === 'number') {
+            p1PracticeTreeBonusHp = parsed.treeLevel * 50
+          }
+        }
+      } catch (_) {}
+
+      stateRef.current = {
+        tick: 0,
+        rng: createRng(1),
+        entityCounter: 0,
+        skySunSeq: 0,
+        engineVersion: 'auth-v2',
+        // En práctica el cartel dura 4 s.
+        pending: [{ atTick: msToTicks(4000), kind: 'clear_wave_banner' }],
+        timers: { lastSkySun: 0, lastP2PassiveSun: 0, lastEnemySpawn: 0, waveStart: 0 },
+        status: 'playing',
+        isPracticeMode: true,
+        p1BaseHp: INITIAL_BASE_HP + p1PracticeTreeBonusHp,
       p2BaseHp: 99999,
       sunBank: 9999,
       p2SunBank: 0,

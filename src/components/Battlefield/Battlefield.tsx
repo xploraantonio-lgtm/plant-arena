@@ -59,11 +59,12 @@ interface BaseTowerProps {
   sunBank?: number
   /** El nick del dueño de este árbol. Sin él se usa la etiqueta genérica. */
   nombre?: string | null
+  level?: number
 }
 
 const motherTreeImg = '/game-assets/greenfoot/mothertree_whitebg.webp'
 
-function BaseTower({ team, hp, maxHp, sunBank, nombre }: BaseTowerProps) {
+function BaseTower({ team, hp, maxHp, sunBank, nombre, level }: BaseTowerProps) {
   const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100))
 
   return (
@@ -83,8 +84,13 @@ function BaseTower({ team, hp, maxHp, sunBank, nombre }: BaseTowerProps) {
               contra el bot, donde no hay nadie al otro lado. */}
           🌳 {nombre
             ? nombre
-            : team === 'p1' ? 'ÁRBOL MADRE (P1)' : 'ÁRBOL MADRE (P2)'}{' '}
-          ({Math.round(hp)})
+            : team === 'p1' ? 'ÁRBOL MADRE (P1)' : 'ÁRBOL MADRE (P2)'}
+          {level !== undefined && level > 0 && (
+            <span style={{ color: '#facc15', fontWeight: 900, marginLeft: '4px' }}>[Nv.{level}]</span>
+          )}{' '}
+          <span style={{ color: '#ffffff', fontWeight: 800, marginLeft: '2px' }}>
+            ({Math.round(hp)}/{maxHp})
+          </span>
         </span>
         {team === 'p2' && sunBank !== undefined && (
           <div className="base__pc-sun">
@@ -93,11 +99,25 @@ function BaseTower({ team, hp, maxHp, sunBank, nombre }: BaseTowerProps) {
           </div>
         )}
       </div>
-      <div className="base__tree-wrap">
+      <div className="base__tree-wrap" style={{ position: 'relative' }}>
+        {team === 'p1' && level !== undefined && level > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: '-10%',
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(74, 222, 128, 0.45) 0%, transparent 70%)',
+              filter: 'blur(10px)',
+              pointerEvents: 'none',
+              zIndex: 0,
+            }}
+          />
+        )}
         <img
           src={motherTreeImg}
           alt={team === 'p1' ? 'Árbol Madre P1' : 'Árbol Madre P2'}
           className={`base__mothertree-img ${team === 'p2' ? 'base__mothertree-img--p2' : ''}`}
+          style={{ position: 'relative', zIndex: 1 }}
         />
       </div>
     </div>
@@ -243,6 +263,17 @@ export default function Battlefield({
   const { user } = useAuth()
   const currentUserId = user?.id ?? null
 
+  const [treeLevel, setTreeLevel] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('plant_arena_mother_tree')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return typeof parsed?.treeLevel === 'number' ? parsed.treeLevel : 0
+      }
+    } catch (_) {}
+    return 0
+  })
+
   const [treeBonusHp, setTreeBonusHp] = useState<number>(() => {
     try {
       const raw = localStorage.getItem('plant_arena_mother_tree')
@@ -257,6 +288,7 @@ export default function Battlefield({
   useEffect(() => {
     void supabaseService.getMotherTreeState().then((res) => {
       if (typeof res?.treeLevel === 'number') {
+        setTreeLevel(res.treeLevel)
         setTreeBonusHp(res.treeLevel * 50)
       }
     })
@@ -1260,7 +1292,7 @@ export default function Battlefield({
       )}
 
       {/* Base Towers */}
-      <BaseTower team="p1" hp={p1BaseHp} maxHp={INITIAL_BASE_HP + treeBonusHp} nombre={nombres?.mio} />
+      <BaseTower team="p1" hp={p1BaseHp} maxHp={INITIAL_BASE_HP + treeBonusHp} nombre={nombres?.mio} level={treeLevel} />
       {/* Los soles del rival sólo se enseñan contra el bot, que es cuando el
           número es de verdad: lo lleva esta misma simulación. En PvP los soles del
           otro son cosa de SU navegador y aquí no se conocen, así que el contador
