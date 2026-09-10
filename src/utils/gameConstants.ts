@@ -387,10 +387,9 @@ export function getScaledPlantConfig(
  * shop_config.vip_pass_price_gems, así que si algún día se cambia ahí hay que
  * cambiarlo aquí también — o el botón dirá un número y se cobrará otro.
  *
- * Está aquí porque el número estaba escrito diez veces a mano y, además, como
- * «$10.00 USD»: el juego cobra gemas y la pantalla prometía dólares.
+ * 2500 gemas = $25.00 USD (ratio estándar: 100 gemas = $1.00 USD).
  */
-export const VIP_PASS_PRECIO_GEMAS = 1000
+export const VIP_PASS_PRECIO_GEMAS = 2500
 
 /**
  * Precio de la Oferta Flash (Jalapeño), en GEMAS.
