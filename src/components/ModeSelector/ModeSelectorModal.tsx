@@ -22,10 +22,13 @@ interface ModeSelectorModalProps {
   userElo: number
   userTokens: number
   colosseumTickets: number
+  playerEnergy?: number
+  maxPlayerEnergy?: number
   onSelectRanked: () => void
   onSelectColosseum: () => void
   onSelectTournament?: () => void
   onSelectStrategicPlaytest?: () => void
+  onOpenShop?: (tab?: 'packs' | 'pass' | 'gold' | 'energy' | 'market') => void
   /**
    * Entra a un duelo amistoso.
    *
@@ -48,12 +51,16 @@ export default function ModeSelectorModal({
   userElo,
   userTokens,
   colosseumTickets,
+  playerEnergy = 20,
+  maxPlayerEnergy = 20,
   onSelectRanked,
   onSelectColosseum,
   onSelectTournament,
   onSelectFriendly,
+  onOpenShop,
   apuestaMaximaAmistoso = 100,
 }: ModeSelectorModalProps) {
+
   const [subModal, setSubModal] = useState<'none' | 'friendly'>('none')
   const [codigo, setCodigo] = useState('')
   const [apuesta, setApuesta] = useState(0)
@@ -104,29 +111,80 @@ export default function ModeSelectorModal({
             {/* 4 GAME MODES GRID */}
             <div className="mode-selector-grid-4">
               {/* 1. MODO RANKED */}
-              <div
-                className="mode-card mode-card--ranked"
-                onClick={() => {
-                  soundManager.playSound('click', 0.5)
-                  onClose()
-                  onSelectRanked()
-                }}
-              >
-                <div className="mode-card__badge mode-card__badge--free">GRATIS</div>
-                <div className="mode-card__icon">🏆</div>
-                <h3 className="mode-card__name">RANKED GLOBAL</h3>
-                <p className="mode-card__desc">
-                  Escala en el ranking mundial por copas de ELO, desbloquea nuevas arenas y gana sobres de batalla en tus 4 slots.
-                </p>
-                <div className="mode-card__perks">
-                  <span>✅ 100% Gratuito e Ilimitado</span>
-                  <span>✅ Suma copas para el Ranking ELO</span>
-                  <span>✅ Gana sobres de batalla</span>
-                </div>
-                <button type="button" className="mode-card__action-btn mode-card__action-btn--ranked">
-                  ⚔️ JUGAR RANKED
-                </button>
-              </div>
+              {(() => {
+                const isEnergyDepleted = userElo >= 1602 && playerEnergy <= 0
+                return (
+                  <div
+                    className={`mode-card mode-card--ranked ${isEnergyDepleted ? 'mode-card--depleted' : ''}`}
+                    onClick={() => {
+                      soundManager.playSound('click', 0.5)
+                      if (isEnergyDepleted) {
+                        onClose()
+                        onOpenShop?.('energy')
+                      } else {
+                        onClose()
+                        onSelectRanked()
+                      }
+                    }}
+                  >
+                    <div
+                      className={`mode-card__badge ${
+                        userElo <= 1601
+                          ? 'mode-card__badge--free'
+                          : isEnergyDepleted
+                          ? 'mode-card__badge--depleted'
+                          : 'mode-card__badge--energy'
+                      }`}
+                      style={
+                        userElo >= 1602
+                          ? {
+                              background: isEnergyDepleted
+                                ? 'linear-gradient(135deg, #ef4444, #b91c1c)'
+                                : 'linear-gradient(135deg, #0284c7, #0369a1)',
+                              color: '#fff',
+                              border: isEnergyDepleted ? '1px solid #f87171' : '1px solid #38bdf8',
+                            }
+                          : undefined
+                      }
+                    >
+                      {userElo <= 1601 ? 'GRATIS' : isEnergyDepleted ? '⚡ 0 ENERGÍA' : `⚡ ${playerEnergy}/${maxPlayerEnergy}`}
+                    </div>
+                    <div className="mode-card__icon">🏆</div>
+                    <h3 className="mode-card__name">RANKED GLOBAL</h3>
+                    <p className="mode-card__desc">
+                      Escala en el ranking mundial por copas de ELO, desbloquea nuevas arenas y gana sobres de batalla en tus 4 slots.
+                    </p>
+                    <div className="mode-card__perks">
+                      {userElo <= 1601 ? (
+                        <span>✅ Ilimitado (Arena 1 Novato &lt; 1602)</span>
+                      ) : (
+                        <span>⚡ Consume 1 Energía (Partida Competitiva)</span>
+                      )}
+                      <span>✅ Suma copas para el Ranking ELO</span>
+                      <span>✅ Gana sobres de batalla</span>
+                    </div>
+                    <button
+                      type="button"
+                      className={`mode-card__action-btn ${
+                        isEnergyDepleted
+                          ? 'mode-card__action-btn--recharge'
+                          : 'mode-card__action-btn--ranked'
+                      }`}
+                      style={
+                        isEnergyDepleted
+                          ? {
+                              background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)',
+                              borderColor: '#fde047',
+                              color: '#1a1000',
+                            }
+                          : undefined
+                      }
+                    >
+                      {isEnergyDepleted ? '⚡ RECARGAR EN TIENDA' : '⚔️ JUGAR RANKED'}
+                    </button>
+                  </div>
+                )
+              })()}
 
               {/* 2. MODO AMISTOSO */}
               <div

@@ -397,3 +397,50 @@ export const VIP_PASS_PRECIO_GEMAS = 1000
  * Equivalente exacto a $30.00 USD (30 gemas del sistema anterior x 100 = 3000 gemas).
  */
 export const FLASH_OFFER_PRICE_GEMS = 3000
+
+/**
+ * SISTEMA DE ENERGÍAS DIARIAS (RANKED LADDER & TIENDA)
+ */
+export const ENERGY_FREE_ELO_THRESHOLD = 1602 // Copas a partir de las cuales se cobra energía en Ranked
+export const BASE_DAILY_ENERGY = 20
+export const VIP_DAILY_ENERGY = 25
+
+export interface EnergyPackage {
+  id: string
+  name: string
+  energyAmount: number
+  priceGems: number
+  badge?: string
+  popular?: boolean
+  bestValue?: boolean
+  description: string
+}
+
+export const ENERGY_PACKAGES: EnergyPackage[] = [
+  {
+    id: 'energy_3',
+    name: 'Recarga Rápida',
+    energyAmount: 3,
+    priceGems: 200,
+    badge: '3 PARTIDAS',
+    description: '+3 Energías ⚡ para jugar de inmediato en Ranked competitivo.',
+  },
+  {
+    id: 'energy_5',
+    name: 'Sesión Extendida',
+    energyAmount: 5,
+    priceGems: 300,
+    badge: 'MÁS POPULAR',
+    popular: true,
+    description: '+5 Energías ⚡ para extender tu sesión y cuidar tu winrate.',
+  },
+  {
+    id: 'energy_12',
+    name: 'Grind Competitivo',
+    energyAmount: 12,
+    priceGems: 600,
+    badge: 'MEJOR VALOR',
+    bestValue: true,
+    description: '+12 Energías ⚡ al precio más rentable por partida adicional.',
+  },
+]

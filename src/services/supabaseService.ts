@@ -163,6 +163,8 @@ export const SupabaseService = {
     claimed_vip_levels: number[]
     colosseum_current_streak: number
     colosseum_max_streak: number
+    energy_current?: number
+    energy_last_reset_utc?: string
   } | null> {
     if (!isSupabaseConfigured()) return null
     try {
@@ -177,6 +179,29 @@ export const SupabaseService = {
       return null
     }
   },
+
+  async getPlayerEnergy(): Promise<{
+    energyCurrent: number
+    maxEnergy: number
+    hasVip: boolean
+    userElo: number
+    isUnlimited: boolean
+    secondsUntilReset: number
+  } | null> {
+    if (!isSupabaseConfigured()) return null
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_player_energy')
+      if (error) {
+        logError('getPlayerEnergy', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      logError('getPlayerEnergy', e)
+      return null
+    }
+  },
+
 
   async saveActiveDeck(
     instanceIds: string[]
@@ -2148,6 +2173,97 @@ export const SupabaseService = {
       return { success: false, error: e?.message }
     }
   },
+
+  buyEnergyPackLocal(packId: string): {
+    success: boolean
+    packId?: string
+    energyAdded?: number
+    energyCurrent?: number
+    spentGems?: number
+    newGemsBalance?: number
+    error?: string
+  } {
+    let costGems = 0
+    let addEnergy = 0
+
+    if (packId === 'energy_3') {
+      costGems = 200
+      addEnergy = 3
+    } else if (packId === 'energy_5') {
+      costGems = 300
+      addEnergy = 5
+    } else if (packId === 'energy_12') {
+      costGems = 600
+      addEnergy = 12
+    } else {
+      return { success: false, error: 'Paquete de energía inválido' }
+    }
+
+    try {
+      const currentTokens = parseFloat(localStorage.getItem('plant_arena_user_tokens') || '0')
+      if (currentTokens < costGems) {
+        return {
+          success: false,
+          error: `Gemas insuficientes. Tienes ${currentTokens} 💎 y requieres ${costGems} 💎`,
+        }
+      }
+
+      const currentEnergy = parseInt(localStorage.getItem('plant_arena_player_energy') || '20', 10)
+      const newEnergy = currentEnergy + addEnergy
+      const newBalance = Math.max(0, currentTokens - costGems)
+
+      localStorage.setItem('plant_arena_user_tokens', String(newBalance))
+      localStorage.setItem('plant_arena_player_energy', String(newEnergy))
+
+      return {
+        success: true,
+        packId,
+        energyAdded: addEnergy,
+        energyCurrent: newEnergy,
+        spentGems: costGems,
+        newGemsBalance: newBalance,
+      }
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Error en compra local' }
+    }
+  },
+
+  async buyEnergyPack(packId: string): Promise<{
+    success: boolean
+    packId?: string
+    energyAdded?: number
+    energyCurrent?: number
+    spentGems?: number
+    newGemsBalance?: number
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) {
+      return this.buyEnergyPackLocal(packId)
+    }
+    try {
+      const { data, error } = await (supabase.rpc as any)('buy_energy_pack', {
+        p_pack_id: packId,
+      })
+      if (error) {
+        if (
+          error.code === 'PGRST202' ||
+          error.message?.includes('buy_energy_pack') ||
+          error.message?.includes('schema cache') ||
+          error.code === '42501' ||
+          error.message?.includes('No autenticado')
+        ) {
+          return this.buyEnergyPackLocal(packId)
+        }
+        logError('buyEnergyPack', error)
+        return { success: false, error: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('buyEnergyPack', e)
+      return this.buyEnergyPackLocal(packId)
+    }
+  },
+
 
   /**
    * Consulta el estado de una oferta flash en el servidor (o fallback local).

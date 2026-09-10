@@ -261,6 +261,19 @@
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.3) !important;
 }
 
+.card--stat-energy {
+  border-color: #38bdf8 !important;
+  color: #7dd3fc !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3) !important;
+  transition: all 0.2s ease;
+}
+
+.card--stat-energy:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.5) !important;
+}
+
+
 .card {
   background: rgba(16, 26, 24, 0.85);
   border: 2px solid #76d832;

@@ -152,6 +152,7 @@ const STORAGE_KEYS = {
   COLOSSEUM_TICKETS: 'plant_arena_colosseum_tickets',
   COLOSSEUM_CURRENT_STREAK: 'plant_arena_colosseum_current_streak',
   COLOSSEUM_MAX_STREAK: 'plant_arena_colosseum_max_streak',
+  ENERGY: 'plant_arena_player_energy',
 }
 
 const DEFAULT_DECK: PlantId[] = [
@@ -173,15 +174,20 @@ export function useInventory() {
   })
 
   /**
-   * Arranca en 0, igual que el pase VIP y por el mismo motivo: el número de
-   * verdad es profiles.colosseum_tickets y llega al sincronizar el perfil.
+   * Los tickets del coliseo.
    *
-   * El ticket vale una entrada al coliseo, así que mostrarlo desde localStorage
+   * Se leen de la fila de profiles por RPC (my_balance). Lo que antes hacía este
+   * hook con useColosseumTicket y addColosseumTickets era guardar en localStorage:
    * era enseñar un saldo que cualquiera podía escribir a mano. El gasto siempre
    * lo valida place_colosseum_wager contra la columna del servidor, así que no
    * había robo posible — pero sí un número mentiroso en pantalla.
    */
   const [colosseumTickets, setColosseumTickets] = useState<number>(0)
+
+  const [playerEnergy, setPlayerEnergy] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.ENERGY)
+    return saved ? Number(saved) : 20
+  })
 
   const [colosseumCurrentStreak, setColosseumCurrentStreak] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.COLOSSEUM_CURRENT_STREAK)
@@ -877,9 +883,9 @@ export function useInventory() {
     if (profile.gold_balance !== undefined) setUserGold(Number(profile.gold_balance))
     if (profile.colosseum_tickets !== undefined) setColosseumTickets(Number(profile.colosseum_tickets))
     if (profile.colosseum_current_streak !== undefined) setColosseumCurrentStreak(Number(profile.colosseum_current_streak))
-    if (profile.colosseum_max_streak !== undefined) setColosseumMaxStreak(Number(profile.colosseum_max_streak))
     if (profile.has_vip_pass !== undefined) setHasVipPass(Boolean(profile.has_vip_pass))
     if (profile.claimed_vip_levels !== undefined) setClaimedVipLevels(profile.claimed_vip_levels || [])
+    if ((profile as any).energy_current !== undefined) setPlayerEnergy(Number((profile as any).energy_current))
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -906,7 +912,9 @@ export function useInventory() {
     setClaimedVipLevels(b.claimed_vip_levels || [])
     setColosseumCurrentStreak(Number(b.colosseum_current_streak))
     setColosseumMaxStreak(Number(b.colosseum_max_streak))
+    if (b.energy_current !== undefined) setPlayerEnergy(Number(b.energy_current))
   }
+
 
   useEffect(() => {
     const handleRefresh = () => void refreshBalance()
@@ -1089,6 +1097,35 @@ export function useInventory() {
 
     await refreshBalance().catch(() => {})
     return { success: true }
+  }
+
+  const buyEnergyPack = async (
+    packId: string
+  ): Promise<{ success: boolean; energyAdded?: number; spentGems?: number; error?: string }> => {
+    const res = await inventoryService.buyEnergyPack(packId)
+    if (!res.success) return { success: false, error: res.error }
+
+    if (typeof res.newGemsBalance === 'number') {
+      setUserTokens(res.newGemsBalance)
+      try {
+        localStorage.setItem(STORAGE_KEYS.TOKENS, res.newGemsBalance.toString())
+      } catch {}
+    } else if (typeof res.spentGems === 'number' && res.spentGems > 0) {
+      setUserTokens((prev) => Math.max(0, prev - (res.spentGems ?? 0)))
+    }
+
+    if (typeof res.energyCurrent === 'number') {
+      setPlayerEnergy(res.energyCurrent)
+      try {
+        localStorage.setItem(STORAGE_KEYS.ENERGY, res.energyCurrent.toString())
+      } catch {}
+    } else if (typeof res.energyAdded === 'number') {
+      setPlayerEnergy((prev) => prev + (res.energyAdded ?? 0))
+    }
+
+    window.dispatchEvent(new Event('refresh_user_balance'))
+    await refreshBalance().catch(() => {})
+    return { success: true, energyAdded: res.energyAdded, spentGems: res.spentGems }
   }
 
   /** Abre un sobre del servidor. El sorteo lo hace Postgres. */
@@ -1337,5 +1374,11 @@ export function useInventory() {
     colosseumCurrentStreak,
     colosseumMaxStreak,
     resolveColosseumMatch,
+    // Energy System Exports
+    playerEnergy,
+    setPlayerEnergy,
+    maxPlayerEnergy: hasVipPass ? 25 : 20,
+    buyEnergyPack,
   }
 }
+

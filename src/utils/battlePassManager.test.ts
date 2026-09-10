@@ -51,10 +51,10 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
     const lvl7 = BATTLE_PASS_LEVELS.find((l) => l.level === 7)!
     expect(lvl7.reward).toEqual({
       type: 'copies',
-      plantId: 'aloe',
+      plantId: 'melonpult',
       copiesCount: 1,
-      label: 'x1 Aloe Vera',
-      icon: '/game-assets/plants/aloe_hd.webp',
+      label: 'x1 Melon-pult',
+      icon: '/game-assets/greenfoot/melonpacket1.webp',
     })
 
     const lvl8 = BATTLE_PASS_LEVELS.find((l) => l.level === 8)!
@@ -69,10 +69,10 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
     const lvl11 = BATTLE_PASS_LEVELS.find((l) => l.level === 11)!
     expect(lvl11.reward).toEqual({
       type: 'copies',
-      plantId: 'aloe',
+      plantId: 'squash',
       copiesCount: 1,
-      label: 'x1 Aloe Vera',
-      icon: '/game-assets/plants/aloe_hd.webp',
+      label: 'x1 Potato Mine',
+      icon: '/game-assets/greenfoot/potatopacket1.webp',
     })
 
     const lvl12 = BATTLE_PASS_LEVELS.find((l) => l.level === 12)!
@@ -134,16 +134,27 @@ describe('BATTLE PASS REWARDS AUDIT (MIGRACIÓN 47)', () => {
     expect(lvl19.reward.label).toBe('2x Sobres Básicos')
   })
 
-  it('FASE 5 — Normalización de nombres en plantas de niveles 14 y 18', () => {
+  it('FASE 5 — Cero legendarias en el Pase VIP y solo Tall-nut como épica', () => {
+    // 0 cartas legendarias (ni iceberglettuce ni threepeater)
+    const legendaryRewards = BATTLE_PASS_LEVELS.filter(
+      (l) => l.reward.plantId === 'iceberglettuce' || l.reward.plantId === 'threepeater'
+    )
+    expect(legendaryRewards).toHaveLength(0)
+
+    // Solo Tall-nut como épica (aloe no debe estar)
+    const aloeRewards = BATTLE_PASS_LEVELS.filter((l) => l.reward.plantId === 'aloe')
+    expect(aloeRewards).toHaveLength(0)
+
+    // Niveles 14 y 18 ahora dan cartas raras balanceadas
     const lvl14 = BATTLE_PASS_LEVELS.find((l) => l.level === 14)!
-    expect(lvl14.reward.label).toBe('x1 Lechuga Helada')
-    expect(lvl14.reward.copiesCount).toBe(1)
-    expect(lvl14.reward.plantId).toBe('iceberglettuce')
+    expect(lvl14.reward.label).toBe('x2 Girasol Doble')
+    expect(lvl14.reward.copiesCount).toBe(2)
+    expect(lvl14.reward.plantId).toBe('twinsunflower')
 
     const lvl18 = BATTLE_PASS_LEVELS.find((l) => l.level === 18)!
-    expect(lvl18.reward.label).toBe('x1 Threepeater')
-    expect(lvl18.reward.copiesCount).toBe(1)
-    expect(lvl18.reward.plantId).toBe('threepeater')
+    expect(lvl18.reward.label).toBe('x2 Jalapeño')
+    expect(lvl18.reward.copiesCount).toBe(2)
+    expect(lvl18.reward.plantId).toBe('jalapeno')
   })
 
   it('FASE 6 — Validación de condiciones de claim anti-duplicado', () => {

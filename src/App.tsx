@@ -57,6 +57,8 @@ function App() {
     }
     return 'landing'
   })
+  const [shopInitialTab, setShopInitialTab] = useState<'packs' | 'pass' | 'gold' | 'energy' | 'market'>('packs')
+
 
   /**
    * El código del enlace de repetición, si se llegó por uno.
@@ -165,7 +167,11 @@ function App() {
     colosseumCurrentStreak,
     colosseumMaxStreak,
     resolveColosseumMatch,
+    playerEnergy,
+    maxPlayerEnergy,
+    buyEnergyPack,
   } = useInventory()
+
 
   const {
     user,
@@ -669,9 +675,11 @@ function App() {
     setScreen('jardin')
   }
 
-  const handleOpenShop = () => {
+  const handleOpenShop = (tab: 'packs' | 'pass' | 'gold' | 'energy' | 'market' = 'packs') => {
+    setShopInitialTab(tab)
     setScreen('shop')
   }
+
 
   const handleOpenRanking = () => {
     setScreen('ranking')
@@ -846,6 +854,8 @@ function App() {
             colosseumTickets={colosseumTickets}
             colosseumCurrentStreak={colosseumCurrentStreak}
             colosseumMaxStreak={colosseumMaxStreak}
+            playerEnergy={playerEnergy}
+            maxPlayerEnergy={maxPlayerEnergy}
             onPlay={handlePlayNormal}
             onPlayFriendly={handlePlayFriendly}
             onStartColosseumMatch={handleStartColosseumMatch}
@@ -1004,6 +1014,10 @@ function App() {
             plantLevels={plantLevels}
             plantStatRolls={plantStatRolls}
             plantInstances={plantInstances}
+            initialTab={shopInitialTab}
+            playerEnergy={playerEnergy}
+            maxPlayerEnergy={maxPlayerEnergy}
+            onBuyEnergyPack={buyEnergyPack}
             onBack={() => setScreen('menu')}
             onBuyPack={buyPack}
             onBuyGold={buyGoldPackage}

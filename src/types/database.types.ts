@@ -27,6 +27,8 @@ export interface Database {
           exclude_from_ranking?: boolean
           referral_code: string | null
           referred_by: string | null
+          energy_current: number
+          energy_last_reset_utc: string
           created_at: string
           updated_at: string
         }
@@ -47,6 +49,8 @@ export interface Database {
           exclude_from_ranking?: boolean
           referral_code?: string | null
           referred_by?: string | null
+          energy_current?: number
+          energy_last_reset_utc?: string
           created_at?: string
           updated_at?: string
         }
@@ -67,6 +71,8 @@ export interface Database {
           exclude_from_ranking?: boolean
           referral_code?: string | null
           referred_by?: string | null
+          energy_current?: number
+          energy_last_reset_utc?: string
           created_at?: string
           updated_at?: string
         }

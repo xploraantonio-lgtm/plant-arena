@@ -10,7 +10,7 @@ import {
 import { soundManager } from '../../utils/audioManager'
 import { shopService } from '../../services/shopService'
 import Marketplace from '../Marketplace/Marketplace'
-import { VIP_PASS_PRECIO_GEMAS, type PlantStatKey } from '../../utils/gameConstants'
+import { VIP_PASS_PRECIO_GEMAS, ENERGY_PACKAGES, type EnergyPackage, type PlantStatKey } from '../../utils/gameConstants'
 import './Shop.css'
 
 const commonSeedImg = '/game-assets/greenfoot/seed_pack_common_whitebg.webp'
@@ -124,71 +124,100 @@ export const EMOTE_ITEMS: EmoteItem[] = [
     placeholderEmoji: '👑🏆',
     tagline: '¡Lucimiento exclusivo de campeón!',
   },
+  {
+    id: 'emote_peashooter_cool',
+    name: 'Guisante Épico',
+    category: 'Flex & Victoria',
+    rarity: 'epic',
+    priceGold: 450,
+    placeholderEmoji: '🌱😎',
+    tagline: '¡Gafas oscuras y estilo inigualable!',
+  },
 ]
-
-export interface AdRewardSlot {
-  id: string
-  slotNumber: number
-  title: string
-  rewardGold: number
-  rewardDescription: string
-  durationText: string
-  badgeText: string
-  icon: string
-}
 
 export const ADS_ENABLED = false
 
+export interface AdRewardSlot {
+  id?: string
+  slotNumber: number
+  rewardGold: number
+  title: string
+  desc: string
+  rewardDescription?: string
+  durationText?: string
+  icon: string
+  badge?: string
+}
+
+
 export const AD_REWARD_SLOTS: AdRewardSlot[] = [
   {
-    id: 'ad_slot_1',
     slotNumber: 1,
-    title: 'Anuncio Rápido',
-    rewardGold: 0,
-    rewardDescription: 'Anuncios temporalmente desactivados.',
-    durationText: 'Desactivado',
-    badgeText: 'DESACTIVADO',
-    icon: '🎬',
+    rewardGold: 15,
+    title: 'Semillero Inicial',
+    desc: 'Bolsa rápida de monedas para mejoras tempranas.',
+    icon: '🌱',
+    badge: 'NIVEL 1',
   },
   {
-    id: 'ad_slot_2',
     slotNumber: 2,
-    title: 'Anuncio Patrocinado',
-    rewardGold: 0,
-    rewardDescription: 'Anuncios temporalmente desactivados.',
-    durationText: 'Desactivado',
-    badgeText: 'DESACTIVADO',
-    icon: '📺',
+    rewardGold: 30,
+    title: 'Riego Nutritivo',
+    desc: 'Impulso intermedio de oro para tu jardín.',
+    icon: '💧',
+    badge: 'NIVEL 2',
   },
   {
-    id: 'ad_slot_3',
     slotNumber: 3,
-    title: 'Super Anuncio Oro',
-    rewardGold: 0,
-    rewardDescription: 'Anuncios temporalmente desactivados.',
-    durationText: 'Desactivado',
-    badgeText: 'DESACTIVADO',
+    rewardGold: 50,
+    title: 'Cosecha Solar',
+    desc: 'Buena recompensa para adquirir cartas y pases.',
+    icon: '☀️',
+    badge: 'NIVEL 3',
+  },
+  {
+    slotNumber: 4,
+    rewardGold: 75,
+    title: 'Cofre Dorado',
+    desc: 'Un botín considerable directo a tu reserva.',
+    icon: '🪙',
+    badge: 'NIVEL 4',
+  },
+  {
+    slotNumber: 5,
+    rewardGold: 100,
+    title: 'Tesoro del Jardín',
+    desc: 'Gran premio para jugadores dedicados.',
+    icon: '🏆',
+    badge: 'NIVEL 5',
+  },
+  {
+    slotNumber: 6,
+    rewardGold: 150,
+    title: 'Bóveda Legendaria',
+    desc: '¡La máxima recompensa diaria de oro disponible!',
     icon: '💎',
+    badge: 'MÁXIMO',
   },
 ]
 
-interface ShopProps {
+export interface ShopProps {
+  initialTab?: 'packs' | 'pass' | 'gold' | 'energy' | 'market'
   userTokens: number
-  userElo?: number
+  userElo: number
   userGold?: number
   hasVipPass?: boolean
+  playerEnergy?: number
+  maxPlayerEnergy?: number
   inventoryPacks: InventoryPack[]
   plantCopies?: Partial<Record<PlantId, number>>
   plantLevels?: Partial<Record<PlantId, number>>
   plantStatRolls?: Partial<Record<PlantId, PlantStatKey[]>>
   plantInstances?: PlantCardInstance[]
   onBack: () => void
-  // Estas tres pasan por el servidor, así que son asíncronas: cobra y entrega
-  // Postgres en una sola transacción, y el cliente adopta el saldo que
-  // devuelve. onBuyGold recibe el ID del paquete, no (cantidad, precio): pasar
-  // ambos dejaba el tipo de cambio en manos del navegador.
   onBuyPack: (packId: PackId, qty?: number) => Promise<{ success: boolean; packs?: InventoryPack[]; error?: string }>
   onBuyGold?: (packageId: string) => Promise<{ success: boolean; goldAdded?: number; error?: string }>
+  onBuyEnergyPack?: (packId: string) => Promise<{ success: boolean; energyAdded?: number; spentGems?: number; error?: string }>
   onAddGold?: (amount: number) => void
   onWatchAd?: (slotNumber: number, rewardGold: number) => void
   onOpenJardin: () => void
@@ -201,10 +230,13 @@ interface ShopProps {
 }
 
 export default function Shop({
+  initialTab = 'packs',
   userTokens,
   userElo,
   userGold = 50000,
   hasVipPass = false,
+  playerEnergy = 20,
+  maxPlayerEnergy = 20,
   inventoryPacks,
   plantCopies = {},
   plantLevels = {},
@@ -213,6 +245,7 @@ export default function Shop({
   onBack,
   onBuyPack,
   onBuyGold,
+  onBuyEnergyPack,
   onAddGold: _onAddGold,
   onWatchAd: _onWatchAd,
   onOpenJardin,
@@ -224,7 +257,14 @@ export default function Shop({
   onReceivePlant,
 }: ShopProps) {
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
-  const [activeTab, setActiveTab] = useState<'packs' | 'pass' | 'gold' | 'market'>('packs')
+  const [activeTab, setActiveTab] = useState<'packs' | 'pass' | 'gold' | 'energy' | 'market'>(initialTab)
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab)
+    }
+  }, [initialTab])
+
   const [purchasedPacksList, setPurchasedPacksList] = useState<InventoryPack[]>([])
   const [themedAlert, setThemedAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
   const [selectedPackDetails, setSelectedPackDetails] = useState<PackId | null>(null)
@@ -376,6 +416,35 @@ export default function Shop({
     }
   }
 
+  const handleBuyEnergy = async (pkg: EnergyPackage) => {
+    if (userTokens < pkg.priceGems) {
+      setThemedAlert({
+        title: 'GEMAS INSUFICIENTES',
+        message: `⚠️ Gemas insuficientes (${userTokens} Gemas 💎 disponibles).\nSe requieren ${pkg.priceGems} Gemas 💎 para comprar ${pkg.energyAmount} Energías ⚡.`,
+        icon: '⚠️',
+      })
+      return
+    }
+
+    if (onBuyEnergyPack) {
+      const res = await onBuyEnergyPack(pkg.id)
+      if (res.success) {
+        soundManager.playSound('plantation', 0.8)
+        setThemedAlert({
+          title: '¡ENERGÍA RECARGADA!',
+          message: `⚡ ¡Has adquirido con éxito +${res.energyAdded ?? pkg.energyAmount} Energías ⚡ por ${pkg.priceGems} Gemas 💎!\nAhora puedes seguir compitiendo en Ranked.`,
+          icon: '⚡',
+        })
+      } else {
+        setThemedAlert({
+          title: 'ERROR EN COMPRA',
+          message: res.error || 'No se pudo procesar la compra de energía.',
+          icon: '⚠️',
+        })
+      }
+    }
+  }
+
   return (
     <div className="shop-screen" style={{ backgroundImage: `url(${background})` }}>
       {/* Top Header */}
@@ -397,6 +466,20 @@ export default function Shop({
           <div className="shop-token-badge">
             <span className="shop-token-icon">💎</span>
             <span className="shop-token-amount">{userTokens} Gemas</span>
+          </div>
+          <div
+            className="shop-energy-badge"
+            title={userElo <= 1601 ? '⚡ Energía ilimitada en rango novato (< 1602 copas)' : `⚡ Energía diaria: ${playerEnergy}/${maxPlayerEnergy}`}
+            onClick={() => {
+              soundManager.playSound('click', 0.5)
+              setActiveTab('energy')
+            }}
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="shop-energy-badge-icon">⚡</span>
+            <span className="shop-energy-badge-amount">
+              {userElo <= 1601 ? '∞' : `${playerEnergy}/${maxPlayerEnergy}`}
+            </span>
           </div>
           <button
             className="shop-mute-btn"
@@ -446,6 +529,17 @@ export default function Shop({
           }}
         >
           {ADS_ENABLED ? '🪙 ORO, EMOTES & ADS' : '🪙 ORO & EMOTES'}
+        </button>
+
+        <button
+          type="button"
+          className={`shop-nav-tab ${activeTab === 'energy' ? 'shop-nav-tab--active' : ''}`}
+          onClick={() => {
+            soundManager.playSound('click', 0.5)
+            setActiveTab('energy')
+          }}
+        >
+          ⚡ ENERGÍAS
         </button>
 
         <button
@@ -648,7 +742,16 @@ export default function Shop({
                       <span className="shop-pass-perk-txt">Insignia y brillo real</span>
                     </div>
                   </div>
+
+                  <div className="shop-pass-perk">
+                    <span className="shop-pass-perk-icon">⚡</span>
+                    <div className="shop-pass-perk-info">
+                      <strong className="shop-pass-perk-title">25 Energías Diarias</strong>
+                      <span className="shop-pass-perk-txt">+5 partidas cada día</span>
+                    </div>
+                  </div>
                 </div>
+
 
                 <button
                   type="button"
@@ -972,8 +1075,82 @@ export default function Shop({
           </div>
         )}
 
+        {/* TAB: ENERGÍAS ⚡ (RECARGAS ANTI-SPAM PARA RANKED COMPETITIVO) */}
+        {activeTab === 'energy' && (
+          <div className="shop-tab-pane shop-energy-pane">
+            <div className="shop-packs-section-bar">
+              <span className="shop-section-tagline">
+                ⚡ Gestión y Recarga de Energías para Ranked Competitivo (≥ 1602 Copas). Recarga automática a las 00:00 UTC.
+              </span>
+            </div>
+
+            {/* Banner de Estado de Energía */}
+            <div className="shop-energy-status-card">
+              <div className="shop-energy-status-left">
+                <div className="shop-energy-status-bolt">⚡</div>
+                <div className="shop-energy-status-details">
+                  <div className="shop-energy-status-heading">
+                    Energía Diaria:{' '}
+                    <span className="shop-energy-status-val">
+                      {userElo <= 1601 ? '∞ (ILIMITADA)' : `${playerEnergy} / ${maxPlayerEnergy}`}
+                    </span>
+                    {hasVipPass && <span className="shop-energy-vip-pill">👑 PASE VIP (+5 DIARIAS)</span>}
+                  </div>
+                  <p className="shop-energy-status-subtext">
+                    {userElo <= 1601
+                      ? 'Estás en Arena 1 (< 1602 copas). Todas tus partidas son gratuitas y no consumen energía.'
+                      : hasVipPass
+                      ? 'Cuentas con 25 energías diarias. Las partidas en rango competitivo consumen 1 ⚡ por juego.'
+                      : 'Cuentas con 20 energías diarias. Las partidas en rango competitivo consumen 1 ⚡ por juego. Activa el Pase VIP para obtener 25 diarias.'}
+                  </p>
+                </div>
+              </div>
+              <div className="shop-energy-status-right">
+                <span className="shop-energy-reset-label">🔄 Recarga Automática:</span>
+                <span className="shop-energy-reset-time">00:00 UTC</span>
+                <span className="shop-energy-reset-note">* Reseteo estricto (no acumulable)</span>
+              </div>
+            </div>
+
+            {/* Grid de Paquetes de Energía */}
+            <div className="shop-energy-grid">
+              {ENERGY_PACKAGES.map((pkg) => (
+                <div
+                  key={pkg.id}
+                  className={`shop-energy-card ${pkg.popular ? 'shop-energy-card--popular' : ''} ${pkg.bestValue ? 'shop-energy-card--best' : ''}`}
+                >
+                  {pkg.badge && <div className="shop-energy-badge-ribbon">{pkg.badge}</div>}
+
+                  <div className="shop-energy-card-icon-box">
+                    <span className="shop-energy-card-icon">⚡</span>
+                    <span className="shop-energy-card-qty">+{pkg.energyAmount}</span>
+                  </div>
+
+                  <h3 className="shop-energy-card-name">{pkg.name}</h3>
+                  <p className="shop-energy-card-desc">{pkg.description}</p>
+
+                  <div className="shop-energy-card-price-tag">
+                    <span className="shop-energy-gem">💎</span>
+                    <span className="shop-energy-price-num">{pkg.priceGems.toLocaleString()} Gemas</span>
+                    <span className="shop-energy-price-usd">(${(pkg.priceGems / 100).toFixed(2)} USD)</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="shop-energy-card-buy-btn"
+                    onClick={() => handleBuyEnergy(pkg)}
+                  >
+                    ⚡ RECARGAR
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* TAB 3: COMERCIO */}
         {activeTab === 'market' && (
+
           <div className="shop-tab-pane" style={{ padding: 0, height: '100%' }}>
             <Marketplace
               userTokens={userTokens}

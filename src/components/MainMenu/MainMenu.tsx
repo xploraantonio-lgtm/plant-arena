@@ -59,7 +59,7 @@ interface MainMenuProps {
   onStartTournamentMatch?: (opponentName: string, tournamentId: string, tournamentDeck?: PlantId[]) => void
   onOpenCollection?: () => void
   onOpenJardin?: () => void
-  onOpenShop?: () => void
+  onOpenShop?: (tab?: 'packs' | 'pass' | 'gold' | 'energy' | 'market') => void
   onOpenRanking?: () => void
   onOpenMisPartidas?: () => void
   onOpenBattlePass?: () => void
@@ -74,6 +74,8 @@ interface MainMenuProps {
   onStartSlotUnlock?: (slotId: number) => { success: boolean; error?: string }
   onFastUnlockSlot?: (slotId: number) => Promise<{ success: boolean; goldSpent?: number; error?: string }>
   onOpenSlotPack?: (slotId: number) => void
+  playerEnergy?: number
+  maxPlayerEnergy?: number
   // onAddTokens se eliminó al dejar el formulario de recarga como maqueta:
   // era la vía por la que ProfileModal se sumaba saldo sin cobrar nada.
   onDeductTokens?: (amountUsd: number) => boolean
@@ -85,6 +87,8 @@ export default function MainMenu({
   userTokens = 0,
   userGold = 0,
   hasVipPass = false,
+  playerEnergy = 20,
+  maxPlayerEnergy = 20,
   unlockedPlants,
   claimedVipLevels = [],
   freePackSlots = [],
@@ -121,8 +125,15 @@ export default function MainMenu({
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [ticker, setTicker] = useState<number>(0)
   const [upcomingTournament, setUpcomingTournament] = useState<TournamentModel | null>(null)
-  const [activeAlert, setActiveAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
+  const [activeAlert, setActiveAlert] = useState<{
+    title: string
+    message: string
+    icon: string
+    actionLabel?: string
+    onAction?: () => void
+  } | null>(null)
   const [slotToAccelerate, setSlotToAccelerate] = useState<FreePackSlot | null>(null)
+
   const [isAccelerating, setIsAccelerating] = useState<boolean>(false)
   const [isFlashOfferOpen, setIsFlashOfferOpen] = useState<boolean>(false)
   const [flashOfferStatus, setFlashOfferStatus] = useState<{
@@ -188,8 +199,19 @@ export default function MainMenu({
 
   const handlePlayClick = () => {
     soundManager.playSound('click', 0.5)
+    if (userElo >= 1602 && playerEnergy <= 0) {
+      setActiveAlert({
+        title: 'ENERGÍA AGOTADA',
+        message: `⚡ Has agotado tus ${maxPlayerEnergy} partidas competitivas de hoy. Tu energía se recarga automáticamente a las 00:00 UTC, o puedes recargar ahora en la Tienda.`,
+        icon: '⚡',
+        actionLabel: 'IR A TIENDA',
+        onAction: () => onOpenShop?.('energy'),
+      })
+      return
+    }
     setIsModeSelectorOpen(true)
   }
+
 
   useEffect(() => {
     const syncProfile = () => setPlayerProfile(UserManager.getProfile())
@@ -413,6 +435,22 @@ export default function MainMenu({
             <div className="card card--stat card--stat-ticket" title="Tickets de Coliseo (1 Ticket = 0.5 💎 de entrada)">
               <span style={{ fontSize: '1.05rem' }}>🎟️</span>
               {colosseumTickets}
+            </div>
+            <div
+              className="card card--stat card--stat-energy"
+              title={
+                userElo <= 1601
+                  ? '⚡ Energía ilimitada en Arena 1 novato (< 1602 Copas)'
+                  : `⚡ Energía Diaria: ${playerEnergy}/${maxPlayerEnergy} (Recarga a las 00:00 UTC). Clic para recargar en la Tienda.`
+              }
+              style={{ cursor: 'pointer' }}
+              onClick={() => {
+                soundManager.playSound('click', 0.5)
+                onOpenShop?.('energy')
+              }}
+            >
+              <span style={{ fontSize: '1.05rem', filter: 'drop-shadow(0 0 3px #38bdf8)' }}>⚡</span>
+              {userElo <= 1601 ? '∞' : `${playerEnergy}/${maxPlayerEnergy}`}
             </div>
             <div
               className="card card--stat"
@@ -704,7 +742,7 @@ export default function MainMenu({
           <img src={arena} alt="" />
           <span>RANKING</span>
         </button>
-        <button className="banner-button" type="button" onClick={onOpenShop}>
+        <button className="banner-button" type="button" onClick={() => onOpenShop?.()}>
           <img src={shop} alt="" />
           <span>TIENDA</span>
         </button>
@@ -739,13 +777,28 @@ export default function MainMenu({
             <div className="main-menu-dialog-icon">{activeAlert.icon}</div>
             <h3 className="main-menu-dialog-title">{activeAlert.title}</h3>
             <p className="main-menu-dialog-msg">{activeAlert.message}</p>
-            <button
-              type="button"
-              className="main-menu-dialog-btn"
-              onClick={() => setActiveAlert(null)}
-            >
-              ENTENDIDO
-            </button>
+            <div className="main-menu-dialog-actions" style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="main-menu-dialog-btn"
+                onClick={() => setActiveAlert(null)}
+              >
+                ENTENDIDO
+              </button>
+              {activeAlert.actionLabel && activeAlert.onAction && (
+                <button
+                  type="button"
+                  className="main-menu-dialog-btn main-menu-dialog-btn--confirm"
+                  onClick={() => {
+                    const fn = activeAlert.onAction
+                    setActiveAlert(null)
+                    fn?.()
+                  }}
+                >
+                  {activeAlert.actionLabel}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -803,11 +856,14 @@ export default function MainMenu({
         userElo={userElo}
         userTokens={userTokens}
         colosseumTickets={colosseumTickets}
+        playerEnergy={playerEnergy}
+        maxPlayerEnergy={maxPlayerEnergy}
         onSelectRanked={onPlay}
         onSelectColosseum={() => setIsColosseumModalOpen(true)}
         onSelectTournament={() => setIsTournamentModalOpen(true)}
         onSelectFriendly={onPlayFriendly}
         onSelectStrategicPlaytest={onOpenStrategicPlaytest}
+        onOpenShop={onOpenShop}
       />
 
       {/* COLOSSEUM MODAL */}

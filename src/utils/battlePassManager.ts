@@ -59,7 +59,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 7,
     requiredElo: 2050,
     arenaName: 'Rascacielos Cyberpunk',
-    reward: { type: 'copies', plantId: 'aloe', copiesCount: 1, label: 'x1 Aloe Vera', icon: '/game-assets/plants/aloe_hd.webp' },
+    reward: { type: 'copies', plantId: 'melonpult', copiesCount: 1, label: 'x1 Melon-pult', icon: '/game-assets/greenfoot/melonpacket1.webp' },
   },
   {
     level: 8,
@@ -83,7 +83,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 11,
     requiredElo: 2650,
     arenaName: 'Rascacielos Cyberpunk',
-    reward: { type: 'copies', plantId: 'aloe', copiesCount: 1, label: 'x1 Aloe Vera', icon: '/game-assets/plants/aloe_hd.webp' },
+    reward: { type: 'copies', plantId: 'squash', copiesCount: 1, label: 'x1 Potato Mine', icon: '/game-assets/greenfoot/potatopacket1.webp' },
   },
   {
     level: 12,
@@ -101,7 +101,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 14,
     requiredElo: 3100,
     arenaName: 'Coliseo Galáctico',
-    reward: { type: 'copies', plantId: 'iceberglettuce', copiesCount: 1, label: 'x1 Lechuga Helada', icon: '/game-assets/plants/iceberglettuce_hd.webp' },
+    reward: { type: 'copies', plantId: 'twinsunflower', copiesCount: 2, label: 'x2 Girasol Doble', icon: '/game-assets/greenfoot/twinsunflower1.webp' },
   },
   {
     level: 15,
@@ -125,7 +125,7 @@ export const BATTLE_PASS_LEVELS: PassLevel[] = [
     level: 18,
     requiredElo: 3700,
     arenaName: 'Coliseo Galáctico',
-    reward: { type: 'copies', plantId: 'threepeater', copiesCount: 1, label: 'x1 Threepeater', icon: '/game-assets/greenfoot/threepeater1.webp' },
+    reward: { type: 'copies', plantId: 'jalapeno', copiesCount: 2, label: 'x2 Jalapeño', icon: '/game-assets/plants/jalapeno_hd.webp' },
   },
   {
     level: 19,
