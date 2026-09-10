@@ -1821,10 +1821,10 @@ export const SupabaseService = {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
       const { data, error } = await (supabase.rpc as any)('admin_open_secret_code_round', {
-        p_prize_pool: opts?.prizePool ?? 20,
-        p_prize_1st: opts?.prize1st ?? 10,
-        p_prize_2nd: opts?.prize2nd ?? 6,
-        p_prize_3rd: opts?.prize3rd ?? 4,
+        p_prize_pool: opts?.prizePool ?? 50,
+        p_prize_1st: opts?.prize1st ?? 50,
+        p_prize_2nd: opts?.prize2nd ?? 0,
+        p_prize_3rd: opts?.prize3rd ?? 0,
         p_free_attempts: opts?.freeAttempts ?? 3,
       })
       if (error) {
@@ -1834,6 +1834,51 @@ export const SupabaseService = {
       return data
     } catch (e: any) {
       logError('adminOpenSecretCodeRound', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /** Reinicia el acertijo: cierra la ronda anterior e inicia inmediatamente una nueva con 5 slots */
+  async adminRestartSecretCodeRound(opts?: {
+    prizePool?: number
+    prize1st?: number
+    prize2nd?: number
+    prize3rd?: number
+    freeAttempts?: number
+    attemptCost?: number
+    settlePrevious?: boolean
+  }): Promise<{
+    success: boolean
+    roundId?: string
+    roundNumber?: number
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      // Intentar RPC directo si la migración 72 está aplicada
+      const { data, error } = await (supabase.rpc as any)('admin_restart_secret_code_round', {
+        p_prize_pool: opts?.prizePool ?? 50,
+        p_prize_1st: opts?.prize1st ?? 50,
+        p_prize_2nd: opts?.prize2nd ?? 0,
+        p_prize_3rd: opts?.prize3rd ?? 0,
+        p_free_attempts: opts?.freeAttempts ?? 3,
+        p_attempt_cost: opts?.attemptCost ?? 10,
+        p_settle_previous: opts?.settlePrevious ?? true,
+      })
+      if (!error && data?.success) {
+        return data
+      }
+
+      // Fallback compuesto resiliente si el RPC nuevo aún no se ejecutó en DB
+      if (opts?.settlePrevious !== false) {
+        await this.adminCloseSecretCodeRound(true)
+      } else {
+        await this.adminCloseSecretCodeRound(false)
+      }
+
+      return await this.adminOpenSecretCodeRound(opts)
+    } catch (e: any) {
+      logError('adminRestartSecretCodeRound', e)
       return { success: false, error: e?.message }
     }
   },

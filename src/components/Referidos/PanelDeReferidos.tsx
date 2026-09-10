@@ -375,7 +375,7 @@ export default function PanelDeReferidos() {
             disabled={datos.oroPorCobrar <= 0 || ocupado === 'oro'}
             onClick={() => void cobrarOro()}
           >
-            {ocupado === 'oro' ? '…' : `Cobrar ${datos.oroPorCobrar} 🪙`}
+            {ocupado === 'oro' ? '…' : `Cobrar ${datos.oroPorCobrar} 💰`}
           </button>
         </div>
 

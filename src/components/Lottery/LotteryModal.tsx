@@ -10,6 +10,8 @@ interface LotteryModalProps {
   onClose: () => void
   userTokens: number
   userGold?: number
+  isAdmin?: boolean
+  onOpenAdmin?: () => void
   // Las recompensas ya no se conceden desde el cliente: las entrega el
   // servidor y onRewardsChanged sólo las trae a pantalla.
   /** Recarga saldo e inventario desde el servidor tras un premio. El premio ya
@@ -56,7 +58,7 @@ const WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'gold_500',
     label: '150 Oro',
-    icon: '🪙',
+    icon: '💰',
     color: '#f59e0b',
     textColor: '#ffffff',
     type: 'gold',
@@ -86,7 +88,7 @@ const WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'gold_200',
     label: '100 Oro',
-    icon: '🪙',
+    icon: '💰',
     color: '#10b981',
     textColor: '#ffffff',
     type: 'gold',
@@ -105,7 +107,7 @@ const WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'gold_50',
     label: '50 Oro',
-    icon: '🪙',
+    icon: '💰',
     color: '#8b5cf6',
     textColor: '#ffffff',
     type: 'gold',
@@ -186,6 +188,8 @@ export default function LotteryModal({
   isOpen,
   onClose,
   userTokens,
+  isAdmin,
+  onOpenAdmin,
   onRewardsChanged,
 }: LotteryModalProps) {
   const [activeTab, setActiveTab] = useState<'wheel' | 'code'>('wheel')
@@ -635,7 +639,7 @@ export default function LotteryModal({
                       💎 50 Gemas (8%)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--gold">
-                      🪙 150 Oro (10%) · 100 Oro (15%) · 50 Oro (10%)
+                      💰 150 Oro (10%) · 100 Oro (15%) · 50 Oro (10%)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--epic">
                       💨 Sigue Intentando (55%)
@@ -655,7 +659,7 @@ export default function LotteryModal({
               <div className="lottery-code-alert-banner">{codeBannerNotice}</div>
             )}
 
-            {/* SUB-TABS: JUEGA | HISTORIAL | RANKING */}
+            {/* SUB-TABS: JUEGA | HISTORIAL | RANKING | ADMIN */}
             <div className="lottery-code-subtabs">
               <button
                 type="button"
@@ -687,6 +691,27 @@ export default function LotteryModal({
               >
                 🏆 RANKING ({codeBoard.length})
               </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="lottery-code-subtab-btn"
+                  style={{
+                    marginLeft: 'auto',
+                    background: 'rgba(234, 179, 8, 0.15)',
+                    color: '#facc15',
+                    border: '1px solid #eab308',
+                    fontWeight: 800,
+                  }}
+                  onClick={() => {
+                    soundManager.playSound('click', 0.3)
+                    onClose()
+                    onOpenAdmin?.()
+                  }}
+                  title="Configurar Bote, Coste e Iniciar Nuevo Acertijo desde Panel de Administrador"
+                >
+                  🛡️ ADMINISTRAR
+                </button>
+              )}
             </div>
 
             {/* SUBTAB 1: JUEGA */}
@@ -726,7 +751,7 @@ export default function LotteryModal({
                   <div className="lottery-code-promo-banner">
                     <div className="lottery-promo-badge">
                       {roundIsOpen
-                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizePool ?? 1000} 💎`
+                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizePool ?? 50} 💎`
                         : codeRound
                           ? `⏸️ RONDA #${codeRound.roundNumber} FINALIZADA`
                           : '⏸️ SIN RONDA ACTIVA'}
@@ -736,7 +761,7 @@ export default function LotteryModal({
                       <p>
                         {codeRound?.freeAttempts ?? 3} intentos gratis por ronda. El primero que
                         acierte las {SECRET_CODE_LENGTH} en orden <strong>cierra la ronda</strong> y se lleva{' '}
-                        <strong>{codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 1000} 💎</strong>.
+                        <strong>{codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎</strong>.
                       </p>
                     ) : (
                       <p>
@@ -800,10 +825,10 @@ export default function LotteryModal({
                         soundManager.playSound('click', 0.4)
                         setShowConfirmCodeBuyModal(true)
                       }}
-                      disabled={userTokens < 100.0}
-                      title="Pagar 100 Gemas 💎 por 2 intentos adicionales"
+                      disabled={userTokens < 10.0}
+                      title="Pagar 10 Gemas 💎 por 1 intento adicional"
                     >
-                      ⚡ +2 INTENTOS (100 💎 Gemas)
+                      ⚡ +1 INTENTO (10 💎 Gemas)
                     </button>
 
                     <button
@@ -954,7 +979,7 @@ export default function LotteryModal({
                     <h5>🏆 CLASIFICACIÓN DE LA RONDA:</h5>
                     <div className="lottery-pins-legend">
                       <span className="pin-tag pin-tag--exact">
-                        Bote {codeRound?.prizePool ?? 20} 💎 · {(codeRound?.prizes?.[0] ?? 10)} / {(codeRound?.prizes?.[1] ?? 6)} / {(codeRound?.prizes?.[2] ?? 4)}
+                        🥇 50 💎 · 🥈 100 💰 · 🥉 80 💰 · Top 4-10: Oro 💰
                       </span>
                     </div>
                   </div>
@@ -976,9 +1001,20 @@ export default function LotteryModal({
                       </div>
                     ) : (
                       codeBoard.map((e) => {
-                        const premio =
-                          e.place <= 3 ? (codeRound?.prizes?.[e.place - 1] ?? 0) : 0
-                        const empatados = codeBoard.filter((o) => o.bestPct === e.bestPct).length
+                        const topGoldPrizes: Record<number, number> = {
+                          2: 100,
+                          3: 80,
+                          4: 60,
+                          5: 50,
+                          6: 40,
+                          7: 30,
+                          8: 25,
+                          9: 20,
+                          10: 15,
+                        }
+                        const goldPrize = topGoldPrizes[e.place] || 0
+                        const isWinner = e.place === 1
+
                         return (
                           <div
                             key={e.userId}
@@ -1000,13 +1036,20 @@ export default function LotteryModal({
                             <strong style={{ fontVariantNumeric: 'tabular-nums', minWidth: 60, textAlign: 'right' }}>
                               {Number(e.bestPct).toFixed(1)}%
                             </strong>
-                            {premio > 0 && (
+                            {isWinner && (
                               <span
-                                style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#fbbf24', fontWeight: 800 }}
-                                title={empatados > 1 ? `Empate entre ${empatados}: el premio del puesto se divide` : 'Premio de este puesto'}
+                                style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#38bdf8', fontWeight: 900 }}
+                                title="Premio Bote al ganador que descifre el 100%"
                               >
-                                {(premio / empatados).toFixed(2)} 💎
-                                {empatados > 1 && <em style={{ opacity: 0.7 }}> (÷{empatados})</em>}
+                                {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎
+                              </span>
+                            )}
+                            {!isWinner && goldPrize > 0 && (
+                              <span
+                                style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#f59e0b', fontWeight: 800 }}
+                                title={`Premio en Oro para el Top #${e.place} al finalizar la ronda`}
+                              >
+                                +{goldPrize} 💰
                               </span>
                             )}
                           </div>
@@ -1017,14 +1060,13 @@ export default function LotteryModal({
 
                   {codeMyPayout && (
                     <div className="lottery-code-alert-banner" style={{ marginTop: 10 }}>
-                      🏅 Cobraste {codeMyPayout.gems} 💎 por el puesto {codeMyPayout.place}
+                      🏅 Cobraste {codeMyPayout.gems > 0 ? `${codeMyPayout.gems} 💎 ` : ''}{(codeMyPayout as any).gold > 0 ? `+${(codeMyPayout as any).gold} 💰 Oro ` : ''}por el puesto #{codeMyPayout.place}
                       {codeMyPayout.tiedWith > 1 && ` (empate entre ${codeMyPayout.tiedWith})`}.
                     </div>
                   )}
 
                   <p style={{ fontSize: 11, opacity: 0.7, marginTop: 10, lineHeight: 1.5 }}>
-                    Sólo se publica el porcentaje de cada jugador, nunca las plantas que
-                    probó. Si dos empatan, el premio de ese puesto se divide entre ellos.
+                    El primer lugar que descifre el 100% se lleva <strong>50 Gemas 💎</strong>. Los puestos 2 al 10 reciben <strong>hasta 100 Oro 💰</strong> al cerrarse la ronda.
                   </p>
                 </div>
               </div>
@@ -1082,10 +1124,10 @@ export default function LotteryModal({
               </div>
               <div className="lottery-prize-icon">💎</div>
               <h3 className="lottery-prize-name" style={{ color: '#4ade80' }}>
-                +10 GEMAS 💎
+                +{codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} GEMAS 💎
               </h3>
               <p className="lottery-prize-desc">
-                ¡Increíble deducción! Has acertado las {SECRET_CODE_LENGTH} plantas en la posición exacta y ganado el <strong>Gran Premio de 10 Gemas 💎</strong>.
+                ¡Increíble deducción! Has acertado las {SECRET_CODE_LENGTH} plantas en la posición exacta y ganado el <strong>Gran Premio de {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} Gemas 💎</strong>.
               </p>
               <button
                 type="button"
@@ -1095,7 +1137,7 @@ export default function LotteryModal({
                   setCodeWonPrize(false)
                 }}
               >
-                ¡RECLAMAR 10 GEMAS 💎!
+                ¡RECLAMAR {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} GEMAS 💎!
               </button>
             </div>
           </div>
@@ -1141,10 +1183,10 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">🎯</div>
               <h3>COMPRAR INTENTOS DE CÓDIGO</h3>
               <p>
-                ¿Deseas pagar <strong>100 Gemas 💎</strong> para adquirir <strong>2 INTENTOS ADICIONALES</strong> y descifrar la secuencia para ganar el <strong>Bote de Gemas 💎</strong>?
+                ¿Deseas pagar <strong>10 Gemas 💎</strong> para adquirir <strong>1 INTENTO ADICIONAL</strong> y descifrar la secuencia para ganar el <strong>Gran Premio de {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} Gemas 💎</strong>?
               </p>
               <div className="lottery-confirm-balance">
-                Saldo actual: <strong>{userTokens} Gemas 💎</strong> (Recibes: +2 Intentos)
+                Saldo actual: <strong>{userTokens} Gemas 💎</strong> (Recibes: +1 Intento)
               </div>
               <div className="lottery-confirm-actions">
                 <button
@@ -1161,8 +1203,9 @@ export default function LotteryModal({
                     setShowConfirmCodeBuyModal(false)
                     handleBuyCodeAttempts()
                   }}
+                  disabled={userTokens < 10.0}
                 >
-                  SÍ, COMPRAR 2 INTENTOS (100 💎)
+                  SÍ, COMPRAR 1 INTENTO (10 💎)
                 </button>
               </div>
             </div>

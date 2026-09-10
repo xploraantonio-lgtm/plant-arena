@@ -54,6 +54,8 @@ interface JardinProps {
   onOpenCollection: () => void
   onOpenShop: () => void
   onOpenPack: (instanceId: string) => void
+  isAdmin?: boolean
+  onOpenAdmin?: () => void
   onOpenMultiplePacks?: (instanceIds: string[]) => void
   onStartUnlockRewardPack?: (packId: string) => Promise<{ success: boolean; error?: string }>
   onInstantUnlockRewardPack?: (packId: string) => Promise<{ success: boolean; goldSpent?: number; error?: string }>
@@ -100,6 +102,8 @@ export default function Jardin({
   onInstantUnlockRewardPack,
   onOpenRewardPack,
   onFusePlant,
+  isAdmin,
+  onOpenAdmin,
   onRewardsChanged,
 }: JardinProps) {
   const [deck, setDeck] = useState<PlantId[]>(activeDeck)
@@ -529,7 +533,7 @@ export default function Jardin({
                               setRewardPackAccelerating({ packId: pack.id, goldCost })
                             }}
                           >
-                            ⚡ ACELERAR ({goldCost} 🪙)
+                            ⚡ ACELERAR ({goldCost} 💰)
                           </button>
                         </div>
                       )}
@@ -702,7 +706,7 @@ export default function Jardin({
                     alt="Oro"
                     onError={(e) => { e.currentTarget.style.display = 'none' }}
                   />
-                  <span>🪙</span>
+                  <span>💰</span>
                 </div>
                 <strong>Monedas de Oro</strong>
                 <span className="jardin-farming-card__qty">x{userGold.toLocaleString()}</span>
@@ -890,7 +894,7 @@ export default function Jardin({
 
                   {isUnlocked && (
                     <div className="jardin-card-copies-tag">
-                      COPIAS: {copies}/{FUSION_COPIES_REQ} · 🪙 {FUSION_GOLD_COST} {isMaxLevel ? '(MÁX)' : ''}
+                      COPIAS: {copies}/{FUSION_COPIES_REQ} · 💰 {FUSION_GOLD_COST} {isMaxLevel ? '(MÁX)' : ''}
                     </div>
                   )}
 
@@ -911,7 +915,7 @@ export default function Jardin({
                             })
                           }}
                         >
-                          🔥 MEJORAR (5/5 + 250🪙) ➔ LVL {level + 1}
+                          🔥 MEJORAR (5/5 + 250💰) ➔ LVL {level + 1}
                         </button>
                       )}
                       {hasCopies && !hasGold && (
@@ -922,7 +926,7 @@ export default function Jardin({
                           onClick={(e) => e.stopPropagation()}
                           title="Oro insuficiente para mejorar (requiere 250 Oro)"
                         >
-                          ⚠️ ORO INSUFICIENTE (250🪙)
+                          ⚠️ ORO INSUFICIENTE (250💰)
                         </button>
                       )}
                     </>
@@ -960,7 +964,7 @@ export default function Jardin({
                 <span className="jardin-fuse-req-text">5 copias</span>
               </div>
               <div className="jardin-fuse-req-item">
-                <span className="jardin-fuse-req-icon">🪙</span>
+                <span className="jardin-fuse-req-icon">💰</span>
                 <span className="jardin-fuse-req-text">250 Oro</span>
               </div>
             </div>
@@ -1060,6 +1064,8 @@ export default function Jardin({
           onClose={() => setShowLotteryModal(false)}
           userTokens={userTokens}
           userGold={userGold}
+          isAdmin={isAdmin}
+          onOpenAdmin={onOpenAdmin}
           onRewardsChanged={onRewardsChanged}
         />
       )}
@@ -1110,12 +1116,12 @@ export default function Jardin({
                 <div className="game-dialog-gold-row">
                   <span className="game-dialog-gold-label">Costo en Oro:</span>
                   <strong className="game-dialog-gold-val game-dialog-gold-val--cost">
-                    {rewardPackAccelerating.goldCost} 🪙
+                    {rewardPackAccelerating.goldCost} 💰
                   </strong>
                 </div>
                 <div className="game-dialog-gold-row">
                   <span className="game-dialog-gold-label">Tu saldo actual:</span>
-                  <strong className="game-dialog-gold-val">{userGold ?? 0} 🪙</strong>
+                  <strong className="game-dialog-gold-val">{userGold ?? 0} 💰</strong>
                 </div>
                 {!hasEnoughGold && (
                   <div className="game-dialog-gold-warning">
@@ -1142,7 +1148,7 @@ export default function Jardin({
                       setRewardPackAlert({
                         title: 'ORO INSUFICIENTE',
                         message: `Necesitas ${rewardPackAccelerating.goldCost} de oro para acelerar este sobre.`,
-                        icon: '🪙',
+                        icon: '💰',
                       })
                       setRewardPackAccelerating(null)
                       return
@@ -1169,7 +1175,7 @@ export default function Jardin({
                   {isAcceleratingReward
                     ? 'ACELERANDO...'
                     : hasEnoughGold
-                    ? `PAGAR ${rewardPackAccelerating.goldCost} 🪙`
+                    ? `PAGAR ${rewardPackAccelerating.goldCost} 💰`
                     : 'ORO INSUFICIENTE'}
                 </button>
               </div>

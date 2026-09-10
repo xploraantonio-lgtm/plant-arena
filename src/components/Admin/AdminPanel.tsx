@@ -81,11 +81,12 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   // puede jugar sin ventaja.
   const [codeRounds, setCodeRounds] = useState<CodeRoundRow[]>([])
   const [codeBoard, setCodeBoard] = useState<CodeBoardEntry[]>([])
-  const [codePrizePool, setCodePrizePool] = useState(10)
-  const [codePrize1, setCodePrize1] = useState(10)
+  const [codePrizePool, setCodePrizePool] = useState(50)
+  const [codePrize1, setCodePrize1] = useState(50)
   const [codePrize2, setCodePrize2] = useState(0)
   const [codePrize3, setCodePrize3] = useState(0)
   const [codeFreeAttempts, setCodeFreeAttempts] = useState(3)
+  const [codeAttemptCost, setCodeAttemptCost] = useState(10)
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
   const [seasons, setSeasons] = useState<SeasonRow[]>([])
   const [players, setPlayers] = useState<ProfileRow[]>([])
@@ -207,6 +208,34 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
         ? `✅ Ronda #${res.roundNumber} cerrada y bote repartido.`
         : `🚫 Ronda #${res.roundNumber} cancelada sin reparto.`
     )
+    await loadCodeRounds()
+  }
+
+  const handleRestartCodeRound = async (settlePrevious: boolean) => {
+    if (codePrize1 + codePrize2 + codePrize3 > codePrizePool) {
+      showNotice(
+        `⚠️ Los premios (${codePrize1} + ${codePrize2} + ${codePrize3} = ${codePrize1 + codePrize2 + codePrize3}) superan el bote de ${codePrizePool}.`
+      )
+      return
+    }
+    setIsLoading(true)
+    const res = await adminService.adminRestartSecretCodeRound({
+      prizePool: codePrizePool,
+      prize1st: codePrize1,
+      prize2nd: codePrize2,
+      prize3rd: codePrize3,
+      freeAttempts: codeFreeAttempts,
+      attemptCost: codeAttemptCost,
+      settlePrevious,
+    })
+    setIsLoading(false)
+
+    if (!res.success) {
+      showNotice(`⚠️ ${res.error || 'No se pudo reiniciar la ronda.'}`)
+      return
+    }
+    soundManager.playSound('victory', 0.8)
+    showNotice(`🚀 Nuevo Acertijo #${res.roundNumber} iniciado (5 slots · ${codePrizePool} 💎). Tablero anterior limpiado.`)
     await loadCodeRounds()
   }
 
@@ -917,9 +946,9 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                       </div>
 
                       <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.5 }}>
-                        La ronda se cierra sola cuando alguien acierte los 4 (100%).
-                        Ciérrala a mano sólo si quieres repartir antes de que nadie
-                        lo consiga, o cancelarla.
+                        La ronda se cierra sola cuando alguien acierte los 5 (100%).
+                        Ciérrala a mano si quieres repartir antes de que nadie lo
+                        consiga, o reinicia para iniciar un nuevo acertijo inmediatamente.
                       </p>
 
                       <div className="admin-form-row">
@@ -940,6 +969,72 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                           🚫 Cancelar sin repartir
                         </button>
                       </div>
+
+                      {/* INICIAR NUEVA TEMPORADA / LIMPIAR ANTERIOR */}
+                      <div
+                        style={{
+                          marginTop: '16px',
+                          padding: '12px',
+                          background: 'rgba(14, 165, 233, 0.1)',
+                          border: '1px dashed #0284c7',
+                          borderRadius: '8px',
+                        }}
+                      >
+                        <h4 style={{ margin: '0 0 6px 0', color: '#38bdf8', fontSize: '13px' }}>
+                          🚀 Iniciar Nueva Temporada / Acertijo (5 Slots)
+                        </h4>
+                        <p style={{ fontSize: '11px', opacity: 0.85, margin: '0 0 8px 0' }}>
+                          Cierra la ronda anterior y comienza de inmediato un nuevo acertijo secreto de 5 plantas:
+                        </p>
+                        <div className="admin-form-row">
+                          <div className="admin-form-group">
+                            <label>Bote nuevo (💎):</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={codePrizePool}
+                              onChange={(e) => {
+                                const v = Number(e.target.value)
+                                setCodePrizePool(v)
+                                setCodePrize1(v)
+                              }}
+                            />
+                          </div>
+                          <div className="admin-form-group">
+                            <label>Coste por intento (💎):</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={codeAttemptCost}
+                              onChange={(e) => setCodeAttemptCost(Number(e.target.value))}
+                            />
+                          </div>
+                          <div className="admin-form-group">
+                            <label>Slots:</label>
+                            <input type="text" value="5 Plantas" disabled />
+                          </div>
+                        </div>
+                        <div className="admin-form-row" style={{ marginTop: '8px' }}>
+                          <button
+                            type="button"
+                            className="admin-tab-btn admin-tab-btn--active"
+                            style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', flex: 1 }}
+                            disabled={isLoading}
+                            onClick={() => handleRestartCodeRound(true)}
+                          >
+                            🏆 Repartir actual e Iniciar Nuevo (5 Slots · {codePrizePool} 💎)
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-tab-btn"
+                            style={{ background: '#334155' }}
+                            disabled={isLoading}
+                            onClick={() => handleRestartCodeRound(false)}
+                          >
+                            🧹 Limpiar sin repartir
+                          </button>
+                        </div>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -951,7 +1046,20 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                             min={0}
                             step="0.01"
                             value={codePrizePool}
-                            onChange={(e) => setCodePrizePool(Number(e.target.value))}
+                            onChange={(e) => {
+                              const v = Number(e.target.value)
+                              setCodePrizePool(v)
+                              setCodePrize1(v)
+                            }}
+                          />
+                        </div>
+                        <div className="admin-form-group">
+                          <label>Coste por intento extra (💎):</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={codeAttemptCost}
+                            onChange={(e) => setCodeAttemptCost(Number(e.target.value))}
                           />
                         </div>
                         <div className="admin-form-group">
@@ -963,11 +1071,15 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                             onChange={(e) => setCodeFreeAttempts(Number(e.target.value))}
                           />
                         </div>
+                        <div className="admin-form-group">
+                          <label>Slots:</label>
+                          <input type="text" value="5 Plantas" disabled />
+                        </div>
                       </div>
 
                       <div className="admin-form-row">
                         <div className="admin-form-group">
-                          <label>1.º puesto:</label>
+                          <label>1.º puesto (Descifra 100%):</label>
                           <input
                             type="number" min={0} step="0.01" value={codePrize1}
                             onChange={(e) => setCodePrize1(Number(e.target.value))}
@@ -991,7 +1103,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
 
                       <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.5 }}>
                         Suma de premios: <strong>{codePrize1 + codePrize2 + codePrize3} 💎</strong> de{' '}
-                        {codePrizePool} 💎.
+                        {codePrizePool} 💎. Coste por intento extra: <strong>{codeAttemptCost} 💎</strong>. Longitud: <strong>5 slots</strong>.
                         {codePrize1 + codePrize2 + codePrize3 > codePrizePool && (
                           <span style={{ color: '#f87171' }}> ⚠️ Se pasa del bote.</span>
                         )}
@@ -1006,7 +1118,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                         disabled={isLoading}
                         onClick={handleOpenCodeRound}
                       >
-                        🔐 Abrir ronda y generar código
+                        🔐 Abrir ronda (5 slots · {codePrizePool} 💎)
                       </button>
                     </>
                   )}
@@ -1025,21 +1137,30 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                           <th>Jugador</th>
                           <th style={{ textAlign: 'right' }}>Mejor %</th>
                           <th style={{ textAlign: 'right' }}>Intentos</th>
+                          <th style={{ textAlign: 'right' }}>Premio</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {codeBoard.map((e) => (
-                          <tr key={e.userId}>
-                            <td>{e.place}</td>
-                            <td>{e.username}</td>
-                            <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                              {Number(e.bestPct).toFixed(1)}%
-                            </td>
-                            <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                              {e.attempts}
-                            </td>
-                          </tr>
-                        ))}
+                        {codeBoard.map((e) => {
+                          const goldPrizes: Record<number, number> = {
+                            2: 100, 3: 80, 4: 60, 5: 50, 6: 40, 7: 30, 8: 25, 9: 20, 10: 15
+                          }
+                          return (
+                            <tr key={e.userId}>
+                              <td>{e.place === 1 ? '🥇 1' : e.place === 2 ? '🥈 2' : e.place === 3 ? '🥉 3' : e.place}</td>
+                              <td>{e.username}</td>
+                              <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                {Number(e.bestPct).toFixed(1)}%
+                              </td>
+                              <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                {e.attempts}
+                              </td>
+                              <td style={{ textAlign: 'right', fontWeight: 800, color: e.place === 1 ? '#38bdf8' : '#f59e0b' }}>
+                                {e.place === 1 ? '50 💎' : goldPrizes[e.place] ? `+${goldPrizes[e.place]} 💰` : '—'}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   )}
@@ -1353,7 +1474,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                   <span>Username</span>
                   <span>Copas ELO</span>
                   <span>Gemas 💎</span>
-                  <span>Oro 🪙</span>
+                  <span>Oro 💰</span>
                   <span>Acción</span>
                 </div>
                 {players
@@ -1363,7 +1484,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                       <span><strong>{p.username}</strong></span>
                       <span>{p.elo_rating} 🏆</span>
                       <span style={{ color: '#c084fc' }}>{p.gems_balance} 💎</span>
-                      <span style={{ color: '#fbbf24' }}>{p.gold_balance} 🪙</span>
+                      <span style={{ color: '#fbbf24' }}>{p.gold_balance} 💰</span>
                       <span>
                         <button
                           type="button"
@@ -1390,7 +1511,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                       />
                     </div>
                     <div className="admin-form-group">
-                      <label>Sumar/Restar Oro 🪙:</label>
+                      <label>Sumar/Restar Oro 💰:</label>
                       <input
                         type="number"
                         value={adjustGold}
@@ -1503,7 +1624,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                             min="1"
                             value={sec.gold_amount ?? 0}
                             onChange={(e) => handleLotteryFieldChange(sec.sector_id, 'gold_amount', Number(e.target.value))}
-                            placeholder="Oro 🪙"
+                            placeholder="Oro 💰"
                           />
                         )}
                         {sec.reward_type === 'pack' && (

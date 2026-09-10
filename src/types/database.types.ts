@@ -859,6 +859,18 @@ export interface Database {
         }
         Returns: Json
       }
+      admin_restart_secret_code_round: {
+        Args: {
+          p_prize_pool?: number
+          p_prize_1st?: number
+          p_prize_2nd?: number
+          p_prize_3rd?: number
+          p_free_attempts?: number
+          p_attempt_cost?: number
+          p_settle_previous?: boolean
+        }
+        Returns: Json
+      }
     }
 
     Enums: {

@@ -180,7 +180,7 @@ export const AD_REWARD_SLOTS: AdRewardSlot[] = [
     rewardGold: 75,
     title: 'Cofre Dorado',
     desc: 'Un botín considerable directo a tu reserva.',
-    icon: '🪙',
+    icon: '💰',
     badge: 'NIVEL 4',
   },
   {
@@ -372,8 +372,8 @@ export default function Shop({
         soundManager.playSound('plantation', 0.8)
         setThemedAlert({
           title: '¡COMPRA EXITOSA!',
-          message: `🪙 ¡Has adquirido con éxito +${(res.goldAdded ?? pkg.goldAmount).toLocaleString()} Monedas de Oro por ${pkg.priceUsd} Gemas 💎!`,
-          icon: '🪙',
+          message: `💰 ¡Has adquirido con éxito +${(res.goldAdded ?? pkg.goldAmount).toLocaleString()} Monedas de Oro por ${pkg.priceUsd} Gemas 💎!`,
+          icon: '💰',
         })
       } else {
         setThemedAlert({
@@ -532,7 +532,7 @@ export default function Shop({
             setActiveTab('gold')
           }}
         >
-          {ADS_ENABLED ? '🪙 ORO, EMOTES & ADS' : '🪙 ORO & EMOTES'}
+          {ADS_ENABLED ? '💰 ORO, EMOTES & ADS' : '💰 ORO & EMOTES'}
         </button>
 
         <button
@@ -807,12 +807,12 @@ export default function Shop({
                 className="shop-slider-track"
                 style={{ transform: `translateX(-${goldSlideIndex * 100}%)` }}
               >
-                {/* SLIDE 0: 🪙 BÓVEDA DE MONEDAS DE ORO */}
+                {/* SLIDE 0: 💰 BÓVEDA DE MONEDAS DE ORO */}
                 <div className="shop-slide-item">
                   <div className="shop-epic-section shop-epic-section--gold">
                     <div className="shop-epic-section__header">
                       <div className="shop-epic-section__title-wrap">
-                        <span className="shop-epic-section__icon">🪙</span>
+                        <span className="shop-epic-section__icon">💰</span>
                         <div>
                           <h2 className="shop-epic-section__title">BÓVEDA DE MONEDAS DE ORO</h2>
                         </div>
@@ -915,7 +915,7 @@ export default function Shop({
                             }}
                             title="Volver a Bóveda de Oro"
                           >
-                            VOLVER A ORO (2/2) 🪙
+                            VOLVER A ORO (2/2) 💰
                           </button>
                         )}
                       </div>
@@ -1009,7 +1009,7 @@ export default function Shop({
                             }}
                             title="Volver a Bóveda de Oro"
                           >
-                            VOLVER A ORO (3/3) 🪙
+                            VOLVER A ORO (3/3) 💰
                           </button>
                         </div>
                       </div>
@@ -1025,7 +1025,7 @@ export default function Shop({
                                 <span className="shop-ad-card__screen-slot">CANAL #{ad.slotNumber}</span>
                               </div>
                               <div className="shop-ad-card__screen-overlay">
-                                <span className="shop-ad-card__screen-reward-tag">🪙 +{ad.rewardGold} ORO</span>
+                                <span className="shop-ad-card__screen-reward-tag">💰 +{ad.rewardGold} ORO</span>
                               </div>
                             </div>
 

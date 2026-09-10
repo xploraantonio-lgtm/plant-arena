@@ -1020,6 +1020,8 @@ function App() {
             onInstantUnlockRewardPack={instantUnlockRewardPack}
             onOpenRewardPack={handleOpenRewardPack}
             onFusePlant={fuseAndUpgradePlant}
+            isAdmin={isAdmin}
+            onOpenAdmin={() => setIsAdminPanelOpen(true)}
             onRewardsChanged={refreshFromServer}
           />
         )}

@@ -1036,7 +1036,7 @@ Recibirás ${neto} 💎 cuando se venda.`,
                         {tx.type === 'marketplace_sale' && '🛒 MERCADO P2P'}
                         {tx.type === 'withdrawal' && '💳 RETIRO BNB CHAIN'}
                         {isPack && '🎒 TIENDA · SOBRE'}
-                        {!isPack && tx.type === 'shop_gold' && '🪙 TIENDA · ORO'}
+                        {!isPack && tx.type === 'shop_gold' && '💰 TIENDA · ORO'}
                         {tx.type === 'lottery_win' && '🎰 RULETA JACKPOT'}
                         {tx.type === 'reward_code' && '🎁 CÓDIGO ESPECIAL'}
                         {tx.type === 'tournament_reward' && '🏆 CÓDIGO SECRETO'}

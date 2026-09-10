@@ -874,12 +874,12 @@ export default function MainMenu({
                 <div className="game-dialog-gold-row">
                   <span className="game-dialog-gold-label">Costo de aceleración:</span>
                   <strong className="game-dialog-gold-val game-dialog-gold-val--cost">
-                    {goldCost} 🪙 Oro
+                    {goldCost} 💰 Oro
                   </strong>
                 </div>
                 <div className="game-dialog-gold-row">
                   <span className="game-dialog-gold-label">Tu saldo actual:</span>
-                  <strong className="game-dialog-gold-val">{userGold ?? 0} 🪙</strong>
+                  <strong className="game-dialog-gold-val">{userGold ?? 0} 💰</strong>
                 </div>
                 {!hasEnoughGold && (
                   <div className="game-dialog-gold-warning">
@@ -906,7 +906,7 @@ export default function MainMenu({
                   {isAccelerating
                     ? 'PROCESANDO...'
                     : hasEnoughGold
-                    ? `PAGAR ${goldCost} 🪙`
+                    ? `PAGAR ${goldCost} 💰`
                     : 'ORO INSUFICIENTE'}
                 </button>
               </div>
