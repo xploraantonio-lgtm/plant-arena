@@ -80,7 +80,7 @@ interface OfertaDelMercado {
   itemType?: 'plant' | 'farming'
   itemId?: string
   quantity?: number
-  plantId: PlantId
+  plantId?: PlantId
   nivel: number
   statRolls: PlantStatKey[]
   precio: number
@@ -435,7 +435,7 @@ export default function Marketplace({
     const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
     const nombre = isFarming
       ? (FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId]?.label || item.itemId || 'Recurso')
-      : (PLANT_CONFIGS[item.plantId]?.name || item.plantId)
+      : (item.plantId && PLANT_CONFIGS[item.plantId as PlantId]?.name || item.plantId || 'Carta')
     const detalle = isFarming
       ? `1x "${nombre}"`
       : `"${nombre}" (Nivel ${item.nivel})`
@@ -575,7 +575,7 @@ export default function Marketplace({
     const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
     const nombre = isFarming
       ? (FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId]?.label || item.itemId || 'Recurso')
-      : (PLANT_CONFIGS[item.plantId]?.name || item.plantId)
+      : (item.plantId && PLANT_CONFIGS[item.plantId as PlantId]?.name || item.plantId || 'Carta')
 
     showModalConfirm(
       'RETIRAR OFERTA DEL MERCADO',
@@ -740,12 +740,12 @@ export default function Marketplace({
               const isMine = item.esMia
               const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
               const farmingDef = isFarming && item.itemId ? FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId] : undefined
-              const plantDef = !isFarming ? PLANT_CONFIGS[item.plantId] : undefined
+              const plantDef = !isFarming && item.plantId ? PLANT_CONFIGS[item.plantId as PlantId] : undefined
               const itemIcon = isFarming ? farmingDef?.icon : (plantDef?.packetActive || plantDef?.icon)
-              const rInfo = !isFarming
-                ? getPlantRarityAndMinPrice(item.plantId)
+              const rInfo = !isFarming && item.plantId
+                ? getPlantRarityAndMinPrice(item.plantId as PlantId)
                 : { rarity: 'FARMING', minPrice: item.itemId ? (FARMING_ITEM_MIN_PRICES[item.itemId as FarmingItemId] || 100) : 100, color: '#4ade80' }
-              const itemName = isFarming ? (farmingDef?.label || item.itemId || 'Recurso') : (plantDef?.name || item.plantId)
+              const itemName = isFarming ? (farmingDef?.label || item.itemId || 'Recurso') : (plantDef?.name || item.plantId || 'Carta')
 
               return (
                 <div key={item.id} className="market-item-card">
