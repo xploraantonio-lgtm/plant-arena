@@ -179,7 +179,7 @@ export class ClanManager {
           joinedAt: new Date().toISOString().split('T')[0],
         },
       ],
-      vaultUsd: 5.0, // Initial $5 in vault from creation
+      vaultUsd: 500.0, // Initial 500 💎 in vault from creation
       status: 'active',
       wins: 0,
       losses: 0,
@@ -191,13 +191,13 @@ export class ClanManager {
     const clans = this.getClans()
     clans.unshift(newClan)
     this.saveClans(clans)
-    this.recordDeposit(newClan.id, playerName, 5.0, 'fund')
+    this.recordDeposit(newClan.id, playerName, 500.0, 'fund')
     this.setUserClanId(newClan.id)
     return newClan
   }
 
   /**
-   * Join an existing clan (Costs $2.00 USD, adds +$2.00 to Clan Vault)
+   * Join an existing clan (Costs 200 Gemas, adds +200 to Clan Vault)
    */
   static joinClan(clanId: string, playerName: string, playerElo: number): boolean {
     const clans = this.getClans()
@@ -216,10 +216,10 @@ export class ClanManager {
     })
 
     // Entry fee added to vault
-    clan.vaultUsd += 2.0
+    clan.vaultUsd += 200.0
 
     this.saveClans(clans)
-    this.recordDeposit(clan.id, playerName, 2.0, 'join')
+    this.recordDeposit(clan.id, playerName, 200.0, 'join')
     this.setUserClanId(clan.id)
     return true
   }
@@ -349,10 +349,10 @@ export class ClanManager {
     const clan = clans.find((c) => c.id === clanId)
     if (!clan) return false
 
-    clan.vaultUsd = Math.max(5.0, Number((clan.vaultUsd + 5.0).toFixed(2)))
+    clan.vaultUsd = Math.max(500.0, Number((clan.vaultUsd + 500.0).toFixed(2)))
     clan.status = 'active'
     this.saveClans(clans)
-    this.recordDeposit(clanId, fixerName, 5.0, 'repair')
+    this.recordDeposit(clanId, fixerName, 500.0, 'repair')
     return true
   }
 
@@ -566,7 +566,7 @@ export class ClanManager {
     const winner = attackerWins ? attacker : defender
     const loser = attackerWins ? defender : attacker
 
-    const stolenAmount = Math.min(5.0, loser.vaultUsd)
+    const stolenAmount = Math.min(500.0, loser.vaultUsd)
     loser.vaultUsd = Math.max(0, Number((loser.vaultUsd - stolenAmount).toFixed(2)))
     winner.vaultUsd = Number((winner.vaultUsd + stolenAmount).toFixed(2))
 

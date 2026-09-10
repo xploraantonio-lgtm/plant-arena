@@ -1018,194 +1018,331 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
         {/* TAB 3: REFERRAL LEADERBOARD */}
         {activeTab === 'referrals' && (
           <div className="ranking-tab-pane">
-            <div className="referral-ranking-layout">
-              {/* TOOLBAR REFERIDOS */}
-              <div className="leaderboard-toolbar">
-                <div className="leaderboard-search-box">
-                  <span className="leaderboard-search-icon">🔍</span>
-                  <input
-                    type="text"
-                    className="leaderboard-search-input"
-                    placeholder="Buscar en ranking de referidos..."
-                    value={referralSearch}
-                    onChange={(e) => {
-                      setReferralSearch(e.target.value)
-                      setReferralPage(1)
-                    }}
-                  />
-                  {referralSearch && (
-                    <button
-                      type="button"
-                      className="leaderboard-search-clear"
-                      onClick={() => {
-                        setReferralSearch('')
-                        setReferralPage(1)
-                      }}
-                    >
-                      ✕
-                    </button>
-                  )}
+            <div className="leaderboard-container">
+              {isLoadingReferrals ? (
+                <div className="leaderboard-loading-state">
+                  <span>⏳ Cargando clasificación de referidos...</span>
                 </div>
-
-                <div className="leaderboard-size-selector">
-                  <span className="leaderboard-size-lbl">Ver:</span>
-                  {[10, 20, 50].map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      className={`leaderboard-size-btn ${referralPageSize === size ? 'leaderboard-size-btn--active' : ''}`}
-                      onClick={() => {
-                        soundManager.playSound('click', 0.2)
-                        setReferralPageSize(size)
-                        setReferralPage(1)
-                      }}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={`leaderboard-size-btn ${referralPageSize === 'all' ? 'leaderboard-size-btn--active' : ''}`}
-                    onClick={() => {
-                      soundManager.playSound('click', 0.2)
-                      setReferralPageSize('all')
-                      setReferralPage(1)
-                    }}
-                  >
-                    Todos ({totalReferralCount})
-                  </button>
+              ) : referralLeaderboard.length === 0 ? (
+                <div className="leaderboard-empty-state">
+                  <span>🌱 Aún no hay líderes de referidos registrados en esta temporada. ¡Sé el primero en invitar!</span>
                 </div>
-              </div>
+              ) : (
+                <div className="leaderboard-split-layout">
+                  {/* LEFT COLUMN: PODIUM #1 TOP, #2 & #3 BOTTOM */}
+                  <div className="leaderboard-podium-col">
+                    {/* 1st Place Golden Card */}
+                    {referralLeaderboard[0] ? (
+                      <div
+                        className={`podium-card-v2 podium-card-v2--gold ${referralLeaderboard[0].isCurrentUser ? 'podium-card-v2--user' : ''}`}
+                      >
+                        <div className="podium-v2-top">
+                          <span className="podium-v2-star">★</span>
+                          <span className="podium-v2-rank-gold">#1</span>
+                          <span className="podium-v2-star">★</span>
+                        </div>
 
-              {/* REFERRAL LEADERBOARD TABLE */}
-              <div className="leaderboard-table-wrap referral-table-wrap" ref={referralTableRef}>
-                {isLoadingReferrals ? (
-                  <div className="leaderboard-loading-state">
-                    <span>⏳ Cargando clasificación de referidos...</span>
-                  </div>
-                ) : paginatedReferralUsers.length > 0 ? (
-                  <table className="lb-table referral-lb-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: '70px', textAlign: 'center' }}>POS</th>
-                        <th style={{ textAlign: 'left' }}>JUGADOR</th>
-                        <th style={{ width: '180px', textAlign: 'center' }}>AMIGOS ACTIVOS</th>
-                        <th style={{ width: '200px', textAlign: 'right' }}>RANGO DE EMBAJADOR</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedReferralUsers.map((usr) => (
-                        <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'lb-row--user' : ''}>
-                          <td className="lb-col-rank" style={{ textAlign: 'center', fontWeight: 900 }}>
-                            {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
-                          </td>
-                          <td className="lb-col-player">
-                            <div className="lb-player-cell" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <img
-                                src={getPlayerAvatarUrl(usr.avatar)}
-                                alt={usr.username}
-                                className="lb-avatar-circle"
-                                onError={(e) => {
-                                  e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
-                                }}
-                              />
-                              <span className={`lb-player-name ${usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                                {usr.isCurrentUser && hasVipPass && '👑 '}
-                                {usr.username}
-                                {usr.isCurrentUser && <span className="user-self-badge" style={{ marginLeft: '6px' }}>TÚ</span>}
-                              </span>
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8', fontSize: '12px' }}>
-                            👥 {usr.referredCount} Amigos
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <span className="referral-tier-pill">{usr.tierBadge}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="leaderboard-few-users-note">
-                    {referralSearch ? (
-                      <span>🔎 No se encontraron referidores con "{referralSearch}".</span>
+                        <div className="podium-v2-avatar-wrapper">
+                          <svg className="podium-v2-laurel-svg" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M 32 96 C 18 68 22 38 46 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="M 24 84 C 14 81 12 71 20 70 C 26 70 27 78 24 84 Z" fill="#fbbf24" />
+                            <path d="M 20 66 C 10 62 9 52 17 50 C 24 49 25 59 20 66 Z" fill="#f59e0b" />
+                            <path d="M 22 46 C 14 39 16 29 24 30 C 30 31 29 41 22 46 Z" fill="#fbbf24" />
+                            <path d="M 30 28 C 24 20 29 11 37 14 C 42 17 39 25 30 28 Z" fill="#fde047" />
+                            <path d="M 42 14 C 39 6 46 0 52 4 C 57 8 52 15 42 14 Z" fill="#fbbf24" />
+                            <path d="M 128 96 C 142 68 138 38 114 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="M 136 84 C 146 81 148 71 140 70 C 134 70 133 78 136 84 Z" fill="#fbbf24" />
+                            <path d="M 140 66 C 150 62 151 52 143 50 C 136 49 135 59 140 66 Z" fill="#f59e0b" />
+                            <path d="M 138 46 C 146 39 144 29 136 30 C 130 31 131 41 138 46 Z" fill="#fbbf24" />
+                            <path d="M 130 28 C 136 20 131 11 123 14 C 118 17 121 25 130 28 Z" fill="#fde047" />
+                            <path d="M 118 14 C 121 6 114 0 108 4 C 103 8 108 15 118 14 Z" fill="#fbbf24" />
+                          </svg>
+                          <img
+                            src={getPlayerAvatarUrl(referralLeaderboard[0].avatar)}
+                            alt={referralLeaderboard[0].username}
+                            className="podium-v2-avatar-img podium-v2-avatar-img--gold"
+                            onError={(e) => {
+                              e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                            }}
+                          />
+                        </div>
+
+                        <div className={`podium-v2-username ${referralLeaderboard[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                          {referralLeaderboard[0].isCurrentUser && hasVipPass && '👑 '}
+                          {referralLeaderboard[0].username} {referralLeaderboard[0].isCurrentUser && '(TÚ)'}
+                        </div>
+
+                        <div className="referral-tier-pill" style={{ marginBottom: '4px' }}>
+                          {referralLeaderboard[0].tierBadge}
+                        </div>
+
+                        <div className="podium-v2-stats-row" style={{ justifyContent: 'center' }}>
+                          <div className="podium-v2-cups" style={{ color: '#38bdf8', fontSize: '11px', fontWeight: 900 }}>
+                            👥 {referralLeaderboard[0].referredCount} Amigos Invitados
+                          </div>
+                        </div>
+                      </div>
                     ) : (
-                      <span>🌱 Aún no hay líderes de referidos registrados en esta temporada. ¡Sé el primero en invitar!</span>
+                      <div className="podium-card-v2 podium-card-v2--placeholder">
+                        <span>Esperando embajador #1...</span>
+                      </div>
                     )}
+
+                    {/* Bottom row: #2 Silver & #3 Bronze */}
+                    <div className="podium-v2-bottom-grid">
+                      {/* 2nd Place */}
+                      {referralLeaderboard[1] ? (
+                        <div
+                          className={`podium-card-v2 podium-card-v2--silver ${referralLeaderboard[1].isCurrentUser ? 'podium-card-v2--user' : ''}`}
+                        >
+                          <div className="podium-v2-sub-rank podium-v2-sub-rank--silver">
+                            ★ #2
+                          </div>
+                          <div className="podium-v2-sub-avatar-wrap">
+                            <img
+                              src={getPlayerAvatarUrl(referralLeaderboard[1].avatar)}
+                              alt={referralLeaderboard[1].username}
+                              className="podium-v2-sub-avatar podium-v2-sub-avatar--silver"
+                              onError={(e) => {
+                                e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                              }}
+                            />
+                          </div>
+                          <div className={`podium-v2-sub-username ${referralLeaderboard[1].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                            {referralLeaderboard[1].isCurrentUser && hasVipPass && '👑 '}
+                            {referralLeaderboard[1].username}
+                          </div>
+                          <div className="referral-tier-pill" style={{ fontSize: '8.5px', padding: '1px 6px', marginBottom: '2px' }}>
+                            {referralLeaderboard[1].tierBadge}
+                          </div>
+                          <div className="podium-v2-sub-stats">
+                            <span style={{ color: '#38bdf8', fontSize: '9.5px', fontWeight: 800 }}>
+                              👥 {referralLeaderboard[1].referredCount} Amigos
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="podium-card-v2 podium-card-v2--placeholder">
+                          <span>Esperando #2...</span>
+                        </div>
+                      )}
+
+                      {/* 3rd Place */}
+                      {referralLeaderboard[2] ? (
+                        <div
+                          className={`podium-card-v2 podium-card-v2--bronze ${referralLeaderboard[2].isCurrentUser ? 'podium-card-v2--user' : ''}`}
+                        >
+                          <div className="podium-v2-sub-rank podium-v2-sub-rank--bronze">
+                            🏆 #3
+                          </div>
+                          <div className="podium-v2-sub-avatar-wrap">
+                            <img
+                              src={getPlayerAvatarUrl(referralLeaderboard[2].avatar)}
+                              alt={referralLeaderboard[2].username}
+                              className="podium-v2-sub-avatar podium-v2-sub-avatar--bronze"
+                              onError={(e) => {
+                                e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                              }}
+                            />
+                          </div>
+                          <div className={`podium-v2-sub-username ${referralLeaderboard[2].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                            {referralLeaderboard[2].isCurrentUser && hasVipPass && '👑 '}
+                            {referralLeaderboard[2].username}
+                          </div>
+                          <div className="referral-tier-pill" style={{ fontSize: '8.5px', padding: '1px 6px', marginBottom: '2px' }}>
+                            {referralLeaderboard[2].tierBadge}
+                          </div>
+                          <div className="podium-v2-sub-stats">
+                            <span style={{ color: '#38bdf8', fontSize: '9.5px', fontWeight: 800 }}>
+                              👥 {referralLeaderboard[2].referredCount} Amigos
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="podium-card-v2 podium-card-v2--placeholder">
+                          <span>Esperando #3...</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* BARRA DE PAGINACIÓN REFERIDOS */}
-              <div className="leaderboard-pagination">
-                <div className="pagination-info">
-                  <span>
-                    {totalReferralCount === 0
-                      ? '0 referidores'
-                      : `Mostrando ${referralStartIdx} - ${referralEndIdx} de ${totalReferralCount} referidores`}
-                  </span>
-                </div>
-
-                {totalReferralPages > 1 && (
-                  <div className="pagination-controls">
-                    <button
-                      type="button"
-                      className="pagination-btn pagination-btn--nav"
-                      disabled={currentReferralPage <= 1}
-                      onClick={() => handleReferralPageChange(1)}
-                      title="Primera página"
-                    >
-                      ««
-                    </button>
-                    <button
-                      type="button"
-                      className="pagination-btn pagination-btn--nav"
-                      disabled={currentReferralPage <= 1}
-                      onClick={() => handleReferralPageChange(currentReferralPage - 1)}
-                      title="Página anterior"
-                    >
-                      ‹ Ant
-                    </button>
-
-                    <div className="pagination-pages">
-                      {generatePageNumbers(currentReferralPage, totalReferralPages).map((p, idx) =>
-                        p === '...' ? (
-                          <span key={`dots-ref-${idx}`} className="pagination-dots">…</span>
-                        ) : (
-                          <button
-                            key={`page-ref-${p}`}
-                            type="button"
-                            className={`pagination-btn ${p === currentReferralPage ? 'pagination-btn--active' : ''}`}
-                            onClick={() => handleReferralPageChange(Number(p))}
-                          >
-                            {p}
-                          </button>
-                        )
+                  {/* RIGHT COLUMN: SEARCH, TABLE & FOOTER */}
+                  <div className="leaderboard-table-col">
+                    {/* Top Search Bar */}
+                    <div className="lb-search-container">
+                      <span className="lb-search-icon">🔍</span>
+                      <input
+                        type="text"
+                        className="lb-search-input"
+                        placeholder="Buscar embajador por nombre..."
+                        value={referralSearch}
+                        onChange={(e) => {
+                          setReferralSearch(e.target.value)
+                          setReferralPage(1)
+                        }}
+                      />
+                      {referralSearch && (
+                        <button
+                          type="button"
+                          className="lb-search-clear"
+                          onClick={() => {
+                            setReferralSearch('')
+                            setReferralPage(1)
+                          }}
+                        >
+                          ✕
+                        </button>
                       )}
                     </div>
 
-                    <button
-                      type="button"
-                      className="pagination-btn pagination-btn--nav"
-                      disabled={currentReferralPage >= totalReferralPages}
-                      onClick={() => handleReferralPageChange(currentReferralPage + 1)}
-                      title="Página siguiente"
-                    >
-                      Sig ›
-                    </button>
-                    <button
-                      type="button"
-                      className="pagination-btn pagination-btn--nav"
-                      disabled={currentReferralPage >= totalReferralPages}
-                      onClick={() => handleReferralPageChange(totalReferralPages)}
-                      title="Última página"
-                    >
-                      »»
-                    </button>
+                    {/* Table Container */}
+                    <div className="lb-table-wrap" ref={referralTableRef}>
+                      {paginatedReferralUsers.length > 0 ? (
+                        <table className="lb-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '45px', textAlign: 'center' }}>#</th>
+                              <th>EMBAJADOR</th>
+                              <th style={{ width: '150px', textAlign: 'center' }}>AMIGOS ACTIVOS</th>
+                              <th style={{ width: '160px', textAlign: 'right' }}>RANGO</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedReferralUsers.map((usr) => (
+                              <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'lb-row--user' : ''}>
+                                <td className="lb-col-rank">
+                                  {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
+                                </td>
+                                <td className="lb-col-player">
+                                  <div className="lb-player-cell">
+                                    <img
+                                      src={getPlayerAvatarUrl(usr.avatar)}
+                                      alt={usr.username}
+                                      className="lb-avatar-circle"
+                                      onError={(e) => {
+                                        e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                                      }}
+                                    />
+                                    <span className={`lb-player-name ${usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                                      {usr.isCurrentUser && hasVipPass && '👑 '}
+                                      {usr.username}
+                                      {usr.isCurrentUser && <span className="user-self-badge" style={{ marginLeft: '6px' }}>TÚ</span>}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8', fontSize: '12px' }}>
+                                  👥 {usr.referredCount} {usr.referredCount === 1 ? 'Amigo' : 'Amigos'}
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                  <span className="referral-tier-pill">{usr.tierBadge}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="leaderboard-empty-state" style={{ padding: '32px 16px' }}>
+                          <span>🔎 No se encontraron embajadores con "{referralSearch}".</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pagination & Page Size Footer */}
+                    <div className="lb-table-footer">
+                      <div className="lb-page-size-picker">
+                        <span className="lb-footer-label">Ver:</span>
+                        {[10, 20, 50].map((size) => (
+                          <button
+                            key={size}
+                            type="button"
+                            className={`lb-size-btn ${referralPageSize === size ? 'lb-size-btn--active' : ''}`}
+                            onClick={() => {
+                              soundManager.playSound('click', 0.2)
+                              setReferralPageSize(size)
+                              setReferralPage(1)
+                            }}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className={`lb-size-btn ${referralPageSize === 'all' ? 'lb-size-btn--active' : ''}`}
+                          onClick={() => {
+                            soundManager.playSound('click', 0.2)
+                            setReferralPageSize('all')
+                            setReferralPage(1)
+                          }}
+                        >
+                          Todos ({totalReferralCount})
+                        </button>
+                        <span className="pagination-info" style={{ fontSize: '10px', color: '#94a3b8', marginLeft: '6px' }}>
+                          {totalReferralCount === 0 ? '' : `(${referralStartIdx} - ${referralEndIdx})`}
+                        </span>
+                      </div>
+
+                      {totalReferralPages > 1 && (
+                        <div className="pagination-controls">
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentReferralPage <= 1}
+                            onClick={() => handleReferralPageChange(1)}
+                            title="Primera página"
+                          >
+                            ««
+                          </button>
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentReferralPage <= 1}
+                            onClick={() => handleReferralPageChange(currentReferralPage - 1)}
+                            title="Página anterior"
+                          >
+                            ‹ Ant
+                          </button>
+
+                          <div className="pagination-pages">
+                            {generatePageNumbers(currentReferralPage, totalReferralPages).map((p, idx) =>
+                              p === '...' ? (
+                                <span key={`dots-ref-${idx}`} className="pagination-dots">…</span>
+                              ) : (
+                                <button
+                                  key={`page-ref-${p}`}
+                                  type="button"
+                                  className={`pagination-btn ${p === currentReferralPage ? 'pagination-btn--active' : ''}`}
+                                  onClick={() => handleReferralPageChange(Number(p))}
+                                >
+                                  {p}
+                                </button>
+                              )
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentReferralPage >= totalReferralPages}
+                            onClick={() => handleReferralPageChange(currentReferralPage + 1)}
+                            title="Página siguiente"
+                          >
+                            Sig ›
+                          </button>
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentReferralPage >= totalReferralPages}
+                            onClick={() => handleReferralPageChange(totalReferralPages)}
+                            title="Última página"
+                          >
+                            »»
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -50,7 +50,7 @@ export default function ProfileModal({
     treasuryWallet: '0x721622D8cad39621C731eC286D1EA859365A51b8',
     tokenContract: '0x55d398326f99059fF775485246999027B3197955',
     network: 'BNB Smart Chain (BEP20)',
-    rate: '1 USDT = 1 GEMA',
+    rate: '1 USDT = 100 GEMAS',
   })
   const [personalWalletInput, setPersonalWalletInput] = useState('')
   const [isRegisteringWallet, setIsRegisteringWallet] = useState(false)
@@ -351,15 +351,15 @@ export default function ProfileModal({
     return () => clearInterval(interval)
   }, [isOpen, activeTab])
 
-  // ── CÁLCULO DE COMISIÓN DE RETIRO (5% SERVER-AUTHORITATIVE) ────────────────
-  const withdrawalFee = Number((withdrawGems * 0.05).toFixed(6))
-  const netWithdrawalUsdt = Number((withdrawGems * 0.95).toFixed(6))
+  // ── CÁLCULO DE COMISIÓN DE RETIRO (5% SERVER-AUTHORITATIVE, 100 GEMAS = 1 USDT) ──
+  const withdrawalFee = Number((withdrawGems * 0.05).toFixed(2))
+  const netWithdrawalUsdt = Number(((withdrawGems * 0.95) / 100.0).toFixed(2))
 
   // ── PREPARAR RETIRO Y MOSTRAR CONFIRMACIÓN ─────────────────────────────────
   const handleOpenWithdrawConfirm = (e: React.FormEvent) => {
     e.preventDefault()
-    if (withdrawGems < 10.0) {
-      showFeedback('El retiro mínimo es de 10.00 Gemas (10.00 USDT).', 'error')
+    if (withdrawGems < 1000.0) {
+      showFeedback('El retiro mínimo es de 1,000.00 Gemas (10.00 USDT).', 'error')
       return
     }
     if (withdrawGems > userTokens) {
@@ -720,7 +720,7 @@ export default function ProfileModal({
           <div className="profile-tab-body">
             <div className="profile-section-title">
               <span>💰 DEPÓSITO AUTOMÁTICO DE USDT (BEP20)</span>
-              <small>Conversión oficial: <strong>1 USDT = 1 Gema 💎</strong> (BNB Smart Chain)</small>
+              <small>Conversión oficial: <strong>1 USDT = 100 Gemas 💎</strong> (BNB Smart Chain)</small>
             </div>
 
             {/* PASO 1: VINCULAR WALLET PERSONAL */}
@@ -801,7 +801,7 @@ export default function ProfileModal({
               <div className="crypto-treasury-meta-row">
                 <span className="crypto-network-badge">🟡 RED: BNB Smart Chain (BEP20)</span>
                 <span className="crypto-token-badge">💵 TOKEN: USDT</span>
-                <span className="crypto-rate-badge">💎 1 USDT = 1 GEMA</span>
+                <span className="crypto-rate-badge">💎 1 USDT = 100 GEMAS</span>
               </div>
 
               <div className="crypto-treasury-address-box">
@@ -920,39 +920,39 @@ export default function ProfileModal({
 
             {/* Quick Amounts */}
             <div className="profile-quick-amounts">
-              {[10, 25, 50, 100].map((amt) => (
+              {[1000, 2500, 5000, 10000].map((amt) => (
                 <button
                   key={amt}
                   type="button"
                   className={`profile-quick-btn ${withdrawGems === amt ? 'profile-quick-btn--active' : ''}`}
                   onClick={() => setWithdrawGems(amt)}
                 >
-                  {amt} 💎
+                  {amt.toLocaleString()} 💎
                 </button>
               ))}
               <button
                 type="button"
                 className="profile-quick-btn profile-quick-btn--max"
-                onClick={() => setWithdrawGems(Math.max(10, userTokens))}
+                onClick={() => setWithdrawGems(Math.max(1000, userTokens))}
               >
-                MÁX ({userTokens} 💎)
+                MÁX ({userTokens.toLocaleString()} 💎)
               </button>
             </div>
 
             <div className="profile-form-row">
-              <label>Cantidad de Gemas a Retirar (Mínimo: 10.00 💎):</label>
+              <label>Cantidad de Gemas a Retirar (Mínimo: 1,000.00 💎):</label>
               <div className="profile-input-wrap">
                 <span>💎</span>
                 <input
                   type="number"
-                  min={10}
-                  max={Math.max(10, userTokens)}
-                  step={0.01}
-                  value={withdrawGems}
+                  min={1000}
+                  max={Math.max(1000, userTokens)}
+                  step={1}
+                  value={withdrawGems || ''}
                   onChange={(e) => setWithdrawGems(Number(e.target.value))}
+                  className="profile-number-input"
                   required
                 />
-                <span>GEMAS</span>
               </div>
             </div>
 
@@ -972,15 +972,15 @@ export default function ProfileModal({
             <div className="crypto-settlement-breakdown-card">
               <div className="crypto-breakdown-header">
                 <span>📋 RESUMEN DE LIQUIDACIÓN</span>
-                <span className="crypto-net-pill">1 USDT = 1 GEMA</span>
+                <span className="crypto-net-pill">1 USDT = 100 GEMAS</span>
               </div>
               <div className="crypto-breakdown-row">
                 <span>Monto Solicitado:</span>
-                <strong>{withdrawGems.toFixed(2)} 💎</strong>
+                <strong>{withdrawGems.toLocaleString()} 💎</strong>
               </div>
               <div className="crypto-breakdown-row crypto-breakdown-row--fee">
                 <span>Comisión de Retiro (5%):</span>
-                <span style={{ color: '#f87171' }}>- {withdrawalFee.toFixed(2)} 💎</span>
+                <span style={{ color: '#f87171' }}>- {withdrawalFee.toLocaleString()} 💎</span>
               </div>
               <div className="crypto-breakdown-divider" />
               <div className="crypto-breakdown-row crypto-breakdown-row--net">
@@ -990,14 +990,14 @@ export default function ProfileModal({
                 </strong>
               </div>
               <div className="crypto-breakdown-row crypto-breakdown-row--meta">
-                <small>Red: <strong>BNB Smart Chain (BEP20)</strong> • Token: <strong>USDT</strong></small>
+                <small>Red: <strong>BNB Smart Chain (BEP20)</strong> • Token: <strong>USDT</strong> • Tasa: <strong>100 💎 = 1.00 USDT</strong></small>
               </div>
             </div>
 
             <button
               type="submit"
               className="profile-submit-action-btn profile-submit-action-btn--withdraw"
-              disabled={withdrawGems < 10 || withdrawGems > userTokens}
+              disabled={withdrawGems < 1000 || withdrawGems > userTokens}
             >
               💸 SOLICITAR RETIRO DE {netWithdrawalUsdt.toFixed(2)} USDT
             </button>
@@ -1111,11 +1111,11 @@ export default function ProfileModal({
             <div className="withdraw-confirm-details">
               <div className="withdraw-confirm-item">
                 <span>Gemas a Descontar:</span>
-                <strong>{withdrawGems.toFixed(2)} 💎</strong>
+                <strong>{withdrawGems.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 💎</strong>
               </div>
               <div className="withdraw-confirm-item">
                 <span>Comisión Plant Arena (5%):</span>
-                <span style={{ color: '#f87171' }}>{withdrawalFee.toFixed(2)} 💎</span>
+                <span style={{ color: '#f87171' }}>{withdrawalFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 💎</span>
               </div>
               <div className="withdraw-confirm-item withdraw-confirm-item--net">
                 <span>Neto a Recibir:</span>

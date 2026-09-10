@@ -3,18 +3,18 @@ import { describe, it, expect } from 'vitest'
 // ── LÓGICA DE CONTABILIDAD Y SEGURIDAD BEP20 CRIPTO ─────────────────────────
 
 export function calculateWithdrawalSettlement(requestedAmountGems: number, feePercent = 5.0) {
-  if (requestedAmountGems < 10.0) {
+  if (requestedAmountGems < 1000.0) {
     throw new Error('AMOUNT_BELOW_MIN')
   }
-  if (requestedAmountGems > 500.0) {
+  if (requestedAmountGems > 50000.0) {
     throw new Error('AMOUNT_ABOVE_MAX')
   }
-  // 5% de comisión server-authoritative
+  // 5% de comisión server-authoritative (100 Gemas = 1 USDT)
   const feeGems = Number((requestedAmountGems * (feePercent / 100.0)).toFixed(6))
   const netGems = Number((requestedAmountGems - feeGems).toFixed(6))
-  const amountUsdt = requestedAmountGems
-  const feeUsdt = feeGems
-  const netAmountUsdt = netGems
+  const amountUsdt = Number((requestedAmountGems / 100.0).toFixed(6))
+  const feeUsdt = Number((feeGems / 100.0).toFixed(6))
+  const netAmountUsdt = Number((netGems / 100.0).toFixed(6))
 
   return {
     amountGems: requestedAmountGems,
@@ -94,9 +94,9 @@ export function processDepositEventServerAuthoritative(
     }
   }
 
-  // 5. Acreditación atómica 1 USDT = 1 Gema
+  // 5. Acreditación atómica 1 USDT = 100 Gemas
   const currentBalance = ledger.userBalances.get(userId) ?? 0
-  const creditedAmount = event.amountUsdt
+  const creditedAmount = Math.round(event.amountUsdt * 100.0 * 100) / 100
   ledger.userBalances.set(userId, currentBalance + creditedAmount)
   ledger.processedEvents.add(eventKey)
 
@@ -115,40 +115,40 @@ describe('Sistema de Depósitos y Retiros USDT BEP20 (BNB Smart Chain)', () => {
   const TREASURY_WALLET = '0x721622D8cad39621C731eC286D1EA859365A51b8'
   const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955'
 
-  describe('Cálculo de Liquidación de Retiro (5% Comisión Server-Authoritative)', () => {
-    it('TEST 4: Retiro de 10.00 Gemas (Mínimo) -> Comisión: 0.50, Neto: 9.50 USDT', () => {
-      const res = calculateWithdrawalSettlement(10.0)
-      expect(res.amountGems).toBe(10.0)
-      expect(res.feeGems).toBe(0.5)
-      expect(res.netGems).toBe(9.5)
+  describe('Cálculo de Liquidación de Retiro (5% Comisión Server-Authoritative, 100 Gemas = 1 USDT)', () => {
+    it('TEST 4: Retiro de 1000.00 Gemas (Mínimo = $10.00 USDT) -> Comisión: 50.00 Gemas ($0.50), Neto: 950.00 Gemas ($9.50 USDT)', () => {
+      const res = calculateWithdrawalSettlement(1000.0)
+      expect(res.amountGems).toBe(1000.0)
+      expect(res.feeGems).toBe(50.0)
+      expect(res.netGems).toBe(950.0)
       expect(res.amountUsdt).toBe(10.0)
       expect(res.feeUsdt).toBe(0.5)
       expect(res.netAmountUsdt).toBe(9.5)
     })
 
-    it('TEST 5: Caso Decimal: Retiro de 25.50 Gemas -> Comisión: 1.275, Neto: 24.225 USDT', () => {
-      const res = calculateWithdrawalSettlement(25.5)
-      expect(res.amountGems).toBe(25.5)
-      expect(res.feeGems).toBe(1.275)
-      expect(res.netGems).toBe(24.225)
+    it('TEST 5: Caso Decimal: Retiro de 2550.00 Gemas ($25.50 USDT) -> Comisión: 127.50, Neto: 24.225 USDT', () => {
+      const res = calculateWithdrawalSettlement(2550.0)
+      expect(res.amountGems).toBe(2550.0)
+      expect(res.feeGems).toBe(127.5)
+      expect(res.netGems).toBe(2422.5)
       expect(res.netAmountUsdt).toBe(24.225)
     })
 
-    it('TEST 6: Retiro de 100.00 Gemas -> Comisión: 5.00, Neto: 95.00 USDT', () => {
-      const res = calculateWithdrawalSettlement(100.0)
-      expect(res.amountGems).toBe(100.0)
-      expect(res.feeGems).toBe(5.0)
-      expect(res.netGems).toBe(95.0)
+    it('TEST 6: Retiro de 10000.00 Gemas ($100.00 USDT) -> Comisión: 500.00, Neto: 95.00 USDT', () => {
+      const res = calculateWithdrawalSettlement(10000.0)
+      expect(res.amountGems).toBe(10000.0)
+      expect(res.feeGems).toBe(500.0)
+      expect(res.netGems).toBe(9500.0)
       expect(res.netAmountUsdt).toBe(95.0)
     })
 
-    it('Rechaza retiro menor al mínimo permitido (< 10.00 Gemas)', () => {
-      expect(() => calculateWithdrawalSettlement(9.99)).toThrow('AMOUNT_BELOW_MIN')
-      expect(() => calculateWithdrawalSettlement(1.0)).toThrow('AMOUNT_BELOW_MIN')
+    it('Rechaza retiro menor al mínimo permitido (< 1000.00 Gemas = $10 USDT)', () => {
+      expect(() => calculateWithdrawalSettlement(999.99)).toThrow('AMOUNT_BELOW_MIN')
+      expect(() => calculateWithdrawalSettlement(100.0)).toThrow('AMOUNT_BELOW_MIN')
     })
 
-    it('Rechaza retiro mayor al máximo permitido por transacción (> 500.00 Gemas)', () => {
-      expect(() => calculateWithdrawalSettlement(500.01)).toThrow('AMOUNT_ABOVE_MAX')
+    it('Rechaza retiro mayor al máximo permitido por transacción (> 50000.00 Gemas = $500 USDT)', () => {
+      expect(() => calculateWithdrawalSettlement(50000.01)).toThrow('AMOUNT_ABOVE_MAX')
     })
   })
 
@@ -167,7 +167,7 @@ describe('Sistema de Depósitos y Retiros USDT BEP20 (BNB Smart Chain)', () => {
   })
 
   describe('Detección y Acreditación de Depósitos Server-Authoritative', () => {
-    it('TEST 1: Depositar 1.00 USDT desde wallet personal registrada acredita +1.00 Gema', () => {
+    it('TEST 1: Depositar 1.00 USDT desde wallet personal registrada acredita +100.00 Gemas', () => {
       const ledger: DepositLedger = {
         processedEvents: new Set(),
         registeredWallets: new Map([
@@ -190,8 +190,8 @@ describe('Sistema de Depósitos y Retiros USDT BEP20 (BNB Smart Chain)', () => {
       const res = processDepositEventServerAuthoritative(ledger, event, TREASURY_WALLET, USDT_CONTRACT)
       expect(res.success).toBe(true)
       expect(res.status).toBe('credited')
-      expect(res.amountGems).toBe(1.0)
-      expect(ledger.userBalances.get('user-lionel-123')).toBe(51.0)
+      expect(res.amountGems).toBe(100.0)
+      expect(ledger.userBalances.get('user-lionel-123')).toBe(150.0)
     })
 
     it('TEST 2: Repetir la detección del mismo evento no suma gemas adicionales (Idempotencia)', () => {
@@ -214,15 +214,15 @@ describe('Sistema de Depósitos y Retiros USDT BEP20 (BNB Smart Chain)', () => {
         amountUsdt: 10.0,
       }
 
-      // Primera ejecución -> acreditado
+      // Primera ejecución -> acreditado (+1000 gemas)
       const first = processDepositEventServerAuthoritative(ledger, event, TREASURY_WALLET, USDT_CONTRACT)
       expect(first.status).toBe('credited')
-      expect(ledger.userBalances.get('user-lionel-123')).toBe(60.0)
+      expect(ledger.userBalances.get('user-lionel-123')).toBe(1050.0)
 
       // Segunda ejecución -> ignorada sin doble gasto
       const second = processDepositEventServerAuthoritative(ledger, event, TREASURY_WALLET, USDT_CONTRACT)
       expect(second.status).toBe('already_credited')
-      expect(ledger.userBalances.get('user-lionel-123')).toBe(60.0) // No incrementa
+      expect(ledger.userBalances.get('user-lionel-123')).toBe(1050.0) // No incrementa
     })
 
     it('TEST 3: Depositar desde wallet NO registrada queda en UNMATCHED y NO acredita gemas', () => {

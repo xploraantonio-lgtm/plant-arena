@@ -73,7 +73,7 @@ export default function Clan({
   const [showDepositModal, setShowDepositModal] = useState(false)
   const [showRequestSeedModal, setShowRequestSeedModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
-  const [depositAmount, setDepositAmount] = useState<number>(1.0)
+  const [depositAmount, setDepositAmount] = useState<number>(100)
   const [activeDialog, setActiveDialog] = useState<ClanModalDialog | null>(null)
 
   // Kick Member Modal State
@@ -390,15 +390,15 @@ export default function Clan({
     }
   }
 
-  // CREATE CLAN (5 Gemas 💎)
+  // CREATE CLAN (500 Gemas 💎)
   const handleCreateClan = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newClanName.trim() || !newClanTag.trim()) {
       showModalAlert('DATOS INCOMPLETOS', 'Ingresa un nombre y etiqueta válidos para el clan.', '⚠️', 'warning')
       return
     }
-    if (userTokens < 5.0) {
-      showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (5 Gemas 💎 requeridas). Recarga saldo en la Tienda.', '⚠️', 'warning')
+    if (userTokens < 500.0) {
+      showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (500 Gemas 💎 requeridas). Recarga saldo en la Tienda.', '⚠️', 'warning')
       return
     }
 
@@ -406,7 +406,7 @@ export default function Clan({
       const res = await supabaseService.createClan(newClanName, newClanTag, newClanBadge, newClanDesc)
       if (!res.success) {
         if (res.error === 'INSUFFICIENT_GEMS') {
-          showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (5 Gemas 💎 requeridas).', '⚠️', 'warning')
+          showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (500 Gemas 💎 requeridas).', '⚠️', 'warning')
         } else if (res.error === 'ALREADY_IN_CLAN') {
           showModalAlert('YA TIENES UN CLAN', 'Ya perteneces a un clan. Debes abandonarlo antes de fundar uno nuevo.', '⚠️', 'warning')
         } else if (res.error === 'CLAN_NAME_OR_TAG_ALREADY_EXISTS') {
@@ -417,11 +417,11 @@ export default function Clan({
         return
       }
 
-      onDeductTokens(5.0)
+      onDeductTokens(500.0)
       if (onRefreshUserData) void onRefreshUserData()
 
       soundManager.playSound('victory', 0.8)
-      showModalAlert('¡CLAN CREADO!', `¡El clan "${newClanName.trim().toUpperCase()}" ha sido fundado con éxito!\nSe descontaron 5 Gemas 💎 y se depositaron en el Tesoro del Clan.`, '🎉', 'success')
+      showModalAlert('¡CLAN CREADO!', `¡El clan "${newClanName.trim().toUpperCase()}" ha sido fundado con éxito!\nSe descontaron 500 Gemas 💎 y se depositaron en el Tesoro del Clan.`, '🎉', 'success')
       if (res.clan_id) {
         ClanManager.setUserClanId(res.clan_id)
       }
@@ -451,10 +451,10 @@ export default function Clan({
       )
       return
     }
-    if (userTokens < 2.0) {
+    if (userTokens < 200.0) {
       showModalAlert(
         'SALDO INSUFICIENTE',
-        `Saldo insuficiente (2 Gemas 💎 requeridas para ingresar al clan).\nTu saldo actual es de ${userGems} Gemas 💎.\nPor favor recarga saldo en la Tienda.`,
+        `Saldo insuficiente (200 Gemas 💎 requeridas para ingresar al clan).\nTu saldo actual es de ${userGems} Gemas 💎.\nPor favor recarga saldo en la Tienda.`,
         '⚠️',
         'warning'
       )
@@ -463,14 +463,14 @@ export default function Clan({
 
     showModalConfirm(
       'UNIRSE AL CLAN',
-      `¿Deseas pagar 2 Gemas 💎 de entrada para unirte a "${clan.name}"?\n\nEl monto se descontará de tu saldo disponible (${userGems} Gemas 💎) y se inyectará directamente al Tesoro del Clan.`,
+      `¿Deseas pagar 200 Gemas 💎 de entrada para unirte a "${clan.name}"?\n\nEl monto se descontará de tu saldo disponible (${userGems} Gemas 💎) y se inyectará directamente al Tesoro del Clan.`,
       '⚡',
       async () => {
         try {
           const res = await supabaseService.joinClan(clan.id)
           if (!res.success) {
             if (res.error === 'INSUFFICIENT_GEMS') {
-              showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (2 Gemas 💎 requeridas).', '⚠️', 'warning')
+              showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (200 Gemas 💎 requeridas).', '⚠️', 'warning')
             } else if (res.error === 'ALREADY_IN_CLAN') {
               showModalAlert('YA TIENES UN CLAN', 'Ya perteneces a un clan.', '⚠️', 'warning')
             } else if (res.error === 'CLAN_FULL') {
@@ -483,13 +483,13 @@ export default function Clan({
             return
           }
 
-          onDeductTokens(2.0)
+          onDeductTokens(200.0)
           if (onRefreshUserData) void onRefreshUserData()
 
           soundManager.playSound('plantation', 0.8)
           showModalAlert(
             '¡BIENVENIDO AL CLAN!',
-            `Te has unido exitosamente a "${clan.name}".\nTu aporte de 2 Gemas 💎 fue sumado al Tesoro del Clan.`,
+            `Te has unido exitosamente a "${clan.name}".\nTu aporte de 200 Gemas 💎 fue sumado al Tesoro del Clan.`,
             '🎉',
             'success'
           )
@@ -499,7 +499,7 @@ export default function Clan({
           showModalAlert('ERROR', err?.message || 'Error al comunicarse con el servidor.', '❌', 'error')
         }
       },
-      'UNIRSE (2 💎)',
+      'UNIRSE (200 💎)',
       'CANCELAR'
     )
   }
@@ -573,7 +573,7 @@ export default function Clan({
       if (onRefreshUserData) void onRefreshUserData()
 
       soundManager.playSound('plantation', 0.9)
-      const ticketsEarned = res.tickets_awarded ?? Math.floor(depositAmount)
+      const ticketsEarned = res.tickets_awarded ?? Math.floor(depositAmount / 100)
 
       showModalAlert(
         '¡DEPÓSITO EXITOSO + BONOS!',
@@ -588,17 +588,17 @@ export default function Clan({
     }
   }
 
-  // REPAIR BASE (5 Gemas 💎)
+  // REPAIR BASE (500 Gemas 💎)
   const handleRepairBase = () => {
     if (!userClan) return
-    if (userTokens < 5.0) {
-      showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (5 Gemas 💎 requeridas para Reparar la Base).', '⚠️', 'warning')
+    if (userTokens < 500.0) {
+      showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (500 Gemas 💎 requeridas para Reparar la Base).', '⚠️', 'warning')
       return
     }
 
     showModalConfirm(
       'REPARAR BASE',
-      '¿Deseas pagar 5 Gemas 💎 para REPARAR LA BASE y reactivar las funciones del clan?',
+      '¿Deseas pagar 500 Gemas 💎 para REPARAR LA BASE y reactivar las funciones del clan?',
       '🛠️',
       async () => {
         try {
@@ -608,7 +608,7 @@ export default function Clan({
             return
           }
 
-          onDeductTokens(5.0)
+          onDeductTokens(500.0)
           if (onRefreshUserData) void onRefreshUserData()
 
           soundManager.playSound('victory', 0.8)
@@ -618,7 +618,7 @@ export default function Clan({
           showModalAlert('ERROR', e?.message || 'Error de conexión al reparar base.', '❌', 'error')
         }
       },
-      'REPARAR (5 💎)',
+      'REPARAR (500 💎)',
       'CANCELAR'
     )
   }
@@ -708,8 +708,8 @@ export default function Clan({
     }
 
     showModalConfirm(
-      'ASALTO DE GUERRA (5 Gemas 💎)',
-      `¿Deseas asaltar a "${defenderClan.name}" por 5 Gemas 💎 del Tesoro?\n¡Si ganas, tu clan suma +5 Gemas 💎! Si pierdes, ellos se llevan 5 Gemas 💎.`,
+      'ASALTO DE GUERRA (500 Gemas 💎)',
+      `¿Deseas asaltar a "${defenderClan.name}" por 500 Gemas 💎 del Tesoro?\n¡Si ganas, tu clan suma +500 Gemas 💎! Si pierdes, ellos se llevan 500 Gemas 💎.`,
       '⚔️',
       () => {
         const result = ClanManager.executeClanRaid(userClan.id, defenderClan.id)
@@ -797,9 +797,9 @@ export default function Clan({
         {/* Banner Info */}
         <div className="clan-promo-banner">
           <div className="clan-promo-banner__badge">⚔️ ALTO RENDIMIENTO & SAQUEOS REALES</div>
-          <h3 className="clan-promo-banner__title">Únete a un Clan (2 💎) o Funda el tuyo (5 💎)</h3>
+          <h3 className="clan-promo-banner__title">Únete a un Clan (200 💎) o Funda el tuyo (500 💎)</h3>
           <p className="clan-promo-banner__desc">
-            Colabora con 15 jugadores, pide semillas diarias gratis, asalta el tesoro de clanes rivales por 5 Gemas 💎
+            Colabora con 15 jugadores, pide semillas diarias gratis, asalta el tesoro de clanes rivales por 500 Gemas 💎
             y reparte las ganancias de la temporada entre todos los miembros.
           </p>
         </div>
@@ -1052,11 +1052,11 @@ export default function Clan({
             <div className="clan-create-summary">
               <div className="clan-create-summary__item">
                 <span>Costo de Creación:</span>
-                <strong>5 Gemas 💎</strong>
+                <strong>500 Gemas 💎</strong>
               </div>
               <div className="clan-create-summary__item">
                 <span>Tesoro Inicial del Clan:</span>
-                <strong style={{ color: '#4ade80' }}>5 Gemas 💎</strong>
+                <strong style={{ color: '#4ade80' }}>500 Gemas 💎</strong>
               </div>
               <div className="clan-create-summary__item">
                 <span>Capacidad de Miembros:</span>
@@ -1128,9 +1128,9 @@ export default function Clan({
                 type="button"
                 className="clan-repair-btn"
                 onClick={handleRepairBase}
-                title="Pagar 5 Gemas 💎 para reactivar la base"
+                title="Pagar 500 Gemas 💎 para reactivar la base"
               >
-                🛠️ REPARAR BASE (5 💎)
+                🛠️ REPARAR BASE (500 💎)
               </button>
             )}
 
@@ -1320,7 +1320,7 @@ export default function Clan({
               <div className="clan-wars-banner__info">
                 <h4>🔥 DÍAS DE SAQUEO (JUEVES Y VIERNES — 48H DE GUERRA TOTAL)</h4>
                 <p>
-                  Asalta bases rivales por <strong>5 Gemas 💎 por victoria</strong>. Al sufrir un saqueo, se activa un <strong>Escudo de 4 Horas</strong> para planear la revancha.
+                  Asalta bases rivales por <strong>500 Gemas 💎 por victoria</strong>. Al sufrir un saqueo, se activa un <strong>Escudo de 4 Horas</strong> para planear la revancha.
                 </p>
               </div>
               <div className="clan-wars-record">
@@ -1917,12 +1917,12 @@ export default function Clan({
               Aporta Gemas al Tesoro de tu Clan para blindar su economía.
               <br />
               <strong style={{ color: '#fbbf24' }}>
-                🎁 ¡Por cada 1 Gema aportada recibes +1 Ticket de Coliseo 🎟️ y +1 Tiro Gratis en la Ruleta 🎡!
+                🎁 ¡Por cada 100 Gemas aportadas recibes +1 Ticket de Coliseo 🎟️ y +1 Tiro Gratis en la Ruleta 🎡!
               </strong>
             </p>
 
             <div className="clan-deposit-opts">
-              {[1.0, 2.0, 5.0, 10.0, 20.0].map((amt) => (
+              {[100, 200, 500, 1000, 2000].map((amt) => (
                 <button
                   key={amt}
                   type="button"

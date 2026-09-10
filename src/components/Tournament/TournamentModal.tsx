@@ -66,9 +66,9 @@ export default function TournamentModal({
 
   // Create form states
   const [createTitle, setCreateTitle] = useState<string>('')
-  const [createPrizeGems, setCreatePrizeGems] = useState<number>(10)
+  const [createPrizeGems, setCreatePrizeGems] = useState<number>(1000)
   const [createEntryType, setCreateEntryType] = useState<'free' | 'gems'>('free')
-  const [createEntryFeeGems, setCreateEntryFeeGems] = useState<number>(5)
+  const [createEntryFeeGems, setCreateEntryFeeGems] = useState<number>(100)
   const [createStartOffsetMin, setCreateStartOffsetMin] = useState<number>(5)
   const [createDurationMin, setCreateDurationMin] = useState<number>(60)
   const [createError, setCreateError] = useState<string | null>(null)

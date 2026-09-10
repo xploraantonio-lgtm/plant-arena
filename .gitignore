@@ -19,12 +19,9 @@ dist-ssr
 .env.local
 .env.*.local
 
-# Carpeta de migraciones y lógica interna de base de datos Supabase
-supabase/*
-!supabase/migrations/
-!supabase/60-sistema-torneos-autoritativo.sql
-!supabase/61-reentrada-y-entrada-gemas-torneo.sql
-!supabase/62-optimizacion-feed-intenciones-ranked.sql
+# Carpeta de migraciones y base de datos Supabase fuera del repositorio
+supabase/
+supabase
 
 # Editor directories and files
 .vscode/*

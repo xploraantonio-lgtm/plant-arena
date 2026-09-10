@@ -39,7 +39,7 @@ export default function ColosseumModal({
         username: p.username,
         avatarPlant: (p.avatar_id as any) || 'peashooter',
         maxStreak: p.colosseum_max_streak,
-        prizeGems: idx === 0 ? 20 : idx === 1 ? 10 : idx === 2 ? 5 : 0,
+        prizeGems: idx === 0 ? 2000 : idx === 1 ? 1000 : idx === 2 ? 500 : 0,
       }))
       setRealLeaderboard(mapped)
     })
@@ -88,7 +88,7 @@ export default function ColosseumModal({
               <span>💎</span>
               <strong>{userTokens}</strong>
             </div>
-            <div className="colosseum-badge colosseum-badge--tickets" title="Tickets de Coliseo (Valen 0.5 💎)">
+            <div className="colosseum-badge colosseum-badge--tickets" title="Tickets de Coliseo (Valen 50 💎)">
               <span>🎟️</span>
               <strong>{colosseumTickets}</strong>
             </div>
@@ -154,27 +154,27 @@ export default function ColosseumModal({
         {/* TAB 1: SALAS DE DUELO */}
         {activeTab === 'rooms' && (
           <div className="colosseum-rooms-grid">
-            {/* SALA 1: BRONCE (0.5 GEMAS / 1 TICKET) */}
+            {/* SALA 1: BRONCE (50 GEMAS / 1 TICKET) */}
             <div className="colosseum-room-card">
               <div className="colosseum-room-header">
                 <span className="colosseum-room-badge colosseum-room-badge--bronze">BRONCE</span>
-                <span className="colosseum-room-entry">Entrada: 0.5 💎</span>
+                <span className="colosseum-room-entry">Entrada: 50 💎</span>
               </div>
 
               <div className="colosseum-room-body">
                 <div className="colosseum-room-pot-box">
                   <span className="colosseum-pot-label">Pozo Total en Juego:</span>
-                  <span className="colosseum-pot-value">1.0 Gema 💎</span>
+                  <span className="colosseum-pot-value">100 Gemas 💎</span>
                 </div>
 
                 <div className="colosseum-room-payout-box">
                   <div className="colosseum-payout-row">
                     <span>🏆 Premio Ganador:</span>
-                    <strong style={{ color: '#4ade80' }}>+0.8 Gemas 💎</strong>
+                    <strong style={{ color: '#4ade80' }}>+80 Gemas 💎</strong>
                   </div>
                   <div className="colosseum-payout-row">
                     <span>🛡️ Rake Proyecto:</span>
-                    <small>0.2 Gemas (20%)</small>
+                    <small>20 Gemas (20%)</small>
                   </div>
                 </div>
 
@@ -183,7 +183,7 @@ export default function ColosseumModal({
                     <button
                       type="button"
                       className="colosseum-action-btn colosseum-action-btn--ticket"
-                      onClick={() => handleEnterRoom(0.5, true)}
+                      onClick={() => handleEnterRoom(50, true)}
                     >
                       <span>🎟️ ENTRAR CON TICKET</span>
                       <small>Tienes {colosseumTickets} {colosseumTickets === 1 ? 'ticket' : 'tickets'}</small>
@@ -193,36 +193,36 @@ export default function ColosseumModal({
                   <button
                     type="button"
                     className="colosseum-action-btn colosseum-action-btn--gem"
-                    onClick={() => handleEnterRoom(0.5, false)}
-                    disabled={userTokens < 0.5}
+                    onClick={() => handleEnterRoom(50, false)}
+                    disabled={userTokens < 50}
                   >
-                    <span>⚔️ JUGAR POR 0.5 GEMAS</span>
+                    <span>⚔️ JUGAR POR 50 GEMAS</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* SALA 2: PLATA (1.0 GEMA) */}
+            {/* SALA 2: PLATA (100 GEMAS) */}
             <div className="colosseum-room-card">
               <div className="colosseum-room-header">
                 <span className="colosseum-room-badge colosseum-room-badge--silver">PLATA</span>
-                <span className="colosseum-room-entry">Entrada: 1.0 💎</span>
+                <span className="colosseum-room-entry">Entrada: 100 💎</span>
               </div>
 
               <div className="colosseum-room-body">
                 <div className="colosseum-room-pot-box">
                   <span className="colosseum-pot-label">Pozo Total en Juego:</span>
-                  <span className="colosseum-pot-value">2.0 Gemas 💎</span>
+                  <span className="colosseum-pot-value">200 Gemas 💎</span>
                 </div>
 
                 <div className="colosseum-room-payout-box">
                   <div className="colosseum-payout-row">
                     <span>🏆 Premio Ganador:</span>
-                    <strong style={{ color: '#4ade80' }}>+1.6 Gemas 💎</strong>
+                    <strong style={{ color: '#4ade80' }}>+160 Gemas 💎</strong>
                   </div>
                   <div className="colosseum-payout-row">
                     <span>🛡️ Rake Proyecto:</span>
-                    <small>0.4 Gemas (20%)</small>
+                    <small>40 Gemas (20%)</small>
                   </div>
                 </div>
 
@@ -230,36 +230,36 @@ export default function ColosseumModal({
                   <button
                     type="button"
                     className="colosseum-action-btn colosseum-action-btn--gem"
-                    onClick={() => handleEnterRoom(1.0, false)}
-                    disabled={userTokens < 1.0}
+                    onClick={() => handleEnterRoom(100, false)}
+                    disabled={userTokens < 100}
                   >
-                    <span>⚔️ JUGAR POR 1.0 GEMA</span>
+                    <span>⚔️ JUGAR POR 100 GEMAS</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* SALA 3: ORO (2.0 GEMAS MÁXIMO) */}
+            {/* SALA 3: ORO (200 GEMAS MÁXIMO) */}
             <div className="colosseum-room-card colosseum-room-card--gold">
               <div className="colosseum-room-header">
                 <span className="colosseum-room-badge colosseum-room-badge--gold">ORO (MÁXIMO)</span>
-                <span className="colosseum-room-entry">Entrada: 2.0 💎</span>
+                <span className="colosseum-room-entry">Entrada: 200 💎</span>
               </div>
 
               <div className="colosseum-room-body">
                 <div className="colosseum-room-pot-box">
                   <span className="colosseum-pot-label">Pozo Total en Juego:</span>
-                  <span className="colosseum-pot-value">4.0 Gemas 💎</span>
+                  <span className="colosseum-pot-value">400 Gemas 💎</span>
                 </div>
 
                 <div className="colosseum-room-payout-box">
                   <div className="colosseum-payout-row">
                     <span>🏆 Premio Ganador:</span>
-                    <strong style={{ color: '#fbbf24' }}>+3.2 Gemas 💎</strong>
+                    <strong style={{ color: '#fbbf24' }}>+320 Gemas 💎</strong>
                   </div>
                   <div className="colosseum-payout-row">
                     <span>🛡️ Rake Proyecto:</span>
-                    <small>0.8 Gemas (20%)</small>
+                    <small>80 Gemas (20%)</small>
                   </div>
                 </div>
 
@@ -267,10 +267,10 @@ export default function ColosseumModal({
                   <button
                     type="button"
                     className="colosseum-action-btn colosseum-action-btn--gold"
-                    onClick={() => handleEnterRoom(2.0, false)}
-                    disabled={userTokens < 2.0}
+                    onClick={() => handleEnterRoom(200, false)}
+                    disabled={userTokens < 200}
                   >
-                    <span>👑 JUGAR POR 2.0 GEMAS</span>
+                    <span>👑 JUGAR POR 200 GEMAS</span>
                   </button>
                 </div>
               </div>
@@ -289,15 +289,15 @@ export default function ColosseumModal({
               <div className="colosseum-prizes-cards-row">
                 <div className="colosseum-prize-card colosseum-prize-card--1">
                   <span className="colosseum-prize-rank">🥇 TOP 1</span>
-                  <strong className="colosseum-prize-amount">20 Gemas 💎</strong>
+                  <strong className="colosseum-prize-amount">2000 Gemas 💎</strong>
                 </div>
                 <div className="colosseum-prize-card colosseum-prize-card--2">
                   <span className="colosseum-prize-rank">🥈 TOP 2</span>
-                  <strong className="colosseum-prize-amount">10 Gemas 💎</strong>
+                  <strong className="colosseum-prize-amount">1000 Gemas 💎</strong>
                 </div>
                 <div className="colosseum-prize-card colosseum-prize-card--3">
                   <span className="colosseum-prize-rank">🥉 TOP 3</span>
-                  <strong className="colosseum-prize-amount">5 Gemas 💎</strong>
+                  <strong className="colosseum-prize-amount">500 Gemas 💎</strong>
                 </div>
               </div>
             </div>
@@ -362,7 +362,7 @@ export default function ColosseumModal({
                     </td>
                     <td>
                       <span style={{ color: maxStreak >= 7 ? '#4ade80' : '#94a3b8' }}>
-                        {maxStreak >= 12 ? '+20 💎' : maxStreak >= 9 ? '+10 💎' : maxStreak >= 7 ? '+5 💎' : '¡Sube tu racha!'}
+                        {maxStreak >= 12 ? '+2000 💎' : maxStreak >= 9 ? '+1000 💎' : maxStreak >= 7 ? '+500 💎' : '¡Sube tu racha!'}
                       </span>
                     </td>
                   </tr>
@@ -375,7 +375,7 @@ export default function ColosseumModal({
         {/* FOOTER INFO */}
         <div className="colosseum-footer">
           <div className="colosseum-footer-ticket-hint">
-            💡 <strong>¿Cómo conseguir Tickets de Coliseo?</strong> Aparecen al azar en sobres PvP/Tienda y recibes <strong>+1 Ticket y +1 Giro de Ruleta</strong> por cada Gema aportada a tu Clan.
+            💡 <strong>¿Cómo conseguir Tickets de Coliseo?</strong> Aparecen al azar en sobres PvP/Tienda y recibes <strong>+1 Ticket y +1 Giro de Ruleta</strong> por cada 100 Gemas aportadas a tu Clan.
           </div>
         </div>
       </div>

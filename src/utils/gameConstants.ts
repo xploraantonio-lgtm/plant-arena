@@ -390,4 +390,4 @@ export function getScaledPlantConfig(
  * Está aquí porque el número estaba escrito diez veces a mano y, además, como
  * «$10.00 USD»: el juego cobra gemas y la pantalla prometía dólares.
  */
-export const VIP_PASS_PRECIO_GEMAS = 10
+export const VIP_PASS_PRECIO_GEMAS = 1000

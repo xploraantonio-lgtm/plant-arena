@@ -185,7 +185,7 @@ export interface PlantCardInstance {
   obtainedAt?: number
 }
 
-export type ColosseumBetAmount = 0.5 | 1.0 | 2.0
+export type ColosseumBetAmount = 50 | 100 | 200
 
 export interface ColosseumMatchConfig {
   betGems: ColosseumBetAmount

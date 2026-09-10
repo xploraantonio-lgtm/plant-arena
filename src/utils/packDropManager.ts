@@ -29,21 +29,21 @@ export interface PackDefinition {
 export const PACK_DEFINITIONS: Record<PackId, PackDefinition> = {
   basic: {
     name: 'Sobre de Semillas Básico',
-    priceUsd: 3,
+    priceUsd: 300,
     cardCount: 3,
     icon: '/game-assets/greenfoot/seed_pack_common_whitebg.webp',
     rarity: 'common',
   },
   epic: {
     name: 'Sobre de Semillas Místico',
-    priceUsd: 5,
+    priceUsd: 1000,
     cardCount: 4,
     icon: '/game-assets/greenfoot/seed_pack_epic_whitebg.webp',
     rarity: 'epic',
   },
   legendary: {
     name: 'Sobre de Semillas VIP Legendario',
-    priceUsd: 10,
+    priceUsd: 2500,
     cardCount: 4,
     icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.webp',
     rarity: 'legendary',

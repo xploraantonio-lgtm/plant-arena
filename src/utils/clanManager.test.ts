@@ -15,12 +15,12 @@ describe('ClanManager & Gem Valuations', () => {
     mockLocalStorage.clear()
   })
 
-  it('creates clan with 5 gems initial vault', () => {
+  it('creates clan with 500 gems initial vault', () => {
     const clan = ClanManager.createClan('Los Gladiadores', 'LG', '👑', 'Descripción del clan', 'Líder Supremo', 1200)
     expect(clan).toBeDefined()
     expect(clan.name).toBe('LOS GLADIADORES')
     expect(clan.tag).toBe('#LG')
-    expect(clan.vaultUsd).toBe(5.0)
+    expect(clan.vaultUsd).toBe(500.0)
     expect(clan.members.length).toBe(1)
     expect(clan.members[0].name).toBe('Líder Supremo')
   })
@@ -32,7 +32,7 @@ describe('ClanManager & Gem Valuations', () => {
 
     const updatedClan = ClanManager.getClans().find((c) => c.id === clan.id)
     expect(updatedClan?.members.length).toBe(2)
-    expect(updatedClan?.vaultUsd).toBe(7.0) // 5 initial + 2 join fee
+    expect(updatedClan?.vaultUsd).toBe(700.0) // 500 initial + 200 join fee
   })
 
   it('protects active warrior with >= 2 rounds from kick', () => {

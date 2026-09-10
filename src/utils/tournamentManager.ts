@@ -63,9 +63,9 @@ export const TOURNAMENT_CATALOG: TournamentDefinition[] = [
   },
   {
     id: 'tourney_paid_1',
-    name: '💎 Masters Cup Premium (Entrada 2 Gemas)',
+    name: '💎 Masters Cup Premium (Entrada 200 Gemas)',
     type: 'paid',
-    entryCostGems: 2.0,
+    entryCostGems: 200,
     durationMinutes: 60,
     startDelaySeconds: 120, // 2 mins countdown
     description: 'Torneo competitivo. 1 hora de combates en matchmaking. Los 3 jugadores con más victorias alcanzan el Podio de Honor.',

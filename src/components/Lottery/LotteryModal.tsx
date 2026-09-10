@@ -36,12 +36,12 @@ interface WheelSector {
 const WHEEL_SECTORS: WheelSector[] = [
   {
     id: 'jackpot_5',
-    label: '5 Gemas 💎',
+    label: '500 Gemas 💎',
     icon: '👑',
     color: '#eab308',
     textColor: '#ffffff',
     type: 'token',
-    valueUsd: 5.0,
+    valueUsd: 500.0,
     rarity: 'jackpot',
   },
   {
@@ -305,11 +305,11 @@ export default function LotteryModal({
     // Avisos locales sólo para no gastar una llamada en vano. Los que cuentan
     // son los del servidor.
     if (isFree && !canFreeSpin) {
-      alert('Ya has usado tu tiro gratis diario. Puedes girar nuevamente por 1 Gema 💎.')
+      alert('Ya has usado tu tiro gratis diario. Puedes girar nuevamente por 100 Gemas 💎.')
       return
     }
-    if (!isFree && userTokens < 1.0) {
-      alert('Gemas insuficientes (1 Gema 💎 requerida para un tiro adicional).')
+    if (!isFree && userTokens < 100.0) {
+      alert('Gemas insuficientes (100 Gemas 💎 requeridas para un tiro adicional).')
       return
     }
 
@@ -524,7 +524,7 @@ export default function LotteryModal({
               setActiveTab('code')
             }}
           >
-            🔐 CÓDIGO SECRETO (¡GANA 10 💎!)
+            🔐 CÓDIGO SECRETO (¡GANA EL BOTE EN GEMAS!)
           </button>
         </div>
 
@@ -572,7 +572,7 @@ export default function LotteryModal({
                     className={`lottery-wheel-center-hub ${isSpinning ? 'lottery-hub--spinning' : ''} ${!canFreeSpin ? 'lottery-hub--locked' : ''}`}
                     disabled={isSpinning || !canFreeSpin}
                     onClick={() => handleSpinWheel(true)}
-                    title={canFreeSpin ? 'Girar tiro gratis' : 'Tiro gratis usado. Haz clic en "⚡ GIRAR POR 1 GEMA 💎"'}
+                    title={canFreeSpin ? 'Girar tiro gratis' : 'Tiro gratis usado. Haz clic en "⚡ GIRAR POR 100 GEMAS 💎"'}
                   >
                     <span>{isSpinning ? '🌀' : 'GIRAR'}</span>
                   </button>
@@ -585,7 +585,7 @@ export default function LotteryModal({
                   <div className="lottery-wheel-hero-badge">⭐ RULETA DE LA SUERTE</div>
                   <h3>¡PRUEBA TU SUERTE CADA DÍA!</h3>
                   <p>
-                    Tienes <strong>1 Tiro Gratis cada 24 horas</strong> garantizado. También puedes adquirir giros extra por tan solo <strong>1 Gema 💎</strong>.
+                    Tienes <strong>1 Tiro Gratis cada 24 horas</strong> garantizado. También puedes adquirir giros extra por tan solo <strong>100 Gemas 💎</strong>.
                   </p>
                 </div>
 
@@ -613,13 +613,13 @@ export default function LotteryModal({
                   <button
                     type="button"
                     className="lottery-spin-btn lottery-spin-btn--paid"
-                    disabled={isSpinning || userTokens < 1.0}
+                    disabled={isSpinning || userTokens < 100.0}
                     onClick={() => {
                       soundManager.playSound('click', 0.4)
                       setShowConfirmPaidModal(true)
                     }}
                   >
-                    <span>⚡ GIRAR POR 1 GEMA 💎</span>
+                    <span>⚡ GIRAR POR 100 GEMAS 💎</span>
                   </button>
                 </div>
 
@@ -628,7 +628,7 @@ export default function LotteryModal({
                   <span className="lottery-prizes-title">🎁 PREMIOS EN ESTE SORTEO:</span>
                   <div className="lottery-prizes-tags-grid">
                     <div className="lottery-prize-tag lottery-prize-tag--jackpot">
-                      👑 5 Gemas 💎 (Jackpot)
+                      👑 500 Gemas 💎 (Jackpot)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--legendary">
                       📦 Sobre Básico
@@ -724,7 +724,7 @@ export default function LotteryModal({
                   <div className="lottery-code-promo-banner">
                     <div className="lottery-promo-badge">
                       {roundIsOpen
-                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizePool ?? 10} 💎`
+                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizePool ?? 1000} 💎`
                         : codeRound
                           ? `⏸️ RONDA #${codeRound.roundNumber} FINALIZADA`
                           : '⏸️ SIN RONDA ACTIVA'}
@@ -734,7 +734,7 @@ export default function LotteryModal({
                       <p>
                         {codeRound?.freeAttempts ?? 3} intentos gratis por ronda. El primero que
                         acierte las {SECRET_CODE_LENGTH} en orden <strong>cierra la ronda</strong> y se lleva{' '}
-                        <strong>{codeRound?.prizes?.[0] ?? 10} 💎</strong>.
+                        <strong>{codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 1000} 💎</strong>.
                       </p>
                     ) : (
                       <p>
@@ -798,10 +798,10 @@ export default function LotteryModal({
                         soundManager.playSound('click', 0.4)
                         setShowConfirmCodeBuyModal(true)
                       }}
-                      disabled={userTokens < 1.0}
-                      title="Pagar 1 Gema 💎 por 2 intentos adicionales"
+                      disabled={userTokens < 100.0}
+                      title="Pagar 100 Gemas 💎 por 2 intentos adicionales"
                     >
-                      ⚡ +2 INTENTOS (1 💎 Gema)
+                      ⚡ +2 INTENTOS (100 💎 Gemas)
                     </button>
 
                     <button
@@ -1047,7 +1047,7 @@ export default function LotteryModal({
               <h3 className="lottery-prize-name">{winningSector.label}</h3>
               <p className="lottery-prize-desc">
                 {winningSector.type === 'none'
-                  ? '¡No te desanimes! Vuelve mañana para tu tiro gratis diario o gira por 1 Gema 💎.'
+                  ? '¡No te desanimes! Vuelve mañana para tu tiro gratis diario o gira por 100 Gemas 💎.'
                   : winningSector.type === 'token'
                   ? `¡Se han acreditado ${winningSector.valueUsd?.toFixed(0)} Gemas 💎 a tu cuenta!`
                   : winningSector.type === 'gold'
@@ -1105,7 +1105,7 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">⚡</div>
               <h3>CONFIRMAR GIRO DE RULETA</h3>
               <p>
-                ¿Deseas pagar <strong>1 Gema 💎</strong> de tu saldo para girar la Ruleta de la Suerte y probar tu suerte?
+                ¿Deseas pagar <strong>100 Gemas 💎</strong> de tu saldo para girar la Ruleta de la Suerte y probar tu suerte?
               </p>
               <div className="lottery-confirm-balance">
                 Saldo actual: <strong>{userTokens} Gemas 💎</strong>
@@ -1126,7 +1126,7 @@ export default function LotteryModal({
                     handleSpinWheel(false)
                   }}
                 >
-                  SÍ, GIRAR (1 💎)
+                  SÍ, GIRAR (100 💎)
                 </button>
               </div>
             </div>
@@ -1139,7 +1139,7 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">🎯</div>
               <h3>COMPRAR INTENTOS DE CÓDIGO</h3>
               <p>
-                ¿Deseas pagar <strong>1 Gema 💎</strong> para adquirir <strong>2 INTENTOS ADICIONALES</strong> y descifrar la secuencia para ganar las <strong>10 Gemas 💎</strong>?
+                ¿Deseas pagar <strong>100 Gemas 💎</strong> para adquirir <strong>2 INTENTOS ADICIONALES</strong> y descifrar la secuencia para ganar el <strong>Bote de Gemas 💎</strong>?
               </p>
               <div className="lottery-confirm-balance">
                 Saldo actual: <strong>{userTokens} Gemas 💎</strong> (Recibes: +2 Intentos)
@@ -1160,7 +1160,7 @@ export default function LotteryModal({
                     handleBuyCodeAttempts()
                   }}
                 >
-                  SÍ, COMPRAR 2 INTENTOS (1 💎)
+                  SÍ, COMPRAR 2 INTENTOS (100 💎)
                 </button>
               </div>
             </div>

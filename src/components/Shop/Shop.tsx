@@ -10,7 +10,7 @@ import {
 import { soundManager } from '../../utils/audioManager'
 import { shopService } from '../../services/shopService'
 import Marketplace from '../Marketplace/Marketplace'
-import type { PlantStatKey } from '../../utils/gameConstants'
+import { VIP_PASS_PRECIO_GEMAS, type PlantStatKey } from '../../utils/gameConstants'
 import './Shop.css'
 
 const commonSeedImg = '/game-assets/greenfoot/seed_pack_common_whitebg.webp'
@@ -33,7 +33,7 @@ export const GOLD_PACKAGES: GoldPackage[] = [
     id: 'gold_100',
     name: 'Bolsa de Monedas',
     goldAmount: 100,
-    priceUsd: 1,
+    priceUsd: 100,
     badge: 'BÁSICO',
     description: '100 Monedas de Oro directas a tu cuenta.',
   },
@@ -41,7 +41,7 @@ export const GOLD_PACKAGES: GoldPackage[] = [
     id: 'gold_250',
     name: 'Cofre de Monedas',
     goldAmount: 250,
-    priceUsd: 2,
+    priceUsd: 200,
     badge: 'MÁS POPULAR • +25% EXTRA',
     popular: true,
     description: '250 Monedas de Oro (+50 Oro de regalo).',
@@ -50,7 +50,7 @@ export const GOLD_PACKAGES: GoldPackage[] = [
     id: 'gold_700',
     name: 'Bóveda Real de Monedas',
     goldAmount: 700,
-    priceUsd: 5,
+    priceUsd: 500,
     badge: 'MEJOR VALOR • +40% EXTRA',
     bestValue: true,
     description: '700 Monedas de Oro (+200 Oro de bonificación).',
@@ -655,7 +655,7 @@ export default function Shop({
                   className="shop-pass-hero-buy-btn"
                   onClick={handleBuyVipFromShop}
                 >
-                  👑 ACTIVAR PASE VIP — 10 💎 Gemas
+                  👑 ACTIVAR PASE VIP — {VIP_PASS_PRECIO_GEMAS.toLocaleString()} 💎 Gemas
                 </button>
               </div>
             </div>
