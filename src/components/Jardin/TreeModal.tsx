@@ -26,7 +26,7 @@ const LEVEL_NAMES = [
   'Árbol Sagrado Supremo',
 ]
 
-const LEVEL_XP_REQS = [100, 250, 500, 1000, 2000]
+const LEVEL_XP_REQS = [500, 1200, 1800, 2500, 3000]
 
 export default function TreeModal({
   isOpen,
@@ -38,7 +38,7 @@ export default function TreeModal({
 }: TreeModalProps) {
   const [treeLevel, setTreeLevel] = useState<number>(0)
   const [treeXp, setTreeXp] = useState<number>(0)
-  const [nextLevelXp, setNextLevelXp] = useState<number>(100)
+  const [nextLevelXp, setNextLevelXp] = useState<number>(500)
   const [selectedResource, setSelectedResource] = useState<FeedResource>('water')
   const [amount, setAmount] = useState<number>(1)
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -54,7 +54,7 @@ export default function TreeModal({
       if (!active) return
       setTreeLevel(res.treeLevel)
       setTreeXp(res.treeXp)
-      setNextLevelXp(res.nextLevelXp)
+      setNextLevelXp(res.nextLevelXp || 500)
     })
 
     return () => {
@@ -96,13 +96,13 @@ export default function TreeModal({
   const getCalculatedXp = (res: FeedResource, qty: number): number => {
     switch (res) {
       case 'water':
-        return qty * 5
+        return qty * 8
       case 'fertilizer':
-        return qty * 20
+        return qty * 30
       case 'gold':
-        return Math.floor(qty / 10) * 1
+        return Math.floor(qty / 10) * 2
       case 'gems':
-        return qty * 50
+        return qty * 2
     }
   }
 
@@ -254,7 +254,7 @@ export default function TreeModal({
                   <span className="tree-res-card__icon">💧</span>
                   <span className="tree-res-card__name">Agua</span>
                 </div>
-                <div className="tree-res-card__xp">+5 XP c/u</div>
+                <div className="tree-res-card__xp">+8 XP c/u</div>
                 <div className="tree-res-card__balance">Saldo: <b>{curWater}</b></div>
               </button>
 
@@ -267,7 +267,7 @@ export default function TreeModal({
                   <span className="tree-res-card__icon">🌱</span>
                   <span className="tree-res-card__name">Fertilizante</span>
                 </div>
-                <div className="tree-res-card__xp">+20 XP c/u</div>
+                <div className="tree-res-card__xp">+30 XP c/u</div>
                 <div className="tree-res-card__balance">Saldo: <b>{curFert}</b></div>
               </button>
 
@@ -280,7 +280,7 @@ export default function TreeModal({
                   <span className="tree-res-card__icon">💰</span>
                   <span className="tree-res-card__name">Oro</span>
                 </div>
-                <div className="tree-res-card__xp">+1 XP / 10 Oro</div>
+                <div className="tree-res-card__xp">+2 XP / 10 Oro</div>
                 <div className="tree-res-card__balance">Saldo: <b>{curGold.toLocaleString()}</b></div>
               </button>
 
@@ -293,7 +293,7 @@ export default function TreeModal({
                   <span className="tree-res-card__icon">💎</span>
                   <span className="tree-res-card__name">Gemas</span>
                 </div>
-                <div className="tree-res-card__xp">+50 XP c/u</div>
+                <div className="tree-res-card__xp">+2 XP c/u</div>
                 <div className="tree-res-card__balance">Saldo: <b>{curGems}</b></div>
               </button>
             </div>
@@ -323,12 +323,20 @@ export default function TreeModal({
                       <>
                         <button type="button" onClick={() => handleQuickAdd(10)}>+10</button>
                         <button type="button" onClick={() => handleQuickAdd(50)}>+50</button>
-                        <button type="button" onClick={() => handleQuickAdd(200)}>+200</button>
+                        <button type="button" onClick={() => handleQuickAdd(250)}>+250</button>
                         <button type="button" onClick={() => handleQuickAdd(1000)}>+1K</button>
+                      </>
+                    ) : selectedResource === 'gems' ? (
+                      <>
+                        <button type="button" onClick={() => handleQuickAdd(1)}>+1</button>
+                        <button type="button" onClick={() => handleQuickAdd(5)}>+5</button>
+                        <button type="button" onClick={() => handleQuickAdd(10)}>+10</button>
+                        <button type="button" onClick={() => handleQuickAdd(25)}>+25</button>
                       </>
                     ) : (
                       <>
                         <button type="button" onClick={() => handleQuickAdd(1)}>+1</button>
+                        <button type="button" onClick={() => handleQuickAdd(2)}>+2</button>
                         <button type="button" onClick={() => handleQuickAdd(5)}>+5</button>
                         <button type="button" onClick={() => handleQuickAdd(10)}>+10</button>
                       </>

@@ -3535,7 +3535,7 @@ export const SupabaseService = {
         if (prof) {
           const lvl = Number((prof as any).tree_level) || 0
           const xp = Number((prof as any).tree_xp) || 0
-          const req = [100, 250, 500, 1000, 2000, 0][lvl] ?? 100
+          const req = [500, 1200, 1800, 2500, 3000, 0][lvl] ?? 500
           const res = {
             success: true,
             treeLevel: lvl,
@@ -3556,7 +3556,7 @@ export const SupabaseService = {
       if (raw) return JSON.parse(raw)
     } catch {}
 
-    return { success: true, treeLevel: 0, treeXp: 0, nextLevelXp: 100, hpBonus: 0 }
+    return { success: true, treeLevel: 0, treeXp: 0, nextLevelXp: 500, hpBonus: 0 }
   },
 
   async feedMotherTree(
