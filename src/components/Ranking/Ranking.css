@@ -1678,7 +1678,8 @@
   border-radius: 10px;
 }
 
-.referral-table-wrap .leaderboard-table th {
+.referral-table-wrap .leaderboard-table th,
+.referral-table-wrap .lb-table th {
   position: sticky;
   top: 0;
   z-index: 5;

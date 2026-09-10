@@ -2790,12 +2790,13 @@ export const SupabaseService = {
     }
   },
 
-  /** Dispara la verificación de nuevos depósitos en blockchain */
-  async triggerDepositCheck(): Promise<{ success: boolean; transfersFound?: number; processed?: any[]; error?: string }> {
+  /** Dispara la verificación de nuevos depósitos en blockchain (opcionalmente por txHash) */
+  async triggerDepositCheck(txHash?: string): Promise<{ success: boolean; transfersFound?: number; processed?: any[]; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false }
     try {
       const { data, error } = await supabase.functions.invoke('crypto-deposit-detector', {
         method: 'POST',
+        body: txHash ? { txHash } : {},
       })
       if (error) {
         return { success: false, error: error.message }

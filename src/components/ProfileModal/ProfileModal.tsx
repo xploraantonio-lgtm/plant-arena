@@ -57,6 +57,8 @@ export default function ProfileModal({
   const [isCheckingDeposits, setIsCheckingDeposits] = useState(false)
   const [copiedTreasury, setCopiedTreasury] = useState(false)
   const [isEditingRegisteredWallet, setIsEditingRegisteredWallet] = useState(false)
+  const [manualTxHashInput, setManualTxHashInput] = useState('')
+  const [showManualTxInput, setShowManualTxInput] = useState(false)
 
   // ── ESTADO DE RETIRO BEP20 (5% COMISIÓN) ──────────────────────────────────
   const [withdrawGems, setWithdrawGems] = useState<number>(10)
@@ -294,10 +296,10 @@ export default function ProfileModal({
   }
 
   // ── COMPROBAR DEPÓSITOS EN BLOCKCHAIN (CON DETECCIÓN Y NOTIFICACIÓN REALTIME) ─
-  const handleCheckBlockchainDeposits = async (isAutoPoll = false) => {
+  const handleCheckBlockchainDeposits = async (isAutoPoll = false, customTxHash?: string) => {
     try {
       if (!isAutoPoll) setIsCheckingDeposits(true)
-      const res = await accountService.triggerDepositCheck()
+      const res = await accountService.triggerDepositCheck(customTxHash)
 
       // Consultar historial actualizado
       const hist = await accountService.getFinancialHistory()
@@ -817,7 +819,7 @@ export default function ProfileModal({
               </div>
 
               <div className="crypto-detector-status-bar">
-                <span className="crypto-detector-pulse">🟢 Detección Automática Activa</span>
+                <span className="crypto-detector-pulse">🟢 Cron Automático 24/7 Activo</span>
                 <button
                   type="button"
                   className="crypto-refresh-blockchain-btn"
@@ -826,6 +828,78 @@ export default function ProfileModal({
                 >
                   {isCheckingDeposits ? '⏳ Escaneando...' : '🔄 Comprobar Blockchain Ahora'}
                 </button>
+              </div>
+
+              {/* Opción rápida de verificación directa por Hash de transacción */}
+              <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                {!showManualTxInput ? (
+                  <button
+                    type="button"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                    onClick={() => setShowManualTxInput(true)}
+                  >
+                    ¿Ya enviaste y tienes el Hash de la transacción? Verificar por Hash
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                    <input
+                      type="text"
+                      placeholder="0x... (Hash de la transacción)"
+                      value={manualTxHashInput}
+                      onChange={(e) => setManualTxHashInput(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        fontSize: '11px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={isCheckingDeposits || !manualTxHashInput.trim()}
+                      onClick={() => {
+                        handleCheckBlockchainDeposits(false, manualTxHashInput.trim())
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#3b82f6',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {isCheckingDeposits ? '⏳' : 'Verificar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowManualTxInput(false)}
+                      style={{
+                        padding: '6px 8px',
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: '#ccc',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

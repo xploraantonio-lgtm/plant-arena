@@ -44,9 +44,7 @@ interface RankingProps {
 interface ReferralLeaderboardUser {
   rank: number
   username: string
-  clan: string
   referredCount: number
-  earnedUsd: number
   tierBadge: string
   avatar: string
   isCurrentUser?: boolean
@@ -247,9 +245,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
           return {
             rank: r.puesto,
             username: r.nombre || 'Jugador',
-            clan: '-',
             referredCount: r.validos,
-            earnedUsd: r.validos * 1.0,
             tierBadge: r.validos >= 25 ? '👑 Embajador VIP' : r.validos >= 10 ? '⭐ Influencer' : r.validos >= 5 ? '🥉 Promotor' : '🌱 Iniciado',
             avatar: getPlayerAvatarUrl(r.avatar),
             isCurrentUser: isMe,
@@ -1088,46 +1084,40 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                     <span>⏳ Cargando clasificación de referidos...</span>
                   </div>
                 ) : paginatedReferralUsers.length > 0 ? (
-                  <table className="leaderboard-table">
+                  <table className="lb-table referral-lb-table">
                     <thead>
                       <tr>
-                        <th style={{ width: '60px' }}>POS</th>
-                        <th>JUGADOR</th>
-                        <th>CLAN</th>
-                        <th style={{ textAlign: 'center' }}>AMIGOS ACTIVOS</th>
-                        <th style={{ textAlign: 'center' }}>GANANCIAS (USD)</th>
-                        <th style={{ textAlign: 'right' }}>RANGO DE EMBAJADOR</th>
+                        <th style={{ width: '70px', textAlign: 'center' }}>POS</th>
+                        <th style={{ textAlign: 'left' }}>JUGADOR</th>
+                        <th style={{ width: '180px', textAlign: 'center' }}>AMIGOS ACTIVOS</th>
+                        <th style={{ width: '200px', textAlign: 'right' }}>RANGO DE EMBAJADOR</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedReferralUsers.map((usr) => (
-                        <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'row--user' : ''}>
-                          <td className="col-rank">
+                        <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'lb-row--user' : ''}>
+                          <td className="lb-col-rank" style={{ textAlign: 'center', fontWeight: 900 }}>
                             {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
                           </td>
-                          <td className="col-user">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <td className="lb-col-player">
+                            <div className="lb-player-cell" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                               <img
                                 src={getPlayerAvatarUrl(usr.avatar)}
                                 alt={usr.username}
-                                style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
+                                className="lb-avatar-circle"
                                 onError={(e) => {
                                   e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
                                 }}
                               />
-                              <strong className={usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}>
+                              <span className={`lb-player-name ${usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
                                 {usr.isCurrentUser && hasVipPass && '👑 '}
                                 {usr.username}
-                              </strong>
-                              {usr.isCurrentUser && <span className="user-self-badge">TÚ</span>}
+                                {usr.isCurrentUser && <span className="user-self-badge" style={{ marginLeft: '6px' }}>TÚ</span>}
+                              </span>
                             </div>
                           </td>
-                          <td className="col-clan">{usr.clan}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8' }}>
+                          <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8', fontSize: '12px' }}>
                             👥 {usr.referredCount} Amigos
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 900, color: '#4ade80' }}>
-                            ${usr.earnedUsd.toFixed(2)} USD
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <span className="referral-tier-pill">{usr.tierBadge}</span>
