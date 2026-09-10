@@ -839,6 +839,8 @@ export interface RunAsyncTimelineOptions {
   strictAuthoritativeHistory?: boolean
   stopOnGameOver?: boolean
   engineVersion?: EngineVersion
+  p1BaseHp?: number
+  p2BaseHp?: number
 }
 
 export interface RunAsyncTimelineResult {
@@ -877,6 +879,8 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     strictAuthoritativeHistory = true,
     stopOnGameOver = true,
     engineVersion = 'auth-v2',
+    p1BaseHp,
+    p2BaseHp,
   } = options
 
   const isStrategicMode = asyncOpponentMode === 'strategic'
@@ -895,7 +899,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         ok: false,
         reason: 'INVALID_P1_DECK',
         details: 'El mazo de P1 es obligatorio y no puede estar vacío en Ranked Async',
-        state: createBattleState(seed, false, true, undefined, engineVersion),
+        state: createBattleState(seed, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp),
         controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: true,
         motivo: 'no_result',
@@ -908,7 +912,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         ok: false,
         reason: 'INVALID_P1_DECK',
         details: 'El mazo de P1 no contiene cartas válidas',
-        state: createBattleState(seed, false, true, undefined, engineVersion),
+        state: createBattleState(seed, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp),
         controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: true,
         motivo: 'no_result',
@@ -924,7 +928,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         ok: false,
         reason: valDeckP2.reason,
         details: valDeckP2.details,
-        state: createBattleState(seed, false, true, undefined, engineVersion),
+        state: createBattleState(seed, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp),
         controller: createAsyncOpponentControllerFromValidated([], []),
         p1Ilegal: false,
         motivo: 'no_result',
@@ -943,7 +947,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
           inconsistencySeq: valIntents.seq,
           inconsistencyTick: valIntents.issuedTick,
           details: valIntents.details,
-          state: createBattleState(seed, false, true, undefined, engineVersion),
+          state: createBattleState(seed, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp),
           controller: createAsyncOpponentControllerFromValidated(mazoP2, []),
           p1Ilegal: false,
           motivo: 'no_result',
@@ -962,7 +966,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
         inconsistencySeq: validacionP1.seq,
         inconsistencyTick: validacionP1.issuedTick,
         details: validacionP1.details,
-        state: createBattleState(seed, false, true, undefined, engineVersion),
+        state: createBattleState(seed, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp),
         controller: isStrategicMode
           ? createStrategicOpponentController(mazoP2, {
               style: strategicStyle,
@@ -981,7 +985,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
     ordenadasP1 = validacionP1.acciones
 
     // 5. Inicialización estricta de State y Controller únicamente tras validar todo
-    state = createBattleState(seed, false, true, undefined, engineVersion)
+    state = createBattleState(seed, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp)
     controller = isStrategicMode
       ? createStrategicOpponentController(mazoP2, {
           style: strategicStyle,
@@ -994,7 +998,7 @@ export function runAsyncTimeline(options: RunAsyncTimelineOptions): RunAsyncTime
       : createAsyncOpponentControllerFromValidated(mazoP2, intencionesP2)
   } else {
     // RUTA PERMISIVA LEGACY (solo para compatibilidad fuera de Ranked)
-    state = createBattleState(seed, false, true, undefined, engineVersion)
+    state = createBattleState(seed, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp)
     mazoP1 = leerMazo(p1Deck) ?? []
     mazoP2 = leerMazo(asyncDeck) ?? []
     if (isStrategicMode) {
@@ -1354,7 +1358,9 @@ export function reconstruirPartidaAsync(
   asyncIntents: AsyncOpponentIntent[] | any[],
   p1Acciones: AccionP1Simulacion[] | any[],
   hastaTick: number,
-  engineVersion: EngineVersion = 'auth-v2'
+  engineVersion: EngineVersion = 'auth-v2',
+  p1BaseHp?: number,
+  p2BaseHp?: number
 ): ReconstruirPartidaAsyncResult {
   const res = runAsyncTimeline({
     seed,
@@ -1367,6 +1373,8 @@ export function reconstruirPartidaAsync(
     strictAuthoritativeHistory: true,
     stopOnGameOver: true,
     engineVersion,
+    p1BaseHp,
+    p2BaseHp,
   })
 
   if (!res.ok) {

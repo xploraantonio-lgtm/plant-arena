@@ -99,6 +99,19 @@ function getPlantRolls(plantId: PlantId): PlantStatKey[] {
   return []
 }
 
+export function getStoredMotherTreeBonus(): number {
+  try {
+    const raw = localStorage.getItem('plant_arena_mother_tree')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (typeof parsed?.treeLevel === 'number') {
+        return parsed.treeLevel * 50
+      }
+    }
+  } catch (_) {}
+  return 0
+}
+
 const createInitialCooldowns = (): Record<PlantId, number> =>
   (Object.keys(PLANT_CONFIGS) as PlantId[]).reduce(
     (acc, id) => ({ ...acc, [id]: 0 }),
@@ -110,6 +123,8 @@ const createInitialCooldowns = (): Record<PlantId, number> =>
 export function useGameEngine() {
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [, setRenderTick] = useState<number>(0)
+
+  const p1TreeBonusHpRef = useRef<number>(getStoredMotherTreeBonus())
 
   // Single mutable reference holding all game state
   const stateRef = useRef<GameState>({
@@ -128,7 +143,7 @@ export function useGameEngine() {
       waveStart: 0,
     },
     status: 'ready',
-    p1BaseHp: INITIAL_BASE_HP,
+    p1BaseHp: INITIAL_BASE_HP + p1TreeBonusHpRef.current,
     p2BaseHp: INITIAL_BASE_HP,
     sunBank: INITIAL_SUN,
     p2SunBank: INITIAL_SUN,
@@ -435,21 +450,16 @@ export function useGameEngine() {
     mazos?: { mio: unknown; rival: unknown } | null,
     isAsyncMatch?: boolean,
     initialAsyncIntents?: unknown,
-    engineVersion: EngineVersion = 'auth-v2'
+    engineVersion: EngineVersion = 'auth-v2',
+    treeBonusHp?: number
   ) => {
     sessionGenerationRef.current += 1
     engineVersionRef.current = engineVersion
 
-    let p1TreeBonusHp = 0
-    try {
-      const raw = localStorage.getItem('plant_arena_mother_tree')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (typeof parsed?.treeLevel === 'number') {
-          p1TreeBonusHp = parsed.treeLevel * 50
-        }
-      }
-    } catch (_) {}
+    const effectiveTreeBonusHp = typeof treeBonusHp === 'number'
+      ? treeBonusHp
+      : getStoredMotherTreeBonus()
+    p1TreeBonusHpRef.current = effectiveTreeBonusHp
 
     stateRef.current = createBattleState(
       seed,
@@ -457,7 +467,7 @@ export function useGameEngine() {
       esPvp,
       nivelPorElo(miElo ?? 1500),
       engineVersion,
-      INITIAL_BASE_HP + p1TreeBonusHp,
+      INITIAL_BASE_HP + effectiveTreeBonusHp,
       INITIAL_BASE_HP
     )
 
@@ -524,6 +534,17 @@ export function useGameEngine() {
     soundManager.playBgm('battle')
     forceRender()
   }, [forceRender, marcarInconsistenciaRanked])
+
+  const updateInitialTreeBonusHp = useCallback(
+    (bonus: number) => {
+      p1TreeBonusHpRef.current = bonus
+      if (stateRef.current.status === 'ready' && stateRef.current.tick === 0) {
+        stateRef.current.p1BaseHp = INITIAL_BASE_HP + bonus
+        forceRender()
+      }
+    },
+    [forceRender]
+  )
 
   // Start practice / sandbox mode
   const startPracticeGame = useCallback((plantId?: string) => {
@@ -833,7 +854,9 @@ export function useGameEngine() {
         asyncOpponentActionsBufferRef.current,
         accionesP1AceptadasRef.current,
         viejo.tick,
-        engineVersionRef.current
+        engineVersionRef.current,
+        INITIAL_BASE_HP + p1TreeBonusHpRef.current,
+        INITIAL_BASE_HP
       )
 
       if (!rebuildRes.ok) {
@@ -862,7 +885,9 @@ export function useGameEngine() {
       registroRef.current,
       viejo.tick,
       soyP1 ?? true,
-      engineVersionRef.current
+      engineVersionRef.current,
+      INITIAL_BASE_HP + p1TreeBonusHpRef.current,
+      INITIAL_BASE_HP
     )
     // Los soles y los enfriamientos son sólo tuyos y no salen del registro: si se
     // rehicieran, perderías los soles que ya habías recogido pulsando.
@@ -1790,5 +1815,6 @@ export function useGameEngine() {
     getAccionesP1Pending: () => accionesP1PendingRef.current,
     sessionGeneration: sessionGenerationRef.current,
     getSessionGeneration: () => sessionGenerationRef.current,
+    updateInitialTreeBonusHp,
   }
 }

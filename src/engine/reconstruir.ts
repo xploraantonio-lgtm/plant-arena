@@ -39,6 +39,7 @@
 import { createBattleState, stepTick, type GameState, type EngineVersion } from './simulate.ts'
 import { huellaDeLaPartida, tocaHuella, type HuellaEnUnTic } from './huella.ts'
 import type { PlantId, PlantStatKey } from '../types/game.ts'
+import { INITIAL_BASE_HP } from '../utils/gameConstants.ts'
 
 /** Una jugada del registro, con de quién es. */
 export interface AccionRegistrada {
@@ -74,9 +75,11 @@ export function reconstruirHasta(
   semilla: number,
   acciones: readonly AccionRegistrada[],
   hastaTick: number,
-  engineVersion: EngineVersion = 'auth-v2'
+  engineVersion: EngineVersion = 'auth-v2',
+  p1BaseHp: number = INITIAL_BASE_HP,
+  p2BaseHp: number = INITIAL_BASE_HP
 ): GameState {
-  const estado = sembrar(semilla, acciones, engineVersion)
+  const estado = sembrar(semilla, acciones, engineVersion, p1BaseHp, p2BaseHp)
   while (estado.tick < hastaTick && estado.status === 'playing') {
     // Sin sonidos: se están rehaciendo tics que el jugador ya vivió, y volver a
     // sonarlos sería un estruendo de dos minutos de partida en un instante.
@@ -101,9 +104,11 @@ export function reconstruirConHuellas(
   acciones: readonly AccionRegistrada[],
   hastaTick: number,
   soyP1: boolean,
-  engineVersion: EngineVersion = 'auth-v2'
+  engineVersion: EngineVersion = 'auth-v2',
+  p1BaseHp: number = INITIAL_BASE_HP,
+  p2BaseHp: number = INITIAL_BASE_HP
 ): { estado: GameState; huellas: HuellaEnUnTic[] } {
-  const estado = sembrar(semilla, acciones, engineVersion)
+  const estado = sembrar(semilla, acciones, engineVersion, p1BaseHp, p2BaseHp)
   const huellas: HuellaEnUnTic[] = []
 
   while (estado.tick < hastaTick && estado.status === 'playing') {
@@ -122,9 +127,11 @@ export function reconstruirConHuellas(
 function sembrar(
   semilla: number,
   acciones: readonly AccionRegistrada[],
-  engineVersion: EngineVersion = 'auth-v2'
+  engineVersion: EngineVersion = 'auth-v2',
+  p1BaseHp: number = INITIAL_BASE_HP,
+  p2BaseHp: number = INITIAL_BASE_HP
 ): GameState {
-  const estado = createBattleState(semilla, false, true, undefined, engineVersion)
+  const estado = createBattleState(semilla, false, true, undefined, engineVersion, p1BaseHp, p2BaseHp)
 
   // Por tic, y a igualdad de tic en el orden en que están: el registro llega
   // desordenado cuando el canal en vivo y la recuperación periódica se solapan, y
