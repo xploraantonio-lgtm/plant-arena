@@ -1242,16 +1242,27 @@ export default function Shop({
         {themedAlert && (
           <div className="main-menu-dialog-backdrop" onClick={() => setThemedAlert(null)}>
             <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
-              <div className="main-menu-dialog-icon">{themedAlert.icon}</div>
-              <h3 className="main-menu-dialog-title">{themedAlert.title}</h3>
+              <div className="main-menu-dialog-header">
+                <div className="main-menu-dialog-icon">{themedAlert.icon}</div>
+                <h3 className="main-menu-dialog-title">{themedAlert.title}</h3>
+                <button
+                  type="button"
+                  className="main-menu-dialog-close"
+                  onClick={() => setThemedAlert(null)}
+                >
+                  ✕
+                </button>
+              </div>
               <p className="main-menu-dialog-msg">{themedAlert.message}</p>
-              <button
-                type="button"
-                className="main-menu-dialog-btn"
-                onClick={() => setThemedAlert(null)}
-              >
-                ENTENDIDO
-              </button>
+              <div className="main-menu-dialog-actions">
+                <button
+                  type="button"
+                  className="main-menu-dialog-btn"
+                  onClick={() => setThemedAlert(null)}
+                >
+                  ENTENDIDO
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -13,10 +13,12 @@
 .pvp-reward-modal {
   position: relative;
   width: min(920px, 96vw);
-  overflow: hidden;
+  max-height: min(94vh, 600px);
+  overflow-y: auto;
+  box-sizing: border-box;
   border: 2px solid rgba(250, 204, 21, 0.75);
   border-radius: 28px;
-  padding: 28px;
+  padding: 24px 28px;
   background: linear-gradient(145deg, rgba(38, 8, 18, 0.98), rgba(11, 26, 16, 0.98));
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.72), 0 0 50px rgba(250, 204, 21, 0.18);
   color: white;
@@ -93,8 +95,74 @@
 
 @media (max-width: 720px) {
   .pvp-reward-modal { padding: 18px 12px; }
-  .pvp-reward-grid { gap: 7px; }
+  .pvp-reward-grid { gap: 7px; margin: 14px 0; }
   .pvp-drop-card { min-height: 205px; }
   .pvp-drop-img { width: 82px; height: 82px; }
   .pvp-drop-name { font-size: .78rem; }
 }
+
+@media (max-height: 520px) {
+  .pvp-reward-overlay {
+    padding: 6px;
+  }
+
+  .pvp-reward-modal {
+    padding: 10px 14px;
+    border-radius: 16px;
+    max-height: 98vh;
+  }
+
+  .pvp-reward-header h2 {
+    font-size: 1.25rem;
+    margin: 2px 0;
+  }
+
+  .pvp-reward-header p {
+    font-size: 0.75rem;
+  }
+
+  .pvp-reward-grid {
+    margin: 8px 0;
+    gap: 6px;
+  }
+
+  .pvp-drop-card {
+    min-height: 125px;
+    gap: 3px;
+    border-radius: 14px;
+    padding: 4px;
+  }
+
+  .pvp-drop-img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .pvp-drop-name {
+    font-size: 0.7rem;
+  }
+
+  .pvp-drop-quantity {
+    font-size: 1rem;
+  }
+
+  .pvp-drop-detail {
+    font-size: 0.65rem;
+  }
+
+  .pvp-drop-rarity {
+    font-size: 0.6rem;
+    padding: 1px 6px;
+  }
+
+  .pvp-reward-claim {
+    padding: 8px 18px;
+    font-size: 0.85rem;
+  }
+
+  .pvp-reward-wait {
+    min-height: 28px;
+    font-size: 0.8rem;
+  }
+}
+

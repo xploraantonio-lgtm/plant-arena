@@ -779,10 +779,19 @@ export default function MainMenu({
       {activeAlert && (
         <div className="main-menu-dialog-backdrop" onClick={() => setActiveAlert(null)}>
           <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
-            <div className="main-menu-dialog-icon">{activeAlert.icon}</div>
-            <h3 className="main-menu-dialog-title">{activeAlert.title}</h3>
+            <div className="main-menu-dialog-header">
+              <div className="main-menu-dialog-icon">{activeAlert.icon}</div>
+              <h3 className="main-menu-dialog-title">{activeAlert.title}</h3>
+              <button
+                type="button"
+                className="main-menu-dialog-close"
+                onClick={() => setActiveAlert(null)}
+              >
+                ✕
+              </button>
+            </div>
             <p className="main-menu-dialog-msg">{activeAlert.message}</p>
-            <div className="main-menu-dialog-actions" style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center' }}>
+            <div className="main-menu-dialog-actions">
               <button
                 type="button"
                 className="main-menu-dialog-btn"
@@ -809,40 +818,93 @@ export default function MainMenu({
       )}
 
       {/* CONFIRMACIÓN ACELERAR SOBRE CON ORO */}
-      {slotToAccelerate && (
-        <div
-          className="main-menu-dialog-backdrop"
-          onClick={() => {
-            if (!isAccelerating) setSlotToAccelerate(null)
-          }}
-        >
-          <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
-            <div className="main-menu-dialog-icon">⚡</div>
-            <h3 className="main-menu-dialog-title">DESBLOQUEAR AL INSTANTE</h3>
-            <p className="main-menu-dialog-msg">
-              {`¿Deseas desbloquear este sobre al instante por ${calculateInstantUnlockGoldCost(slotToAccelerate)} de Oro?`}
-            </p>
-            <div className="main-menu-dialog-actions">
-              <button
-                type="button"
-                className="main-menu-dialog-btn main-menu-dialog-btn--cancel"
-                disabled={isAccelerating}
-                onClick={() => setSlotToAccelerate(null)}
-              >
-                CANCELAR
-              </button>
-              <button
-                type="button"
-                className="main-menu-dialog-btn main-menu-dialog-btn--confirm"
-                disabled={isAccelerating}
-                onClick={handleConfirmAccelerate}
-              >
-                {isAccelerating ? 'PROCESANDO...' : 'ACELERAR'}
-              </button>
+      {slotToAccelerate && (() => {
+        const goldCost = calculateInstantUnlockGoldCost(slotToAccelerate)
+        const hasEnoughGold = (userGold ?? 0) >= goldCost
+        const missingGold = goldCost - (userGold ?? 0)
+        const remainingTime = getRemainingTimeString(slotToAccelerate)
+
+        return (
+          <div
+            className="main-menu-dialog-backdrop"
+            onClick={() => {
+              if (!isAccelerating) setSlotToAccelerate(null)
+            }}
+          >
+            <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
+              <div className="main-menu-dialog-header">
+                <div className="main-menu-dialog-icon">⚡</div>
+                <h3 className="main-menu-dialog-title">DESBLOQUEAR AL INSTANTE</h3>
+                <button
+                  type="button"
+                  className="main-menu-dialog-close"
+                  onClick={() => {
+                    if (!isAccelerating) setSlotToAccelerate(null)
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Vista previa del sobre PvP */}
+              <div className="game-dialog-pack-preview">
+                <img
+                  src="/game-assets/greenfoot/seed_pack_pvp.webp"
+                  alt="Sobre PvP"
+                  className="game-dialog-pack-img"
+                />
+                <div className="game-dialog-pack-meta">
+                  <span className="game-dialog-pack-tag">ARENA {slotToAccelerate.arenaLevel}</span>
+                  <span className="game-dialog-pack-name">Sobre de Victoria PvP</span>
+                  <span className="game-dialog-pack-timer">⏱️ Restante: {remainingTime}</span>
+                </div>
+              </div>
+
+              {/* Comparación de Oro */}
+              <div className="game-dialog-gold-box">
+                <div className="game-dialog-gold-row">
+                  <span className="game-dialog-gold-label">Costo de aceleración:</span>
+                  <strong className="game-dialog-gold-val game-dialog-gold-val--cost">
+                    {goldCost} 🪙 Oro
+                  </strong>
+                </div>
+                <div className="game-dialog-gold-row">
+                  <span className="game-dialog-gold-label">Tu saldo actual:</span>
+                  <strong className="game-dialog-gold-val">{userGold ?? 0} 🪙</strong>
+                </div>
+                {!hasEnoughGold && (
+                  <div className="game-dialog-gold-warning">
+                    ⚠️ Te faltan {missingGold} de Oro para acelerar este sobre.
+                  </div>
+                )}
+              </div>
+
+              <div className="main-menu-dialog-actions">
+                <button
+                  type="button"
+                  className="main-menu-dialog-btn main-menu-dialog-btn--cancel"
+                  disabled={isAccelerating}
+                  onClick={() => setSlotToAccelerate(null)}
+                >
+                  CANCELAR
+                </button>
+                <button
+                  type="button"
+                  className={`main-menu-dialog-btn main-menu-dialog-btn--confirm ${!hasEnoughGold ? 'main-menu-dialog-btn--disabled' : ''}`}
+                  disabled={isAccelerating || !hasEnoughGold}
+                  onClick={handleConfirmAccelerate}
+                >
+                  {isAccelerating
+                    ? 'PROCESANDO...'
+                    : hasEnoughGold
+                    ? `PAGAR ${goldCost} 🪙`
+                    : 'ORO INSUFICIENTE'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* PLAYER PROFILE MODAL */}
       <ProfileModal

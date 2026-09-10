@@ -1190,10 +1190,19 @@ export function useInventory() {
     const res = await inventoryService.claimPackSlot(slotIndex)
     if (!res.success) {
       console.warn('[claimSlotOnServer] Error al reclamar slot:', res.error)
-      if (res.error?.includes('SLOT_NOT_READY')) {
-        alert('⏳ El cofre aún está sincronizando su tiempo con el servidor. Por favor intenta de nuevo en unos segundos.')
-      } else if (res.error) {
-        alert(`⚠️ No se pudo abrir el cofre: ${res.error}`)
+      const isSyncing = res.error?.includes('SLOT_NOT_READY')
+      const title = isSyncing ? 'SINCRONIZANDO COFRE' : 'ERROR AL ABRIR COFRE'
+      const message = isSyncing
+        ? 'El cofre aún está sincronizando su tiempo con el servidor. Por favor intenta de nuevo en unos segundos.'
+        : `No se pudo abrir el cofre: ${res.error || 'Error inesperado'}`
+      const icon = isSyncing ? '⏳' : '⚠️'
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('plant-arena:game-alert', {
+            detail: { title, message, icon },
+          })
+        )
       }
       return null
     }

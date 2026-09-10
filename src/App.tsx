@@ -78,6 +78,21 @@ function App() {
   const [lastOpenedPackType, setLastOpenedPackType] = useState<PackId | null>(null)
   const [activeAppAlert, setActiveAppAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
 
+  useEffect(() => {
+    const handleGameAlert = (e: Event) => {
+      const customEvent = e as CustomEvent<{ title: string; message: string; icon?: string }>
+      if (customEvent.detail) {
+        setActiveAppAlert({
+          title: customEvent.detail.title,
+          message: customEvent.detail.message,
+          icon: customEvent.detail.icon || '⚠️',
+        })
+      }
+    }
+    window.addEventListener('plant-arena:game-alert', handleGameAlert)
+    return () => window.removeEventListener('plant-arena:game-alert', handleGameAlert)
+  }, [])
+
   /**
    * VERSIÓN NUEVA PUBLICADA
    *
@@ -1232,16 +1247,27 @@ function App() {
         {activeAppAlert && (
           <div className="main-menu-dialog-backdrop" onClick={() => setActiveAppAlert(null)}>
             <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
-              <div className="main-menu-dialog-icon">{activeAppAlert.icon}</div>
-              <h3 className="main-menu-dialog-title">{activeAppAlert.title}</h3>
+              <div className="main-menu-dialog-header">
+                <div className="main-menu-dialog-icon">{activeAppAlert.icon}</div>
+                <h3 className="main-menu-dialog-title">{activeAppAlert.title}</h3>
+                <button
+                  type="button"
+                  className="main-menu-dialog-close"
+                  onClick={() => setActiveAppAlert(null)}
+                >
+                  ✕
+                </button>
+              </div>
               <p className="main-menu-dialog-msg">{activeAppAlert.message}</p>
-              <button
-                type="button"
-                className="main-menu-dialog-btn"
-                onClick={() => setActiveAppAlert(null)}
-              >
-                ENTENDIDO
-              </button>
+              <div className="main-menu-dialog-actions">
+                <button
+                  type="button"
+                  className="main-menu-dialog-btn"
+                  onClick={() => setActiveAppAlert(null)}
+                >
+                  ENTENDIDO
+                </button>
+              </div>
             </div>
           </div>
         )}

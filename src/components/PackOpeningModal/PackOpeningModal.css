@@ -22,10 +22,13 @@
   padding: 24px 32px;
   max-width: 440px;
   width: 90%;
+  max-height: min(94vh, 580px);
+  overflow-y: auto;
+  box-sizing: border-box;
   text-align: center;
   box-shadow: 0 0 50px rgba(251, 191, 36, 0.4), 0 20px 40px rgba(0, 0, 0, 0.8);
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
   animation: popCard 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
@@ -261,3 +264,95 @@
   color: #60a5fa;
   margin-top: 2px;
 }
+
+@media (max-width: 480px) {
+  .pack-reveal-card {
+    padding: 16px 18px;
+    border-radius: 18px;
+    width: 95%;
+  }
+
+  .pack-reveal-card__img-wrap {
+    width: 100px;
+    height: 100px;
+    margin: 8px auto;
+  }
+
+  .pack-reveal-card__sprite {
+    max-width: 90px;
+    max-height: 90px;
+  }
+
+  .pack-reveal-card__name {
+    font-size: 18px;
+  }
+
+  .pack-reveal-card__stats {
+    padding: 6px 10px;
+    margin-bottom: 12px;
+  }
+
+  .pack-reveal-btn {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+}
+
+@media (max-height: 520px) {
+  .pack-reveal-card {
+    padding: 10px 16px;
+    border-radius: 14px;
+    max-height: 96vh;
+  }
+
+  .pack-reveal-card__header {
+    margin-bottom: 4px;
+  }
+
+  .pack-reveal-card__img-wrap {
+    width: 60px;
+    height: 60px;
+    margin: 4px auto;
+  }
+
+  .pack-reveal-card__sprite {
+    max-width: 55px;
+    max-height: 55px;
+  }
+
+  .pack-reveal-card__name {
+    font-size: 15px;
+  }
+
+  .pack-reveal-card__cat {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+
+  .pack-reveal-card__stats {
+    padding: 4px 8px;
+    margin-bottom: 8px;
+  }
+
+  .pack-reveal-stat__label {
+    font-size: 8px;
+  }
+
+  .pack-reveal-stat__val {
+    font-size: 10px;
+  }
+
+  .pack-reveal-card__actions {
+    gap: 6px;
+  }
+
+  .pack-reveal-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+
+  .pack-reveal-multi-grid {
+    max-height: 180px;
+  }
+}
+

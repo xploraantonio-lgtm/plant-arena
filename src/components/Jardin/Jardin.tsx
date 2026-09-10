@@ -1065,90 +1065,132 @@ export default function Jardin({
       )}
 
       {/* MODAL DE CONFIRMACIÓN PARA ACELERAR SOBRE PvP CON ORO */}
-      {rewardPackAccelerating && (
-        <div className="jardin-fuse-modal-backdrop" onClick={() => setRewardPackAccelerating(null)}>
-          <div className="jardin-fuse-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="jardin-fuse-modal__header">
-              <h3>⚡ ACELERAR DESBLOQUEO</h3>
-              <button
-                type="button"
-                className="jardin-fuse-modal__close"
-                onClick={() => setRewardPackAccelerating(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="jardin-fuse-modal__body">
-              <p>
-                ¿Deseas desbloquear y abrir este sobre PvP inmediatamente por <strong>{rewardPackAccelerating.goldCost} 🪙 Oro</strong>?
-              </p>
-              <div className="jardin-fuse-modal__cost-info">
-                <span>Tu saldo actual:</span>
-                <strong>{userGold} 🪙</strong>
+      {rewardPackAccelerating && (() => {
+        const hasEnoughGold = (userGold ?? 0) >= rewardPackAccelerating.goldCost
+        const missingGold = rewardPackAccelerating.goldCost - (userGold ?? 0)
+
+        return (
+          <div
+            className="main-menu-dialog-backdrop"
+            onClick={() => {
+              if (!isAcceleratingReward) setRewardPackAccelerating(null)
+            }}
+          >
+            <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
+              <div className="main-menu-dialog-header">
+                <div className="main-menu-dialog-icon">⚡</div>
+                <h3 className="main-menu-dialog-title">ACELERAR DESBLOQUEO</h3>
+                <button
+                  type="button"
+                  className="main-menu-dialog-close"
+                  onClick={() => {
+                    if (!isAcceleratingReward) setRewardPackAccelerating(null)
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Vista previa del sobre */}
+              <div className="game-dialog-pack-preview">
+                <img
+                  src="/game-assets/greenfoot/seed_pack_pvp.webp"
+                  alt="Sobre PvP"
+                  className="game-dialog-pack-img"
+                />
+                <div className="game-dialog-pack-meta">
+                  <span className="game-dialog-pack-tag">SOBRE PvP</span>
+                  <span className="game-dialog-pack-name">Sobre de Recompensas</span>
+                  <span className="game-dialog-pack-timer">⚡ Desbloqueo Inmediato</span>
+                </div>
+              </div>
+
+              {/* Comparación de Oro */}
+              <div className="game-dialog-gold-box">
+                <div className="game-dialog-gold-row">
+                  <span className="game-dialog-gold-label">Costo en Oro:</span>
+                  <strong className="game-dialog-gold-val game-dialog-gold-val--cost">
+                    {rewardPackAccelerating.goldCost} 🪙
+                  </strong>
+                </div>
+                <div className="game-dialog-gold-row">
+                  <span className="game-dialog-gold-label">Tu saldo actual:</span>
+                  <strong className="game-dialog-gold-val">{userGold ?? 0} 🪙</strong>
+                </div>
+                {!hasEnoughGold && (
+                  <div className="game-dialog-gold-warning">
+                    ⚠️ Te faltan {missingGold} de Oro para desbloquear este sobre.
+                  </div>
+                )}
+              </div>
+
+              <div className="main-menu-dialog-actions">
+                <button
+                  type="button"
+                  className="main-menu-dialog-btn main-menu-dialog-btn--cancel"
+                  disabled={isAcceleratingReward}
+                  onClick={() => setRewardPackAccelerating(null)}
+                >
+                  CANCELAR
+                </button>
+                <button
+                  type="button"
+                  className={`main-menu-dialog-btn main-menu-dialog-btn--confirm ${!hasEnoughGold ? 'main-menu-dialog-btn--disabled' : ''}`}
+                  disabled={isAcceleratingReward || !hasEnoughGold}
+                  onClick={async () => {
+                    if (!hasEnoughGold) {
+                      setRewardPackAlert({
+                        title: 'ORO INSUFICIENTE',
+                        message: `Necesitas ${rewardPackAccelerating.goldCost} de oro para acelerar este sobre.`,
+                        icon: '🪙',
+                      })
+                      setRewardPackAccelerating(null)
+                      return
+                    }
+                    setIsAcceleratingReward(true)
+                    try {
+                      soundManager.playSound('plantation', 0.9)
+                      if (onInstantUnlockRewardPack) {
+                        const res = await onInstantUnlockRewardPack(rewardPackAccelerating.packId)
+                        if (!res.success && res.error) {
+                          setRewardPackAlert({
+                            title: 'ERROR AL ACELERAR',
+                            message: res.error,
+                            icon: '⚠️',
+                          })
+                        }
+                      }
+                    } finally {
+                      setIsAcceleratingReward(false)
+                      setRewardPackAccelerating(null)
+                    }
+                  }}
+                >
+                  {isAcceleratingReward
+                    ? 'ACELERANDO...'
+                    : hasEnoughGold
+                    ? `PAGAR ${rewardPackAccelerating.goldCost} 🪙`
+                    : 'ORO INSUFICIENTE'}
+                </button>
               </div>
             </div>
-            <div className="jardin-fuse-modal__actions">
-              <button
-                type="button"
-                className="jardin-btn-cancel"
-                onClick={() => setRewardPackAccelerating(null)}
-              >
-                CANCELAR
-              </button>
-              <button
-                type="button"
-                className="jardin-btn-confirm-fuse"
-                disabled={isAcceleratingReward || userGold < rewardPackAccelerating.goldCost}
-                onClick={async () => {
-                  if (userGold < rewardPackAccelerating.goldCost) {
-                    setRewardPackAlert({
-                      title: 'ORO INSUFICIENTE',
-                      message: `Necesitas ${rewardPackAccelerating.goldCost} de oro para acelerar este sobre.`,
-                      icon: '🪙',
-                    })
-                    setRewardPackAccelerating(null)
-                    return
-                  }
-                  setIsAcceleratingReward(true)
-                  try {
-                    soundManager.playSound('plantation', 0.9)
-                    if (onInstantUnlockRewardPack) {
-                      const res = await onInstantUnlockRewardPack(rewardPackAccelerating.packId)
-                      if (!res.success && res.error) {
-                        setRewardPackAlert({
-                          title: 'ERROR AL ACELERAR',
-                          message: res.error,
-                          icon: '⚠️',
-                        })
-                      }
-                    }
-                  } finally {
-                    setIsAcceleratingReward(false)
-                    setRewardPackAccelerating(null)
-                  }
-                }}
-              >
-                {isAcceleratingReward ? 'ACELERANDO...' : `PAGAR ${rewardPackAccelerating.goldCost} 🪙`}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* MODAL DE ALERTA DE SOBRES PvP */}
       {rewardPackAlert && (
-        <div className="jardin-fuse-modal-backdrop" onClick={() => setRewardPackAlert(null)}>
-          <div className="jardin-fuse-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="jardin-fuse-modal__header">
-              <h3>{rewardPackAlert.title}</h3>
-              <button type="button" className="jardin-fuse-modal__close" onClick={() => setRewardPackAlert(null)}>✕</button>
-            </div>
-            <div className="jardin-fuse-modal__body">
-              <div style={{ fontSize: '3rem', textAlign: 'center', marginBottom: '10px' }}>{rewardPackAlert.icon}</div>
-              <p style={{ textAlign: 'center' }}>{rewardPackAlert.message}</p>
-            </div>
-            <div className="jardin-fuse-modal__actions">
-              <button type="button" className="jardin-btn-confirm-fuse" onClick={() => setRewardPackAlert(null)}>
+        <div className="main-menu-dialog-backdrop" onClick={() => setRewardPackAlert(null)}>
+          <div className="main-menu-dialog-card" onClick={(e) => e.stopPropagation()}>
+            <div className="main-menu-dialog-icon">{rewardPackAlert.icon}</div>
+            <h3 className="main-menu-dialog-title">{rewardPackAlert.title}</h3>
+            <p className="main-menu-dialog-msg">{rewardPackAlert.message}</p>
+            <div className="main-menu-dialog-actions">
+              <button
+                type="button"
+                className="main-menu-dialog-btn"
+                onClick={() => setRewardPackAlert(null)}
+              >
                 ENTENDIDO
               </button>
             </div>
