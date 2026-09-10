@@ -429,6 +429,7 @@ function App() {
   /** Cancelar la búsqueda y volver al menú. */
   const salirDeLaCola = async () => {
     await cancelar()
+    void refreshFromServer()
     handleRegresarAlMenu()
   }
 

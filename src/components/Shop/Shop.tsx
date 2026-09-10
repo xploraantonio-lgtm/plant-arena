@@ -584,7 +584,10 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Básico</h4>
-                  <span className="shop-pack-price-tag">{packPrice('basic')} 💎 Gemas</span>
+                  <div className="shop-pack-pricing-col">
+                    <span className="shop-pack-price-tag">{packPrice('basic').toLocaleString('en-US')} 💎 Gemas</span>
+                    <span className="shop-pack-details-price">💵 Precio: $3.00 USD</span>
+                  </div>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -604,7 +607,7 @@ export default function Shop({
                 >
                   {isPurchasingPack
                     ? '⏳ PROCESANDO...'
-                    : `COMPRAR (${getQty('basic')}) — ${packPrice('basic') * getQty('basic')} 💎 Gemas`}
+                    : `COMPRAR (${getQty('basic')}) — ${(packPrice('basic') * getQty('basic')).toLocaleString('en-US')} 💎 Gemas`}
                 </button>
               </div>
 
@@ -626,7 +629,10 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Épico</h4>
-                  <span className="shop-pack-price-tag shop-pack-price-tag--epic">{packPrice('epic')} 💎 Gemas</span>
+                  <div className="shop-pack-pricing-col">
+                    <span className="shop-pack-price-tag shop-pack-price-tag--epic">{packPrice('epic').toLocaleString('en-US')} 💎 Gemas</span>
+                    <span className="shop-pack-details-price">💵 Precio: $10.00 USD</span>
+                  </div>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -646,7 +652,7 @@ export default function Shop({
                 >
                   {isPurchasingPack
                     ? '⏳ PROCESANDO...'
-                    : `COMPRAR (${getQty('epic')}) — ${packPrice('epic') * getQty('epic')} 💎 Gemas`}
+                    : `COMPRAR (${getQty('epic')}) — ${(packPrice('epic') * getQty('epic')).toLocaleString('en-US')} 💎 Gemas`}
                 </button>
               </div>
 
@@ -668,7 +674,10 @@ export default function Shop({
                 </div>
                 <div className="shop-pack-meta">
                   <h4 className="shop-pack-name">Sobre Legendario</h4>
-                  <span className="shop-pack-price-tag shop-pack-price-tag--legendary">{packPrice('legendary')} 💎 Gemas</span>
+                  <div className="shop-pack-pricing-col">
+                    <span className="shop-pack-price-tag shop-pack-price-tag--legendary">{packPrice('legendary').toLocaleString('en-US')} 💎 Gemas</span>
+                    <span className="shop-pack-details-price">💵 Precio: $25.00 USD</span>
+                  </div>
                 </div>
 
                 <div className="shop-pack-qty-bar">
@@ -688,7 +697,7 @@ export default function Shop({
                 >
                   {isPurchasingPack
                     ? '⏳ PROCESANDO...'
-                    : `COMPRAR (${getQty('legendary')}) — ${packPrice('legendary') * getQty('legendary')} 💎 Gemas`}
+                    : `COMPRAR (${getQty('legendary')}) — ${(packPrice('legendary') * getQty('legendary')).toLocaleString('en-US')} 💎 Gemas`}
                 </button>
               </div>
             </div>
@@ -1266,7 +1275,7 @@ export default function Shop({
                       ? epicSeedImg
                       : legendarySeedImg
                   }
-                  alt=""
+                  alt="Sobre de semillas"
                   className="shop-pack-details-img"
                 />
                 <div className="shop-pack-details-meta">
@@ -1282,9 +1291,12 @@ export default function Shop({
                     {selectedPackDetails === 'basic'
                       ? '3.00'
                       : selectedPackDetails === 'epic'
-                      ? '5.00'
-                      : '10.00'}{' '}
+                      ? '10.00'
+                      : '25.00'}{' '}
                     USD
+                  </span>
+                  <span className="shop-pack-details-gems-val">
+                    💎 {packPrice(selectedPackDetails).toLocaleString('en-US')} Gemas
                   </span>
                 </div>
               </div>
@@ -1321,7 +1333,7 @@ export default function Shop({
                 >
                   {isPurchasingPack
                     ? '⏳ PROCESANDO...'
-                    : `🛒 COMPRAR (${getQty(selectedPackDetails)}) — ${packPrice(selectedPackDetails) * getQty(selectedPackDetails)} 💎 Gemas`}
+                    : `🛒 COMPRAR (${getQty(selectedPackDetails)}) — ${(packPrice(selectedPackDetails) * getQty(selectedPackDetails)).toLocaleString('en-US')} 💎 Gemas`}
                 </button>
               </div>
             </div>
