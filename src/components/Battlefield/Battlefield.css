@@ -1412,11 +1412,33 @@
    pensado para leerse en una captura de pantalla: cifras tabulares para poder
    comparar los tics de las dos ventanas de un vistazo. */
 
+.pvp-diag-toggle-btn {
+  position: absolute;
+  top: 0.4rem;
+  left: 15.5%;
+  z-index: 45;
+  background: rgba(7, 20, 13, 0.7);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: #a7f3d0;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pvp-diag-toggle-btn:hover {
+  background: rgba(22, 101, 52, 0.9);
+  color: white;
+  border-color: #4ade80;
+}
+
 .pvp-diag {
   position: absolute;
-  top: 3.2rem;
-  left: 0.5rem;
-  z-index: 40;
+  top: 2rem;
+  left: 15.5%;
+  z-index: 45;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
@@ -1426,11 +1448,11 @@
   font-size: 0.62rem;
   line-height: 1.35;
   color: #e2e8f0;
-  background: rgba(7, 20, 13, 0.82);
+  background: rgba(7, 20, 13, 0.92);
   border: 1px solid rgba(74, 222, 128, 0.5);
   border-radius: 0.35rem;
-  pointer-events: none;
   font-variant-numeric: tabular-nums;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
 }
 
 .pvp-diag__linea b { color: #fde047; font-weight: 700; }
@@ -1441,15 +1463,15 @@
   overflow-wrap: anywhere;
 }
 
-/* Cartel de entrenamiento. Arriba a la izquierda, donde en PvP va el
-   diagnóstico: quien juega contra la máquina tiene que saberlo sin buscarlo. */
+/* Cartel de entrenamiento centrado en el medio superior para no tapar ninguna base */
 .entrenamiento-aviso {
   position: absolute;
-  top: 3.2rem;
-  left: 0.5rem;
+  top: 0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 40;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.7rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #cbd5e1;

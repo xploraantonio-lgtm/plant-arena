@@ -294,6 +294,8 @@ export default function Battlefield({
     })
   }, [])
 
+  const [showPvpDiag, setShowPvpDiag] = useState<boolean>(false)
+
   const sessionGenerationRef = useRef<number>(sessionGeneration ?? 0)
   sessionGenerationRef.current = sessionGeneration ?? 0
   const roomIdRef = useRef<string | null>(roomId ?? null)
@@ -1325,6 +1327,17 @@ export default function Battlefield({
       )}
 
       {roomId && (
+        <button
+          type="button"
+          className="pvp-diag-toggle-btn"
+          onClick={() => setShowPvpDiag((prev) => !prev)}
+          title="Ver / Ocultar diagnóstico técnico"
+        >
+          {showPvpDiag ? '✕ Diag' : '📊'}
+        </button>
+      )}
+
+      {roomId && showPvpDiag && (
         <div className="pvp-diag">
           <div className="pvp-diag__linea">
             <b>SALA</b> {roomId.slice(0, 8)} · <b>TIC</b> {tick}
