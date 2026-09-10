@@ -1304,7 +1304,9 @@ export function simulateAsyncMatch(
   p1Actions: AccionP1Simulacion[] | any[],
   asyncActionsRaw: unknown,
   maxTicks = TOPE_DE_SEGURIDAD_ASYNC,
-  engineVersion: EngineVersion = 'auth-v2'
+  engineVersion: EngineVersion = 'auth-v2',
+  p1BaseHp?: number,
+  p2BaseHp?: number
 ): ResultadoSimulacionAsync {
   const res = runAsyncTimeline({
     seed,
@@ -1317,6 +1319,8 @@ export function simulateAsyncMatch(
     strictAuthoritativeHistory: true,
     stopOnGameOver: true,
     engineVersion,
+    p1BaseHp,
+    p2BaseHp,
   })
 
   return {

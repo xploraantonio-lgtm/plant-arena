@@ -287,6 +287,8 @@ export default function Battlefield({
     } catch (_) {}
     return 0
   })
+  const treeBonusHpRef = useRef<number>(treeBonusHp)
+  treeBonusHpRef.current = treeBonusHp
 
   useEffect(() => {
     void supabaseService.getMotherTreeState().then((res) => {
@@ -294,6 +296,7 @@ export default function Battlefield({
         const bonus = res.treeLevel * 50
         setTreeLevel(res.treeLevel)
         setTreeBonusHp(bonus)
+        treeBonusHpRef.current = bonus
         updateInitialTreeBonusHp(bonus)
       }
     })
@@ -381,7 +384,7 @@ export default function Battlefield({
 
         startedGensRef.current.add(attemptGen)
         setClockSyncStatus('synced')
-        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, undefined, validEngine, treeBonusHp)
+        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, undefined, validEngine, treeBonusHpRef.current)
       })
       .catch((err: any) => {
         if (matchClockGenRef.current !== attemptGen) {
@@ -390,7 +393,7 @@ export default function Battlefield({
         setClockSyncStatus('error')
         setClockSyncError(err?.message || 'No se pudo sincronizar la partida con el servidor.')
       })
-  }, [seed, soyP1, mazosDeLaSala, isAsyncMatch, engineVersion, startGame, treeBonusHp])
+  }, [seed, soyP1, mazosDeLaSala, isAsyncMatch, engineVersion, startGame])
 
   const [colosseumResult, setColosseumResult] = useState<{
     payoutGems: number
@@ -1132,10 +1135,10 @@ export default function Battlefield({
         syncAndStartMatchClock(roomId)
       } else {
         // Entrenamiento contra el bot local: no hay reloj que alinear
-        startGame(seed, false, undefined, userElo, undefined, undefined, undefined, undefined, undefined, treeBonusHp)
+        startGame(seed, false, undefined, userElo, undefined, undefined, undefined, undefined, undefined, treeBonusHpRef.current)
       }
     }
-  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, startStrategicPlaytestGame, setSelectedCard, gameStatus, userElo, syncAndStartMatchClock, matchMode, strategicPlaytestConfig, activeDeck, treeBonusHp])
+  }, [practicePlantId, seed, roomId, startGame, startPracticeGame, startStrategicPlaytestGame, setSelectedCard, gameStatus, userElo, syncAndStartMatchClock, matchMode, strategicPlaytestConfig, activeDeck])
 
   /**
    * LA HUELLA DEL TABLERO

@@ -165,6 +165,7 @@ interface ServerAttempt {
   sequence: string[]
   exactCount: number
   wrongPosCount: number
+  slotResults?: ('exact' | 'wrong' | 'miss')[]
   pct: number
   wasFree: boolean
   createdAt: string
@@ -880,13 +881,16 @@ export default function LotteryModal({
                     <h3>¡ADIVINA LA SECUENCIA DE {SECRET_CODE_LENGTH} PLANTAS!</h3>
                     {roundIsOpen ? (
                       <p>
-                        {codeRound?.freeAttempts ?? 3} intentos gratis por ronda. El primero que
-                        acierte las {SECRET_CODE_LENGTH} en orden <strong>cierra la ronda</strong> y se lleva{' '}
+                        {codeRound?.freeAttempts ?? 3} intentos gratis por ronda. <strong>Semáforo estilo Wordle</strong> por cada casilla:{' '}
+                        <span style={{ color: '#4ade80' }}>🟢 Verde</span> = casilla exacta,{' '}
+                        <span style={{ color: '#facc15' }}>🟡 Amarillo</span> = en otra casilla,{' '}
+                        <span style={{ color: '#94a3b8' }}>🔴 Rojo</span> = descartada.{' '}
+                        ¡El primero en descifrar las {SECRET_CODE_LENGTH} en orden se lleva{' '}
                         <strong>
                           {codeRound?.prizesConfig?.[0]
                             ? `${codeRound.prizesConfig[0].amount} ${codeRound.prizesConfig[0].currency === 'gold' ? '💰' : '💎'}`
                             : `${codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎`}
-                        </strong>.
+                        </strong>!
                       </p>
                     ) : (
                       <p>
@@ -975,6 +979,7 @@ export default function LotteryModal({
                   {/* ÚLTIMO INTENTO REALIZADO (PREVIEW) */}
                   {codeHistory.length > 0 && (() => {
                     const lastAtt = codeHistory[0]
+                    const missCount = Math.max(0, (lastAtt.sequence?.length || SECRET_CODE_LENGTH) - lastAtt.exactCount - lastAtt.wrongPosCount)
                     return (
                       <div className="lottery-code-last-attempt-card">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -983,25 +988,46 @@ export default function LotteryModal({
                             {lastAtt.sequence.map((pId, pIdx) => {
                               const pConf = PLANT_CONFIGS[pId as PlantId]
                               const pIcon = pConf ? pConf.packetActive || pConf.icon : ''
+                              const slotRes = lastAtt.slotResults?.[pIdx]
+                              const resClass = slotRes ? `lottery-hist-mini-card--${slotRes}` : ''
+                              const tooltip = slotRes === 'exact'
+                                ? `${pConf?.name} · Casilla #${pIdx + 1}: ¡Exacta en su lugar! 🟢`
+                                : slotRes === 'wrong'
+                                ? `${pConf?.name} · En el código, pero en OTRA casilla 🟡`
+                                : slotRes === 'miss'
+                                ? `${pConf?.name} · Descartada (no está en el código) 🔴`
+                                : pConf?.name
+
                               return (
-                                <div key={pIdx} className="lottery-hist-mini-card" title={pConf?.name}>
+                                <div key={pIdx} className={`lottery-hist-mini-card ${resClass}`} title={tooltip}>
                                   <img src={pIcon} alt={pConf?.name} />
+                                  {slotRes && (
+                                    <span className={`lottery-hist-slot-dot lottery-hist-slot-dot--${slotRes}`}>
+                                      {slotRes === 'exact' ? '🟢' : slotRes === 'wrong' ? '🟡' : '🔴'}
+                                    </span>
+                                  )}
                                 </div>
                               )
                             })}
                           </div>
-                          <div className="lottery-history-pins">
-                            {Array.from({ length: lastAtt.exactCount }).map((_, i) => (
-                              <span key={`ex_${i}`} className="lottery-pin lottery-pin--exact" title="Posición exacta">🟢</span>
-                            ))}
-                            {Array.from({ length: lastAtt.wrongPosCount }).map((_, i) => (
-                              <span key={`wp_${i}`} className="lottery-pin lottery-pin--wrong" title="Posición errónea">🟡</span>
-                            ))}
-                            {Array.from({ length: Math.max(0, (lastAtt.sequence?.length || SECRET_CODE_LENGTH) - lastAtt.exactCount - lastAtt.wrongPosCount) }).map((_, i) => (
-                              <span key={`inc_${i}`} className="lottery-pin lottery-pin--miss" title="No está">🔴</span>
-                            ))}
+                          <div className="lottery-history-badges">
+                            {lastAtt.exactCount > 0 && (
+                              <span className="lottery-count-badge lottery-count-badge--exact" title={`${lastAtt.exactCount} plantas en posición exacta`}>
+                                🟢 {lastAtt.exactCount}
+                              </span>
+                            )}
+                            {lastAtt.wrongPosCount > 0 && (
+                              <span className="lottery-count-badge lottery-count-badge--wrong" title={`${lastAtt.wrongPosCount} plantas en otra casilla`}>
+                                🟡 {lastAtt.wrongPosCount}
+                              </span>
+                            )}
+                            {missCount > 0 && (
+                              <span className="lottery-count-badge lottery-count-badge--miss" title={`${missCount} plantas descartadas`}>
+                                🔴 {missCount}
+                              </span>
+                            )}
                           </div>
-                          <strong className="lottery-history-pct" style={{ fontSize: '11px' }}>
+                          <strong className="lottery-history-pct" style={{ fontSize: '11px', marginLeft: 'auto' }}>
                             {Number(lastAtt.pct).toFixed(1)}%
                           </strong>
                         </div>
@@ -1024,11 +1050,11 @@ export default function LotteryModal({
               <div className="lottery-code-full-pane">
                 <div className="lottery-code-history-box" style={{ flex: 1 }}>
                   <div className="lottery-history-header">
-                    <h5>📜 HISTORIAL COMPLETO DE INTENTOS Y PISTAS:</h5>
+                    <h5>📜 HISTORIAL Y SEMÁFORO DE CASILLAS (WORDLE):</h5>
                     <div className="lottery-pins-legend">
-                      <span className="pin-tag pin-tag--exact">🟢 Posición Exacta</span>
-                      <span className="pin-tag pin-tag--wrong">🟡 Posición Errónea</span>
-                      <span className="pin-tag pin-tag--miss">🔴 No Está</span>
+                      <span className="pin-tag pin-tag--exact">🟢 Casilla Correcta</span>
+                      <span className="pin-tag pin-tag--wrong">🟡 En otra Casilla</span>
+                      <span className="pin-tag pin-tag--miss">🔴 Descartada</span>
                     </div>
                   </div>
 
@@ -1048,48 +1074,66 @@ export default function LotteryModal({
                         </div>
                       </div>
                     ) : (
-                      codeHistory.map((att, idx) => (
-                        <div key={att.id} className="lottery-history-row">
-                          <span className="lottery-history-num">#{codeHistory.length - idx}</span>
-                          <div className="lottery-history-cards">
-                            {att.sequence.map((pId, pIdx) => {
-                              const pConf = PLANT_CONFIGS[pId as PlantId]
-                              const pIcon = pConf ? pConf.packetActive || pConf.icon : ''
-                              return (
-                                <div key={pIdx} className="lottery-hist-mini-card" title={pConf?.name}>
-                                  <img src={pIcon} alt={pConf?.name} />
-                                </div>
-                              )
-                            })}
-                          </div>
+                      codeHistory.map((att, idx) => {
+                        const missCount = Math.max(0, (att.sequence?.length || SECRET_CODE_LENGTH) - att.exactCount - att.wrongPosCount)
+                        return (
+                          <div key={att.id} className="lottery-history-row">
+                            <span className="lottery-history-num">#{codeHistory.length - idx}</span>
+                            <div className="lottery-history-cards">
+                              {att.sequence.map((pId, pIdx) => {
+                                const pConf = PLANT_CONFIGS[pId as PlantId]
+                                const pIcon = pConf ? pConf.packetActive || pConf.icon : ''
+                                const slotRes = att.slotResults?.[pIdx]
+                                const resClass = slotRes ? `lottery-hist-mini-card--${slotRes}` : ''
+                                const tooltip = slotRes === 'exact'
+                                  ? `${pConf?.name} · Casilla #${pIdx + 1}: ¡Exacta en su lugar! 🟢`
+                                  : slotRes === 'wrong'
+                                  ? `${pConf?.name} · En el código, pero en OTRA casilla 🟡`
+                                  : slotRes === 'miss'
+                                  ? `${pConf?.name} · Descartada (no está en el código) 🔴`
+                                  : pConf?.name
 
-                          <div className="lottery-history-pins">
-                            {Array.from({ length: att.exactCount }).map((_, i) => (
-                              <span key={`ex_${i}`} className="lottery-pin lottery-pin--exact" title="Planta y posición correcta">
-                                🟢
-                              </span>
-                            ))}
-                            {Array.from({ length: att.wrongPosCount }).map((_, i) => (
-                              <span key={`wp_${i}`} className="lottery-pin lottery-pin--wrong" title="Planta correcta, posición errónea">
-                                🟡
-                              </span>
-                            ))}
-                            {Array.from({ length: Math.max(0, (att.sequence?.length || SECRET_CODE_LENGTH) - att.exactCount - att.wrongPosCount) }).map((_, i) => (
-                              <span key={`inc_${i}`} className="lottery-pin lottery-pin--miss" title="Planta no está en la clave">
-                                🔴
-                              </span>
-                            ))}
-                          </div>
+                                return (
+                                  <div key={pIdx} className={`lottery-hist-mini-card ${resClass}`} title={tooltip}>
+                                    <img src={pIcon} alt={pConf?.name} />
+                                    {slotRes && (
+                                      <span className={`lottery-hist-slot-dot lottery-hist-slot-dot--${slotRes}`}>
+                                        {slotRes === 'exact' ? '🟢' : slotRes === 'wrong' ? '🟡' : '🔴'}
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
 
-                          <strong
-                            className="lottery-history-pct"
-                            style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}
-                            title="Acercamiento: cada acierto exacto vale el doble que una planta en posición errónea"
-                          >
-                            {Number(att.pct).toFixed(1)}%
-                          </strong>
-                        </div>
-                      ))
+                            <div className="lottery-history-badges">
+                              {att.exactCount > 0 && (
+                                <span className="lottery-count-badge lottery-count-badge--exact" title={`${att.exactCount} en la casilla correcta`}>
+                                  🟢 {att.exactCount}
+                                </span>
+                              )}
+                              {att.wrongPosCount > 0 && (
+                                <span className="lottery-count-badge lottery-count-badge--wrong" title={`${att.wrongPosCount} en el código pero en otra casilla`}>
+                                  🟡 {att.wrongPosCount}
+                                </span>
+                              )}
+                              {missCount > 0 && (
+                                <span className="lottery-count-badge lottery-count-badge--miss" title={`${missCount} descartadas`}>
+                                  🔴 {missCount}
+                                </span>
+                              )}
+                            </div>
+
+                            <strong
+                              className="lottery-history-pct"
+                              style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}
+                              title="Acercamiento acumulado"
+                            >
+                              {Number(att.pct).toFixed(1)}%
+                            </strong>
+                          </div>
+                        )
+                      })
                     )}
                   </div>
                 </div>

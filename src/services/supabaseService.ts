@@ -1742,6 +1742,7 @@ export const SupabaseService = {
       sequence: string[]
       exactCount: number
       wrongPosCount: number
+      slotResults?: ('exact' | 'wrong' | 'miss')[]
       pct: number
       wasFree: boolean
       createdAt: string
@@ -1799,6 +1800,7 @@ export const SupabaseService = {
     exactCount?: number
     wrongPosCount?: number
     pct?: number
+    slotResults?: ('exact' | 'wrong' | 'miss')[]
     wasFree?: boolean
     solved?: boolean
     roundFinished?: boolean

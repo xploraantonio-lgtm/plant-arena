@@ -175,32 +175,104 @@ describe('Secret Code Lottery V2 — 5 Plantas (Pruebas Unitarias y de Seguridad
     expect(resV2.pct).toBe(80)
   })
 
-  describe('Auditoría estática de 52-secret-code-v2-5-plants.sql', () => {
-    const sqlPath = path.resolve(__dirname, '../../supabase/52-secret-code-v2-5-plants.sql')
+/**
+ * Emulación exacta de la lógica PL/pgSQL de `_score_secret_guess_wordle` en TypeScript
+ * para validar matemáticamente todos los escenarios de puntuación Wordle por casilla.
+ */
+function scoreSecretGuessWordle(secret: string[], guess: string[]) {
+  const v_len = secret.length
+  let exact = 0
+  let wrong = 0
+  const v_sec = [...secret] as (string | null)[]
+  const v_gue = [...guess] as (string | null)[]
+  const slotResults: ('exact' | 'wrong' | 'miss')[] = Array(v_len).fill('miss')
+
+  // Paso 1: Exactos (Verde)
+  for (let i = 0; i < v_len; i++) {
+    if (v_gue[i] !== null && v_sec[i] !== null && v_gue[i] === v_sec[i]) {
+      exact++
+      slotResults[i] = 'exact'
+      v_sec[i] = null
+      v_gue[i] = null
+    }
+  }
+
+  // Paso 2: Mal ubicados (Amarillo)
+  for (let i = 0; i < v_len; i++) {
+    if (v_gue[i] === null) continue
+    for (let j = 0; j < v_len; j++) {
+      if (v_sec[j] !== null && v_sec[j] === v_gue[i]) {
+        wrong++
+        slotResults[i] = 'wrong'
+        v_sec[j] = null
+        v_gue[i] = null
+        break
+      }
+    }
+  }
+
+  const score = exact * 2 + wrong
+  const maxScore = v_len * 2
+  const pct = Number(((score / maxScore) * 100).toFixed(2))
+
+  return {
+    exactCount: exact,
+    wrongPosCount: wrong,
+    pct,
+    slotResults,
+    solved: pct >= 100,
+  }
+}
+
+  it('9. Wordle: Evaluación posicional exacta casilla por casilla', () => {
+    const secret = ['sunflower', 'peashooter', 'wallnut', 'chomper', 'melonpult']
+    // sunflower en pos 0 (exact), chomper en pos 1 (wrong), garlic en pos 2 (miss), peashooter en pos 3 (wrong), melonpult en pos 4 (exact)
+    const guess = ['sunflower', 'chomper', 'garlic', 'peashooter', 'melonpult']
+
+    const res = scoreSecretGuessWordle(secret, guess)
+    expect(res.slotResults).toEqual(['exact', 'wrong', 'miss', 'wrong', 'exact'])
+    expect(res.exactCount).toBe(2)
+    expect(res.wrongPosCount).toBe(2)
+    expect(res.pct).toBe(60)
+  })
+
+  it('10. Wordle: Manejo de plantas duplicadas (no marcar doble amarillo o verde inexistente)', () => {
+    // Secreto tiene solo UN sunflower
+    const secret = ['sunflower', 'peashooter', 'wallnut', 'chomper', 'melonpult']
+    // Jugador pone DOS sunflower: uno en pos 0 (exacto) y otro en pos 1 (debe ser miss porque ya se consumió el único sunflower)
+    const guess = ['sunflower', 'sunflower', 'garlic', 'bonkchoy', 'aloe']
+
+    const res = scoreSecretGuessWordle(secret, guess)
+    expect(res.slotResults[0]).toBe('exact')
+    expect(res.slotResults[1]).toBe('miss') // No puede ser wrong porque solo había 1 en el secreto
+    expect(res.exactCount).toBe(1)
+    expect(res.wrongPosCount).toBe(0)
+  })
+
+  describe('Auditoría estática de 81-secret-code-wordle-slot-results.sql', () => {
+    const sqlPath = path.resolve(__dirname, '../../supabase/migrations/81-secret-code-wordle-slot-results.sql')
     const sqlContent = fs.readFileSync(sqlPath, 'utf-8')
 
-    it('A. Añade columna code_version y actualiza constraints para soportar 4 y 5 plantas', () => {
-      expect(sqlContent).toContain('code_version INTEGER NOT NULL DEFAULT 2')
-      expect(sqlContent).toContain('CHECK (array_length(secret, 1) IN (4, 5))')
-      expect(sqlContent).toContain('CHECK (array_length(sequence, 1) IN (4, 5))')
-      expect(sqlContent).toContain('CHECK (exact_count BETWEEN 0 AND 5)')
+    it('A. Añade columna slot_results a secret_code_attempts', () => {
+      expect(sqlContent).toContain('ALTER TABLE public.secret_code_attempts')
+      expect(sqlContent).toContain('ADD COLUMN IF NOT EXISTS slot_results TEXT[]')
     })
 
-    it('B. _score_secret_guess adapta la longitud dinámica v_len y denominador (v_len * 2)', () => {
-      expect(sqlContent).toContain('array_length(p_secret, 1)')
-      expect(sqlContent).toContain('(v_len * 2)::NUMERIC')
+    it('B. Define _score_secret_guess_wordle retornando slot_results', () => {
+      expect(sqlContent).toContain('CREATE OR REPLACE FUNCTION public._score_secret_guess_wordle')
+      expect(sqlContent).toContain('slot_results TEXT[]')
+      expect(sqlContent).toContain("v_results[i] := 'exact'")
+      expect(sqlContent).toContain("v_results[i] := 'wrong'")
     })
 
-    it('C. guess_secret_code valida contra la longitud de la ronda activa y cierra al 100%', () => {
-      expect(sqlContent).toContain('v_req_len := COALESCE(array_length(v_round.secret, 1), 5)')
-      expect(sqlContent).toContain('array_length(p_sequence, 1) <> v_req_len')
-      expect(sqlContent).toContain("status = 'finished'")
+    it('C. guess_secret_code persiste y retorna slotResults', () => {
+      expect(sqlContent).toContain('_score_secret_guess_wordle')
+      expect(sqlContent).toContain('slot_results')
+      expect(sqlContent).toContain("'slotResults', v_score.slot_results")
     })
 
-    it('D. admin_open_secret_code_round genera 5 plantas por defecto y bote de 10 gemas', () => {
-      expect(sqlContent).toContain('p_prize_pool    NUMERIC DEFAULT 10')
-      expect(sqlContent).toContain('p_prize_1st     NUMERIC DEFAULT 10')
-      expect(sqlContent).toContain('v_count := CASE WHEN v_version = 1 THEN 4 ELSE 5 END')
+    it('D. secret_code_state incluye slotResults en el historial', () => {
+      expect(sqlContent).toContain("'slotResults', a.slot_results")
     })
   })
 })
