@@ -469,7 +469,11 @@ export default function Shop({
           </div>
           <div
             className="shop-energy-badge"
-            title={userElo <= 1601 ? '⚡ Energía ilimitada en rango novato (< 1602 copas)' : `⚡ Energía diaria: ${playerEnergy}/${maxPlayerEnergy}`}
+            title={
+              userElo <= 1601
+                ? '⚡ Energía ilimitada en rango novato (< 1602 copas)'
+                : `⚡ Energía diaria: ${playerEnergy}/${maxPlayerEnergy}`
+            }
             onClick={() => {
               soundManager.playSound('click', 0.5)
               setActiveTab('energy')
@@ -1103,14 +1107,18 @@ export default function Shop({
                     <span className="shop-energy-status-val">
                       {userElo <= 1601 ? '∞ (ILIMITADA)' : `${playerEnergy} / ${maxPlayerEnergy}`}
                     </span>
-                    {hasVipPass && <span className="shop-energy-vip-pill">👑 PASE VIP (+5 DIARIAS)</span>}
+                    {hasVipPass && (
+                      <span className="shop-energy-vip-pill">
+                        👑 PASE VIP {userElo <= 1601 ? '(+5 DIARIAS EN RANKED)' : '(+5 DIARIAS)'}
+                      </span>
+                    )}
                   </div>
                   <p className="shop-energy-status-subtext">
                     {userElo <= 1601
-                      ? 'Estás en Arena 1 (< 1602 copas). Todas tus partidas son gratuitas y no consumen energía.'
+                      ? `Estás en Arena 1 (< 1602 copas). Todas tus partidas son gratuitas y no consumen energía. Al alcanzar 1602 copas (Ranked Competitivo) contarás con tus ${maxPlayerEnergy} energías diarias (${hasVipPass ? '25 por tu Pase VIP' : '20 estándar'}).`
                       : hasVipPass
-                      ? 'Cuentas con 25 energías diarias. Las partidas en rango competitivo consumen 1 ⚡ por juego.'
-                      : 'Cuentas con 20 energías diarias. Las partidas en rango competitivo consumen 1 ⚡ por juego. Activa el Pase VIP para obtener 25 diarias.'}
+                      ? 'Cuentas con 25 energías diarias (+5 por Pase VIP). Las partidas en rango competitivo (≥ 1602 copas) consumen 1 ⚡ por juego.'
+                      : 'Cuentas con 20 energías diarias. Las partidas en rango competitivo (≥ 1602 copas) consumen 1 ⚡ por juego. Activa el Pase VIP para obtener 25 diarias.'}
                   </p>
                 </div>
               </div>

@@ -113,12 +113,19 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 5px;
 }
 
 .topbar__right {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+}
+
+.topbar__substats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .season-timer-row {
@@ -261,6 +268,18 @@
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.3) !important;
 }
 
+.card--stat-ticket {
+  border-color: #fbbf24 !important;
+  color: #fef08a !important;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.3) !important;
+  transition: all 0.2s ease;
+}
+
+.card--stat-ticket:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.5) !important;
+}
+
 .card--stat-energy {
   border-color: #38bdf8 !important;
   color: #7dd3fc !important;
@@ -271,6 +290,12 @@
 .card--stat-energy:hover {
   transform: scale(1.05);
   box-shadow: 0 0 14px rgba(56, 189, 248, 0.5) !important;
+}
+
+.topbar__substats .card--stat {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 20px;
 }
 
 

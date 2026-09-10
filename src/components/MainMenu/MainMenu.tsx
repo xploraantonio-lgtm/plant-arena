@@ -415,6 +415,7 @@ export default function MainMenu({
         </div>
 
         <div className="topbar__right-wrap">
+          {/* FILA 1: MONEDAS DE ORO, GEMAS Y ELO 🏆 */}
           <div className="topbar__right">
             <div className="card card--stat card--stat-gold" title="Monedas de Oro">
               <img className="card__icon" src={moneda} alt="Monedas" />
@@ -432,6 +433,19 @@ export default function MainMenu({
               <img className="card__icon" src={gema} alt="Gemas" />
               {userTokens.toLocaleString()}
             </div>
+            <div
+              className="card card--stat"
+              style={{ cursor: 'pointer' }}
+              onClick={onOpenRanking}
+              title="Ver Camino de Arenas y Ranking Global"
+            >
+              <img className="card__icon" src={ranking} alt="" />
+              {userElo} 🏆
+            </div>
+          </div>
+
+          {/* FILA 2: TICKETS DE COLISEO Y ENERGÍA DIARIA (DEBAJO DE ELO / STATS) */}
+          <div className="topbar__substats">
             <div className="card card--stat card--stat-ticket" title="Tickets de Coliseo (1 Ticket = 0.5 💎 de entrada)">
               <span style={{ fontSize: '1.05rem' }}>🎟️</span>
               {colosseumTickets}
@@ -440,7 +454,7 @@ export default function MainMenu({
               className="card card--stat card--stat-energy"
               title={
                 userElo <= 1601
-                  ? '⚡ Energía ilimitada en Arena 1 novato (< 1602 Copas)'
+                  ? '⚡ Energía ilimitada en Arena 1 novato (< 1602 Copas). ¡Juega todas las partidas que quieras sin costo!'
                   : `⚡ Energía Diaria: ${playerEnergy}/${maxPlayerEnergy} (Recarga a las 00:00 UTC). Clic para recargar en la Tienda.`
               }
               style={{ cursor: 'pointer' }}
@@ -451,15 +465,6 @@ export default function MainMenu({
             >
               <span style={{ fontSize: '1.05rem', filter: 'drop-shadow(0 0 3px #38bdf8)' }}>⚡</span>
               {userElo <= 1601 ? '∞' : `${playerEnergy}/${maxPlayerEnergy}`}
-            </div>
-            <div
-              className="card card--stat"
-              style={{ cursor: 'pointer' }}
-              onClick={onOpenRanking}
-              title="Ver Camino de Arenas y Ranking Global"
-            >
-              <img className="card__icon" src={ranking} alt="" />
-              {userElo} 🏆
             </div>
           </div>
 
