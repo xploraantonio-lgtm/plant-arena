@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { PlantId } from '../../types/game'
+import type { CodeRoundPrizeTier } from '../../types/database.types'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import { soundManager } from '../../utils/audioManager'
 import { lotteryService } from '../../services/lotteryService'
@@ -150,6 +151,7 @@ interface CodeRound {
   freeAttempts: number
   prizePool: number
   prizes: number[]
+  prizesConfig?: CodeRoundPrizeTier[]
   winnerId: string | null
   codeVersion?: number
   plantCount?: number
@@ -751,7 +753,7 @@ export default function LotteryModal({
                   <div className="lottery-code-promo-banner">
                     <div className="lottery-promo-badge">
                       {roundIsOpen
-                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizePool ?? 50} 💎`
+                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizesConfig?.[0]?.amount ?? codeRound?.prizePool ?? 50} ${codeRound?.prizesConfig?.[0]?.currency === 'gold' ? '💰' : '💎'}`
                         : codeRound
                           ? `⏸️ RONDA #${codeRound.roundNumber} FINALIZADA`
                           : '⏸️ SIN RONDA ACTIVA'}
@@ -761,7 +763,11 @@ export default function LotteryModal({
                       <p>
                         {codeRound?.freeAttempts ?? 3} intentos gratis por ronda. El primero que
                         acierte las {SECRET_CODE_LENGTH} en orden <strong>cierra la ronda</strong> y se lleva{' '}
-                        <strong>{codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎</strong>.
+                        <strong>
+                          {codeRound?.prizesConfig?.[0]
+                            ? `${codeRound.prizesConfig[0].amount} ${codeRound.prizesConfig[0].currency === 'gold' ? '💰' : '💎'}`
+                            : `${codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎`}
+                        </strong>.
                       </p>
                     ) : (
                       <p>
@@ -979,7 +985,18 @@ export default function LotteryModal({
                     <h5>🏆 CLASIFICACIÓN DE LA RONDA:</h5>
                     <div className="lottery-pins-legend">
                       <span className="pin-tag pin-tag--exact">
-                        🥇 50 💎 · 🥈 100 💰 · 🥉 80 💰 · Top 4-10: Oro 💰
+                        {codeRound?.prizesConfig && codeRound.prizesConfig.length > 0
+                          ? codeRound.prizesConfig
+                              .slice(0, 3)
+                              .map(
+                                (p) =>
+                                  `${p.place === 1 ? '🥇' : p.place === 2 ? '🥈' : '🥉'} ${p.amount} ${p.currency === 'gold' ? '💰' : '💎'}`
+                              )
+                              .join(' · ') +
+                            (codeRound.prizesConfig.length > 3
+                              ? ` · Top 4-${codeRound.prizesConfig.length}: Premios`
+                              : '')
+                          : '🥇 50 💎 · 🥈 100 💰 · 🥉 80 💰 · Top 4-10: Oro 💰'}
                       </span>
                     </div>
                   </div>
@@ -1001,6 +1018,7 @@ export default function LotteryModal({
                       </div>
                     ) : (
                       codeBoard.map((e) => {
+                        const configuredPrize = codeRound?.prizesConfig?.find((p) => p.place === e.place)
                         const topGoldPrizes: Record<number, number> = {
                           2: 100,
                           3: 80,
@@ -1036,21 +1054,37 @@ export default function LotteryModal({
                             <strong style={{ fontVariantNumeric: 'tabular-nums', minWidth: 60, textAlign: 'right' }}>
                               {Number(e.bestPct).toFixed(1)}%
                             </strong>
-                            {isWinner && (
+                            {configuredPrize ? (
                               <span
-                                style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#38bdf8', fontWeight: 900 }}
-                                title="Premio Bote al ganador que descifre el 100%"
+                                style={{
+                                  marginLeft: 10,
+                                  fontVariantNumeric: 'tabular-nums',
+                                  color: configuredPrize.currency === 'gems' ? '#38bdf8' : '#f59e0b',
+                                  fontWeight: 800,
+                                }}
+                                title={`Premio Top #${e.place} (+${configuredPrize.amount} ${configuredPrize.currency === 'gems' ? 'Gemas' : 'Oro'})`}
                               >
-                                {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎
+                                +{configuredPrize.amount} {configuredPrize.currency === 'gold' ? '💰' : '💎'}
                               </span>
-                            )}
-                            {!isWinner && goldPrize > 0 && (
-                              <span
-                                style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#f59e0b', fontWeight: 800 }}
-                                title={`Premio en Oro para el Top #${e.place} al finalizar la ronda`}
-                              >
-                                +{goldPrize} 💰
-                              </span>
+                            ) : (
+                              <>
+                                {isWinner && (
+                                  <span
+                                    style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#38bdf8', fontWeight: 900 }}
+                                    title="Premio Bote al ganador que descifre el 100%"
+                                  >
+                                    {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎
+                                  </span>
+                                )}
+                                {!isWinner && goldPrize > 0 && (
+                                  <span
+                                    style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#f59e0b', fontWeight: 800 }}
+                                    title={`Premio en Oro para el Top #${e.place} al finalizar la ronda`}
+                                  >
+                                    +{goldPrize} 💰
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         )

@@ -6,6 +6,12 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export interface CodeRoundPrizeTier {
+  place: number
+  amount: number
+  currency: 'gems' | 'gold'
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -196,6 +202,7 @@ export interface Database {
           prize_3rd: number
           winner_id: string | null
           code_version?: number
+          prizes_config?: CodeRoundPrizeTier[]
           created_at: string
           finished_at: string | null
         }

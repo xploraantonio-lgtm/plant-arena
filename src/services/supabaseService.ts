@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
-import type { Database } from '../types/database.types'
+import type { Database, CodeRoundPrizeTier } from '../types/database.types'
+export type { CodeRoundPrizeTier }
 import { type FreePackSlot, type PlayerRewardPack, normalizePackSlots } from '../utils/freePackManager'
 import type { DatosDeRepeticion } from '../engine/replay'
 import { parseLeaderboardRow, type ParsedLeaderboardRow } from '../utils/leaderboardParser'
@@ -1693,6 +1694,7 @@ export const SupabaseService = {
       freeAttempts: number
       prizePool: number
       prizes: number[]
+      prizesConfig?: CodeRoundPrizeTier[]
       winnerId: string | null
       createdAt: string
       finishedAt: string | null
@@ -1818,7 +1820,7 @@ export const SupabaseService = {
     // 2. Fallback: select directo a la tabla secret_code_rounds
     try {
       const { data, error } = await (supabase.from('secret_code_rounds') as any)
-        .select('id, round_number, status, free_attempts, prize_pool_gems, prize_1st, prize_2nd, prize_3rd, winner_id, created_at, finished_at')
+        .select('id, round_number, status, free_attempts, prize_pool_gems, prize_1st, prize_2nd, prize_3rd, prizes_config, winner_id, created_at, finished_at')
         .order('round_number', { ascending: false })
         .limit(15)
 
@@ -1840,6 +1842,7 @@ export const SupabaseService = {
           prize_1st: state.round.prizes?.[0] ?? state.round.prizePool,
           prize_2nd: state.round.prizes?.[1] ?? 0,
           prize_3rd: state.round.prizes?.[2] ?? 0,
+          prizes_config: state.round.prizesConfig,
           winner_id: state.round.winnerId,
           created_at: state.round.createdAt,
           finished_at: state.round.finishedAt,
@@ -1850,14 +1853,14 @@ export const SupabaseService = {
     return []
   },
 
-  /** Abre una ronda. Sólo administrador. El secreto lo genera el servidor y no
-   *  se devuelve: ni quien la abre puede conocerlo. */
+  /** Abre una ronda con configuración de premios flexible y autoritativa */
   async adminOpenSecretCodeRound(opts?: {
     prizePool?: number
     prize1st?: number
     prize2nd?: number
     prize3rd?: number
     freeAttempts?: number
+    prizesConfig?: CodeRoundPrizeTier[]
   }): Promise<{
     success: boolean
     roundId?: string
@@ -1866,18 +1869,38 @@ export const SupabaseService = {
   }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
-      const { data, error } = await (supabase.rpc as any)('admin_open_secret_code_round', {
-        p_prize_pool: opts?.prizePool ?? 50,
-        p_prize_1st: opts?.prize1st ?? 50,
-        p_prize_2nd: opts?.prize2nd ?? 0,
-        p_prize_3rd: opts?.prize3rd ?? 0,
-        p_free_attempts: opts?.freeAttempts ?? 3,
-      })
-      if (error) {
-        logError('adminOpenSecretCodeRound', error)
-        return { success: false, error: error.message }
+      const payload = {
+        prizePool: opts?.prizePool ?? 50,
+        prize1st: opts?.prize1st ?? (opts?.prizesConfig?.[0]?.amount ?? 50),
+        prize2nd: opts?.prize2nd ?? (opts?.prizesConfig?.[1]?.amount ?? 0),
+        prize3rd: opts?.prize3rd ?? (opts?.prizesConfig?.[2]?.amount ?? 0),
+        freeAttempts: opts?.freeAttempts ?? 3,
+        prizesConfig: opts?.prizesConfig ?? [],
       }
-      return data
+
+      // 1. Intentar llamar con p_payload (JSONB) para evitar colisiones de sobrecarga en Postgres
+      const { data: dataPayload, error: errorPayload } = await (supabase.rpc as any)('admin_open_secret_code_round', {
+        p_payload: payload,
+      })
+      if (!errorPayload && dataPayload?.success) {
+        return dataPayload
+      }
+
+      // 2. Si Postgres devuelve error de tipos o candidato, intentar con parámetros directos
+      const { data: dataDirect, error: errorDirect } = await (supabase.rpc as any)('admin_open_secret_code_round', {
+        p_prize_pool: payload.prizePool,
+        p_prize_1st: payload.prize1st,
+        p_prize_2nd: payload.prize2nd,
+        p_prize_3rd: payload.prize3rd,
+        p_free_attempts: payload.freeAttempts,
+      })
+      if (!errorDirect && dataDirect?.success) {
+        return dataDirect
+      }
+
+      const errStr = errorPayload?.message || errorDirect?.message || 'Error al abrir ronda'
+      logError('adminOpenSecretCodeRound', errStr)
+      return { success: false, error: errStr }
     } catch (e: any) {
       logError('adminOpenSecretCodeRound', e)
       return { success: false, error: e?.message }
@@ -1892,6 +1915,7 @@ export const SupabaseService = {
     prize3rd?: number
     freeAttempts?: number
     attemptCost?: number
+    prizesConfig?: CodeRoundPrizeTier[]
     settlePrevious?: boolean
   }): Promise<{
     success: boolean
@@ -1901,21 +1925,40 @@ export const SupabaseService = {
   }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
-      // Intentar RPC directo si la migración 72 está aplicada
-      const { data, error } = await (supabase.rpc as any)('admin_restart_secret_code_round', {
-        p_prize_pool: opts?.prizePool ?? 50,
-        p_prize_1st: opts?.prize1st ?? 50,
-        p_prize_2nd: opts?.prize2nd ?? 0,
-        p_prize_3rd: opts?.prize3rd ?? 0,
-        p_free_attempts: opts?.freeAttempts ?? 3,
-        p_attempt_cost: opts?.attemptCost ?? 10,
-        p_settle_previous: opts?.settlePrevious ?? true,
-      })
-      if (!error && data?.success) {
-        return data
+      const payload = {
+        prizePool: opts?.prizePool ?? 50,
+        prize1st: opts?.prize1st ?? (opts?.prizesConfig?.[0]?.amount ?? 50),
+        prize2nd: opts?.prize2nd ?? (opts?.prizesConfig?.[1]?.amount ?? 0),
+        prize3rd: opts?.prize3rd ?? (opts?.prizesConfig?.[2]?.amount ?? 0),
+        freeAttempts: opts?.freeAttempts ?? 3,
+        attemptCost: opts?.attemptCost ?? 10,
+        prizesConfig: opts?.prizesConfig ?? [],
+        settlePrevious: opts?.settlePrevious ?? true,
       }
 
-      // Fallback compuesto resiliente si el RPC nuevo aún no se ejecutó en DB
+      // 1. Intentar RPC con p_payload (JSONB)
+      const { data: dataPayload, error: errorPayload } = await (supabase.rpc as any)('admin_restart_secret_code_round', {
+        p_payload: payload,
+      })
+      if (!errorPayload && dataPayload?.success) {
+        return dataPayload
+      }
+
+      // 2. Intentar RPC directo con parámetros planos
+      const { data: dataDirect, error: errorDirect } = await (supabase.rpc as any)('admin_restart_secret_code_round', {
+        p_prize_pool: payload.prizePool,
+        p_prize_1st: payload.prize1st,
+        p_prize_2nd: payload.prize2nd,
+        p_prize_3rd: payload.prize3rd,
+        p_free_attempts: payload.freeAttempts,
+        p_attempt_cost: payload.attemptCost,
+        p_settle_previous: payload.settlePrevious,
+      })
+      if (!errorDirect && dataDirect?.success) {
+        return dataDirect
+      }
+
+      // 3. Fallback compuesto: cerrar anterior y abrir nueva
       if (opts?.settlePrevious !== false) {
         await this.adminCloseSecretCodeRound(true)
       } else {
