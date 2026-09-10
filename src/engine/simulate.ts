@@ -221,7 +221,9 @@ export function createBattleState(
   isPracticeMode = false,
   isPvpMode = false,
   nivelBot: NivelDelBot = NIVEL_POR_DEFECTO,
-  engineVersion: EngineVersion = 'auth-v2'
+  engineVersion: EngineVersion = 'auth-v2',
+  p1BaseHp: number = INITIAL_BASE_HP,
+  p2BaseHp: number = INITIAL_BASE_HP
 ): GameState {
   return {
     tick: 0,
@@ -244,8 +246,8 @@ export function createBattleState(
           waveStart: 0,
         },
     status: 'playing',
-    p1BaseHp: INITIAL_BASE_HP,
-    p2BaseHp: INITIAL_BASE_HP,
+    p1BaseHp: p1BaseHp ?? INITIAL_BASE_HP,
+    p2BaseHp: p2BaseHp ?? INITIAL_BASE_HP,
     sunBank: INITIAL_SUN,
     // Paridad: los dos jugadores empiezan con los mismos soles.
     p2SunBank: INITIAL_SUN,

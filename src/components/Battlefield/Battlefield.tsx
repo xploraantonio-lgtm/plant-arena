@@ -6,6 +6,7 @@ import { tournamentService } from '../../services/tournamentService'
 import { useGameEngine } from '../../hooks/useGameEngine'
 import { useAuth } from '../../hooks/useAuth'
 import { battleService } from '../../services/battleService'
+import { supabaseService } from '../../services/supabaseService'
 import {
   MatchActionOutbox,
   type MatchActionIntent,
@@ -241,6 +242,25 @@ export default function Battlefield({
 
   const { user } = useAuth()
   const currentUserId = user?.id ?? null
+
+  const [treeBonusHp, setTreeBonusHp] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('plant_arena_mother_tree')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return typeof parsed?.treeLevel === 'number' ? parsed.treeLevel * 50 : 0
+      }
+    } catch (_) {}
+    return 0
+  })
+
+  useEffect(() => {
+    void supabaseService.getMotherTreeState().then((res) => {
+      if (typeof res?.treeLevel === 'number') {
+        setTreeBonusHp(res.treeLevel * 50)
+      }
+    })
+  }, [])
 
   const sessionGenerationRef = useRef<number>(sessionGeneration ?? 0)
   sessionGenerationRef.current = sessionGeneration ?? 0
@@ -1240,7 +1260,7 @@ export default function Battlefield({
       )}
 
       {/* Base Towers */}
-      <BaseTower team="p1" hp={p1BaseHp} maxHp={INITIAL_BASE_HP} nombre={nombres?.mio} />
+      <BaseTower team="p1" hp={p1BaseHp} maxHp={INITIAL_BASE_HP + treeBonusHp} nombre={nombres?.mio} />
       {/* Los soles del rival sólo se enseñan contra el bot, que es cuando el
           número es de verdad: lo lleva esta misma simulación. En PvP los soles del
           otro son cosa de SU navegador y aquí no se conocen, así que el contador

@@ -3494,6 +3494,114 @@ export const SupabaseService = {
       return []
     }
   },
+
+  // ---------------------------------------------------------------------------
+  // ÁRBOL MADRE (MOTHER TREE) UPGRADES & FEEDING
+  // ---------------------------------------------------------------------------
+  async getMotherTreeState(): Promise<{
+    success: boolean
+    treeLevel: number
+    treeXp: number
+    nextLevelXp: number
+    hpBonus: number
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) {
+      try {
+        const raw = localStorage.getItem('plant_arena_mother_tree')
+        if (raw) return JSON.parse(raw)
+      } catch {}
+      return { success: true, treeLevel: 0, treeXp: 0, nextLevelXp: 100, hpBonus: 0 }
+    }
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_tree_state')
+      if (!error && data?.success) {
+        try {
+          localStorage.setItem('plant_arena_mother_tree', JSON.stringify(data))
+        } catch {}
+        return data
+      }
+    } catch (_) {}
+
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      if (userData?.user?.id) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('tree_level, tree_xp')
+          .eq('id', userData.user.id)
+          .maybeSingle()
+        if (prof) {
+          const lvl = Number((prof as any).tree_level) || 0
+          const xp = Number((prof as any).tree_xp) || 0
+          const req = [100, 250, 500, 1000, 2000, 0][lvl] ?? 100
+          const res = {
+            success: true,
+            treeLevel: lvl,
+            treeXp: xp,
+            nextLevelXp: req,
+            hpBonus: lvl * 50,
+          }
+          try {
+            localStorage.setItem('plant_arena_mother_tree', JSON.stringify(res))
+          } catch {}
+          return res
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const raw = localStorage.getItem('plant_arena_mother_tree')
+      if (raw) return JSON.parse(raw)
+    } catch {}
+
+    return { success: true, treeLevel: 0, treeXp: 0, nextLevelXp: 100, hpBonus: 0 }
+  },
+
+  async feedMotherTree(
+    resource: 'water' | 'fertilizer' | 'gold' | 'gems',
+    amount: number
+  ): Promise<{
+    success: boolean
+    treeLevel?: number
+    treeXp?: number
+    nextLevelXp?: number
+    hpBonus?: number
+    xpGained?: number
+    leveledUp?: boolean
+    goldBalance?: number
+    gemsBalance?: number
+    farmingInventory?: any
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Supabase no configurado' }
+    }
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('nutrir_arbol', {
+        p_resource: resource,
+        p_amount: amount,
+      })
+
+      if (error) {
+        logError('feedMotherTree', error)
+        return { success: false, error: error.message }
+      }
+
+      if (data?.success) {
+        try {
+          localStorage.setItem('plant_arena_mother_tree', JSON.stringify(data))
+        } catch {}
+      }
+
+      return data
+    } catch (e: any) {
+      logError('feedMotherTree', e)
+      return { success: false, error: e?.message || 'Error al alimentar el Árbol Madre' }
+    }
+  },
 }
 
 export interface GlobalTransactionItem {

@@ -439,7 +439,27 @@ export function useGameEngine() {
   ) => {
     sessionGenerationRef.current += 1
     engineVersionRef.current = engineVersion
-    stateRef.current = createBattleState(seed, false, esPvp, nivelPorElo(miElo ?? 1500), engineVersion)
+
+    let p1TreeBonusHp = 0
+    try {
+      const raw = localStorage.getItem('plant_arena_mother_tree')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (typeof parsed?.treeLevel === 'number') {
+          p1TreeBonusHp = parsed.treeLevel * 50
+        }
+      }
+    } catch (_) {}
+
+    stateRef.current = createBattleState(
+      seed,
+      false,
+      esPvp,
+      nivelPorElo(miElo ?? 1500),
+      engineVersion,
+      INITIAL_BASE_HP + p1TreeBonusHp,
+      INITIAL_BASE_HP
+    )
 
     ancoraMsRef.current = ancoraMs ?? null
     soyP1Ref.current = soyP1 === undefined ? null : soyP1
@@ -621,7 +641,26 @@ export function useGameEngine() {
       playtestLogCompiledRef.current = false
       setCurrentPlaytestLog(null)
 
-      stateRef.current = createBattleState(config.seed, false, true, undefined, 'auth-v2')
+      let p1TreeBonusHp = 0
+      try {
+        const raw = localStorage.getItem('plant_arena_mother_tree')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (typeof parsed?.treeLevel === 'number') {
+            p1TreeBonusHp = parsed.treeLevel * 50
+          }
+        }
+      } catch (_) {}
+
+      stateRef.current = createBattleState(
+        config.seed,
+        false,
+        true,
+        undefined,
+        'auth-v2',
+        INITIAL_BASE_HP + p1TreeBonusHp,
+        INITIAL_BASE_HP
+      )
       ancoraMsRef.current = null
       soyP1Ref.current = true
       mazoMioRef.current = leerMazo(miMazo)

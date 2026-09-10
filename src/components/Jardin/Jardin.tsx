@@ -11,6 +11,7 @@ import type { InventoryPack, PackId } from '../../utils/packDropManager'
 import type { PlayerRewardPack } from '../../utils/freePackManager'
 import { EMPTY_FARMING_INVENTORY, FARMING_ITEM_DEFINITIONS, type FarmingInventory } from '../../utils/pvpRewardManager'
 import LotteryModal from '../Lottery/LotteryModal'
+import TreeModal from './TreeModal'
 import './Jardin.css'
 
 const sunIcon = '/game-assets/greenfoot/sun1.webp'
@@ -110,6 +111,7 @@ export default function Jardin({
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null)
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [showLotteryModal, setShowLotteryModal] = useState(false)
+  const [showTreeModal, setShowTreeModal] = useState(false)
   const [rewardPackAccelerating, setRewardPackAccelerating] = useState<{ packId: string; goldCost: number } | null>(null)
   const [isAcceleratingReward, setIsAcceleratingReward] = useState(false)
   const [rewardPackAlert, setRewardPackAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
@@ -410,9 +412,9 @@ export default function Jardin({
           ⬅ VOLVER AL MENÚ
         </button>
         <div className="jardin-header__center">
-          <h1 className="jardin-title">🌱 JARDÍN BOTÁNICO & CARTAS</h1>
+          <h1 className="jardin-title">🌱 JARDÍN</h1>
           <span className="jardin-subtitle">
-            Personaliza tu equipo de batalla, fusiona copas y gestiona tus instancias mejoradas
+            Personaliza tu equipo de batalla.
           </span>
         </div>
         <div className="jardin-header__right">
@@ -429,8 +431,15 @@ export default function Jardin({
           <button type="button" className="jardin-btn-shop" onClick={onOpenShop}>
             🛒 TIENDA
           </button>
-          <button type="button" className="jardin-btn-sec" onClick={onOpenCollection}>
-            📖 ÁLBUM
+          <button
+            type="button"
+            className="jardin-btn-sec"
+            onClick={() => {
+              soundManager.playSound('click', 0.4)
+              setShowTreeModal(true)
+            }}
+          >
+            🌳 ÁRBOL
           </button>
           <button
             type="button"
@@ -1066,6 +1075,18 @@ export default function Jardin({
           userGold={userGold}
           isAdmin={isAdmin}
           onOpenAdmin={onOpenAdmin}
+          onRewardsChanged={onRewardsChanged}
+        />
+      )}
+
+      {/* MOTHER TREE UPGRADE MODAL */}
+      {showTreeModal && (
+        <TreeModal
+          isOpen={showTreeModal}
+          onClose={() => setShowTreeModal(false)}
+          userTokens={userTokens}
+          userGold={userGold}
+          farmingItems={farmingItems}
           onRewardsChanged={onRewardsChanged}
         />
       )}
