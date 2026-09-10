@@ -281,6 +281,63 @@ export default function LotteryModal({
     setCodeBoard(board as BoardEntry[])
   }
 
+  // Calcula el premio correspondiente y su reparto equitativo entre jugadores empatados en el mismo puesto
+  const boardWithDividedPrizes = useMemo(() => {
+    if (!codeBoard || codeBoard.length === 0) return []
+
+    // Contar cuántos jugadores hay empatados en cada puesto
+    const placeCounts = new Map<number, number>()
+    for (const e of codeBoard) {
+      const p = e.place || 1
+      placeCounts.set(p, (placeCounts.get(p) || 0) + 1)
+    }
+
+    const topGoldPrizes: Record<number, number> = {
+      2: 100,
+      3: 80,
+      4: 60,
+      5: 50,
+      6: 40,
+      7: 30,
+      8: 25,
+      9: 20,
+      10: 15,
+    }
+
+    return codeBoard.map((e) => {
+      const place = e.place || 1
+      const tiedCount = placeCounts.get(place) || 1
+
+      const configuredPrize = codeRound?.prizesConfig?.find((p) => p.place === place)
+      let totalPrize = 0
+      let currency: 'gems' | 'gold' = 'gold'
+
+      if (configuredPrize) {
+        totalPrize = configuredPrize.amount
+        currency = configuredPrize.currency
+      } else if (place === 1) {
+        totalPrize = codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50
+        currency = 'gems'
+      } else {
+        totalPrize = topGoldPrizes[place] || 0
+        currency = 'gold'
+      }
+
+      // Su parte individual dividida equitativamente entre los empatados
+      const myShare = tiedCount > 0 && totalPrize > 0
+        ? Number((totalPrize / tiedCount).toFixed(2))
+        : totalPrize
+
+      return {
+        ...e,
+        tiedCount,
+        totalPrize,
+        myShare,
+        currency,
+      }
+    })
+  }, [codeBoard, codeRound])
+
   // Se recarga al abrir el modal y al entrar en la pestaña del código, para que
   // la clasificación refleje los intentos de los demás.
   useEffect(() => {
@@ -983,7 +1040,7 @@ export default function LotteryModal({
                 <div className="lottery-code-history-box" style={{ flex: 1 }}>
                   <div className="lottery-history-header">
                     <h5>🏆 CLASIFICACIÓN DE LA RONDA:</h5>
-                    <div className="lottery-pins-legend">
+                    <div className="lottery-pins-legend" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
                       <span className="pin-tag pin-tag--exact">
                         {codeRound?.prizesConfig && codeRound.prizesConfig.length > 0
                           ? codeRound.prizesConfig
@@ -998,11 +1055,14 @@ export default function LotteryModal({
                               : '')
                           : '🥇 50 💎 · 🥈 100 💰 · 🥉 80 💰 · Top 4-10: Oro 💰'}
                       </span>
+                      <span style={{ fontSize: '9.5px', color: '#94a3b8', fontWeight: 600 }}>
+                        (🤝 Los empates dividen el premio)
+                      </span>
                     </div>
                   </div>
 
                   <div className="lottery-history-list" style={{ minHeight: '260px', maxHeight: '380px' }}>
-                    {codeBoard.length === 0 ? (
+                    {boardWithDividedPrizes.length === 0 ? (
                       <div className="lottery-history-empty">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
                           <span>Nadie ha probado todavía en esta ronda. ¡Sé el primero en jugar!</span>
@@ -1017,74 +1077,81 @@ export default function LotteryModal({
                         </div>
                       </div>
                     ) : (
-                      codeBoard.map((e) => {
-                        const configuredPrize = codeRound?.prizesConfig?.find((p) => p.place === e.place)
-                        const topGoldPrizes: Record<number, number> = {
-                          2: 100,
-                          3: 80,
-                          4: 60,
-                          5: 50,
-                          6: 40,
-                          7: 30,
-                          8: 25,
-                          9: 20,
-                          10: 15,
-                        }
-                        const goldPrize = topGoldPrizes[e.place] || 0
-                        const isWinner = e.place === 1
-
+                      boardWithDividedPrizes.map((e) => {
+                        const isTied = e.tiedCount > 1
                         return (
                           <div
                             key={e.userId}
                             className="lottery-history-row"
-                            style={e.isMe ? { outline: '1px solid #6366f1', background: 'rgba(99, 102, 241, 0.2)' } : undefined}
+                            style={{
+                              ...(e.isMe ? { outline: '1px solid #6366f1', background: 'rgba(99, 102, 241, 0.2)' } : {}),
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '5px 8px',
+                            }}
                           >
-                            <span className="lottery-history-num">
-                              {e.place === 1 ? '🥇' : e.place === 2 ? '🥈' : e.place === 3 ? '🥉' : `#${e.place}`}
-                            </span>
-                            <span style={{ flex: 1, fontWeight: e.isMe ? 800 : 500, color: e.isMe ? '#a5b4fc' : '#ffffff' }}>
+                            {/* Puesto: si hay empate, cada jugador ocupa su propia fila (uno debajo del otro) con el mismo puesto */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', minWidth: isTied ? 36 : 20 }}>
+                              <span className="lottery-history-num" style={{ width: 'auto' }}>
+                                {e.place === 1 ? '🥇' : e.place === 2 ? '🥈' : e.place === 3 ? '🥉' : `#${e.place}`}
+                              </span>
+                              {isTied && (
+                                <span
+                                  style={{
+                                    fontSize: '8px',
+                                    fontWeight: 800,
+                                    color: '#facc15',
+                                    background: 'rgba(250, 204, 21, 0.15)',
+                                    border: '1px solid rgba(250, 204, 21, 0.3)',
+                                    padding: '1px 3px',
+                                    borderRadius: '3px',
+                                    lineHeight: 1,
+                                  }}
+                                  title={`Empate en puesto #${e.place} (${e.tiedCount} jugadores)`}
+                                >
+                                  empate
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Nombre del jugador */}
+                            <span style={{ flex: 1, fontWeight: e.isMe ? 800 : 500, color: e.isMe ? '#a5b4fc' : '#ffffff', marginLeft: 6 }}>
                               {e.username}{e.isMe ? ' (tú)' : ''}
                             </span>
+
+                            {/* Intentos realizados */}
                             <span
                               style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.75, marginRight: 10 }}
                               title="Intentos realizados"
                             >
                               {e.attempts} int.
                             </span>
-                            <strong style={{ fontVariantNumeric: 'tabular-nums', minWidth: 60, textAlign: 'right' }}>
+
+                            {/* Porcentaje de acierto */}
+                            <strong style={{ fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'right' }}>
                               {Number(e.bestPct).toFixed(1)}%
                             </strong>
-                            {configuredPrize ? (
+
+                            {/* Premio: su parte individual asignada */}
+                            {e.myShare > 0 && (
                               <span
                                 style={{
                                   marginLeft: 10,
                                   fontVariantNumeric: 'tabular-nums',
-                                  color: configuredPrize.currency === 'gems' ? '#38bdf8' : '#f59e0b',
+                                  color: e.currency === 'gems' ? '#38bdf8' : '#f59e0b',
                                   fontWeight: 800,
+                                  minWidth: 54,
+                                  textAlign: 'right',
                                 }}
-                                title={`Premio Top #${e.place} (+${configuredPrize.amount} ${configuredPrize.currency === 'gems' ? 'Gemas' : 'Oro'})`}
+                                title={
+                                  isTied
+                                    ? `Su parte: +${e.myShare} ${e.currency === 'gems' ? 'Gemas' : 'Oro'} (premio base de ${e.totalPrize} dividido entre ${e.tiedCount} jugadores)`
+                                    : `Premio Top #${e.place} (+${e.myShare} ${e.currency === 'gems' ? 'Gemas' : 'Oro'})`
+                                }
                               >
-                                +{configuredPrize.amount} {configuredPrize.currency === 'gold' ? '💰' : '💎'}
+                                +{e.myShare} {e.currency === 'gold' ? '💰' : '💎'}
                               </span>
-                            ) : (
-                              <>
-                                {isWinner && (
-                                  <span
-                                    style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#38bdf8', fontWeight: 900 }}
-                                    title="Premio Bote al ganador que descifre el 100%"
-                                  >
-                                    {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎
-                                  </span>
-                                )}
-                                {!isWinner && goldPrize > 0 && (
-                                  <span
-                                    style={{ marginLeft: 10, fontVariantNumeric: 'tabular-nums', color: '#f59e0b', fontWeight: 800 }}
-                                    title={`Premio en Oro para el Top #${e.place} al finalizar la ronda`}
-                                  >
-                                    +{goldPrize} 💰
-                                  </span>
-                                )}
-                              </>
                             )}
                           </div>
                         )
