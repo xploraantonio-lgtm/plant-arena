@@ -95,7 +95,7 @@ export default function Jardin({
   onUpdateDeck,
   onBack,
   onPlay,
-  onOpenCollection,
+  onOpenCollection: _onOpenCollection,
   onOpenShop,
   onOpenPack,
   onOpenMultiplePacks,

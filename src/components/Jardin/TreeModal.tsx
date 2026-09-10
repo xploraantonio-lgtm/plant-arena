@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { soundManager } from '../../utils/audioManager'
 import { supabaseService } from '../../services/supabaseService'
 import type { FarmingInventory } from '../../utils/pvpRewardManager'
@@ -25,8 +25,6 @@ const LEVEL_NAMES = [
   'Árbol Titánico',
   'Árbol Sagrado Supremo',
 ]
-
-const LEVEL_XP_REQS = [500, 1200, 1800, 2500, 3000]
 
 export default function TreeModal({
   isOpen,

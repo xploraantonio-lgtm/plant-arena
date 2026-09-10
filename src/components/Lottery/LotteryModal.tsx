@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { PlantId } from '../../types/game'
 import type { CodeRoundPrizeTier } from '../../types/database.types'
 import { PLANT_CONFIGS } from '../../utils/gameConstants'
