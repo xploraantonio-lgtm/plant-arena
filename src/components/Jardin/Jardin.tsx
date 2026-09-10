@@ -77,7 +77,7 @@ interface JardinProps {
   onRewardsChanged?: () => Promise<void> | void
 }
 
-const FUSION_GOLD_COST = 250
+const FUSION_GOLD_COST = 1000
 const FUSION_COPIES_REQ = 5
 
 export default function Jardin({
@@ -924,7 +924,7 @@ export default function Jardin({
                             })
                           }}
                         >
-                          🔥 MEJORAR (5/5 + 250💰) ➔ LVL {level + 1}
+                          🔥 MEJORAR (5/5 + {FUSION_GOLD_COST}💰) ➔ LVL {level + 1}
                         </button>
                       )}
                       {hasCopies && !hasGold && (
@@ -933,9 +933,9 @@ export default function Jardin({
                           className="jardin-fuse-btn jardin-fuse-btn--disabled-gold"
                           disabled
                           onClick={(e) => e.stopPropagation()}
-                          title="Oro insuficiente para mejorar (requiere 250 Oro)"
+                          title={`Oro insuficiente para mejorar (requiere ${FUSION_GOLD_COST} Oro)`}
                         >
-                          ⚠️ ORO INSUFICIENTE (250💰)
+                          ⚠️ ORO INSUFICIENTE ({FUSION_GOLD_COST}💰)
                         </button>
                       )}
                     </>
@@ -974,7 +974,7 @@ export default function Jardin({
               </div>
               <div className="jardin-fuse-req-item">
                 <span className="jardin-fuse-req-icon">💰</span>
-                <span className="jardin-fuse-req-text">250 Oro</span>
+                <span className="jardin-fuse-req-text">{FUSION_GOLD_COST} Oro</span>
               </div>
             </div>
 

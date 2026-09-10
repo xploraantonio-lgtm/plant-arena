@@ -235,4 +235,50 @@ describe('Sistema de Gestión de Energías (20/20 Diario, VIP 25/25, Umbral 1602
       expect(diffSeconds).toBe(12 * 3600) // exactamente 12 horas hasta 00:00 UTC
     })
   })
+
+  describe('6. Otorgamiento de +5 Energías al Activar Pase VIP (Caso Rjnieves Bugfix)', () => {
+    function simulateBuyVipPass(currentEnergy: number) {
+      // Al comprar el Pase VIP, maxEnergy pasa de 20 a 25 (+5 diarias)
+      const newMaxEnergy = VIP_DAILY_ENERGY
+      // Se añaden de inmediato las +5 energías para que el usuario pueda jugar esas partidas adicionales
+      const newEnergy = currentEnergy + (VIP_DAILY_ENERGY - BASE_DAILY_ENERGY)
+
+      return {
+        hasVip: true,
+        maxEnergy: newMaxEnergy,
+        energy: newEnergy,
+        consumed: newMaxEnergy - newEnergy,
+      }
+    }
+
+    it('Caso Rjnieves: Tenía 20/20 consumidas (0 restantes); al comprar pase debe tener 5/25 para jugar (20 consumidas de 25)', () => {
+      // Rjnieves consumió sus 20 partidas del día:
+      const currentEnergy = 0 // 0 de 20 restantes (20 consumidas)
+
+      const result = simulateBuyVipPass(currentEnergy)
+
+      expect(result.hasVip).toBe(true)
+      expect(result.maxEnergy).toBe(25)
+      expect(result.energy).toBe(5) // Le quedan 5 energías para jugar de inmediato
+      expect(result.consumed).toBe(20) // 20 de 25 consumidas, ¡NO 25 de 25!
+    })
+
+    it('Usuario con 10/20 restantes (10 consumidas): al comprar pase pasa a tener 15/25 (10 consumidas)', () => {
+      const result = simulateBuyVipPass(10)
+
+      expect(result.hasVip).toBe(true)
+      expect(result.maxEnergy).toBe(25)
+      expect(result.energy).toBe(15) // 15 de 25
+      expect(result.consumed).toBe(10) // Mantiene las 10 partidas jugadas
+    })
+
+    it('Usuario con 20/20 restantes (0 consumidas): al comprar pase pasa a tener 25/25', () => {
+      const result = simulateBuyVipPass(20)
+
+      expect(result.hasVip).toBe(true)
+      expect(result.maxEnergy).toBe(25)
+      expect(result.energy).toBe(25)
+      expect(result.consumed).toBe(0)
+    })
+  })
 })

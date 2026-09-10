@@ -892,7 +892,13 @@ export function useInventory() {
     if (profile.colosseum_current_streak !== undefined) setColosseumCurrentStreak(Number(profile.colosseum_current_streak))
     if (profile.has_vip_pass !== undefined) setHasVipPass(Boolean(profile.has_vip_pass))
     if (profile.claimed_vip_levels !== undefined) setClaimedVipLevels(profile.claimed_vip_levels || [])
-    if ((profile as any).energy_current !== undefined) setPlayerEnergy(Number((profile as any).energy_current))
+    if ((profile as any).energy_current !== undefined) {
+      const en = Number((profile as any).energy_current)
+      setPlayerEnergy(en)
+      try {
+        localStorage.setItem(STORAGE_KEYS.ENERGY, en.toString())
+      } catch {}
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -919,7 +925,13 @@ export function useInventory() {
     setClaimedVipLevels(b.claimed_vip_levels || [])
     setColosseumCurrentStreak(Number(b.colosseum_current_streak))
     setColosseumMaxStreak(Number(b.colosseum_max_streak))
-    if (b.energy_current !== undefined) setPlayerEnergy(Number(b.energy_current))
+    if (b.energy_current !== undefined) {
+      const en = Number(b.energy_current)
+      setPlayerEnergy(en)
+      try {
+        localStorage.setItem(STORAGE_KEYS.ENERGY, en.toString())
+      } catch {}
+    }
   }
 
 
@@ -1107,6 +1119,24 @@ export function useInventory() {
       })
     }
     setHasVipPass(true)
+
+    // Al comprar el Pase VIP, la capacidad sube de 20 a 25 (+5 diarias).
+    // Otorgar de inmediato esas +5 energías al saldo actual para que el usuario pueda jugar.
+    if (typeof (res as any).energyCurrent === 'number') {
+      setPlayerEnergy((res as any).energyCurrent)
+      try {
+        localStorage.setItem(STORAGE_KEYS.ENERGY, (res as any).energyCurrent.toString())
+      } catch {}
+    } else {
+      setPlayerEnergy((prev) => {
+        const next = prev + 5
+        try {
+          localStorage.setItem(STORAGE_KEYS.ENERGY, next.toString())
+        } catch {}
+        return next
+      })
+    }
+
     window.dispatchEvent(new Event('refresh_user_balance'))
 
     await refreshBalance().catch(() => {})
@@ -1160,7 +1190,7 @@ export function useInventory() {
     return { drops, colosseumTicket: Boolean(res.colosseumTicket) }
   }
 
-  /** Fusiona en el servidor: 5 copias + 250 oro → +1 nivel + stat al azar. */
+  /** Fusiona en el servidor: 5 copias + 1000 oro → +1 nivel + stat al azar. */
   const fusePlantOnServer = async (
     instanceId: string
   ): Promise<{

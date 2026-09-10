@@ -303,7 +303,7 @@ describe('FIX B — Acelerar Sobre PvP con Oro (RPC, Timer y Atomicidad)', () =>
   })
 })
 
-describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fail-Closed)', () => {
+describe('FUSIÓN DE CARTAS CON COSTO DE 1000 ORO Y 5 COPIAS (Transaccional y Fail-Closed)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
@@ -318,7 +318,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     isListed: boolean
     eligibleStats?: string[] | null
   }) {
-    const FUSION_GOLD_COST = 250
+    const FUSION_GOLD_COST = 1000
     const FUSION_COPIES_REQ = 5
 
     if (!params.isOwner) {
@@ -360,8 +360,8 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     }
   }
 
-  it('1. 5 copias + 250 oro → Éxito: level +1, copies -5, gold -250', () => {
-    let userGold = 250
+  it('1. 5 copias + 1000 oro → Éxito: level +1, copies -5, gold -1000', () => {
+    let userGold = 1000
     let copies = 5
     let level = 0
     const maxLevel = 5
@@ -386,12 +386,12 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     expect(level).toBe(1)
     expect(copies).toBe(0)
     expect(userGold).toBe(0)
-    expect(res.goldSpent).toBe(250)
+    expect(res.goldSpent).toBe(1000)
     expect(res.copiesSpent).toBe(5)
   })
 
-  it('2. 5 copias + 249 oro → FAIL: 0 oro gastado, 0 copias consumidas, nivel intacto', () => {
-    let userGold = 249
+  it('2. 5 copias + 999 oro → FAIL: 0 oro gastado, 0 copias consumidas, nivel intacto', () => {
+    let userGold = 999
     let copies = 5
     let level = 0
 
@@ -408,7 +408,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     expect(res.success).toBe(false)
     expect(res.error).toContain('Oro insuficiente')
     // Los datos locales no se modifican
-    expect(userGold).toBe(249)
+    expect(userGold).toBe(999)
     expect(copies).toBe(5)
     expect(level).toBe(0)
   })
@@ -450,8 +450,8 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     expect(res.error).toContain('Oro insuficiente')
   })
 
-  it('5. 10 copias + 500 oro → Dos fusiones consecutivas procesadas correctamente', () => {
-    let userGold = 500
+  it('5. 10 copias + 2000 oro → Dos fusiones consecutivas procesadas correctamente', () => {
+    let userGold = 2000
     let copies = 10
     let level = 0
 
@@ -472,7 +472,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
 
     expect(level).toBe(1)
     expect(copies).toBe(5)
-    expect(userGold).toBe(250)
+    expect(userGold).toBe(1000)
 
     // Segunda fusión
     const res2 = simulateServerFusePlant({
@@ -506,19 +506,19 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
     expect(res3.success).toBe(false)
   })
 
-  it('6. Doble click con 5 copias y 250 oro → Exactamente 1 llamada tiene éxito', async () => {
+  it('6. Doble click con 5 copias y 1000 oro → Exactamente 1 llamada tiene éxito', async () => {
     let inFlight = false
     let currentCopies = 5
-    let currentGold = 250
+    let currentGold = 1000
     let currentLevel = 0
 
     const mockFuseRpc = vi.fn().mockImplementation(async () => {
       await new Promise((r) => setTimeout(r, 20))
-      if (currentCopies < 5 || currentGold < 250) {
+      if (currentCopies < 5 || currentGold < 1000) {
         return { success: false, error: 'Recursos insuficientes' }
       }
       currentCopies -= 5
-      currentGold -= 250
+      currentGold -= 1000
       currentLevel += 1
       return { success: true, newLevel: currentLevel }
     })
@@ -593,7 +593,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
   })
 
   it('10. Planta con eligible_stats NULL → Falla fail-closed, 0 oro y 0 copias consumidas', () => {
-    let userGold = 500
+    let userGold = 1000
     let copies = 5
     let level = 0
 
@@ -609,13 +609,13 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
 
     expect(res.success).toBe(false)
     expect(res.error).toContain('no tiene estadísticas elegibles')
-    expect(userGold).toBe(500)
+    expect(userGold).toBe(1000)
     expect(copies).toBe(5)
     expect(level).toBe(0)
   })
 
   it('11. Planta con eligible_stats array vacío → Falla fail-closed, 0 cambios', () => {
-    let userGold = 500
+    let userGold = 1000
     let copies = 5
     let level = 0
 
@@ -631,7 +631,7 @@ describe('FUSIÓN DE CARTAS CON COSTO DE 250 ORO Y 5 COPIAS (Transaccional y Fai
 
     expect(res.success).toBe(false)
     expect(res.error).toContain('no tiene estadísticas elegibles')
-    expect(userGold).toBe(500)
+    expect(userGold).toBe(1000)
     expect(copies).toBe(5)
     expect(level).toBe(0)
   })
