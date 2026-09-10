@@ -1463,15 +1463,15 @@
   overflow-wrap: anywhere;
 }
 
-/* Cartel de entrenamiento centrado en el medio superior para no tapar ninguna base */
+/* Cartel de entrenamiento. Arriba a la izquierda, donde en PvP va el
+   diagnóstico: quien juega contra la máquina tiene que saberlo sin buscarlo. */
 .entrenamiento-aviso {
   position: absolute;
-  top: 0.4rem;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 3.2rem;
+  left: 0.5rem;
   z-index: 40;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.68rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #cbd5e1;
