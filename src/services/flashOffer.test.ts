@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { inventoryService } from './inventoryService'
+import { FLASH_OFFER_PRICE_GEMS } from '../utils/gameConstants'
 
-describe('Oferta Flash de Jalapeños (30 Gemas c/u, Máximo 3 Compras) con Backend Garantizador', () => {
+describe(`Oferta Flash de Jalapeños (${FLASH_OFFER_PRICE_GEMS} Gemas c/u, Máximo 3 Compras) con Backend Garantizador`, () => {
   let memoryStore: Record<string, string> = {}
 
   const mockStorage = {
@@ -26,11 +27,11 @@ describe('Oferta Flash de Jalapeños (30 Gemas c/u, Máximo 3 Compras) con Backe
     })
   })
 
-  it('1. getFlashOfferStatus devuelve la configuración autoritativa (30 gemas, 3 disponibles)', async () => {
+  it(`1. getFlashOfferStatus devuelve la configuración autoritativa (${FLASH_OFFER_PRICE_GEMS} gemas, 3 disponibles)`, async () => {
     const status = await inventoryService.getFlashOfferStatus('flash_jalapeno_30')
     expect(status.success).toBe(true)
     expect(status.plantId).toBe('jalapeno')
-    expect(status.priceGems).toBe(30)
+    expect(status.priceGems).toBe(FLASH_OFFER_PRICE_GEMS)
     expect(status.maxPurchasesPerUser).toBe(3)
     expect(status.userBought).toBe(0)
     expect(status.remainingPurchases).toBe(3)
@@ -44,24 +45,24 @@ describe('Oferta Flash de Jalapeños (30 Gemas c/u, Máximo 3 Compras) con Backe
   })
 
   it('3. buyFlashOffer rechaza la compra si las gemas son insuficientes', async () => {
-    mockStorage.setItem('plant_arena_user_tokens', '20') // Se necesitan 30
+    mockStorage.setItem('plant_arena_user_tokens', '2000') // Se necesitan 3000
     const res = await inventoryService.buyFlashOffer('flash_jalapeno_30', 1)
     expect(res.success).toBe(false)
     expect(res.error).toContain('Gemas insuficientes')
   })
 
-  it('4. buyFlashOffer ejecuta la compra de 1 Jalapeño descontando 30 gemas y otorgando la planta', async () => {
-    mockStorage.setItem('plant_arena_user_tokens', '100')
+  it(`4. buyFlashOffer ejecuta la compra de 1 Jalapeño descontando ${FLASH_OFFER_PRICE_GEMS} gemas y otorgando la planta`, async () => {
+    mockStorage.setItem('plant_arena_user_tokens', '10000')
     const res = await inventoryService.buyFlashOffer('flash_jalapeno_30', 1)
 
     expect(res.success).toBe(true)
     expect(res.quantity).toBe(1)
-    expect(res.totalGemsSpent).toBe(30)
+    expect(res.totalGemsSpent).toBe(FLASH_OFFER_PRICE_GEMS)
     expect(res.userTotalBought).toBe(1)
     expect(res.remainingPurchases).toBe(2)
 
-    // Verificar deducción de gemas (100 - 30 = 70)
-    expect(parseFloat(mockStorage.getItem('plant_arena_user_tokens') || '0')).toBe(70)
+    // Verificar deducción de gemas (10000 - 3000 = 7000)
+    expect(parseFloat(mockStorage.getItem('plant_arena_user_tokens') || '0')).toBe(10000 - FLASH_OFFER_PRICE_GEMS)
 
     // Verificar otorgamiento de Jalapeño
     const unlocked = JSON.parse(mockStorage.getItem('plant_arena_unlocked_plants') || '[]')
@@ -72,24 +73,24 @@ describe('Oferta Flash de Jalapeños (30 Gemas c/u, Máximo 3 Compras) con Backe
   })
 
   it('5. buyFlashOffer permite compras múltiples hasta el límite estricto de 3 ventas', async () => {
-    mockStorage.setItem('plant_arena_user_tokens', '150')
+    mockStorage.setItem('plant_arena_user_tokens', '15000')
 
-    // Compra 1: 2 jalapeños por 60 gemas
+    // Compra 1: 2 jalapeños por 6000 gemas
     const res1 = await inventoryService.buyFlashOffer('flash_jalapeno_30', 2)
     expect(res1.success).toBe(true)
-    expect(res1.totalGemsSpent).toBe(60)
+    expect(res1.totalGemsSpent).toBe(FLASH_OFFER_PRICE_GEMS * 2)
     expect(res1.userTotalBought).toBe(2)
     expect(res1.remainingPurchases).toBe(1)
 
-    // Compra 2: 1 jalapeño por 30 gemas (total 3 compras)
+    // Compra 2: 1 jalapeño por 3000 gemas (total 3 compras)
     const res2 = await inventoryService.buyFlashOffer('flash_jalapeno_30', 1)
     expect(res2.success).toBe(true)
-    expect(res2.totalGemsSpent).toBe(30)
+    expect(res2.totalGemsSpent).toBe(FLASH_OFFER_PRICE_GEMS)
     expect(res2.userTotalBought).toBe(3)
     expect(res2.remainingPurchases).toBe(0)
 
-    // Saldo restante: 150 - 60 - 30 = 60
-    expect(parseFloat(mockStorage.getItem('plant_arena_user_tokens') || '0')).toBe(60)
+    // Saldo restante: 15000 - 6000 - 3000 = 6000
+    expect(parseFloat(mockStorage.getItem('plant_arena_user_tokens') || '0')).toBe(6000)
 
     // Estado ahora es AGOTADO
     const status = await inventoryService.getFlashOfferStatus('flash_jalapeno_30')
@@ -104,7 +105,7 @@ describe('Oferta Flash de Jalapeños (30 Gemas c/u, Máximo 3 Compras) con Backe
   })
 
   it('6. buyFlashOffer rechaza de inmediato si la cantidad solicitada excede las compras restantes', async () => {
-    mockStorage.setItem('plant_arena_user_tokens', '200')
+    mockStorage.setItem('plant_arena_user_tokens', '20000')
     // Intentar comprar 4 de golpe (máximo es 3)
     const res = await inventoryService.buyFlashOffer('flash_jalapeno_30', 4)
     expect(res.success).toBe(false)

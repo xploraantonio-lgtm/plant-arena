@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import gemaIcon from '../../assets/ico/gema.webp'
 import { soundManager } from '../../utils/audioManager'
 import { inventoryService } from '../../services/inventoryService'
+import { FLASH_OFFER_PRICE_GEMS } from '../../utils/gameConstants'
 import './FlashOfferModal.css'
 
 interface FlashOfferModalProps {
@@ -23,7 +24,7 @@ export default function FlashOfferModal({
   const [buying, setBuying] = useState(false)
   const [userBought, setUserBought] = useState(0)
   const [remainingPurchases, setRemainingPurchases] = useState(3)
-  const [priceGems] = useState(30)
+  const [priceGems, setPriceGems] = useState<number>(FLASH_OFFER_PRICE_GEMS)
   const [selectedQty, setSelectedQty] = useState(1)
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null)
 
@@ -34,6 +35,7 @@ export default function FlashOfferModal({
       if (res && res.success) {
         setUserBought(res.userBought)
         setRemainingPurchases(res.remainingPurchases)
+        if (res.priceGems) setPriceGems(res.priceGems)
         if (res.remainingPurchases > 0 && selectedQty > res.remainingPurchases) {
           setSelectedQty(res.remainingPurchases)
         }
@@ -119,7 +121,7 @@ export default function FlashOfferModal({
         setSelectedQty(Math.max(1, Math.min(1, newRemaining)))
 
         setStatusMessage({
-          text: `¡Felicidades! Has adquirido ${selectedQty} Jalapeño${selectedQty > 1 ? 's' : ''} por ${totalCost} 💎`,
+          text: `¡Felicidades! Has adquirido ${selectedQty} Jalapeño${selectedQty > 1 ? 's' : ''} por ${totalCost.toLocaleString()} 💎`,
           type: 'success',
         })
 
@@ -311,7 +313,7 @@ export default function FlashOfferModal({
               <div className="flash-offer-total-display">
                 <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Total:</span>
                 <img src={gemaIcon} alt="Gemas" style={{ width: 17, height: 17 }} />
-                <span>{isSoldOut ? 0 : totalCost} 💎</span>
+                <span>{isSoldOut ? 0 : totalCost.toLocaleString()} 💎</span>
               </div>
             </div>
 
@@ -340,15 +342,15 @@ export default function FlashOfferModal({
                 '🔒 OFERTA AGOTADA (3/3)'
               ) : !canAfford ? (
                 onRechargeGems ? (
-                  `💎 RECARGAR GEMAS (Faltan ${missingGems} 💎)`
+                  `💎 RECARGAR GEMAS (Faltan ${missingGems.toLocaleString()} 💎)`
                 ) : (
-                  `GEMAS INSUFICIENTES (${totalCost} 💎)`
+                  `GEMAS INSUFICIENTES (${totalCost.toLocaleString()} 💎)`
                 )
               ) : (
                 <>
                   <span>🔥 COMPRAR {selectedQty} JALAPEÑO{selectedQty > 1 ? 'S' : ''}</span>
                   <span>•</span>
-                  <span>{totalCost} 💎</span>
+                  <span>{totalCost.toLocaleString()} 💎</span>
                 </>
               )}
             </button>

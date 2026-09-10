@@ -30,6 +30,7 @@ import TournamentModal from '../Tournament/TournamentModal'
 import FlashOfferModal from '../FlashOffer/FlashOfferModal'
 import { tournamentService } from '../../services/tournamentService'
 import { inventoryService } from '../../services/inventoryService'
+import { FLASH_OFFER_PRICE_GEMS } from '../../utils/gameConstants'
 import type { ColosseumBetAmount, PlantId, TournamentModel } from '../../types/game'
 import './MainMenu.css'
 
@@ -128,6 +129,7 @@ export default function MainMenu({
     userBought: number
     remainingPurchases: number
     isSoldOut: boolean
+    priceGems?: number
   } | null>(null)
 
   const loadFlashOfferStatus = useCallback(async () => {
@@ -138,6 +140,7 @@ export default function MainMenu({
           userBought: res.userBought,
           remainingPurchases: res.remainingPurchases,
           isSoldOut: res.isSoldOut,
+          priceGems: res.priceGems,
         })
       }
     } catch {
@@ -660,7 +663,7 @@ export default function MainMenu({
             soundManager.playSound('click', 0.5)
             setIsFlashOfferOpen(true)
           }}
-          title="🔥 Oferta Flash: 3 Jalapeños a 30 💎 c/u (Máx 3 ventas) - Clic para abrir"
+          title={`🔥 Oferta Flash: 3 Jalapeños a ${(flashOfferStatus?.priceGems ?? FLASH_OFFER_PRICE_GEMS).toLocaleString()} 💎 c/u (Máx 3 ventas) - Clic para abrir`}
           role="button"
           tabIndex={0}
         >
@@ -679,7 +682,9 @@ export default function MainMenu({
             />
             <div className="flash-offer-banner-header__details">
               <span className="flash-offer-banner-header__plant-name">JALAPEÑO</span>
-              <span className="flash-offer-banner-header__price-tag">30 💎 c/u</span>
+              <span className="flash-offer-banner-header__price-tag">
+                {(flashOfferStatus?.priceGems ?? FLASH_OFFER_PRICE_GEMS).toLocaleString()} 💎 c/u
+              </span>
             </div>
           </div>
         </div>

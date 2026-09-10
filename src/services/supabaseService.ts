@@ -6,6 +6,7 @@ import { parseLeaderboardRow, type ParsedLeaderboardRow } from '../utils/leaderb
 import { validateMatchClock } from '../utils/matchClock'
 import type { EngineVersion } from '../types/game'
 import type { FarmingInventory, PvpRewardDrop } from '../utils/pvpRewardManager'
+import { FLASH_OFFER_PRICE_GEMS } from '../utils/gameConstants'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -2169,9 +2170,9 @@ export const SupabaseService = {
       success: true,
       offerId,
       title: 'Oferta Flash: Jalapeño Explosivo',
-      description: '¡Consigue hasta 3 unidades de Jalapeño por 30 gemas cada una!',
+      description: `¡Consigue hasta 3 unidades de Jalapeño por ${FLASH_OFFER_PRICE_GEMS.toLocaleString()} gemas cada una!`,
       plantId: 'jalapeno',
-      priceGems: 30,
+      priceGems: FLASH_OFFER_PRICE_GEMS,
       maxPurchasesPerUser: 3,
       userBought: 0,
       remainingPurchases: 3,
@@ -2243,7 +2244,7 @@ export const SupabaseService = {
         }
       }
 
-      const priceGems = 30
+      const priceGems = FLASH_OFFER_PRICE_GEMS
       const totalGems = priceGems * qty
       const curTokens = parseFloat(localStorage.getItem('plant_arena_user_tokens') || '0')
       if (curTokens < totalGems) {

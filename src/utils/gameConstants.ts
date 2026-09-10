@@ -391,3 +391,9 @@ export function getScaledPlantConfig(
  * «$10.00 USD»: el juego cobra gemas y la pantalla prometía dólares.
  */
 export const VIP_PASS_PRECIO_GEMAS = 1000
+
+/**
+ * Precio de la Oferta Flash (Jalapeño), en GEMAS.
+ * Equivalente exacto a $30.00 USD (30 gemas del sistema anterior x 100 = 3000 gemas).
+ */
+export const FLASH_OFFER_PRICE_GEMS = 3000
