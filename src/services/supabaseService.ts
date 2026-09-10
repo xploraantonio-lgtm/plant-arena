@@ -1804,6 +1804,52 @@ export const SupabaseService = {
     }
   },
 
+  /** Obtiene las rondas de código secreto de forma autoritativa para el panel de administración */
+  async adminGetSecretCodeRounds(): Promise<any[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      // 1. Intentar RPC SECURITY DEFINER
+      const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('admin_get_secret_code_rounds', { p_limit: 15 })
+      if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+        return rpcData
+      }
+    } catch (_) {}
+
+    // 2. Fallback: select directo a la tabla secret_code_rounds
+    try {
+      const { data, error } = await (supabase.from('secret_code_rounds') as any)
+        .select('id, round_number, status, free_attempts, prize_pool_gems, prize_1st, prize_2nd, prize_3rd, winner_id, created_at, finished_at')
+        .order('round_number', { ascending: false })
+        .limit(15)
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data
+      }
+    } catch (_) {}
+
+    // 3. Fallback adicional: consultar secret_code_state() para al menos saber la ronda activa
+    try {
+      const state = await this.secretCodeState()
+      if (state?.round) {
+        return [{
+          id: state.round.id,
+          round_number: state.round.roundNumber,
+          status: state.round.status,
+          free_attempts: state.round.freeAttempts,
+          prize_pool_gems: state.round.prizePool,
+          prize_1st: state.round.prizes?.[0] ?? state.round.prizePool,
+          prize_2nd: state.round.prizes?.[1] ?? 0,
+          prize_3rd: state.round.prizes?.[2] ?? 0,
+          winner_id: state.round.winnerId,
+          created_at: state.round.createdAt,
+          finished_at: state.round.finishedAt,
+        }]
+      }
+    } catch (_) {}
+
+    return []
+  },
+
   /** Abre una ronda. Sólo administrador. El secreto lo genera el servidor y no
    *  se devuelve: ni quien la abre puede conocerlo. */
   async adminOpenSecretCodeRound(opts?: {

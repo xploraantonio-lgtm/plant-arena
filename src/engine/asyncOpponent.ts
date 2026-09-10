@@ -313,7 +313,9 @@ export function createStrategicOpponentController(
   options: CreateStrategicOpponentOptions = {}
 ): AsyncOpponentController {
   const style = options.style ?? 'balanced'
-  const difficulty = options.difficulty ?? 'hard'
+  const difficulty =
+    options.difficulty ??
+    ((options.playerElo !== undefined && options.playerElo >= 3000) ? 'elite' : 'hard')
   let profile = options.profile ?? obtenerPerfilEstrategico(style, difficulty)
   if (options.playerElo !== undefined) {
     profile = escalarPerfilPorElo(profile, options.playerElo)

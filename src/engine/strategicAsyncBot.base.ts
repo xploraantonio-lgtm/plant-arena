@@ -525,7 +525,7 @@ export function escalarPerfilPorElo(
   baseProfile: StrategicProfile,
   playerElo: number = 1200
 ): StrategicProfile {
-  const clampedElo = Math.max(700, Math.min(2000, playerElo))
+  const clampedElo = Math.max(700, Math.min(4500, playerElo))
 
   let badPlayMargin: number
   if (clampedElo <= 1200) {
@@ -533,13 +533,32 @@ export function escalarPerfilPorElo(
   } else if (clampedElo <= 1600) {
     const ratio = (clampedElo - 1200) / 400
     badPlayMargin = Math.round((0.15 - ratio * (0.15 - 0.05)) * 1000) / 1000
-  } else {
+  } else if (clampedElo <= 2000) {
+    // 1600 - 2000 (Arena 2): 0.05 fijo
     badPlayMargin = 0.05
+  } else if (clampedElo <= 3000) {
+    // 2000 - 3000 (Arena 3: Cyberpunk): reducción continua 0.05 -> 0.02
+    const ratio = (clampedElo - 2000) / 1000
+    badPlayMargin = Math.round((0.05 - ratio * 0.03) * 1000) / 1000
+  } else {
+    // 3000 - 4500 (Arena 4 y 5: Coliseo Galáctico y Olimpo): reducción 0.02 -> 0.01 (Casi nula tolerancia a errores)
+    const ratio = Math.min(1.0, (clampedElo - 3000) / 1500)
+    badPlayMargin = Math.round((0.02 - ratio * 0.01) * 1000) / 1000
   }
 
-  const eloRatio = (clampedElo - 700) / 1300 // 0.0 (700) -> 1.0 (2000)
-  const reactionMultiplier = Math.max(0.65, Math.round((1.30 - eloRatio * 0.60) * 100) / 100)
-  const irregularity = Math.max(0.15, Math.round((0.45 - eloRatio * 0.30) * 100) / 100)
+  let reactionMultiplier: number
+  let irregularity: number
+
+  if (clampedElo <= 2000) {
+    const eloRatio = (clampedElo - 700) / 1300 // 0.0 (700) -> 1.0 (2000)
+    reactionMultiplier = Math.max(0.65, Math.round((1.30 - eloRatio * 0.60) * 100) / 100)
+    irregularity = Math.max(0.15, Math.round((0.45 - eloRatio * 0.30) * 100) / 100)
+  } else {
+    // Para ELO > 2000 (Arena 3, 4 y 5): Reacciones aún más rápidas e irregularidad mínima
+    const highEloRatio = Math.min(1.0, (clampedElo - 2000) / 2000) // 0.0 (2000) -> 1.0 (4000+)
+    reactionMultiplier = Math.max(0.42, Math.round((0.65 - highEloRatio * 0.20) * 100) / 100)
+    irregularity = Math.max(0.06, Math.round((0.15 - highEloRatio * 0.09) * 100) / 100)
+  }
 
   return {
     ...baseProfile,

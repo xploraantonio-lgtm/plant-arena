@@ -73,12 +73,11 @@ export function getArenaForElo(elo: number): ArenaInfo {
   return found || ARENAS[0]
 }
 
-export function getTrophyGateForElo(elo: number): number {
-  if (elo >= 4000) return 4000
-  if (elo >= 3000) return 3000
-  if (elo >= 2000) return 2000
-  if (elo >= 1600) return 1600
-  if (elo >= 1000) return 1000
+/**
+ * En Plant Arena los jugadores PUEDEN descender de arena si pierden copas.
+ * El único piso absoluto del sistema es 0 copas (no hay ratings negativos).
+ */
+export function getTrophyGateForElo(_elo?: number): number {
   return 0
 }
 

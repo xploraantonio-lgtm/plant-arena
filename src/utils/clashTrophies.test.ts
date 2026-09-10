@@ -59,60 +59,46 @@ describe('Sistema de Copas Ranked estilo Clash Royale', () => {
     })
   })
 
-  describe('2. Verificación de Pisos Protegidos (Trophy Gates)', () => {
-    it('determina el piso protegido exacto según las copas actuales', () => {
+  describe('2. Verificación de Descenso entre Arenas y Piso 0', () => {
+    it('el piso absoluto es 0 copas (sin pisos artificiales bloqueando descenso)', () => {
       expect(getTrophyGateForElo(900)).toBe(0)
-      expect(getTrophyGateForElo(1000)).toBe(1000)
-      expect(getTrophyGateForElo(1450)).toBe(1000)
-      expect(getTrophyGateForElo(1600)).toBe(1600)
-      expect(getTrophyGateForElo(1850)).toBe(1600)
-      expect(getTrophyGateForElo(2000)).toBe(2000)
-      expect(getTrophyGateForElo(2999)).toBe(2000)
-      expect(getTrophyGateForElo(3000)).toBe(3000)
-      expect(getTrophyGateForElo(3999)).toBe(3000)
-      expect(getTrophyGateForElo(4000)).toBe(4000)
-      expect(getTrophyGateForElo(5500)).toBe(4000)
+      expect(getTrophyGateForElo(1000)).toBe(0)
+      expect(getTrophyGateForElo(1600)).toBe(0)
+      expect(getTrophyGateForElo(2000)).toBe(0)
+      expect(getTrophyGateForElo(3000)).toBe(0)
+      expect(getTrophyGateForElo(4000)).toBe(0)
     })
 
-    it('en derrota, protege al jugador de caer a una arena inferior (Trophy Gate)', () => {
-      // Caso 1: Jugador en Arena 2 con 1604 copas pierde (pérdida nominal de 8)
-      // Debe quedar en 1600 (pérdida efectiva de 4), NUNCA caer a 1596
+    it('en derrota, un jugador PUEDE descender a una arena inferior si cae por debajo del umbral', () => {
+      // Caso 1: Jugador en Arena 4 con 3010 copas pierde 20 copas
+      // Debe descender a 2990 copas y caer a Arena 3
+      const eloA4 = 3010
+      const deltasA4 = getEloDeltasForElo(eloA4)
+      const nuevoEloA4 = Math.max(getTrophyGateForElo(eloA4), eloA4 - deltasA4.loseElo)
+      expect(nuevoEloA4).toBe(2990)
+      expect(getArenaForElo(nuevoEloA4).id).toBe(3) // Desciende a Arena 3
+
+      // Caso 2: Jugador en Arena 3 con 2005 copas pierde 12 copas
+      // Debe descender a 1993 copas y caer a Arena 2
+      const eloA3 = 2005
+      const deltasA3 = getEloDeltasForElo(eloA3)
+      const nuevoEloA3 = Math.max(getTrophyGateForElo(eloA3), eloA3 - deltasA3.loseElo)
+      expect(nuevoEloA3).toBe(1993)
+      expect(getArenaForElo(nuevoEloA3).id).toBe(2) // Desciende a Arena 2
+
+      // Caso 3: Jugador en Arena 2 con 1604 copas pierde 8 copas
+      // Debe descender a 1596 copas y caer a Arena 1
       const eloA2 = 1604
       const deltasA2 = getEloDeltasForElo(eloA2)
-      const gateA2 = getTrophyGateForElo(eloA2)
-      const nuevoEloA2 = Math.max(gateA2, eloA2 - deltasA2.loseElo)
-      expect(nuevoEloA2).toBe(1600)
-      expect(eloA2 - nuevoEloA2).toBe(4)
+      const nuevoEloA2 = Math.max(getTrophyGateForElo(eloA2), eloA2 - deltasA2.loseElo)
+      expect(nuevoEloA2).toBe(1596)
+      expect(getArenaForElo(nuevoEloA2).id).toBe(1) // Desciende a Arena 1
 
-      // Caso 2: Jugador justo en el piso de Arena 2 (1600) pierde
-      // Debe mantenerse en 1600 (pérdida efectiva de 0)
-      const eloPisoA2 = 1600
-      const nuevoEloPisoA2 = Math.max(getTrophyGateForElo(eloPisoA2), eloPisoA2 - getEloDeltasForElo(eloPisoA2).loseElo)
-      expect(nuevoEloPisoA2).toBe(1600)
-
-      // Caso 3: Jugador en Arena 1 en 1002 copas pierde (nominal de 5)
-      // Debe quedar en 1000
-      const eloA1 = 1002
-      const nuevoEloA1 = Math.max(getTrophyGateForElo(eloA1), eloA1 - getEloDeltasForElo(eloA1).loseElo)
-      expect(nuevoEloA1).toBe(1000)
-
-      // Caso 4: Jugador en Arena 3 con 2005 copas pierde (nominal de 12)
-      // Debe quedar en 2000
-      const eloA3 = 2005
-      const nuevoEloA3 = Math.max(getTrophyGateForElo(eloA3), eloA3 - getEloDeltasForElo(eloA3).loseElo)
-      expect(nuevoEloA3).toBe(2000)
-
-      // Caso 5: Jugador en Arena 4 con 3010 copas pierde (nominal de 20)
-      // Debe quedar en 3000
-      const eloA4 = 3010
-      const nuevoEloA4 = Math.max(getTrophyGateForElo(eloA4), eloA4 - getEloDeltasForElo(eloA4).loseElo)
-      expect(nuevoEloA4).toBe(3000)
-
-      // Caso 6: Jugador en Arena 5 con 4015 copas pierde (nominal de 30)
-      // Debe quedar en 4000
-      const eloA5 = 4015
-      const nuevoEloA5 = Math.max(getTrophyGateForElo(eloA5), eloA5 - getEloDeltasForElo(eloA5).loseElo)
-      expect(nuevoEloA5).toBe(4000)
+      // Caso 4: Jugador en Arena 1 con 2 copas pierde 5 copas -> acotado a 0
+      const eloBajo = 2
+      const deltasBajo = getEloDeltasForElo(eloBajo)
+      const nuevoEloBajo = Math.max(getTrophyGateForElo(eloBajo), eloBajo - deltasBajo.loseElo)
+      expect(nuevoEloBajo).toBe(0)
     })
   })
 

@@ -143,34 +143,31 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     'id, round_number, status, free_attempts, prize_pool_gems, prize_1st, prize_2nd, prize_3rd, winner_id, created_at, finished_at'
 
   const loadCodeRounds = async () => {
-    const { data, error } = await (supabase.from('secret_code_rounds') as any)
-      .select(CODE_ROUND_COLUMNS)
-      .order('round_number', { ascending: false })
-      .limit(15)
-
-    if (error) {
-      console.error('[AdminPanel] rondas del código:', error.message)
-      return
+    try {
+      const rows = await adminService.adminGetSecretCodeRounds()
+      setCodeRounds(rows as CodeRoundRow[])
+    } catch (err: any) {
+      console.error('[AdminPanel] Error al cargar rondas de código:', err)
     }
-    const rows = (data || []) as CodeRoundRow[]
-    setCodeRounds(rows)
 
     // Clasificación de la ronda más reciente
-    const board = await adminService.secretCodeLeaderboard()
-    setCodeBoard(
-      board.map((b) => ({
-        userId: b.userId,
-        username: b.username,
-        bestPct: b.bestPct,
-        attempts: b.attempts,
-        place: b.place,
-      }))
-    )
+    try {
+      const board = await adminService.secretCodeLeaderboard()
+      setCodeBoard(
+        board.map((b) => ({
+          userId: b.userId,
+          username: b.username,
+          bestPct: b.bestPct,
+          attempts: b.attempts,
+          place: b.place,
+        }))
+      )
+    } catch (_) {}
   }
 
   const handleOpenCodeRound = async () => {
     if (codePrize1 + codePrize2 + codePrize3 > codePrizePool) {
-      showNotice(
+      alert(
         `⚠️ Los premios (${codePrize1} + ${codePrize2} + ${codePrize3} = ${codePrize1 + codePrize2 + codePrize3}) superan el bote de ${codePrizePool}.`
       )
       return
@@ -186,11 +183,13 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     setIsLoading(false)
 
     if (!res.success) {
+      alert(`⚠️ Error al abrir ronda: ${res.error || 'No se pudo abrir la ronda.'}`)
       showNotice(`⚠️ ${res.error || 'No se pudo abrir la ronda.'}`)
       return
     }
     soundManager.playSound('victory', 0.8)
-    showNotice(`🔐 Ronda #${res.roundNumber} abierta. El código lo generó el servidor: nadie lo conoce.`)
+    alert(`🎉 ¡Ronda #${res.roundNumber} abierta con éxito! (5 Slots · ${codePrizePool} 💎)`)
+    showNotice(`🔐 Ronda #${res.roundNumber} abierta con éxito.`)
     await loadCodeRounds()
   }
 
@@ -200,20 +199,21 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     setIsLoading(false)
 
     if (!res.success) {
+      alert(`⚠️ Error al cerrar ronda: ${res.error || 'No se pudo cerrar la ronda.'}`)
       showNotice(`⚠️ ${res.error || 'No se pudo cerrar la ronda.'}`)
       return
     }
-    showNotice(
-      settle
-        ? `✅ Ronda #${res.roundNumber} cerrada y bote repartido.`
-        : `🚫 Ronda #${res.roundNumber} cancelada sin reparto.`
-    )
+    const msg = settle
+      ? `✅ Ronda #${res.roundNumber} cerrada y bote repartido.`
+      : `🚫 Ronda #${res.roundNumber} cancelada sin reparto.`
+    alert(msg)
+    showNotice(msg)
     await loadCodeRounds()
   }
 
   const handleRestartCodeRound = async (settlePrevious: boolean) => {
     if (codePrize1 + codePrize2 + codePrize3 > codePrizePool) {
-      showNotice(
+      alert(
         `⚠️ Los premios (${codePrize1} + ${codePrize2} + ${codePrize3} = ${codePrize1 + codePrize2 + codePrize3}) superan el bote de ${codePrizePool}.`
       )
       return
@@ -231,11 +231,13 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     setIsLoading(false)
 
     if (!res.success) {
+      alert(`⚠️ Error al reiniciar ronda: ${res.error || 'No se pudo reiniciar la ronda.'}`)
       showNotice(`⚠️ ${res.error || 'No se pudo reiniciar la ronda.'}`)
       return
     }
     soundManager.playSound('victory', 0.8)
-    showNotice(`🚀 Nuevo Acertijo #${res.roundNumber} iniciado (5 slots · ${codePrizePool} 💎). Tablero anterior limpiado.`)
+    alert(`🚀 ¡Nuevo Acertijo #${res.roundNumber} iniciado con éxito! (5 Slots · ${codePrizePool} 💎)`)
+    showNotice(`🚀 Nuevo Acertijo #${res.roundNumber} iniciado (5 slots · ${codePrizePool} 💎).`)
     await loadCodeRounds()
   }
 
@@ -622,9 +624,12 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
           <button
             type="button"
             className={`admin-tab-btn ${activeTab === 'code' ? 'admin-tab-btn--active' : ''}`}
-            onClick={() => setActiveTab('code')}
+            onClick={() => {
+              setActiveTab('code')
+              loadCodeRounds()
+            }}
           >
-            🔐 Código Secreto ({codeRounds.filter((r) => r.status === 'open').length > 0 ? 'ronda activa' : 'sin ronda'})
+            🔐 Código Secreto ({codeRounds.filter((r) => r.status === 'open').length > 0 ? '🟢 ronda activa' : 'sin ronda'})
           </button>
           <button
             type="button"
@@ -1112,14 +1117,27 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                         empatados: 2.º entre dos → {(codePrize2 / 2).toFixed(2)} 💎 cada uno.
                       </p>
 
-                      <button
-                        type="button"
-                        className="admin-tab-btn admin-tab-btn--active"
-                        disabled={isLoading}
-                        onClick={handleOpenCodeRound}
-                      >
-                        🔐 Abrir ronda (5 slots · {codePrizePool} 💎)
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="admin-tab-btn admin-tab-btn--active"
+                          style={{ flex: 1, minWidth: '220px' }}
+                          disabled={isLoading}
+                          onClick={handleOpenCodeRound}
+                        >
+                          {isLoading ? '⏳ Procesando...' : `🔐 Abrir ronda (5 slots · ${codePrizePool} 💎)`}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-tab-btn"
+                          style={{ background: '#0284c7' }}
+                          disabled={isLoading}
+                          onClick={() => handleRestartCodeRound(false)}
+                          title="Si hay una ronda anterior bloqueada, la cancela e inicia una nueva limpia de 5 slots"
+                        >
+                          🧹 Forzar Inicio Limpio (5 Slots)
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
