@@ -1608,13 +1608,13 @@ export default function Battlefield({
         const config = PLANT_CONFIGS[plant.plantId]
         const laneConfig = LANES_CONFIG[plant.lane]
         const hpPct = (plant.hp / plant.maxHp) * 100
-        const isShovelActive = selectedCard === 'shovel'
+        const isShovelTarget = selectedCard === 'shovel' && !plant.isWalking
 
         return (
           <div
             key={plant.id}
             className={`entity plant-unit ${
-              isShovelActive ? 'plant-unit--shovel-target' : ''
+              isShovelTarget ? 'plant-unit--shovel-target' : ''
             } ${
               plant.isWalking ? 'plant-unit--walking' : ''
             } ${
@@ -1635,17 +1635,18 @@ export default function Battlefield({
             style={{
               left: `${plant.x}%`,
               top: `${laneConfig.topPct + laneConfig.heightPct / 2}%`,
-              pointerEvents: isShovelActive ? 'auto' : 'none',
+              pointerEvents: isShovelTarget ? 'auto' : 'none',
             }}
             onClick={(e) => {
               e.stopPropagation()
-              if (isShovelActive) {
+              if (isShovelTarget) {
                 if (roomId && inFlightCountRef.current >= MAX_IN_FLIGHT_ACTIONS) {
                   if (typeof navigator !== 'undefined' && navigator.vibrate) {
                     try { navigator.vibrate([20, 30]) } catch {}
                   }
                   return
                 }
+                if (isAsyncMatch && (rankedAsyncInconsistency || reconciliationState === 'reconciling_pending')) return
                 const seq = roomId ? ++ordenRef.current : undefined
                 const casilla = digPlant(plant.id, seq)
                 if (casilla) {
