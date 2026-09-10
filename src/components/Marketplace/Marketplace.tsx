@@ -2,8 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { soundManager } from '../../utils/audioManager'
 import {
   getPlantRarityAndMinPrice,
+  FARMING_ITEM_MIN_PRICES,
   type PlantRarity,
 } from '../../utils/marketplaceManager'
+import {
+  FARMING_ITEM_DEFINITIONS,
+  type FarmingInventory,
+  type FarmingItemId,
+} from '../../utils/pvpRewardManager'
 import { marketplaceService, type GlobalTransactionItem } from '../../services/marketplaceService'
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
 import type { PlantId, PlantCardInstance } from '../../types/game'
@@ -33,6 +39,7 @@ interface MarketplaceProps {
   userTokens: number
   userElo?: number
   hasVipPass: boolean
+  farmingItems?: FarmingInventory
   plantCopies: Partial<Record<PlantId, number>>
   plantLevels: Partial<Record<PlantId, number>>
   plantStatRolls: Partial<Record<PlantId, PlantStatKey[]>>
@@ -70,6 +77,9 @@ interface MarketplaceProps {
  */
 interface OfertaDelMercado {
   id: string
+  itemType?: 'plant' | 'farming'
+  itemId?: string
+  quantity?: number
   plantId: PlantId
   nivel: number
   statRolls: PlantStatKey[]
@@ -89,10 +99,42 @@ interface MarketModalDialog {
   onConfirm?: () => void
 }
 
+export type SellableMarketItem =
+  | {
+      kind: 'plant'
+      id: string
+      instanceId: string
+      plantId: PlantId
+      level: number
+      statRolls: PlantStatKey[]
+      isBase: boolean
+      isUnlocked: boolean
+      rarity: PlantRarity
+      minPrice: number
+      rarityColor: string
+      inDeck: boolean
+      name: string
+      icon: string
+    }
+  | {
+      kind: 'farming'
+      id: string
+      itemId: FarmingItemId
+      name: string
+      icon: string
+      fallbackIcon: string
+      minPrice: number
+      availableQty: number
+      description: string
+      rarity: string
+      rarityColor: string
+    }
+
 export default function Marketplace({
   userTokens,
   userElo,
   hasVipPass,
+  farmingItems,
   plantCopies: _plantCopies = {},
   plantLevels = {},
   plantStatRolls = {},
@@ -128,23 +170,12 @@ export default function Marketplace({
   const copasActuales = accessInfo.copasActuales
 
 
-  // Build the list of all individual card builds/instances from Mi Jardín
-  const gardenCards = useMemo(() => {
-    const cards: {
-      instanceId: string
-      plantId: PlantId
-      level: number
-      statRolls: PlantStatKey[]
-      isBase: boolean
-      isUnlocked: boolean
-      rarity: PlantRarity
-      minPrice: number
-      rarityColor: string
-      inDeck: boolean
-    }[] = []
-
+  // Lista unificada de cartas de plantas e ítems de farming vendibles
+  const sellableItems = useMemo<SellableMarketItem[]>(() => {
+    const items: SellableMarketItem[] = []
     const unlocked = unlockedPlants || (Object.keys(PLANT_CONFIGS) as PlantId[])
 
+    // 1. Cartas de Plantas
     if (plantInstances && plantInstances.length > 0) {
       plantInstances.forEach((inst) => {
         if (!unlocked.includes(inst.plantId)) return
@@ -153,7 +184,10 @@ export default function Marketplace({
           activeDeckInstances?.includes(inst.instanceId) ||
           activeDeck?.includes(inst.plantId)
         )
-        cards.push({
+        const pConfig = PLANT_CONFIGS[inst.plantId]
+        items.push({
+          kind: 'plant',
+          id: inst.instanceId,
           instanceId: inst.instanceId,
           plantId: inst.plantId,
           level: inst.level || 0,
@@ -164,12 +198,17 @@ export default function Marketplace({
           minPrice: rInfo.minPrice,
           rarityColor: rInfo.color,
           inDeck,
+          name: pConfig?.name || inst.plantId,
+          icon: pConfig?.packetActive || pConfig?.icon || '',
         })
       })
     } else {
       unlocked.forEach((pId) => {
         const rInfo = getPlantRarityAndMinPrice(pId)
-        cards.push({
+        const pConfig = PLANT_CONFIGS[pId]
+        items.push({
+          kind: 'plant',
+          id: `inst_base_${pId}`,
           instanceId: `inst_base_${pId}`,
           plantId: pId,
           level: plantLevels[pId] || 0,
@@ -180,34 +219,69 @@ export default function Marketplace({
           minPrice: rInfo.minPrice,
           rarityColor: rInfo.color,
           inDeck: Boolean(activeDeck?.includes(pId)),
+          name: pConfig?.name || pId,
+          icon: pConfig?.packetActive || pConfig?.icon || '',
         })
       })
     }
 
-    return cards
-  }, [plantInstances, unlockedPlants, plantLevels, plantStatRolls, activeDeck, activeDeckInstances])
+    // 2. Ítems de Farming del jugador
+    if (farmingItems) {
+      const order: FarmingItemId[] = [
+        'water',
+        'fertilizer',
+        'shovel_fragment',
+        'pesticide',
+        'scarecrow_fragment',
+        'shovel',
+        'scarecrow',
+      ]
+      order.forEach((fId) => {
+        const qty = Number(farmingItems[fId] || 0)
+        if (qty > 0) {
+          const def = FARMING_ITEM_DEFINITIONS[fId]
+          const minP = FARMING_ITEM_MIN_PRICES[fId] || 100
+          items.push({
+            kind: 'farming',
+            id: `farming_${fId}`,
+            itemId: fId,
+            name: def?.label || fId,
+            icon: def?.icon || '',
+            fallbackIcon: def?.fallback || '🌾',
+            minPrice: minP,
+            availableQty: qty,
+            description: def?.description || 'Recurso oficial de cultivo.',
+            rarity: 'FARMING',
+            rarityColor: '#4ade80',
+          })
+        }
+      })
+    }
 
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string>(() => {
-    return gardenCards[0]?.instanceId || ''
+    return items
+  }, [plantInstances, unlockedPlants, plantLevels, plantStatRolls, activeDeck, activeDeckInstances, farmingItems])
+
+  const [selectedItemId, setSelectedItemId] = useState<string>(() => {
+    return sellableItems[0]?.id || ''
   })
 
   useEffect(() => {
-    if (gardenCards.length > 0 && (!selectedInstanceId || !gardenCards.some((c) => c.instanceId === selectedInstanceId))) {
-      setSelectedInstanceId(gardenCards[0].instanceId)
+    if (sellableItems.length > 0 && (!selectedItemId || !sellableItems.some((c) => c.id === selectedItemId))) {
+      setSelectedItemId(sellableItems[0].id)
     }
-  }, [gardenCards, selectedInstanceId])
+  }, [sellableItems, selectedItemId])
 
-  const selectedInstance = gardenCards.find((c) => c.instanceId === selectedInstanceId) || gardenCards[0]
+  const selectedItem = sellableItems.find((c) => c.id === selectedItemId) || sellableItems[0]
 
-  const currentMinPrice = selectedInstance ? selectedInstance.minPrice : 5
+  const currentMinPrice = selectedItem ? selectedItem.minPrice : 50
   const [sellPriceGems, setSellPriceGems] = useState<number>(currentMinPrice)
 
-  // Ensure sellPrice is at least the minimum allowed for that rarity
+  // Asegurar que el precio de venta sea al menos el mínimo permitido para este ítem
   useEffect(() => {
-    if (selectedInstance) {
-      setSellPriceGems((prev) => Math.max(selectedInstance.minPrice, prev))
+    if (selectedItem) {
+      setSellPriceGems((prev) => Math.max(selectedItem.minPrice, prev))
     }
-  }, [selectedInstance?.instanceId, selectedInstance?.minPrice])
+  }, [selectedItem?.id, selectedItem?.minPrice])
 
   const showModalAlert = (
     title: string,
@@ -338,7 +412,7 @@ export default function Marketplace({
     if (!hasAccess) {
       showModalConfirm(
         'COMERCIO BLOQUEADO',
-        `Para comprar cartas en el Mercado necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
+        `Para comprar en el Mercado necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
         '🔒',
         () => {
           handleDirectBuyVip()
@@ -357,24 +431,30 @@ export default function Marketplace({
       )
       return
     }
-    const nombre = PLANT_CONFIGS[item.plantId]?.name || item.plantId
+
+    const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
+    const nombre = isFarming
+      ? (FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId]?.label || item.itemId || 'Recurso')
+      : (PLANT_CONFIGS[item.plantId]?.name || item.plantId)
+    const detalle = isFarming
+      ? `1x "${nombre}"`
+      : `"${nombre}" (Nivel ${item.nivel})`
 
     showModalConfirm(
       'CONFIRMAR COMPRA',
-      `¿Deseas comprar "${nombre}" (Nivel ${item.nivel}) por ${item.precio} 💎 gemas?`,
+      `¿Deseas comprar ${detalle} por ${item.precio} 💎 gemas?`,
       '🛒',
       async () => {
         const r = await marketplaceService.buyMarketplaceCard(item.id)
         if (!r.success) {
-          showModalAlert('NO SE PUDO COMPRAR', r.error || 'La carta ya no está disponible.', '⚠️', 'error')
+          showModalAlert('NO SE PUDO COMPRAR', r.error || 'La oferta ya no está disponible.', '⚠️', 'error')
           await refreshListings()
           return
         }
         soundManager.playSound('victory', 1)
         showModalAlert(
           '¡COMPRA EXITOSA!',
-          `Has adquirido "${nombre}" (Nivel ${item.nivel}) por ${item.precio} 💎.
-Ya está en tu Jardín.`,
+          `Has adquirido ${detalle} por ${item.precio} 💎.\nYa está en tu ${isFarming ? 'inventario de cultivo' : 'Jardín'}.`,
           '🎉',
           'success'
         )
@@ -385,18 +465,17 @@ Ya está en tu Jardín.`,
       `COMPRAR (${item.precio} 💎)`,
       'CANCELAR'
     )
-
   }
 
-  // SELL / LIST A CARD ON MARKETPLACE
+  // SELL / LIST A CARD OR FARMING ITEM ON MARKETPLACE
   const handleCreateListing = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedInstance) return
+    if (!selectedItem) return
 
     if (!hasAccess) {
       showModalConfirm(
         'COMERCIO BLOQUEADO',
-        `Para poner en venta cartas de tu Jardín necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
+        `Para poner en venta cartas o ítems de tu Jardín necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
         '🔒',
         () => {
           handleDirectBuyVip()
@@ -407,20 +486,52 @@ Ya está en tu Jardín.`,
       return
     }
 
-    if (sellPriceGems < currentMinPrice) {
+    if (sellPriceGems < selectedItem.minPrice) {
       showModalAlert(
         'PRECIO INFERIOR AL MÍNIMO',
-        `El precio mínimo de venta para plantas ${selectedInstance.rarity} es de ${currentMinPrice} 💎 gemas.`,
+        `El precio mínimo de venta para "${selectedItem.name}" es de ${selectedItem.minPrice} 💎 gemas.`,
         '⚠️',
         'warning'
       )
       return
     }
 
-    // Las cartas base no son instancias del servidor: no tienen fila propia en
-    // plant_instances y por tanto no se pueden vender. Se dice aquí en lugar de
-    // dejar que el servidor conteste «no eres el propietario», que no explica nada.
-    if (!/^[0-9a-f-]{36}$/i.test(selectedInstance.instanceId)) {
+    const comision = Math.round(sellPriceGems * comisionPct) / 100
+    const neto = sellPriceGems - comision
+
+    if (selectedItem.kind === 'farming') {
+      showModalConfirm(
+        'PUBLICAR ÍTEM EN EL MERCADO',
+        `¿Confirmas poner en venta 1x "${selectedItem.name}" por ${sellPriceGems} 💎?\n\n` +
+          `El comprador paga ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct} % (${comision} 💎) y tú recibes ${neto} 💎.\n\n` +
+          '⚠️ El recurso se descontará de tu inventario mientras esté publicado en el mercado.',
+        '🏷️',
+        async () => {
+          const r = await marketplaceService.listMarketplaceItem('farming', selectedItem.itemId, sellPriceGems, 1)
+          if (!r.success) {
+            showModalAlert('NO SE PUDO PUBLICAR', r.error || 'Inténtalo de nuevo.', '⚠️', 'error')
+            return
+          }
+
+          soundManager.playSound('plantation', 0.9)
+          showModalAlert(
+            '¡OFERTA PUBLICADA EN EL MERCADO!',
+            `1x "${selectedItem.name}" está en venta por ${sellPriceGems} 💎.\nRecibirás ${neto} 💎 cuando se venda.`,
+            '🏷️',
+            'success'
+          )
+          setActiveTab('browse')
+          await refreshListings()
+          onServerChange?.()
+        },
+        `SÍ, VENDER (${sellPriceGems} 💎)`,
+        'CANCELAR'
+      )
+      return
+    }
+
+    // Carta de Planta
+    if (!/^[0-9a-f-]{36}$/i.test(selectedItem.instanceId)) {
       showModalAlert(
         'ESTA CARTA NO SE PUEDE VENDER',
         'Es una carta base del juego, no una instancia de tu inventario. Vende cartas obtenidas en sobres o cofres.',
@@ -430,25 +541,14 @@ Ya está en tu Jardín.`,
       return
     }
 
-    const pConfig = PLANT_CONFIGS[selectedInstance.plantId]
-    const comision = Math.round(sellPriceGems * comisionPct) / 100
-    const neto = sellPriceGems - comision
-
     showModalConfirm(
       'PUBLICAR OFERTA EN EL MERCADO',
-      `¿Confirmas poner en venta "${pConfig.name}" (Nivel ${selectedInstance.level}) por ${sellPriceGems} 💎?
-
-` +
-        `El comprador paga ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct} % (${comision} 💎) y tú recibes ${neto} 💎.
-
-` +
+      `¿Confirmas poner en venta "${selectedItem.name}" (Nivel ${selectedItem.level}) por ${sellPriceGems} 💎?\n\n` +
+        `El comprador paga ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct} % (${comision} 💎) y tú recibes ${neto} 💎.\n\n` +
         '⚠️ La carta se retira de tu Jardín y de tu Mazo mientras esté publicada.',
       '🏷️',
       async () => {
-        // El servidor mueve la carta: la marca en venta y la saca del mazo. Esta
-        // pantalla ya no toca el inventario — cuando lo hacía, una publicación
-        // fallida dejaba la carta perdida en el navegador.
-        const r = await marketplaceService.listMarketplaceCard(selectedInstance.instanceId, sellPriceGems)
+        const r = await marketplaceService.listMarketplaceItem('plant', selectedItem.instanceId, sellPriceGems, 1)
         if (!r.success) {
           showModalAlert('NO SE PUDO PUBLICAR', r.error || 'Inténtalo de nuevo.', '⚠️', 'error')
           return
@@ -457,8 +557,7 @@ Ya está en tu Jardín.`,
         soundManager.playSound('plantation', 0.9)
         showModalAlert(
           '¡OFERTA PUBLICADA EN EL MERCADO!',
-          `"${pConfig.name}" (Nivel ${selectedInstance.level}) está en venta por ${sellPriceGems} 💎.
-Recibirás ${neto} 💎 cuando se venda.`,
+          `"${selectedItem.name}" (Nivel ${selectedItem.level}) está en venta por ${sellPriceGems} 💎.\nRecibirás ${neto} 💎 cuando se venda.`,
           '🏷️',
           'success'
         )
@@ -473,10 +572,14 @@ Recibirás ${neto} 💎 cuando se venda.`,
 
   // RETIRAR MI OFERTA
   const handleCancelListing = (item: OfertaDelMercado) => {
-    const nombre = PLANT_CONFIGS[item.plantId]?.name || item.plantId
+    const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
+    const nombre = isFarming
+      ? (FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId]?.label || item.itemId || 'Recurso')
+      : (PLANT_CONFIGS[item.plantId]?.name || item.plantId)
+
     showModalConfirm(
       'RETIRAR OFERTA DEL MERCADO',
-      `¿Deseas retirar "${nombre}" del mercado y recuperarla en tu Jardín?`,
+      `¿Deseas retirar "${nombre}" del mercado y recuperarla en tu ${isFarming ? 'inventario' : 'Jardín'}?`,
       '📦',
       async () => {
         const r = await marketplaceService.cancelMarketplaceListing(item.id)
@@ -487,7 +590,7 @@ Recibirás ${neto} 💎 cuando se venda.`,
         soundManager.playSound('plantation', 0.8)
         showModalAlert(
           'OFERTA RETIRADA',
-          `"${nombre}" ha vuelto a tu Jardín y ya se puede equipar.`,
+          `"${nombre}" ha vuelto a tu ${isFarming ? 'inventario de cultivo' : 'Jardín'}.`,
           '📦',
           'info'
         )
@@ -635,15 +738,21 @@ Recibirás ${neto} 💎 cuando se venda.`,
           ) : (
             listings.map((item) => {
               const isMine = item.esMia
-              const plantDef = PLANT_CONFIGS[item.plantId]
-              const itemIcon = plantDef?.packetActive || plantDef?.icon
-              const rInfo = getPlantRarityAndMinPrice(item.plantId)
+              const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
+              const farmingDef = isFarming && item.itemId ? FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId] : undefined
+              const plantDef = !isFarming ? PLANT_CONFIGS[item.plantId] : undefined
+              const itemIcon = isFarming ? farmingDef?.icon : (plantDef?.packetActive || plantDef?.icon)
+              const rInfo = !isFarming
+                ? getPlantRarityAndMinPrice(item.plantId)
+                : { rarity: 'FARMING', minPrice: item.itemId ? (FARMING_ITEM_MIN_PRICES[item.itemId as FarmingItemId] || 100) : 100, color: '#4ade80' }
+              const itemName = isFarming ? (farmingDef?.label || item.itemId || 'Recurso') : (plantDef?.name || item.plantId)
+
               return (
                 <div key={item.id} className="market-item-card">
                   {/* Card Header */}
                   <div className="market-item-card__header">
                     <span className="market-item-level-tag">
-                      {item.nivel > 0 ? `⭐ LVL ${item.nivel}` : '🌱 BASE'}
+                      {isFarming ? `🌾 x${item.quantity || 1}` : (item.nivel > 0 ? `⭐ LVL ${item.nivel}` : '🌱 BASE')}
                     </span>
                     <span className="market-item-rarity-badge" style={{ color: rInfo.color, borderColor: rInfo.color }}>
                       {rInfo.rarity}
@@ -653,13 +762,35 @@ Recibirás ${neto} 💎 cuando se venda.`,
 
                   {/* Image and Name */}
                   <div className="market-item-card__img-wrap">
-                    <img src={itemIcon} alt={plantDef?.name || item.plantId} className="market-item-icon" />
+                    {isFarming && itemIcon ? (
+                      <img
+                        src={itemIcon}
+                        alt={itemName}
+                        className="market-item-icon"
+                        onError={(e) => {
+                          const target = e.currentTarget
+                          target.style.display = 'none'
+                          if (target.parentElement) {
+                            const span = document.createElement('span')
+                            span.textContent = farmingDef?.fallback || '🌾'
+                            span.style.fontSize = '3.5rem'
+                            target.parentElement.appendChild(span)
+                          }
+                        }}
+                      />
+                    ) : (
+                      <img src={itemIcon} alt={itemName} className="market-item-icon" />
+                    )}
                   </div>
-                  <h4 className="market-item-name">{plantDef?.name || item.plantId}</h4>
+                  <h4 className="market-item-name">{itemName}</h4>
 
-                  {/* Stat Rolls Pills */}
+                  {/* Stat Rolls Pills or Farming Description */}
                   <div className="market-item-stats-box">
-                    {item.statRolls && item.statRolls.length > 0 ? (
+                    {isFarming ? (
+                      <span className="market-stat-pill market-stat-pill--none">
+                        {farmingDef?.description || 'Recurso de cultivo.'}
+                      </span>
+                    ) : item.statRolls && item.statRolls.length > 0 ? (
                       formatStatRolls(item.statRolls)
                     ) : (
                       <span className="market-stat-pill market-stat-pill--none">Stats estándar de fábrica</span>
@@ -698,73 +829,135 @@ Recibirás ${neto} 💎 cuando se venda.`,
         </div>
       )}
 
-      {/* TAB 2: SELL MY PLANT */}
-      {activeTab === 'sell' && hasVipPass && (
+      {/* TAB 2: SELL MY PLANT OR FARMING ITEM */}
+      {activeTab === 'sell' && hasAccess && (
         <div className="market-sell-pane">
           <div className="market-sell-form-grid">
-            {/* Column 1: Select Plant from Garden */}
+            {/* Column 1: Select Item to Sell */}
             <div className="market-sell-column">
               <label className="market-sell-label">
-                1. Elige la Carta de tu Jardín a Vender ({gardenCards.length} disponibles)
+                1. Elige la Carta o Ítem a Vender ({sellableItems.length} disponibles)
               </label>
               <div className="market-garden-cards-list">
-                {gardenCards.length === 0 ? (
+                {sellableItems.length === 0 ? (
                   <div className="market-empty-state">
-                    <span>No tienes cartas disponibles para vender en tu Jardín.</span>
+                    <span>No tienes cartas ni ítems de farming disponibles para vender.</span>
                   </div>
                 ) : (
-                  gardenCards.map((card) => {
-                    const pConfig = PLANT_CONFIGS[card.plantId]
-                    const isSelected = selectedInstance?.instanceId === card.instanceId
+                  sellableItems.map((item) => {
+                    const isSelected = selectedItemId === item.id
+
+                    if (item.kind === 'farming') {
+                      return (
+                        <div
+                          key={item.id}
+                          role="button"
+                          tabIndex={0}
+                          className={`market-garden-card-item ${isSelected ? 'market-garden-card-item--active' : ''}`}
+                          onClick={() => {
+                            soundManager.playSound('click', 0.4)
+                            setSelectedItemId(item.id)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              setSelectedItemId(item.id)
+                            }
+                          }}
+                        >
+                          <img
+                            src={item.icon}
+                            alt={item.name}
+                            className="market-garden-card-item__img"
+                            onError={(e) => {
+                              const target = e.currentTarget
+                              target.style.display = 'none'
+                              if (target.parentElement) {
+                                const span = document.createElement('span')
+                                span.textContent = item.fallbackIcon
+                                span.style.fontSize = '2.5rem'
+                                target.parentElement.appendChild(span)
+                              }
+                            }}
+                          />
+                          <div className="market-garden-card-item__info">
+                            <div className="market-garden-card-item__header">
+                              <span className="market-item-level-tag">
+                                🌾 DISP: {item.availableQty}
+                              </span>
+                              <span
+                                className="market-rarity-pill"
+                                style={{ color: item.rarityColor, borderColor: item.rarityColor }}
+                              >
+                                {item.rarity}
+                              </span>
+                            </div>
+                            <strong className="market-garden-card-item__name">
+                              {item.name}
+                            </strong>
+                            <div className="market-garden-card-item__stats">
+                              <span className="market-stat-pill market-stat-pill--none">
+                                {item.description}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="market-garden-card-item__price-badge">
+                            Mín: {item.minPrice} 💎
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // Kind === 'plant'
+                    const pConfig = PLANT_CONFIGS[item.plantId]
                     return (
                       <div
-                        key={card.instanceId}
+                        key={item.id}
                         role="button"
                         tabIndex={0}
                         className={`market-garden-card-item ${isSelected ? 'market-garden-card-item--active' : ''}`}
                         onClick={() => {
                           soundManager.playSound('click', 0.4)
-                          setSelectedInstanceId(card.instanceId)
+                          setSelectedItemId(item.id)
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
-                            setSelectedInstanceId(card.instanceId)
+                            setSelectedItemId(item.id)
                           }
                         }}
                       >
                         <img
                           src={pConfig?.packetActive || pConfig?.icon}
-                          alt={pConfig?.name || card.plantId}
+                          alt={pConfig?.name || item.plantId}
                           className="market-garden-card-item__img"
                         />
                         <div className="market-garden-card-item__info">
                           <div className="market-garden-card-item__header">
                             <span className="market-item-level-tag">
-                              {card.level > 0 ? `⭐ LVL ${card.level}` : '🌱 BASE'}
+                              {item.level > 0 ? `⭐ LVL ${item.level}` : '🌱 BASE'}
                             </span>
                             <span
                               className="market-rarity-pill"
-                              style={{ color: card.rarityColor, borderColor: card.rarityColor }}
+                              style={{ color: item.rarityColor, borderColor: item.rarityColor }}
                             >
-                              {card.rarity}
+                              {item.rarity}
                             </span>
-                            {card.inDeck && (
+                            {item.inDeck && (
                               <span className="market-deck-tag">⚔️ EN MAZO</span>
                             )}
                           </div>
                           <strong className="market-garden-card-item__name">
-                            {pConfig?.name || card.plantId}
+                            {pConfig?.name || item.plantId}
                           </strong>
                           <div className="market-garden-card-item__stats">
-                            {card.statRolls.length > 0 ? (
-                              formatStatRolls(card.statRolls)
+                            {item.statRolls && item.statRolls.length > 0 ? (
+                              formatStatRolls(item.statRolls)
                             ) : (
                               <span className="market-stat-pill market-stat-pill--none">Stats estándar</span>
                             )}
                           </div>
                         </div>
                         <div className="market-garden-card-item__price-badge">
-                          Mín: ${card.minPrice}
+                          Mín: {item.minPrice} 💎
                         </div>
                       </div>
                     )
@@ -777,56 +970,86 @@ Recibirás ${neto} 💎 cuando se venda.`,
             <div className="market-sell-column market-sell-column--summary">
               <label className="market-sell-label">2. Fijar Precio y Confirmar Venta</label>
 
-              {selectedInstance && (
+              {selectedItem && (
                 <form className="market-sell-preview-card" onSubmit={handleCreateListing}>
                   <div className="market-sell-preview-header">
                     <span className="market-item-level-tag">
-                      {selectedInstance.level > 0 ? `⭐ LVL ${selectedInstance.level}` : '🌱 BASE'}
+                      {selectedItem.kind === 'farming'
+                        ? `🌾 1x DISP (${selectedItem.availableQty})`
+                        : (selectedItem.level > 0 ? `⭐ LVL ${selectedItem.level}` : '🌱 BASE')}
                     </span>
                     <span
                       className="market-rarity-pill"
-                      style={{ color: selectedInstance.rarityColor, borderColor: selectedInstance.rarityColor }}
+                      style={{ color: selectedItem.rarityColor, borderColor: selectedItem.rarityColor }}
                     >
-                      {selectedInstance.rarity} (Mín {selectedInstance.minPrice} 💎)
+                      {selectedItem.rarity} (Mín {selectedItem.minPrice} 💎)
                     </span>
                   </div>
 
-                  <img
-                    src={
-                      PLANT_CONFIGS[selectedInstance.plantId]?.packetActive ||
-                      PLANT_CONFIGS[selectedInstance.plantId]?.icon
-                    }
-                    alt=""
-                    className="market-preview-icon"
-                  />
-                  <h4>{PLANT_CONFIGS[selectedInstance.plantId]?.name}</h4>
+                  {selectedItem.kind === 'farming' ? (
+                    <>
+                      <img
+                        src={selectedItem.icon}
+                        alt={selectedItem.name}
+                        className="market-preview-icon"
+                        onError={(e) => {
+                          const target = e.currentTarget
+                          target.style.display = 'none'
+                          if (target.parentElement) {
+                            const span = document.createElement('span')
+                            span.textContent = selectedItem.fallbackIcon
+                            span.style.fontSize = '4rem'
+                            target.parentElement.appendChild(span)
+                          }
+                        }}
+                      />
+                      <h4>{selectedItem.name}</h4>
+                      <div className="market-item-stats-box">
+                        <span className="market-stat-pill market-stat-pill--none">
+                          {selectedItem.description}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <img
+                        src={
+                          PLANT_CONFIGS[selectedItem.plantId]?.packetActive ||
+                          PLANT_CONFIGS[selectedItem.plantId]?.icon
+                        }
+                        alt=""
+                        className="market-preview-icon"
+                      />
+                      <h4>{PLANT_CONFIGS[selectedItem.plantId]?.name}</h4>
 
-                  {selectedInstance.inDeck && (
-                    <div className="market-deck-warning">
-                      ⚠️ Esta carta está equipada en tu Mazo de Batalla. Se desequipará automáticamente al ponerla en venta.
-                    </div>
+                      {selectedItem.inDeck && (
+                        <div className="market-deck-warning">
+                          ⚠️ Esta carta está equipada en tu Mazo de Batalla. Se desequipará automáticamente al ponerla en venta.
+                        </div>
+                      )}
+
+                      <div className="market-item-stats-box">
+                        {selectedItem.statRolls && selectedItem.statRolls.length > 0 ? (
+                          formatStatRolls(selectedItem.statRolls)
+                        ) : (
+                          <span className="market-stat-pill market-stat-pill--none">Stats estándar de fábrica</span>
+                        )}
+                      </div>
+                    </>
                   )}
-
-                  <div className="market-item-stats-box">
-                    {selectedInstance.statRolls && selectedInstance.statRolls.length > 0 ? (
-                      formatStatRolls(selectedInstance.statRolls)
-                    ) : (
-                      <span className="market-stat-pill market-stat-pill--none">Stats estándar de fábrica</span>
-                    )}
-                  </div>
 
                   {/* Price Setting with Steppers */}
                   <div className="market-price-input-group">
                     <label>
                       Precio de Venta (💎 gemas) —{' '}
-                      <span style={{ color: '#fde047' }}>Mínimo: {selectedInstance.minPrice} 💎</span>
+                      <span style={{ color: '#fde047' }}>Mínimo: {selectedItem.minPrice} 💎</span>
                     </label>
                     <div className="market-price-stepper-wrap">
                       <button
                         type="button"
                         className="market-stepper-btn"
-                        disabled={sellPriceGems <= selectedInstance.minPrice}
-                        onClick={() => setSellPriceGems((p) => Math.max(selectedInstance.minPrice, p - 1))}
+                        disabled={sellPriceGems <= selectedItem.minPrice}
+                        onClick={() => setSellPriceGems((p) => Math.max(selectedItem.minPrice, p - 1))}
                         title="Bajar 1 gema"
                       >
                         -
@@ -837,8 +1060,8 @@ Recibirás ${neto} 💎 cuando se venda.`,
                         <input
                           type="number"
                           step="1"
-                          min={selectedInstance.minPrice}
-                          max="999"
+                          min={selectedItem.minPrice}
+                          max="99999"
                           value={sellPriceGems}
                           onChange={(e) => setSellPriceGems(Math.max(0, Number(e.target.value)))}
                           required
@@ -861,36 +1084,43 @@ Recibirás ${neto} 💎 cuando se venda.`,
                       <button
                         type="button"
                         className="market-shortcut-btn"
-                        onClick={() => setSellPriceGems(selectedInstance.minPrice)}
+                        onClick={() => setSellPriceGems(selectedItem.minPrice)}
                       >
-                        MÍN (${selectedInstance.minPrice})
+                        MÍN ({selectedItem.minPrice} 💎)
                       </button>
                       <button
                         type="button"
                         className="market-shortcut-btn"
-                        onClick={() => setSellPriceGems((p) => p + 5)}
+                        onClick={() => setSellPriceGems((p) => p + 25)}
                       >
-                        +5 💎
+                        +25 💎
                       </button>
                       <button
                         type="button"
                         className="market-shortcut-btn"
-                        onClick={() => setSellPriceGems((p) => p + 10)}
+                        onClick={() => setSellPriceGems((p) => p + 50)}
                       >
-                        +10 💎
+                        +50 💎
+                      </button>
+                      <button
+                        type="button"
+                        className="market-shortcut-btn"
+                        onClick={() => setSellPriceGems((p) => p + 100)}
+                      >
+                        +100 💎
                       </button>
                     </div>
                   </div>
 
                   <button
                     type="submit"
-                    disabled={!hasAccess || sellPriceGems < selectedInstance.minPrice}
+                    disabled={!hasAccess || sellPriceGems < selectedItem.minPrice}
                     className={`market-publish-btn ${!hasAccess ? 'market-publish-btn--locked' : ''}`}
-                    title={!hasAccess ? 'Requiere Pase PvP o 1,350 Copas para vender plantas en el mercado' : undefined}
+                    title={!hasAccess ? 'Requiere Pase PvP o 1,350 Copas para vender en el mercado' : undefined}
                   >
                     {!hasAccess
                       ? '🔒 REQUIERE PASE PVP O 1,350 COPAS'
-                      : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes ${sellPriceGems - Math.round(sellPriceGems * comisionPct) / 100} 💎`}
+                      : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes ${sellPriceGems - Math.round((sellPriceGems * comisionPct) / 100)} 💎`}
                   </button>
 
                   {!hasAccess && (

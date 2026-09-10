@@ -1036,6 +1036,7 @@ function App() {
             plantLevels={plantLevels}
             plantStatRolls={plantStatRolls}
             plantInstances={plantInstances}
+            farmingItems={farmingItems}
             initialTab={shopInitialTab}
             playerEnergy={playerEnergy}
             maxPlayerEnergy={maxPlayerEnergy}
@@ -1207,6 +1208,7 @@ function App() {
               plantLevels={plantLevels}
               plantStatRolls={plantStatRolls}
               plantInstances={plantInstances}
+              farmingItems={farmingItems}
               unlockedPlants={unlockedPlants}
               activeDeck={activeDeck}
               activeDeckInstances={activeDeckInstances}

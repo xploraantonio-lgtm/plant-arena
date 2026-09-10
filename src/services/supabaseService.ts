@@ -1297,6 +1297,38 @@ export const SupabaseService = {
     }
   },
 
+  /** Publica tanto plantas como ítems de farming en el marketplace autoritativo */
+  async listMarketplaceItem(
+    itemType: 'plant' | 'farming',
+    targetId: string,
+    priceGems: number,
+    quantity = 1
+  ): Promise<{ success: boolean; listing_id?: string; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('list_marketplace_item', {
+        p_item_type: itemType,
+        p_target_id: targetId,
+        p_price_gems: priceGems,
+        p_quantity: quantity,
+      })
+      if (error) {
+        if (itemType === 'plant') {
+          return await this.listMarketplaceCard(targetId, priceGems)
+        }
+        logError('listMarketplaceItem', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; listing_id?: string }
+    } catch (e: any) {
+      if (itemType === 'plant') {
+        return await this.listMarketplaceCard(targetId, priceGems)
+      }
+      logError('listMarketplaceItem', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
   async cancelMarketplaceListing(listingId: string): Promise<{ success: boolean; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
@@ -1325,7 +1357,10 @@ export const SupabaseService = {
     comisionPct: number
     ofertas: Array<{
       id: string
-      plantId: any
+      itemType?: 'plant' | 'farming'
+      itemId?: string
+      quantity?: number
+      plantId?: any
       nivel: number
       statRolls: any[]
       precio: number

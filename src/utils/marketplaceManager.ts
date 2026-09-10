@@ -1,6 +1,8 @@
 import type { PlantId } from '../types/game'
 import { PLANT_CONFIGS, type PlantStatKey } from './gameConstants'
 
+import type { FarmingItemId } from './pvpRewardManager'
+
 export interface MarketListing {
   id: string
   sellerName: string
@@ -15,29 +17,43 @@ export interface MarketListing {
 
 export type PlantRarity = 'COMÚN' | 'POCO COMÚN' | 'RARA' | 'ÉPICA' | 'LEGENDARIA'
 
+export const FARMING_ITEM_MIN_PRICES: Record<FarmingItemId, number> = {
+  water: 100,
+  fertilizer: 200,
+  shovel_fragment: 250,
+  pesticide: 250,
+  scarecrow_fragment: 500,
+  shovel: 800,
+  scarecrow: 1200,
+}
+
+export function getFarmingItemMinPrice(itemId: FarmingItemId): number {
+  return FARMING_ITEM_MIN_PRICES[itemId] ?? 100
+}
+
 export function getPlantRarityAndMinPrice(plantId: PlantId): {
   rarity: PlantRarity
   minPrice: number
   color: string
 } {
-  // Comunes: min 5
+  // Comunes: min 50 gemas
   if (['sunflower', 'peashooter', 'wallnut', 'chomper'].includes(plantId)) {
-    return { rarity: 'COMÚN', minPrice: 5, color: '#4ade80' }
+    return { rarity: 'COMÚN', minPrice: 50, color: '#4ade80' }
   }
-  // Poco Comunes (PC): min 8
+  // Poco Comunes (PC): min 80 gemas
   if (['garlic', 'bonkchoy', 'repeater', 'melonpult', 'squash'].includes(plantId)) {
-    return { rarity: 'POCO COMÚN', minPrice: 8, color: '#38bdf8' }
+    return { rarity: 'POCO COMÚN', minPrice: 80, color: '#38bdf8' }
   }
-  // Raras: min 10
+  // Raras: min 100 gemas
   if (['twinsunflower', 'jalapeno'].includes(plantId)) {
-    return { rarity: 'RARA', minPrice: 10, color: '#a855f7' }
+    return { rarity: 'RARA', minPrice: 100, color: '#a855f7' }
   }
-  // Épicas: min 15
+  // Épicas: min 150 gemas
   if (['aloe', 'tallnut'].includes(plantId)) {
-    return { rarity: 'ÉPICA', minPrice: 15, color: '#ec4899' }
+    return { rarity: 'ÉPICA', minPrice: 150, color: '#ec4899' }
   }
-  // Legendarias: min 20
-  return { rarity: 'LEGENDARIA', minPrice: 20, color: '#fbbf24' }
+  // Legendarias: min 200 gemas
+  return { rarity: 'LEGENDARIA', minPrice: 200, color: '#fbbf24' }
 }
 
 const STORAGE_KEY = 'plant_arena_market_listings'

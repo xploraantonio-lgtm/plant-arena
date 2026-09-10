@@ -11,6 +11,7 @@ import { soundManager } from '../../utils/audioManager'
 import { shopService } from '../../services/shopService'
 import Marketplace from '../Marketplace/Marketplace'
 import { VIP_PASS_PRECIO_GEMAS, ENERGY_PACKAGES, type EnergyPackage, type PlantStatKey } from '../../utils/gameConstants'
+import type { FarmingInventory } from '../../utils/pvpRewardManager'
 import './Shop.css'
 
 const commonSeedImg = '/game-assets/greenfoot/seed_pack_common_whitebg.webp'
@@ -214,6 +215,7 @@ export interface ShopProps {
   plantLevels?: Partial<Record<PlantId, number>>
   plantStatRolls?: Partial<Record<PlantId, PlantStatKey[]>>
   plantInstances?: PlantCardInstance[]
+  farmingItems?: FarmingInventory
   onBack: () => void
   onBuyPack: (packId: PackId, qty?: number) => Promise<{ success: boolean; packs?: InventoryPack[]; error?: string }>
   onBuyGold?: (packageId: string) => Promise<{ success: boolean; goldAdded?: number; error?: string }>
@@ -242,6 +244,7 @@ export default function Shop({
   plantLevels = {},
   plantStatRolls = {},
   plantInstances = [],
+  farmingItems,
   onBack,
   onBuyPack,
   onBuyGold,
@@ -1177,6 +1180,7 @@ export default function Shop({
               plantLevels={plantLevels as Record<PlantId, number>}
               plantStatRolls={plantStatRolls as Record<PlantId, PlantStatKey[]>}
               plantInstances={plantInstances}
+              farmingItems={farmingItems}
               onDeductTokens={onDeductTokens || (() => false)}
               onDonatePlant={onDonatePlant || (() => false)}
               onReceivePlant={onReceivePlant || (() => {})}
