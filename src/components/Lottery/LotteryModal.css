@@ -618,6 +618,15 @@
   background: rgba(251, 191, 36, 0.15);
 }
 
+.lottery-mini-plant-card--in-use {
+  opacity: 0.35 !important;
+  filter: grayscale(90%) !important;
+  cursor: not-allowed !important;
+  border-color: #334155 !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  transform: none !important;
+}
+
 .lottery-mini-plant-img {
   width: 26px;
   height: 26px;

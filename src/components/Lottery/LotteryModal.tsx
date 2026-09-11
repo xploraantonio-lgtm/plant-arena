@@ -490,6 +490,7 @@ export default function LotteryModal({
   // ===================== CODE (SECUENCIA) ACTIONS =====================
   const handleSelectPlantForSlot = (plantId: PlantId) => {
     if (isSpinning || !roundIsOpen || codeWonPrize) return
+    if (selectedSequence.includes(plantId)) return
     soundManager.playSound('click', 0.3)
     const firstEmptyIndex = selectedSequence.findIndex((s) => s === null)
     if (firstEmptyIndex !== -1) {
@@ -850,14 +851,15 @@ export default function LotteryModal({
                     {ALL_PLANTS_LIST.map((plantId) => {
                       const conf = PLANT_CONFIGS[plantId]
                       const iconSrc = conf?.packetActive || conf?.icon
+                      const isAlreadySelected = selectedSequence.includes(plantId)
                       return (
                         <button
                           key={plantId}
                           type="button"
-                          className="lottery-mini-plant-card"
-                          disabled={!roundIsOpen || codeWonPrize}
+                          className={`lottery-mini-plant-card ${isAlreadySelected ? 'lottery-mini-plant-card--in-use' : ''}`}
+                          disabled={!roundIsOpen || codeWonPrize || isAlreadySelected}
                           onClick={() => handleSelectPlantForSlot(plantId)}
-                          title={conf.name}
+                          title={isAlreadySelected ? `${conf.name} (Ya añadida a la combinación)` : conf.name}
                         >
                           <img src={iconSrc} alt={conf.name} className="lottery-mini-plant-img" />
                           <span className="lottery-mini-plant-name">{conf.name}</span>

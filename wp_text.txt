@@ -1,0 +1,246 @@
+Line 0: <!doctype html>
+Line 1: <html lang="es">
+Line 2: <head>
+Line 3: <meta charset="utf-8" />
+Line 4: <meta name="viewport" content="width=device-width, initial-scale=1" />
+Line 5: <title>Plant Arena - Whitepaper de Clanes & Economía del Tesoro v2.0</title>
+Line 6: <style>
+Line 7: :root {
+Line 8:   --bg:#07120e; --panel:#0c1d16; --panel2:#11291d; --lime:#9cff18; --lime2:#51d313;
+Line 9:   --gold:#ffc83d; --cream:#f8f3df; --muted:#b8c8bc; --line:#2d5138; --danger:#ff624f; --cyan:#64e8df;
+Line 10: }
+Line 11: *{box-sizing:border-box} html{scroll-behavior:smooth}
+Line 12: body{margin:0;background:radial-gradient(circle at 20% 10%,#123221 0,#07120e 38%,#040907 100%);color:var(--cream);font-family:Inter,Arial,Helvetica,sans-serif;line-height:1.55}
+Line 13: a{color:var(--lime)}
+Line 14: .wrap{max-width:1100px;margin:auto;padding:28px}
+Line 15: .page{position:relative;background:linear-gradient(180deg,rgba(16,40,28,.97),rgba(7,18,14,.98));border:1px solid rgba(156,255,24,.22);border-radius:24px;padding:42px;margin:24px auto;min-height:900px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+Line 16: .cover{min-height:1020px;padding:0;background:#030806;display:flex;align-items:flex-end}
+Line 17: .cover-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top}.cover-shade{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.03),rgba(3,8,6,.16) 55%,rgba(3,8,6,.96) 90%)}
+Line 18: .cover-content{position:relative;z-index:2;padding:56px;width:100%}
+Line 19: .eyebrow{display:inline-block;padding:7px 12px;border:1px solid rgba(156,255,24,.5);border-radius:999px;background:rgba(7,18,14,.76);color:var(--lime);font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:12px}
+Line 20: h1{font-size:52px;line-height:1.02;margin:18px 0 12px;letter-spacing:-.03em} h2{font-size:32px;line-height:1.15;margin:0 0 16px} h3{font-size:20px;margin:24px 0 10px;color:var(--gold)}
+Line 21: .subtitle{font-size:20px;color:#eef7e8;max-width:780px}
+Line 22: .meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px} .chip{background:#0d2518;border:1px solid #315f3d;border-radius:12px;padding:9px 12px;color:#dce9dc;font-size:13px}
+Line 23: .lead{font-size:19px;color:#d8e8da;max-width:850px}
+Line 24: .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px} .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:15px} .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+Line 25: .card{background:linear-gradient(180deg,rgba(18,47,32,.9),rgba(11,28,20,.95));border:1px solid var(--line);border-radius:18px;padding:18px;break-inside:avoid}
+Line 26: .card strong{color:white} .num{font-size:32px;font-weight:900;color:var(--lime);line-height:1} .label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#9fb5a5;margin-top:6px}
+Line 27: .hero-row{display:grid;grid-template-columns:1.3fr .7fr;gap:24px;align-items:center} .char{max-width:100%;max-height:360px;object-fit:contain;filter:drop-shadow(0 20px 18px rgba(0,0,0,.4))}
+Line 28: .callout{border-left:5px solid var(--gold);background:rgba(255,200,61,.08);padding:15px 18px;border-radius:10px;margin:18px 0}
+Line 29: .simple{background:rgba(156,255,24,.07);border:1px solid rgba(156,255,24,.22);padding:16px;border-radius:14px}
+Line 30: ul{padding-left:20px} li{margin:7px 0} .tiny{font-size:12px;color:var(--muted)}
+Line 31: .flow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;margin:20px 0} .step{flex:1 1 150px;min-width:150px;padding:16px;border-radius:15px;background:#10291d;border:1px solid #31563a;text-align:center} .arrow{align-self:center;color:var(--gold);font-weight:900;font-size:26px}
+Line 32: .money{font-variant-numeric:tabular-nums;color:var(--gold);font-weight:900}
+Line 33: .bar{height:10px;border-radius:999px;background:#1a3224;overflow:hidden;margin-top:8px} .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--lime2),var(--lime))}
+Line 34: .role{display:flex;gap:13px;align-items:flex-start} .badge{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#163b27;border:1px solid #3a6d49;font-size:21px;flex:none}
+Line 35: .table{width:100%;border-collapse:collapse;font-size:13px} .table th,.table td{padding:11px;border-bottom:1px solid #294734;vertical-align:top} .table th{text-align:left;color:var(--lime);background:#0d2418}
+Line 36: .formula{font-size:24px;font-weight:900;text-align:center;padding:18px;background:#07150e;border:1px dashed #4f7d59;border-radius:14px;margin:16px 0;color:#f5f8e9}
+Line 37: .duel{display:grid;grid-template-columns:1fr auto 1fr;gap:15px;align-items:center} .vs{font-size:24px;font-weight:900;color:var(--gold)}
+Line 38: .check{color:var(--lime);font-weight:900} .warn{color:#ffb7a8} .footer{position:absolute;bottom:18px;left:42px;right:42px;display:flex;justify-content:space-between;color:#6e8877;font-size:10px}
+Line 39: .toc a{display:flex;justify-content:space-between;text-decoration:none;padding:10px 0;border-bottom:1px solid #24402f;color:#e7f0e7} .toc a span:last-child{color:var(--lime)}
+Line 40: .poster{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:end;margin-top:20px} .poster img{width:100%;height:210px;object-fit:contain;filter:drop-shadow(0 12px 10px rgba(0,0,0,.35))}
+Line 41: .notice{font-size:12px;color:#99ae9e;border-top:1px solid #294734;padding-top:14px;margin-top:22px}
+Line 42: @media(max-width:760px){.wrap{padding:8px}.page{margin:10px 0;padding:24px;border-radius:16px;min-height:auto}.cover{min-height:760px}.cover-content{padding:28px}h1{font-size:40px}h2{font-size:27px}.grid2,.grid3,.grid4,.hero-row,.duel{grid-template-columns:1fr}.poster{grid-template-columns:repeat(2,1fr)}.poster img{height:160px}.arrow,.vs{display:none}}
+Line 43: @media print{
+Line 44:  @page{size:A4;margin:0} body{background:#07120e;-webkit-print-color-adjust:exact;print-color-adjust:exact} .wrap{max-width:none;padding:0} .page{width:210mm;height:297mm;min-height:297mm;margin:0;border-radius:0;border:0;box-shadow:none;padding:15mm 15mm 13mm;break-after:page} .cover{padding:0} .cover-content{padding:16mm} .footer{left:15mm;right:15mm;bottom:7mm} h1{font-size:42px} h2{font-size:28px} .lead{font-size:16px} .poster img{height:155px} .char{max-height:260px} .card{padding:13px} .grid4{gap:8px} .table{font-size:11px} .table th,.table td{padding:7px} .notice{font-size:10px}
+Line 45: }
+Line 46: </style>
+Line 47: </head>
+Line 48: <body><div class="wrap">
+Line 49: 
+Line 50: <section class="page cover" id="cover">
+Line 51: <IMAGE length 4595271>
+Line 52:  <div class="cover-shade"></div>
+Line 53:  <div class="cover-content">
+Line 54:   <span class="eyebrow">Whitepaper v2.0 · Septiembre 2026</span>
+Line 55:   <h1>PLANT ARENA<br><span style="color:var(--lime)">Sistema de Clanes & Economía del Tesoro</span></h1>
+Line 56:   <p class="subtitle">Una guía visual y fácil de entender sobre membresía, bóveda del clan, guerras, reparto de excedentes, donaciones de semillas y seguridad del sistema.</p>
+Line 57:   <div class="meta"><div class="chip">🎮 Ecosistema: PVP & Guild</div><div class="chip">💎 Moneda base: Gemas</div><div class="chip">👥 Máx. 15 jugadores por clan</div><div class="chip">🗓️ Temporadas: 30 días</div></div>
+Line 58:   <p class="tiny" style="margin-top:22px">plants-arena.online</p>
+Line 59:  </div>
+Line 60: </section>
+Line 61: 
+Line 62: <section class="page" id="resumen">
+Line 63:  <span class="eyebrow">01 · Resumen ejecutivo</span>
+Line 64:  <div class="hero-row">
+Line 65:   <div>
+Line 66:    <h2>Un clan no es solo un grupo: es un equipo con economía compartida</h2>
+Line 67:    <p class="lead">Plant Arena combina cooperación social, competencia PVP y una bóveda común. Los miembros aportan Gemas, el clan arriesga recursos en asaltos y, si termina la temporada por encima de su reserva protegida, reparte el excedente.</p>
+Line 68:    <div class="grid2">
+Line 69:     <div class="card"><div class="num">15</div><div class="label">plazas máximas</div><p>1 líder fundador + 14 miembros u oficiales.</p></div>
+Line 70:     <div class="card"><div class="num">2,800 💎</div><div class="label">reserva operativa</div><p>Capital base protegido cuando el clan completa sus 15 plazas.</p></div>
+Line 71:     <div class="card"><div class="num">500 💎</div><div class="label">botín por guerra</div><p>El monto que cambia de manos en un asalto de clan.</p></div>
+Line 72:     <div class="card"><div class="num">30 días</div><div class="label">temporada</div><p>Al cierre se calcula el excedente elegible para reparto.</p></div>
+Line 73:    </div>
+Line 74:   </div>
+Line 75: <IMAGE length 41094>
+Line 76:  </div>
+Line 77:  <div class="callout"><strong>Idea clave:</strong> la reserva de <span class="money">2,800 💎</span> se mantiene como colchón operativo. Solo el saldo que la supere puede convertirse en reparto al final de temporada.</div>
+Line 78:  <div class="footer"><span>Plant Arena · Whitepaper v2.0</span><span>02</span></div>
+Line 79: </section>
+Line 80: 
+Line 81: <section class="page" id="guia">
+Line 82:  <span class="eyebrow">02 · Cómo funciona en 60 segundos</span>
+Line 83:  <h2>Del fundador al reparto de temporada</h2>
+Line 84:  <div class="flow">
+Line 85:   <div class="step"><b>1. Crear clan</b><br><span class="money">500 💎</span><br><small>tasa de registro</small></div><div class="arrow">→</div>
+Line 86:   <div class="step"><b>2. Entrar</b><br><span class="money">200 💎</span><br><small>por nuevo miembro</small></div><div class="arrow">→</div>
+Line 87:   <div class="step"><b>3. Completar 15</b><br><span class="money">2,800 💎</span><br><small>reserva base</small></div><div class="arrow">→</div>
+Line 88:   <div class="step"><b>4. Competir</b><br><span class="money">±500 💎</span><br><small>por asalto</small></div><div class="arrow">→</div>
+Line 89:   <div class="step"><b>5. Cerrar temporada</b><br><span class="money">Excedente</span><br><small>se reparte</small></div>
+Line 90:  </div>
+Line 91:  <div class="hero-row" style="margin-top:34px">
+Line 92: <IMAGE length 25220>
+Line 93:    <div>
+Line 94:     <h3>¿Dónde va cada pago?</h3>
+Line 95:     <div class="card"><strong>500 💎 de fundación</strong><p>No entra al tesoro. Funciona como sumidero / tasa de registro del ecosistema.</p></div>
+Line 96:     <div class="card" style="margin-top:12px"><strong>200 💎 de ingreso</strong><p>Entra 100% a la bóveda del clan. Con 14 nuevos miembros se llega a 2,800 💎.</p></div>
+Line 97:     <div class="card" style="margin-top:12px"><strong>Donaciones voluntarias</strong><p>Fortalecen el tesoro y otorgan recompensas inmediatas al donante.</p></div>
+Line 98:    </div>
+Line 99:  </div>
+Line 100:  <div class="footer"><span>Flujo económico simplificado</span><span>03</span></div>
+Line 101: </section>
+Line 102: 
+Line 103: <section class="page" id="membresia">
+Line 104:  <span class="eyebrow">03 · Membresía y roles</span>
+Line 105:  <h2>Un equipo pequeño, con responsabilidades claras</h2>
+Line 106:  <p class="lead">Cada clan está limitado a 15 plazas para mantener coordinación táctica y suficiente masa competitiva.</p>
+Line 107:  <div class="grid2">
+Line 108:   <div class="card role"><div class="badge">👑</div><div><strong>Líder</strong><p>Control de ajustes, gobernanza, expulsiones y declaración de asaltos.</p></div></div>
+Line 109:   <div class="card role"><div class="badge">⚔️</div><div><strong>Colíder</strong><p>Apoya la gestión de miembros y las operaciones de guerra.</p></div></div>
+Line 110:   <div class="card role"><div class="badge">🛡️</div><div><strong>Veterano</strong><p>Reconocimiento por antigüedad, contribución o donaciones.</p></div></div>
+Line 111:   <div class="card role"><div class="badge">🌱</div><div><strong>Miembro</strong><p>Participa en combate, cooperación y aportes al clan.</p></div></div>
+Line 112:  </div>
+Line 113:  <div class="hero-row" style="margin-top:26px">
+Line 114:   <div>
+Line 115:    <h3>Configuración de entrada</h3>
+Line 116:    <ul><li><b>Abierto:</b> ingreso directo si se cumplen requisitos.</li><li><b>Con solicitud:</b> la directiva aprueba al postulante.</li><li><b>Cerrado:</b> solo por invitación.</li><li><b>ELO mínimo:</b> 0, 1,000, 1,500 o 2,000 copas.</li></ul>
+Line 117:    <div class="simple"><span class="check">✓ Hito 15/15:</span> al completar por primera vez el clan, cada jugador puede reclamar <b>2 sobres Pack Verde Básico</b>.</div>
+Line 118:   </div>
+Line 119: <IMAGE length 221864>
+Line 120:  </div>
+Line 121:  <div class="footer"><span>Membresía y gobernanza</span><span>04</span></div>
+Line 122: </section>
+Line 123: 
+Line 124: <section class="page" id="tesoro">
+Line 125:  <span class="eyebrow">04 · Tesoro y tokenomics</span>
+Line 126:  <h2>La bóveda del clan: capital compartido con una reserva protegida</h2>
+Line 127:  <div class="grid3">
+Line 128:   <div class="card"><div class="num">500 💎</div><div class="label">crear clan</div><p>Pago de registro. No capitaliza la bóveda.</p></div>
+Line 129:   <div class="card"><div class="num">200 💎</div><div class="label">entrar al clan</div><p>Se deposita íntegramente en la bóveda.</p></div>
+Line 130:   <div class="card"><div class="num">2,800 💎</div><div class="label">reserva base</div><p>14 miembros × 200 💎.</p></div>
+Line 131:  </div>
+Line 132:  <div class="formula">14 miembros × 200 💎 = 2,800 💎 de Reserva Operativa</div>
+Line 133:  <div class="grid2">
+Line 134:   <div class="card"><h3 style="margin-top:0">Reserva protegida</h3><p>No se liquida al final de temporada. Su objetivo es sostener guerras, absorber saqueos y mantener capacidad operativa.</p><div class="bar"><span style="width:65%"></span></div><p class="tiny">La reserva es un umbral contable del sistema, no una promesa de rentabilidad.</p></div>
+Line 135:   <div class="card"><h3 style="margin-top:0">Aportes voluntarios</h3><p>Opciones estándar: <b>100, 200, 500, 1,000 o 2,000 💎</b>.</p><p>Por cada <b>100 💎</b> aportadas:</p><ul><li>+1 Ticket de Coliseo 🎟️</li><li>+1 Giro gratis en la Ruleta 🎡</li></ul></div>
+Line 136:  </div>
+Line 137: <IMAGE length 3138847>
+Line 138:  <div class="footer"><span>Economía del tesoro</span><span>05</span></div>
+Line 139: </section>
+Line 140: 
+Line 141: <section class="page" id="guerra">
+Line 142:  <span class="eyebrow">05 · Guerra de clanes</span>
+Line 143:  <h2>Cada asalto mueve 500 Gemas entre clanes</h2>
+Line 144:  <div class="duel">
+Line 145:   <div class="card"><h3 style="margin-top:0">Clan atacante</h3><p>Asalta la base rival. Si gana, incorpora <span class="money">+500 💎</span> a su tesoro.</p></div>
+Line 146:   <div class="vs">VS</div>
+Line 147:   <div class="card"><h3 style="margin-top:0">Clan defensor</h3><p>Si repele el ataque, arrebata <span class="money">500 💎</span> al tesoro atacante.</p></div>
+Line 148:  </div>
+Line 149:  <h3>Probabilidad base según ELO total activo</h3>
+Line 150:  <div class="grid2">
+Line 151:   <div class="card"><div class="num">75%</div><p>Si el ELO total del atacante es <b>igual o superior</b> al del defensor.</p></div>
+Line 152:   <div class="card"><div class="num">45%</div><p>Si el ELO total del atacante es <b>inferior</b> al del defensor.</p></div>
+Line 153:  </div>
+Line 154:  <div class="hero-row" style="margin-top:24px">
+Line 155:   <div>
+Line 156:    <h3>Protecciones de juego</h3>
+Line 157:    <ul><li><b>Escudo 4h:</b> tras sufrir una derrota o saqueo, el clan no puede volver a ser atacado durante 4 horas.</li><li><b>Estado de derrota:</b> si el tesoro llega a 0 💎, se bloquean peticiones de semillas y nuevas declaraciones de guerra.</li><li><b>Reparación:</b> cuesta 500 💎 y restaura la base a 500 HP.</li><li><b>Fair Play:</b> los 3 clanes con mayor tesoro no pueden asaltar clanes con balance histórico negativo.</li></ul>
+Line 158:   </div>
+Line 159: <IMAGE length 353263>
+Line 160:  </div>
+Line 161:  <div class="footer"><span>Asaltos, ELO y protección</span><span>06</span></div>
+Line 162: </section>
+Line 163: 
+Line 164: <section class="page" id="reparto">
+Line 165:  <span class="eyebrow">06 · Cierre de temporada</span>
+Line 166:  <h2>Solo se reparte lo que supera la reserva de 2,800 Gemas</h2>
+Line 167:  <div class="formula">Excedente retirable = max(0, Tesoro total − 2,800 💎)</div>
+Line 168:  <div class="formula" style="font-size:20px">Cuota por miembro = ⌊ Excedente ÷ Número de miembros ⌋</div>
+Line 169:  <div class="grid2">
+Line 170:   <div class="card"><h3 style="margin-top:0">Ejemplo A · Clan exitoso</h3><p>Tesoro al día 30: <b>4,300 💎</b></p><p>Reserva: <b>2,800 💎</b></p><p>Excedente: <b>1,500 💎</b></p><p>Con 15 miembros: <span class="money">100 💎 por jugador</span></p><p class="check">✓ La nueva temporada comienza con 2,800 💎 intactas.</p></div>
+Line 171:   <div class="card"><h3 style="margin-top:0">Ejemplo B · Sin excedente</h3><p>Tesoro al día 30: <b>2,800 💎 o menos</b></p><p>Excedente elegible: <b>0 💎</b></p><p class="warn">No hay reparto; el sistema muestra “Reserva Protegida”.</p></div>
+Line 172:  </div>
+Line 173:  <div class="callout"><strong>Lectura simple:</strong> ganar guerras y fortalecer el tesoro puede aumentar el excedente de temporada, pero el sistema siempre conserva primero su reserva operativa.</div>
+Line 174: <IMAGE length 48906>
+Line 175:  <div class="footer"><span>Liquidación de excedentes</span><span>07</span></div>
+Line 176: </section>
+Line 177: 
+Line 178: <section class="page" id="donaciones">
+Line 179:  <span class="eyebrow">07 · Donaciones de semillas</span>
+Line 180:  <h2>Progresar juntos sin abrir la puerta a abusos</h2>
+Line 181:  <div class="hero-row">
+Line 182: <IMAGE length 2505440>
+Line 183:   <div>
+Line 184:    <div class="grid2">
+Line 185:     <div class="card"><div class="num">24h</div><div class="label">cooldown</div><p>1 solicitud por jugador cada 24 horas.</p></div>
+Line 186:     <div class="card"><div class="num">3</div><div class="label">copias</div><p>Máximo de copias recibidas por solicitud.</p></div>
+Line 187:    </div>
+Line 188:    <h3>Rarezas permitidas</h3><p>Comunes, raras y épicas. Las legendarias quedan excluidas para preservar su exclusividad.</p>
+Line 189:    <h3>Transferencia segura</h3><p>La carta se descuenta del inventario del donante y se agrega al receptor mediante una transacción de base de datos.</p>
+Line 190:    <div class="simple"><b>Reconocimiento:</b> el clan mantiene un contador <code>donated_count</code> para identificar a los miembros más colaborativos.</div>
+Line 191:   </div>
+Line 192:  </div>
+Line 193:  <div class="footer"><span>Cooperación y progresión</span><span>08</span></div>
+Line 194: </section>
+Line 195: 
+Line 196: <section class="page" id="gobernanza">
+Line 197:  <span class="eyebrow">08 · Gobernanza y convivencia</span>
+Line 198:  <h2>Reglas para proteger el esfuerzo de los jugadores activos</h2>
+Line 199:  <div class="grid2">
+Line 200:   <div class="card"><h3 style="margin-top:0">Blindaje del guerrero activo</h3><p>Quien participe en <b>2 o más rondas de guerra</b> durante la temporada queda protegido contra expulsión hasta el cierre.</p></div>
+Line 201:   <div class="card"><h3 style="margin-top:0">Líder inmune</h3><p>El fundador del clan no puede ser expulsado por otros miembros.</p></div>
+Line 202:   <div class="card"><h3 style="margin-top:0">Inactividad comprobada</h3><p>No participar en <b>2 o más rondas consecutivas</b> habilita una causal legítima de expulsión.</p></div>
+Line 203:   <div class="card"><h3 style="margin-top:0">W.O.</h3><p>Una derrota por abandono al no presentarse a un combate programado también constituye causal.</p></div>
+Line 204:  </div>
+Line 205:  <div class="hero-row" style="margin-top:26px">
+Line 206:   <div><h3>Permisos de guerra</h3><p>El clan puede elegir entre un modelo de mando restringido (Líder + Colíderes) o uno abierto en el que todos los miembros puedan iniciar asaltos.</p><p>También puede activar aprobación automática para postulantes que cumplan ELO y pago de ingreso.</p></div>
+Line 207: <IMAGE length 231411>
+Line 208:  </div>
+Line 209:  <div class="footer"><span>Gobernanza y protección</span><span>09</span></div>
+Line 210: </section>
+Line 211: 
+Line 212: <section class="page" id="seguridad">
+Line 213:  <span class="eyebrow">09 · Seguridad y auditoría</span>
+Line 214:  <h2>Las operaciones críticas se ejecutan y registran en backend</h2>
+Line 215:  <p class="lead">El diseño descrito utiliza funciones seguras en PostgreSQL/Supabase para mantener consistencia en pagos, inventarios, reparaciones y liquidaciones.</p>
+Line 216:  <table class="table"><thead><tr><th>Función</th><th>Qué hace</th></tr></thead><tbody>
+Line 217:   <tr><td><code>create_clan</code></td><td>Descuenta 500 💎, crea el clan y asigna al líder.</td></tr>
+Line 218:   <tr><td><code>join_clan</code></td><td>Descuenta 200 💎, los suma a la bóveda y valida el máximo de 15 miembros.</td></tr>
+Line 219:   <tr><td><code>repair_clan_base</code></td><td>Descuenta 500 💎 del líder y restaura la base.</td></tr>
+Line 220:   <tr><td><code>deposit_to_clan_vault</code></td><td>Registra aportes voluntarios y emite recompensas por cada 100 💎.</td></tr>
+Line 221:   <tr><td><code>claim_season_clan_earnings</code></td><td>Liquida la cuota individual del excedente sobre 2,800 💎.</td></tr>
+Line 222:   <tr><td><code>request_clan_plant_donation</code></td><td>Publica una petición con cooldown de 24 horas.</td></tr>
+Line 223:   <tr><td><code>donate_clan_plant_copy</code></td><td>Transfiere una copia de planta entre inventarios.</td></tr>
+Line 224:  </tbody></table>
+Line 225:  <div class="callout"><strong>Auditoría:</strong> creación, ingresos, salidas, expulsiones, depósitos, asaltos y reparaciones se registran en <code>public.clan_audit_logs</code>.</div>
+Line 226:  <div class="footer"><span>Integridad técnica</span><span>10</span></div>
+Line 227: </section>
+Line 228: 
+Line 229: <section class="page" id="cierre">
+Line 230:  <span class="eyebrow">10 · Conclusión</span>
+Line 231:  <h2>Cooperar, competir y construir patrimonio de clan</h2>
+Line 232:  <p class="lead">El sistema busca que cada decisión tenga una consecuencia visible: fundar exige compromiso, unirse fortalece la bóveda, combatir mueve recursos y participar de forma constante protege la continuidad del equipo.</p>
+Line 233:  <div class="grid2">
+Line 234:   <div class="card"><strong>🌱 Compromiso</strong><p>La tasa de fundación desincentiva clanes fantasma.</p></div>
+Line 235:   <div class="card"><strong>💎 Capitalización</strong><p>Las cuotas de ingreso construyen una reserva común.</p></div>
+Line 236:   <div class="card"><strong>⚔️ Competencia</strong><p>Las guerras crean riesgo y recompensa dentro del ecosistema.</p></div>
+Line 237:   <div class="card"><strong>🤝 Cooperación</strong><p>Donaciones de semillas y aportes premian el juego en equipo.</p></div>
+Line 238:  </div>
+Line 239: <IMAGE length 641288>
+Line 240:  <div class="callout" style="text-align:center"><b>Explora Plant Arena:</b><br><span style="font-size:22px;color:var(--lime)">www.plants-arena.online</span></div>
+Line 241:  <p class="notice">Este documento resume el diseño funcional descrito para Plant Arena v2.0 (septiembre de 2026). Las Gemas se presentan como moneda base interna del sistema de clanes. Las reglas y parámetros pueden evolucionar en futuras versiones del juego.</p>
+Line 242:  <div class="footer"><span>Plant Arena · Whitepaper v2.0</span><span>11</span></div>
+Line 243: </section>
+Line 244: 
+Line 245: </div></body></html>

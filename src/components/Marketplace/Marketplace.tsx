@@ -354,19 +354,19 @@ export default function Marketplace({
 
   const txStats = useMemo(() => {
     let totalP2pGems = 0
-    let totalWithdrawUsdt = 0
+    let totalWithdrawGems = 0
     transactions.forEach((t) => {
       if (t.type === 'marketplace_sale' && t.amountGems) {
         totalP2pGems += t.amountGems
       }
-      if (t.type === 'withdrawal' && t.amountUsd) {
-        totalWithdrawUsdt += t.amountUsd
+      if (t.type === 'withdrawal') {
+        totalWithdrawGems += t.amountGems || (t.amountUsd ? Math.round(t.amountUsd * 100) : 0)
       }
     })
     return {
       total: transactions.length,
       p2pGems: totalP2pGems,
-      withdrawUsdt: totalWithdrawUsdt,
+      withdrawGems: totalWithdrawGems,
     }
   }, [transactions])
 
@@ -1168,8 +1168,8 @@ export default function Marketplace({
                 <span className="market-tx-stat-chip__val">{txStats.p2pGems.toLocaleString()} 💎</span>
               </div>
               <div className="market-tx-stat-chip market-tx-stat-chip--emerald">
-                <span className="market-tx-stat-chip__label">RETIROS OFICIALES ($10+ MIN)</span>
-                <span className="market-tx-stat-chip__val">${txStats.withdrawUsdt.toFixed(2)} USDT</span>
+                <span className="market-tx-stat-chip__label">RETIROS OFICIALES</span>
+                <span className="market-tx-stat-chip__val">{txStats.withdrawGems.toLocaleString()} 💎</span>
               </div>
             </div>
 
@@ -1316,7 +1316,7 @@ export default function Marketplace({
                             <span className="market-tx-action-text">realizó un retiro oficial</span>
                           </div>
                           <span className="market-tx-desc-text">{tx.description}</span>
-                          <span className="market-tx-validated-tag">✓ Mínimo $10 USD Validado (BNB Chain)</span>
+                          <span className="market-tx-validated-tag">✓ Retiro Oficial Validado</span>
                         </div>
                       ) : (
                         <div className="market-tx-details-custom">
@@ -1343,26 +1343,18 @@ export default function Marketplace({
                       )}
                     </div>
 
-                    {/* Right: Amount in Gems or USD */}
+                    {/* Right: Amount in Gems */}
                     <div className="market-tx-card__right">
                       {tx.type === 'withdrawal' ? (
-                        <div className="market-tx-amount-box market-tx-amount-box--usd">
-                          <span className="market-tx-amount-num">
-                            ${tx.amountUsd ? tx.amountUsd.toFixed(2) : ((tx.amountGems || 0) / 100).toFixed(2)} USDT
+                        <div className="market-tx-amount-box market-tx-amount-box--gems">
+                          <span className="market-tx-amount-num" style={{ color: '#f87171' }}>
+                            -{(tx.amountGems || (tx.amountUsd ? Math.round(tx.amountUsd * 100) : 0)).toLocaleString()} 💎
                           </span>
-                          {tx.amountGems && (
-                            <span className="market-tx-amount-sub">
-                              {tx.amountGems.toLocaleString()} 💎
-                            </span>
-                          )}
                         </div>
                       ) : tx.amountGems ? (
                         <div className="market-tx-amount-box market-tx-amount-box--gems">
                           <span className="market-tx-amount-num">
                             {tx.amountGems.toLocaleString()} 💎
-                          </span>
-                          <span className="market-tx-amount-sub">
-                            (${((tx.amountGems) / 100).toFixed(2)} USD)
                           </span>
                         </div>
                       ) : (

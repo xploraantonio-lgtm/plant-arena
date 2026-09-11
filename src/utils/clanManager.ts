@@ -253,40 +253,29 @@ export class ClanManager {
         all = JSON.parse(saved)
       } catch (e) {}
     }
+    // Clean up any legacy fund (creation tax) or Sistema entries from local storage
+    if (all[clanId]) {
+      all[clanId] = all[clanId].filter(
+        (d) =>
+          d.reason !== 'fund' &&
+          d.depositorName?.toLowerCase() !== 'sistema' &&
+          d.depositorName !== 'Fundador'
+      )
+    }
     if (!all[clanId] || all[clanId].length === 0) {
       const clans = this.getClans()
       const clan = clans.find((c) => c.id === clanId)
       const starterMembers = clan?.members || []
-      const initialLogs: ClanDepositLog[] = [
-        {
-          id: `dep-init-1`,
-          clanId,
-          depositorName: clan?.leader || 'Fundador',
-          amountUsd: 500.0,
-          timestamp: Date.now() - 86400000 * 3,
-          reason: 'fund',
-        },
-        ...starterMembers.slice(1, 4).map((m, idx) => ({
-          id: `dep-init-${idx + 2}`,
-          clanId,
-          depositorName: m.name,
-          amountUsd: 200.0,
-          timestamp: Date.now() - 86400000 * (2 - idx * 0.5),
-          reason: 'join' as const,
-        })),
-        ...(starterMembers.length > 2
-          ? [
-              {
-                id: `dep-init-extra`,
-                clanId,
-                depositorName: starterMembers[1]?.name || 'Colíder',
-                amountUsd: 500.0,
-                timestamp: Date.now() - 3600000 * 12,
-                reason: 'deposit' as const,
-              },
-            ]
-          : []),
-      ]
+      // The 500 creation fee is a game tax, NOT a vault deposit.
+      // Only non-leader members joining contribute 200 each to the vault.
+      const initialLogs: ClanDepositLog[] = starterMembers.slice(1, 3).map((m, idx) => ({
+        id: `dep-init-${idx + 1}`,
+        clanId,
+        depositorName: m.name,
+        amountUsd: 200.0,
+        timestamp: Date.now() - 86400000 * (2 - idx * 0.5),
+        reason: 'join' as const,
+      }))
       all[clanId] = initialLogs
       localStorage.setItem(STORAGE_KEYS.VAULT_DEPOSITS, JSON.stringify(all))
     }

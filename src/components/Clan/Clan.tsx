@@ -271,14 +271,25 @@ export default function Clan({
         }
 
         if (myClanData.deposits) {
-          setVaultDeposits(myClanData.deposits.map((dep: any) => ({
-            id: dep.id,
-            clanId: dep.clanId,
-            depositorName: dep.depositorName,
-            amountUsd: Number(dep.amountGems || 0),
-            timestamp: new Date(dep.timestamp).getTime(),
-            reason: dep.reason,
-          })))
+          setVaultDeposits(
+            myClanData.deposits
+              .filter(
+                (dep: any) =>
+                  dep.reason !== 'fund' &&
+                  dep.action !== 'CREATE' &&
+                  dep.action !== 'VAULT_CORRECTION' &&
+                  dep.depositorName?.toLowerCase() !== 'sistema' &&
+                  dep.depositorName !== 'Fundador'
+              )
+              .map((dep: any) => ({
+                id: dep.id,
+                clanId: dep.clanId,
+                depositorName: dep.depositorName,
+                amountUsd: Number(dep.amountGems || 0),
+                timestamp: new Date(dep.timestamp).getTime(),
+                reason: dep.reason,
+              }))
+          )
         }
       } else {
         // En Supabase el usuario no pertenece a ningún clan
@@ -1680,11 +1691,18 @@ export default function Clan({
         const hasActiveRequestToday = donationRequests.some(
           (r) => r.requesterName === playerName && Date.now() - r.createdAt < 86400000
         )
-        const totalDeposited = vaultDeposits.reduce((acc, d) => acc + d.amountUsd, 0)
+        // Only valid deposits from real players: exclude foundation fee (game tax) and sistema
+        const validDeposits = vaultDeposits.filter(
+          (d) =>
+            d.reason !== 'fund' &&
+            d.depositorName?.toLowerCase() !== 'sistema' &&
+            d.depositorName !== 'Fundador'
+        )
+        const totalDeposited = validDeposits.reduce((acc, d) => acc + d.amountUsd, 0)
 
         // Aggregate top depositors
         const depositorTotals: Record<string, number> = {}
-        vaultDeposits.forEach((d) => {
+        validDeposits.forEach((d) => {
           depositorTotals[d.depositorName] = (depositorTotals[d.depositorName] || 0) + d.amountUsd
         })
         const topDepositors = Object.entries(depositorTotals)
@@ -1713,7 +1731,7 @@ export default function Clan({
                   setDonationSubTab('deposits')
                 }}
               >
-                💰 APORTES AL TESORO ({vaultDeposits.length})
+                💰 APORTES AL TESORO ({validDeposits.length})
               </button>
             </div>
 
@@ -1857,10 +1875,9 @@ export default function Clan({
                   <div className="clan-deposits-feed-box">
                     <h5>📜 REGISTRO DE DEPÓSITOS & ACTIVIDAD</h5>
                     <div className="clan-deposits-feed-list">
-                      {vaultDeposits.map((dep) => {
-                        const reasonLabels = {
+                      {validDeposits.map((dep) => {
+                        const reasonLabels: Record<string, string> = {
                           deposit: '💎 Aporte Voluntario',
-                          fund: '👑 Fundación de Clan',
                           join: '⚡ Cuota de Ingreso',
                           repair: '🛠️ Reparación de Base',
                         }

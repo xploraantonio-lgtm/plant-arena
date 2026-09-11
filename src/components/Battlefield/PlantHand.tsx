@@ -138,7 +138,7 @@ export default function PlantHand({
   }
 
   const visibleCards = cardsToRender.slice(safeStartIndex, safeStartIndex + VISIBLE_COUNT)
-  const lastPointerSelectRef = useRef<number>(0)
+  const pointerHandledRef = useRef<boolean>(false)
   const [deniedSlot, setDeniedSlot] = useState<number | null>(null)
 
   const triggerSelect = useCallback(
@@ -292,11 +292,12 @@ export default function PlantHand({
                 }`}
                 onPointerDown={(e) => {
                   if (e.button !== 0) return
-                  lastPointerSelectRef.current = Date.now()
+                  pointerHandledRef.current = true
                   triggerSelect(cardId, realSlotIndex, isDisabled)
                 }}
                 onClick={(e) => {
-                  if (Date.now() - lastPointerSelectRef.current < 400) {
+                  if (pointerHandledRef.current) {
+                    pointerHandledRef.current = false
                     e.preventDefault()
                     return
                   }
@@ -322,6 +323,8 @@ export default function PlantHand({
                     className="plant-hand__packet-img"
                     src={packetSrc}
                     alt={config.name}
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
                   />
                 </div>
 
@@ -376,11 +379,12 @@ export default function PlantHand({
         }`}
         onPointerDown={(e) => {
           if (e.button !== 0) return
-          lastPointerSelectRef.current = Date.now()
+          pointerHandledRef.current = true
           triggerSelect('shovel')
         }}
         onClick={(e) => {
-          if (Date.now() - lastPointerSelectRef.current < 400) {
+          if (pointerHandledRef.current) {
+            pointerHandledRef.current = false
             e.preventDefault()
             return
           }
@@ -389,7 +393,13 @@ export default function PlantHand({
         title="Pala (Tecla Q): Haz clic aquí o presiona Q y luego en cualquier planta del campo para quitarla"
       >
         <span className="plant-hand__hotkey-badge">Q</span>
-        <img className="plant-hand__shovel-icon" src={shovelIcon} alt="Pala" />
+        <img
+          className="plant-hand__shovel-icon"
+          src={shovelIcon}
+          alt="Pala"
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+        />
         <span className="plant-hand__shovel-name">PALA</span>
       </button>
     </div>

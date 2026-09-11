@@ -1151,7 +1151,6 @@ export default function Shop({
                   <div className="shop-energy-card-price-tag">
                     <span className="shop-energy-gem">💎</span>
                     <span className="shop-energy-price-num">{pkg.priceGems.toLocaleString()} Gemas</span>
-                    <span className="shop-energy-price-usd">(${(pkg.priceGems / 100).toFixed(2)} USD)</span>
                   </div>
 
                   <button
