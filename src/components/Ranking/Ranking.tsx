@@ -130,7 +130,7 @@ export function getRankReward(rank: number): RankRewardInfo | null {
       pack: '1x Pack Legendario 👑',
       gold: 0,
       badgeText: '4k 💎 + 👑 Pack',
-      fullText: '4,000 Gemas 💎 ($40 USD) + 1x Pack Legendario 👑',
+      fullText: '4,000 Gemas 💎 + 1x Pack Legendario 👑',
       tierClass: 'lb-reward-badge--top1',
     }
   }
@@ -140,7 +140,7 @@ export function getRankReward(rank: number): RankRewardInfo | null {
       pack: '1x Pack Épico 🟣',
       gold: 0,
       badgeText: '2.5k 💎 + 🟣 Pack',
-      fullText: '2,500 Gemas 💎 ($25 USD) + 1x Pack Épico 🟣',
+      fullText: '2,500 Gemas 💎 + 1x Pack Épico 🟣',
       tierClass: 'lb-reward-badge--top2',
     }
   }
@@ -150,7 +150,7 @@ export function getRankReward(rank: number): RankRewardInfo | null {
       pack: '2x Packs Comunes 📦',
       gold: 0,
       badgeText: '1.5k 💎 + 📦 2 Packs',
-      fullText: '1,500 Gemas 💎 ($15 USD) + 2x Packs Comunes 📦',
+      fullText: '1,500 Gemas 💎 + 2x Packs Comunes 📦',
       tierClass: 'lb-reward-badge--top3',
     }
   }
@@ -160,7 +160,7 @@ export function getRankReward(rank: number): RankRewardInfo | null {
       pack: null,
       gold: 2000,
       badgeText: '1.2k 💎 + 2k 💰',
-      fullText: '1,200 Gemas 💎 ($12 USD) + 2,000 Oro 💰',
+      fullText: '1,200 Gemas 💎 + 2,000 Oro 💰',
       tierClass: 'lb-reward-badge--top4',
     }
   }
@@ -170,7 +170,7 @@ export function getRankReward(rank: number): RankRewardInfo | null {
       pack: null,
       gold: 1000,
       badgeText: '800 💎 + 1k 💰',
-      fullText: '800 Gemas 💎 ($8 USD) + 1,000 Oro 💰',
+      fullText: '800 Gemas 💎 + 1,000 Oro 💰',
       tierClass: 'lb-reward-badge--top5',
     }
   }
@@ -623,88 +623,71 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                   <span>No hay usuarios registrados en la clasificación todavía.</span>
                 </div>
               ) : (
-                <>
-                  {/* POZO DE PREMIOS TEMPORADA 1 BANNER */}
-                  <div className="ranked-season-prize-banner">
-                    <div className="ranked-season-prize-banner__icon">💰</div>
-                    <div className="ranked-season-prize-banner__content">
-                      <div className="ranked-season-prize-banner__title">
-                        POZO DE PREMIOS TEMPORADA 1: <strong>$100 USD (10,000 💎 GEMAS)</strong>
-                      </div>
-                      <div className="ranked-season-prize-banner__subtitle">
-                        ¡100% Repartido! 🥇 Top 1: 4k 💎 ($40) • 🥈 Top 2: 2.5k 💎 ($25) • 🥉 Top 3: 1.5k 💎 ($15) • Top 4: 1.2k 💎 ($12) • Top 5: 800 💎 ($8)
-                      </div>
-                    </div>
-                    <div className="ranked-season-prize-banner__badge">
-                      100% REPARTIDO
-                    </div>
-                  </div>
+                <div className="leaderboard-split-layout">
+                  {/* LEFT COLUMN: PODIUM #1 TOP, #2 & #3 BOTTOM */}
+                  <div className="leaderboard-podium-col">
+                    {/* 1st Place Golden Card */}
+                    {leaderboardData[0] ? (
+                      <div
+                        className={`podium-card-v2 podium-card-v2--gold ${leaderboardData[0].isCurrentUser ? 'podium-card-v2--user' : ''}`}
+                        onClick={() => setSelectedInspectUser(leaderboardData[0])}
+                        role="button"
+                        tabIndex={0}
+                        title="Clic para ver perfil"
+                      >
+                        <div className="podium-v2-top">
+                          <span className="podium-v2-star">★</span>
+                          <span className="podium-v2-rank-gold">#1</span>
+                          <span className="podium-v2-star">★</span>
+                        </div>
 
-                  <div className="leaderboard-split-layout">
-                    {/* LEFT COLUMN: PODIUM #1 TOP, #2 & #3 BOTTOM */}
-                    <div className="leaderboard-podium-col">
-                      {/* 1st Place Golden Card */}
-                      {leaderboardData[0] ? (
-                        <div
-                          className={`podium-card-v2 podium-card-v2--gold ${leaderboardData[0].isCurrentUser ? 'podium-card-v2--user' : ''}`}
-                          onClick={() => setSelectedInspectUser(leaderboardData[0])}
-                          role="button"
-                          tabIndex={0}
-                          title="Clic para ver perfil"
-                        >
-                          <div className="podium-v2-top">
-                            <span className="podium-v2-star">★</span>
-                            <span className="podium-v2-rank-gold">#1</span>
-                            <span className="podium-v2-star">★</span>
-                          </div>
+                        <div className="podium-v2-avatar-wrapper">
+                          <svg className="podium-v2-laurel-svg" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            {/* Branch left */}
+                            <path d="M 32 96 C 18 68 22 38 46 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="M 24 84 C 14 81 12 71 20 70 C 26 70 27 78 24 84 Z" fill="#fbbf24" />
+                            <path d="M 20 66 C 10 62 9 52 17 50 C 24 49 25 59 20 66 Z" fill="#f59e0b" />
+                            <path d="M 22 46 C 14 39 16 29 24 30 C 30 31 29 41 22 46 Z" fill="#fbbf24" />
+                            <path d="M 30 28 C 24 20 29 11 37 14 C 42 17 39 25 30 28 Z" fill="#fde047" />
+                            <path d="M 42 14 C 39 6 46 0 52 4 C 57 8 52 15 42 14 Z" fill="#fbbf24" />
+                            {/* Branch right */}
+                            <path d="M 128 96 C 142 68 138 38 114 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="M 136 84 C 146 81 148 71 140 70 C 134 70 133 78 136 84 Z" fill="#fbbf24" />
+                            <path d="M 140 66 C 150 62 151 52 143 50 C 136 49 135 59 140 66 Z" fill="#f59e0b" />
+                            <path d="M 138 46 C 146 39 144 29 136 30 C 130 31 131 41 138 46 Z" fill="#fbbf24" />
+                            <path d="M 130 28 C 136 20 131 11 123 14 C 118 17 121 25 130 28 Z" fill="#fde047" />
+                            <path d="M 118 14 C 121 6 114 0 108 4 C 103 8 108 15 118 14 Z" fill="#fbbf24" />
+                          </svg>
+                          <img
+                            src={leaderboardData[0].avatar}
+                            alt={leaderboardData[0].username}
+                            className="podium-v2-avatar-img podium-v2-avatar-img--gold"
+                            onError={(e) => {
+                              e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                            }}
+                          />
+                        </div>
 
-                          <div className="podium-v2-avatar-wrapper">
-                            <svg className="podium-v2-laurel-svg" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              {/* Branch left */}
-                              <path d="M 32 96 C 18 68 22 38 46 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
-                              <path d="M 24 84 C 14 81 12 71 20 70 C 26 70 27 78 24 84 Z" fill="#fbbf24" />
-                              <path d="M 20 66 C 10 62 9 52 17 50 C 24 49 25 59 20 66 Z" fill="#f59e0b" />
-                              <path d="M 22 46 C 14 39 16 29 24 30 C 30 31 29 41 22 46 Z" fill="#fbbf24" />
-                              <path d="M 30 28 C 24 20 29 11 37 14 C 42 17 39 25 30 28 Z" fill="#fde047" />
-                              <path d="M 42 14 C 39 6 46 0 52 4 C 57 8 52 15 42 14 Z" fill="#fbbf24" />
-                              {/* Branch right */}
-                              <path d="M 128 96 C 142 68 138 38 114 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
-                              <path d="M 136 84 C 146 81 148 71 140 70 C 134 70 133 78 136 84 Z" fill="#fbbf24" />
-                              <path d="M 140 66 C 150 62 151 52 143 50 C 136 49 135 59 140 66 Z" fill="#f59e0b" />
-                              <path d="M 138 46 C 146 39 144 29 136 30 C 130 31 131 41 138 46 Z" fill="#fbbf24" />
-                              <path d="M 130 28 C 136 20 131 11 123 14 C 118 17 121 25 130 28 Z" fill="#fde047" />
-                              <path d="M 118 14 C 121 6 114 0 108 4 C 103 8 108 15 118 14 Z" fill="#fbbf24" />
-                            </svg>
-                            <img
-                              src={leaderboardData[0].avatar}
-                              alt={leaderboardData[0].username}
-                              className="podium-v2-avatar-img podium-v2-avatar-img--gold"
-                              onError={(e) => {
-                                e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
-                              }}
-                            />
-                          </div>
+                        <div className="podium-v2-user-row">
+                          <span className={`podium-v2-username ${leaderboardData[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                            {leaderboardData[0].isCurrentUser && hasVipPass && '👑 '}
+                            {leaderboardData[0].username} {leaderboardData[0].isCurrentUser && '(TÚ)'}
+                          </span>
+                          <img
+                            src={leaderboardData[0].bestPlantImg}
+                            alt={leaderboardData[0].bestPlantName}
+                            className="podium-v2-plant-mini"
+                            title={`Planta favorita: ${leaderboardData[0].bestPlantName}`}
+                            onError={(e) => {
+                              e.currentTarget.src = '/game-assets/greenfoot/transparentsunflower.png'
+                            }}
+                          />
+                        </div>
 
-                          <div className="podium-v2-user-row">
-                            <span className={`podium-v2-username ${leaderboardData[0].isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                              {leaderboardData[0].isCurrentUser && hasVipPass && '👑 '}
-                              {leaderboardData[0].username} {leaderboardData[0].isCurrentUser && '(TÚ)'}
-                            </span>
-                            <img
-                              src={leaderboardData[0].bestPlantImg}
-                              alt={leaderboardData[0].bestPlantName}
-                              className="podium-v2-plant-mini"
-                              title={`Planta favorita: ${leaderboardData[0].bestPlantName}`}
-                              onError={(e) => {
-                                e.currentTarget.src = '/game-assets/greenfoot/transparentsunflower.png'
-                              }}
-                            />
-                          </div>
-
-                          <div className="podium-v2-prize-box podium-v2-prize-box--gold">
-                            <div className="podium-v2-gems-val">💎 4,000 GEMAS ($40 USD)</div>
-                            <div className="podium-v2-pack-val">👑 1x Pack Legendario</div>
-                          </div>
+                        <div className="podium-v2-prize-box podium-v2-prize-box--gold">
+                          <div className="podium-v2-gems-val">💎 4,000 GEMAS</div>
+                          <div className="podium-v2-pack-val">👑 1x Pack Legendario</div>
+                        </div>
 
                         <div className="podium-v2-stats-row">
                           <div className="podium-v2-cups">
@@ -762,7 +745,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                             />
                           </div>
                           <div className="podium-v2-prize-box podium-v2-prize-box--silver">
-                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 2,500 GEMAS ($25 USD)</div>
+                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 2,500 GEMAS</div>
                             <div className="podium-v2-pack-val podium-v2-pack-val--sub">🟣 1x Pack Épico</div>
                           </div>
                           <div className="podium-v2-sub-stats">
@@ -814,7 +797,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                             />
                           </div>
                           <div className="podium-v2-prize-box podium-v2-prize-box--bronze">
-                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 1,500 GEMAS ($15 USD)</div>
+                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 1,500 GEMAS</div>
                             <div className="podium-v2-pack-val podium-v2-pack-val--sub">📦 2x Packs Comunes</div>
                           </div>
                           <div className="podium-v2-sub-stats">
@@ -1133,8 +1116,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                     </div>
                   </div>
                 </div>
-              </>
-            )}
+              )}
             </div>
           </div>
         )}

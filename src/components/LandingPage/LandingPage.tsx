@@ -579,7 +579,7 @@ export default function LandingPage({
             <div className="landing-stat-item">
               <span className="landing-stat-item__icon">🏆</span>
               <div>
-                <strong>10,000 💎 ($100 USD)</strong>
+                <strong>10,000 💎</strong>
                 <span>{lang === 'es' ? 'Bote de Premios Temporada' : 'Season Prize Pool'}</span>
               </div>
             </div>
