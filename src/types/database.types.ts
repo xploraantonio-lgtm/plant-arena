@@ -93,6 +93,7 @@ export interface Database {
         Row: {
           id: string
           owner_id: string
+          user_id?: string | null
           plant_id: string
           rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
           star_level: number
@@ -107,6 +108,7 @@ export interface Database {
         Insert: {
           id?: string
           owner_id: string
+          user_id?: string | null
           plant_id: string
           rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
           star_level?: number
@@ -119,8 +121,11 @@ export interface Database {
           created_at?: string
         }
         Update: {
+          owner_id?: string
+          user_id?: string | null
           is_in_deck?: boolean
           deck_slot?: number | null
+          is_listed_for_sale?: boolean
         }
         Relationships: []
       }
