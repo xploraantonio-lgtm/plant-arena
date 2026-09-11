@@ -1151,6 +1151,7 @@ function App() {
             onDeductTokens={deductUserTokens}
             onDonatePlant={donatePlantCopy}
             onReceivePlant={receivePlantInstance}
+            onServerChange={refreshFromServer}
           />
         )}
         {screen === 'ranking' && (

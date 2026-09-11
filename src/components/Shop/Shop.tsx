@@ -229,6 +229,7 @@ export interface ShopProps {
   onDeductTokens?: (amountUsd: number) => boolean
   onDonatePlant?: (plantId: PlantId) => boolean
   onReceivePlant?: (plantId: PlantId, level?: number, statRolls?: PlantStatKey[]) => void
+  onServerChange?: () => void
 }
 
 export default function Shop({
@@ -258,6 +259,7 @@ export default function Shop({
   onDeductTokens,
   onDonatePlant,
   onReceivePlant,
+  onServerChange,
 }: ShopProps) {
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [activeTab, setActiveTab] = useState<'packs' | 'pass' | 'gold' | 'energy' | 'market'>(initialTab)
@@ -1185,6 +1187,7 @@ export default function Shop({
               onDonatePlant={onDonatePlant || (() => false)}
               onReceivePlant={onReceivePlant || (() => {})}
               onBuyVipPass={onBuyVipPass || (async () => ({ success: false, error: 'Compra no disponible' }))}
+              onServerChange={onServerChange}
               onBackToMenu={onBack}
             />
           </div>
@@ -1328,18 +1331,18 @@ export default function Shop({
                 {selectedPackDetails === 'basic'
                   ? 'Contiene 3 cartas de plantas. Probabilidades equilibradas para ampliar tu equipo inicial de combate.'
                   : selectedPackDetails === 'epic'
-                  ? 'Contiene 4 cartas de plantas con 1 Rara o Épica 100% GARANTIZADA para potenciar tu jardín.'
-                  : 'Contiene 5 cartas de plantas con 1 Épica o Legendaria EXCLUSIVA de máximo poder.'}
+                  ? 'Contiene 4 cartas de plantas para potenciar tu jardín con altas probabilidades de cartas especiales.'
+                  : 'Contiene 4 cartas de plantas de gran poder, sin cartas comunes y con probabilidad de legendaria.'}
               </p>
 
               <div className="shop-pack-details-odds">
-                <strong>🎯 PROBABILIDADES DE DROP:</strong>
+                <strong>🎯 PROBABILIDADES DE DROP (POR CARTA):</strong>
                 <p>
                   {selectedPackDetails === 'basic'
-                    ? '60% Común | 30% Poco Común | 8% Rara | 2% Épica'
+                    ? '70% Común | 20% Poco Común | 10% Rara'
                     : selectedPackDetails === 'epic'
-                    ? '40% Común | 40% Poco Común | 15% Rara | 5% Épica'
-                    : '20% Común | 30% Poco Común | 30% Rara | 15% Épica | 5% Legendaria'}
+                    ? '30% Común | 40% Poco Común | 20% Rara | 8% Épica | 2% Legendaria'
+                    : '40% Poco Común | 30% Rara | 20% Épica | 10% Legendaria'}
                 </p>
               </div>
 

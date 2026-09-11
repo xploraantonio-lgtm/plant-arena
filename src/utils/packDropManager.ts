@@ -53,7 +53,7 @@ export const PACK_DEFINITIONS: Record<PackId, PackDefinition> = {
 // 15 Plants categorized strictly by user rarity specifications
 const POOL_COMUN: PlantId[] = ['sunflower', 'peashooter', 'wallnut', 'chomper']
 const POOL_POCO_COMUN: PlantId[] = ['garlic', 'bonkchoy', 'repeater', 'melonpult', 'squash']
-const POOL_RARA: PlantId[] = ['twinsunflower', 'jalapeno']
+const POOL_RARA: PlantId[] = ['twinsunflower']
 const POOL_EPICA: PlantId[] = ['aloe', 'tallnut']
 const POOL_LEGENDARIA: PlantId[] = ['iceberglettuce', 'threepeater']
 
@@ -64,8 +64,8 @@ export function rollSingleCardFromPack(packId: PackId, currentlyUnlocked: PlantI
   let rarityColor: string
 
   if (packId === 'basic') {
-    // $3 Pack: 60% Common, 30% Uncommon, 8% Rare, 2% Epic, 0% Legendary
-    if (rand < 60) {
+    // 3 Cards: 70% Common, 20% Uncommon, 10% Rare
+    if (rand < 70) {
       chosenPlant = POOL_COMUN[Math.floor(Math.random() * POOL_COMUN.length)]
       rarityLabel = 'COMÚN'
       rarityColor = '#4ade80'
@@ -73,22 +73,18 @@ export function rollSingleCardFromPack(packId: PackId, currentlyUnlocked: PlantI
       chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
       rarityLabel = 'POCO COMÚN'
       rarityColor = '#22d3ee'
-    } else if (rand < 98) {
+    } else {
       chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
       rarityLabel = 'RARA'
       rarityColor = '#60a5fa'
-    } else {
-      chosenPlant = POOL_EPICA[Math.floor(Math.random() * POOL_EPICA.length)]
-      rarityLabel = 'ÉPICA'
-      rarityColor = '#c084fc'
     }
   } else if (packId === 'epic') {
-    // $8 Pack: 20% Common, 45% Uncommon, 25% Rare, 8% Epic, 2% Legendary
-    if (rand < 20) {
+    // 4 Cards: 30% Common, 40% Uncommon, 20% Rare, 8% Epic, 2% Legendary
+    if (rand < 30) {
       chosenPlant = POOL_COMUN[Math.floor(Math.random() * POOL_COMUN.length)]
       rarityLabel = 'COMÚN'
       rarityColor = '#4ade80'
-    } else if (rand < 65) {
+    } else if (rand < 70) {
       chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
       rarityLabel = 'POCO COMÚN'
       rarityColor = '#22d3ee'
@@ -106,8 +102,8 @@ export function rollSingleCardFromPack(packId: PackId, currentlyUnlocked: PlantI
       rarityColor = '#fbbf24'
     }
   } else {
-    // $10 Pack: 0% Common, 25% Uncommon, 45% Rare, 20% Epic, 10% Legendary
-    if (rand < 25) {
+    // 4 Cards: 0% Common, 40% Uncommon, 30% Rare, 20% Epic, 10% Legendary
+    if (rand < 40) {
       chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
       rarityLabel = 'POCO COMÚN'
       rarityColor = '#22d3ee'

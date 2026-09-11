@@ -233,7 +233,8 @@ export default function Jardin({
     }[] = []
 
     ALL_PLANTS.forEach((plantId) => {
-      const isUnlocked = unlockedPlants.includes(plantId)
+      const hasInstance = plantInstances.some((i) => i.plantId === plantId)
+      const isUnlocked = unlockedPlants.includes(plantId) || hasInstance
       if (!isUnlocked) {
         cards.push({
           instanceId: `locked_${plantId}`,

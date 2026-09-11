@@ -142,7 +142,7 @@ export default function Marketplace({
   unlockedPlants,
   activeDeck = [],
   activeDeckInstances = [],
-  onDeductTokens: _onDeductTokens,
+  onDeductTokens,
   onDonatePlant: _onDonatePlant,
   onReceivePlant: _onReceivePlant,
   onRemovePlantInstance: _onRemovePlantInstance,
@@ -440,6 +440,20 @@ export default function Marketplace({
           return
         }
         soundManager.playSound('victory', 1)
+
+        // Refresco inmediato de saldo e inventario en UI y backend
+        onDeductTokens?.(item.precio)
+        window.dispatchEvent(new Event('refresh_user_balance'))
+        window.dispatchEvent(new Event('refresh_user_inventory'))
+
+        if (onServerChange) {
+          try {
+            await onServerChange()
+          } catch (err) {
+            console.warn('[Marketplace] Error refrescando estado tras compra:', err)
+          }
+        }
+
         showModalAlert(
           '¡COMPRA EXITOSA!',
           `Has adquirido ${detalle} por ${item.precio} 💎.\nYa está en tu ${isFarming ? 'inventario de cultivo' : 'Jardín'}.`,
@@ -448,7 +462,6 @@ export default function Marketplace({
         )
         await refreshListings()
         void refreshTransactions()
-        onServerChange?.()
       },
       `COMPRAR (${item.precio} 💎)`,
       'CANCELAR'

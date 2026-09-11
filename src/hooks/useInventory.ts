@@ -1006,7 +1006,10 @@ export function useInventory() {
 
     const baseCopies = parseServerPlantCopies(inv.copies)
     setPlantCopies(baseCopies)
-    setUnlockedPlants((inv.unlocked || []) as PlantId[])
+    const serverUnlocked = (inv.unlocked || []) as PlantId[]
+    const instancePlantIds = (inv.instances || []).map((i) => i.plantId as PlantId)
+    const combinedUnlocked = Array.from(new Set([...serverUnlocked, ...instancePlantIds]))
+    setUnlockedPlants(combinedUnlocked)
 
     // El instanceId del sobre ES el id de la fila en player_packs: es lo que
     // open_pack necesita para localizarlo y comprobar que es tuyo.
