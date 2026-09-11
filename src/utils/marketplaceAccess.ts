@@ -1,7 +1,12 @@
 export const MARKETPLACE_MIN_COPAS = 1350
 
 export interface MarketplaceAccessResult {
+  /** Compatibilidad: permiso para vender en el mercado (requiere Pase VIP o 1350 copas) */
   hasAccess: boolean
+  /** Permiso explícito para publicar y vender cartas o ítems */
+  canSell: boolean
+  /** Permiso para comprar ofertas en el mercado: ¡TODOS pueden comprar! */
+  canBuy: boolean
   unlockedBy: 'vip_pass' | 'copas' | 'none'
   copasActuales: number
   copasRequeridas: number
@@ -22,6 +27,8 @@ export function evaluateMarketplaceAccess(
   if (Boolean(hasVipPass)) {
     return {
       hasAccess: true,
+      canSell: true,
+      canBuy: true,
       unlockedBy: 'vip_pass',
       copasActuales,
       copasRequeridas,
@@ -32,6 +39,8 @@ export function evaluateMarketplaceAccess(
   if (copasActuales >= copasRequeridas) {
     return {
       hasAccess: true,
+      canSell: true,
+      canBuy: true,
       unlockedBy: 'copas',
       copasActuales,
       copasRequeridas,
@@ -41,6 +50,8 @@ export function evaluateMarketplaceAccess(
 
   return {
     hasAccess: false,
+    canSell: false,
+    canBuy: true, // ¡Todos los jugadores pueden comprar!
     unlockedBy: 'none',
     copasActuales,
     copasRequeridas,

@@ -166,7 +166,9 @@ export default function Marketplace({
     return evaluateMarketplaceAccess(hasVipPass, userElo)
   }, [hasVipPass, userElo])
 
-  const hasAccess = accessInfo.hasAccess
+  const canSell = accessInfo.canSell
+  const hasAccess = canSell
+  const canBuy = accessInfo.canBuy // ¡Todos pueden comprar!
   const copasActuales = accessInfo.copasActuales
 
 
@@ -409,19 +411,7 @@ export default function Marketplace({
       showModalAlert('OFERTA PROPIA', 'No puedes comprar tu propia oferta puesta en el mercado.', '⚠️', 'warning')
       return
     }
-    if (!hasAccess) {
-      showModalConfirm(
-        'COMERCIO BLOQUEADO',
-        `Para comprar en el Mercado necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
-        '🔒',
-        () => {
-          handleDirectBuyVip()
-        },
-        `ACTIVAR PASE PVP (${VIP_PASS_PRECIO_GEMAS} 💎)`,
-        'CANCELAR'
-      )
-      return
-    }
+    // ¡Todos los jugadores pueden comprar! La prohibición de copas/pase es exclusivamente para vender.
     if (userTokens < item.precio) {
       showModalAlert(
         'GEMAS INSUFICIENTES',
@@ -472,10 +462,10 @@ export default function Marketplace({
     e.preventDefault()
     if (!selectedItem) return
 
-    if (!hasAccess) {
+    if (!canSell) {
       showModalConfirm(
-        'COMERCIO BLOQUEADO',
-        `Para poner en venta cartas o ítems de tu Jardín necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
+        'VENTAS BLOQUEADAS',
+        `Todos los jugadores pueden comprar ofertas en el mercado libremente.\n\nPara poner en venta cartas o ítems de tu Jardín necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
         '🔒',
         () => {
           handleDirectBuyVip()
@@ -623,40 +613,25 @@ export default function Marketplace({
 
   return (
     <div className="market-container">
-      {/* ACCESS BANNER: PASE PVP O 1,350 COPAS */}
-      {!hasAccess ? (
-        <div className="market-vip-lock-banner">
-          <div className="market-vip-lock-icon">🔒</div>
-          <div className="market-vip-lock-info">
-            <h3>COMERCIO BLOQUEADO: ¡JUEGA O COMPRA!</h3>
-            <p>
-              Para acceder al comercio de cartas tienes 2 opciones: <strong>compite en la Arena y alcanza 1,350 Copas</strong> jugando gratis, o <strong>activa el Pase PvP ({VIP_PASS_PRECIO_GEMAS} 💎)</strong> para desbloqueo inmediato.
-            </p>
-            <div className="market-copas-progress-wrap">
-              <span className="market-copas-progress-text">
-                🏆 Tu rango: <strong>{copasActuales}</strong> / 1,350 Copas
-                {copasActuales < 1350 ? ` (faltan ${1350 - copasActuales} copas)` : ' (¡Meta alcanzada!)'}
-              </span>
-              <div className="market-copas-progress-bar">
-                <div
-                  className="market-copas-progress-fill"
-                  style={{ width: `${Math.min(100, Math.max(0, Math.round((copasActuales / 1350) * 100)))}%` }}
-                />
-              </div>
-            </div>
-          </div>
-          <button className="market-vip-buy-btn" type="button" onClick={handleDirectBuyVip}>
-            👑 ACTIVAR PASE PVP ({VIP_PASS_PRECIO_GEMAS} 💎)
-          </button>
-        </div>
-      ) : (
+      {/* ACCESS BANNER */}
+      {canSell ? (
         <div className="market-vip-active-banner">
           {hasVipPass ? (
-            <span className="market-vip-badge">👑 PASE PVP ACTIVO — COMERCIO HABILITADO</span>
+            <span className="market-vip-badge">👑 PASE PVP ACTIVO — COMPRA Y VENTA HABILITADAS</span>
           ) : (
-            <span className="market-vip-badge">🏆 MAESTRÍA COMPETITIVA ({copasActuales} COPAS) — COMERCIO HABILITADO</span>
+            <span className="market-vip-badge">🏆 MAESTRÍA COMPETITIVA ({copasActuales} COPAS) — COMPRA Y VENTA HABILITADAS</span>
           )}
           <span>Compra y vende cartas con gemas. El mercado retiene un {comisionPct} % de comisión por venta.</span>
+        </div>
+      ) : (
+        <div className="market-vip-active-banner" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)', borderColor: '#10b981' }}>
+          <span className="market-vip-badge" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>
+            🛒 COMPRA LIBRE
+          </span>
+          <span style={{ fontSize: '11px', color: '#e2e8f0' }}>
+            Todos los jugadores pueden comprar cartas e ítems en el mercado.
+            {' '}🔒 <em>Para vender necesitas Pase PvP ({VIP_PASS_PRECIO_GEMAS} 💎) o 1,350 Copas ({copasActuales}/1,350).</em>
+          </span>
         </div>
       )}
 
@@ -684,13 +659,13 @@ export default function Marketplace({
         </button>
         <button
           type="button"
-          className={`market-tab-btn ${activeTab === 'sell' ? 'market-tab-btn--active' : ''} ${!hasAccess ? 'market-tab-btn--locked' : ''}`}
+          className={`market-tab-btn ${activeTab === 'sell' ? 'market-tab-btn--active' : ''} ${!canSell ? 'market-tab-btn--locked' : ''}`}
           onClick={() => {
             soundManager.playSound('click', 0.5)
-            if (!hasAccess) {
+            if (!canSell) {
               showModalConfirm(
-                'COMERCIO BLOQUEADO',
-                `Para poner en venta cartas de tu Jardín necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
+                'VENTAS BLOQUEADAS',
+                `Todos los jugadores pueden comprar en el mercado libremente.\n\nPara poner en venta cartas o recursos de tu Jardín necesitas el Pase PvP o alcanzar 1,350 Copas en la Arena.\n\nTus copas actuales: ${copasActuales} / 1,350.\n\n¿Deseas activar tu Pase PvP (${VIP_PASS_PRECIO_GEMAS} 💎) ahora?`,
                 '🔒',
                 () => {
                   handleDirectBuyVip()
@@ -702,9 +677,9 @@ export default function Marketplace({
             }
             setActiveTab('sell')
           }}
-          title={!hasAccess ? 'Requiere Pase PvP o 1,350 Copas para vender plantas' : 'Vender cartas de tu Jardín'}
+          title={!canSell ? 'Requiere Pase PvP o 1,350 Copas para vender cartas' : 'Vender cartas de tu Jardín'}
         >
-          {!hasAccess ? '🔒 VENDER (PASE PVP / 1,350 COPAS)' : '🏷️ VENDER'}
+          {!canSell ? '🔒 VENDER (PASE PVP / 1,350 COPAS)' : '🏷️ VENDER'}
         </button>
         <button
           type="button"
@@ -830,7 +805,7 @@ export default function Marketplace({
       )}
 
       {/* TAB 2: SELL MY PLANT OR FARMING ITEM */}
-      {activeTab === 'sell' && hasAccess && (
+      {activeTab === 'sell' && canSell && (
         <div className="market-sell-pane">
           <div className="market-sell-form-grid">
             {/* Column 1: Select Item to Sell */}
@@ -1114,16 +1089,16 @@ export default function Marketplace({
 
                   <button
                     type="submit"
-                    disabled={!hasAccess || sellPriceGems < selectedItem.minPrice}
-                    className={`market-publish-btn ${!hasAccess ? 'market-publish-btn--locked' : ''}`}
-                    title={!hasAccess ? 'Requiere Pase PvP o 1,350 Copas para vender en el mercado' : undefined}
+                    disabled={!canSell || sellPriceGems < selectedItem.minPrice}
+                    className={`market-publish-btn ${!canSell ? 'market-publish-btn--locked' : ''}`}
+                    title={!canSell ? 'Requiere Pase PvP o 1,350 Copas para vender en el mercado' : undefined}
                   >
-                    {!hasAccess
+                    {!canSell
                       ? '🔒 REQUIERE PASE PVP O 1,350 COPAS'
                       : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes ${sellPriceGems - Math.round((sellPriceGems * comisionPct) / 100)} 💎`}
                   </button>
 
-                  {!hasAccess && (
+                  {!canSell && (
                     <button
                       type="button"
                       className="market-vip-unlock-cta"
@@ -1136,6 +1111,34 @@ export default function Marketplace({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* SELL LOCKED BANNER: cuando el usuario está en la pestaña VENDER pero no tiene permisos */}
+      {activeTab === 'sell' && !canSell && (
+        <div className="market-vip-lock-banner" style={{ margin: '20px auto', maxWidth: '750px' }}>
+          <div className="market-vip-lock-icon">🔒</div>
+          <div className="market-vip-lock-info">
+            <h3>VENTAS BLOQUEADAS: ¡ALCANZA 1,350 COPAS O ACTIVA PASE PVP!</h3>
+            <p>
+              Todos los jugadores pueden comprar ofertas en el mercado libremente. Para <strong>poner en venta cartas o recursos de tu Jardín</strong> necesitas: <strong>alcanzar 1,350 Copas</strong> compitiendo gratis en la Arena, o <strong>activar el Pase PvP ({VIP_PASS_PRECIO_GEMAS} 💎)</strong> para desbloqueo inmediato.
+            </p>
+            <div className="market-copas-progress-wrap">
+              <span className="market-copas-progress-text">
+                🏆 Tu rango: <strong>{copasActuales}</strong> / 1,350 Copas
+                {copasActuales < 1350 ? ` (faltan ${1350 - copasActuales} copas)` : ' (¡Meta alcanzada!)'}
+              </span>
+              <div className="market-copas-progress-bar">
+                <div
+                  className="market-copas-progress-fill"
+                  style={{ width: `${Math.min(100, Math.max(0, Math.round((copasActuales / 1350) * 100)))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <button className="market-vip-buy-btn" type="button" onClick={handleDirectBuyVip}>
+            👑 ACTIVAR PASE PVP ({VIP_PASS_PRECIO_GEMAS} 💎)
+          </button>
         </div>
       )}
 

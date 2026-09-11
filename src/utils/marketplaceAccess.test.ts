@@ -9,6 +9,8 @@ describe('evaluateMarketplaceAccess', () => {
   it('permite acceso si tiene Pase VIP aunque tenga menos de 1350 copas', () => {
     const res = evaluateMarketplaceAccess(true, 1000)
     expect(res.hasAccess).toBe(true)
+    expect(res.canSell).toBe(true)
+    expect(res.canBuy).toBe(true)
     expect(res.unlockedBy).toBe('vip_pass')
     expect(res.copasActuales).toBe(1000)
     expect(res.copasRequeridas).toBe(1350)
@@ -17,24 +19,32 @@ describe('evaluateMarketplaceAccess', () => {
   it('permite acceso si tiene 1350 copas o más aunque no tenga Pase VIP', () => {
     const res = evaluateMarketplaceAccess(false, 1350)
     expect(res.hasAccess).toBe(true)
+    expect(res.canSell).toBe(true)
+    expect(res.canBuy).toBe(true)
     expect(res.unlockedBy).toBe('copas')
     expect(res.copasFaltantes).toBe(0)
 
     const resOver = evaluateMarketplaceAccess(false, 1500)
     expect(resOver.hasAccess).toBe(true)
+    expect(resOver.canSell).toBe(true)
+    expect(resOver.canBuy).toBe(true)
     expect(resOver.unlockedBy).toBe('copas')
   })
 
-  it('bloquea acceso si no tiene Pase VIP y tiene menos de 1350 copas', () => {
+  it('bloquea venta pero PERMITE COMPRA si no tiene Pase VIP y tiene menos de 1350 copas', () => {
     const res = evaluateMarketplaceAccess(false, 1200)
     expect(res.hasAccess).toBe(false)
+    expect(res.canSell).toBe(false)
+    expect(res.canBuy).toBe(true)
     expect(res.unlockedBy).toBe('none')
     expect(res.copasFaltantes).toBe(150)
   })
 
-  it('maneja valores nulos o indefinidos con fallback seguro a 1000 copas', () => {
+  it('maneja valores nulos o indefinidos con fallback seguro: venta bloqueada, compra habilitada', () => {
     const res = evaluateMarketplaceAccess(undefined, undefined)
     expect(res.hasAccess).toBe(false)
+    expect(res.canSell).toBe(false)
+    expect(res.canBuy).toBe(true)
     expect(res.copasActuales).toBe(1000)
     expect(res.copasFaltantes).toBe(350)
   })

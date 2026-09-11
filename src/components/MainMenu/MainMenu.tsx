@@ -393,34 +393,43 @@ export default function MainMenu({
             </div>
           </div>
 
-          {/* COMPACT VIP BATTLE PASS WIDGET - ONLY VISIBLE IF HAS VIP PASS */}
-          {hasVipPass && (
-            <div
-              className="card card--pass-widget card--pass-widget-active"
-              onClick={onOpenBattlePass}
-              title="Ver Pase de Batalla VIP"
-            >
-              <span className="pass-widget__crown">👑</span>
-              <div className="pass-widget__info">
-                <span className="pass-widget__title">PASE VIP</span>
-                <span className="pass-widget__level-txt">
-                  NIVEL {highestLevelReached}/20
-                </span>
-                <div className="pass-widget__progress-wrap">
-                  <div
-                    className="pass-widget__progress-bar"
-                    style={{ width: `${Math.min(100, (highestLevelReached / 20) * 100)}%` }}
-                  />
-                </div>
+          {/* COMPACT VIP BATTLE PASS WIDGET - VISIBLE FOR ALL PLAYERS */}
+          <div
+            className={`card card--pass-widget ${
+              hasVipPass ? 'card--pass-widget-active' : 'card--pass-widget-locked'
+            }`}
+            onClick={onOpenBattlePass}
+            title={
+              hasVipPass
+                ? 'Ver Pase de Batalla VIP (Activo)'
+                : 'Pase VIP (Bloqueado) — Clic para ver niveles y comprar'
+            }
+          >
+            <span className="pass-widget__crown">{hasVipPass ? '👑' : '🔒'}</span>
+            <div className="pass-widget__info">
+              <span className="pass-widget__title">PASE VIP</span>
+              <span className="pass-widget__level-txt">
+                NIVEL {highestLevelReached}/20
+              </span>
+              <div className="pass-widget__progress-wrap">
+                <div
+                  className="pass-widget__progress-bar"
+                  style={{ width: `${Math.min(100, (highestLevelReached / 20) * 100)}%` }}
+                />
               </div>
-
-              {claimableCount > 0 && (
-                <span className="pass-widget__claim-badge">
-                  ✨ {claimableCount}
-                </span>
-              )}
             </div>
-          )}
+
+            {hasVipPass && claimableCount > 0 && (
+              <span className="pass-widget__claim-badge">
+                ✨ {claimableCount}
+              </span>
+            )}
+            {!hasVipPass && (
+              <span className="pass-widget__buy-badge">
+                COMPRAR
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="topbar__right-wrap">

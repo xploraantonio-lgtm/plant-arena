@@ -484,6 +484,18 @@
   border-color: #f59e0b;
 }
 
+.card--pass-widget-locked {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+  opacity: 0.95;
+}
+
+.card--pass-widget-locked:hover {
+  border-color: #fbbf24;
+  box-shadow: 0 6px 20px rgba(251, 191, 36, 0.35);
+  opacity: 1;
+}
+
 .pass-widget__crown {
   font-size: 20px;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
@@ -552,6 +564,21 @@
 @keyframes claimPulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.12); }
+}
+
+.pass-widget__buy-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: 1.5px solid #fef08a;
+  color: #1a1a1a;
+  font-size: 8px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+  letter-spacing: 0.4px;
 }
 
 .card__title {

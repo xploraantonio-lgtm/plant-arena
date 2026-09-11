@@ -42,6 +42,7 @@ import { SeasonManager } from './utils/seasonManager'
 import BetaPhaseModal from './components/BetaPhaseModal/BetaPhaseModal'
 import { isStrategicPlaytestAuthorized } from './utils/strategicPlaytestAuth'
 import { useOnlineUsers } from './hooks/useOnlineUsers'
+import { VIP_PASS_PRECIO_GEMAS } from './utils/gameConstants'
 
 function App() {
   const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
@@ -497,6 +498,34 @@ function App() {
     void refreshFromServer()
     handleRegresarAlMenu()
   }
+
+  /** Flujo de compra directa del Pase VIP desde el Pase de Batalla o cualquier sección */
+  const handleBuyVipPassDirect = useCallback(() => {
+    soundManager.playSound('click', 0.5)
+    setActiveAppAlert({
+      title: 'COMPRAR PASE VIP',
+      message: `¿Deseas comprar el Pase VIP de Temporada por ${VIP_PASS_PRECIO_GEMAS.toLocaleString()} 💎 gemas?\n\nBeneficios incluidos:\n👑 Desbloqueo y reclamo de todas las recompensas doradas del Pase.\n⚡ +5 Energías máximas diarias (25 energías en total).\n📦 Acceso completo para comerciar cartas en el Mercado P2P.`,
+      icon: '👑',
+      actionLabel: `COMPRAR (${VIP_PASS_PRECIO_GEMAS.toLocaleString()} 💎)`,
+      onAction: async () => {
+        const { success: ok, error } = await buyVipPass()
+        if (ok) {
+          soundManager.playSound('plantation', 0.9)
+          setActiveAppAlert({
+            title: '¡PASE VIP ACTIVADO!',
+            message: '👑 ¡Pase VIP de Temporada activado con éxito!\nAhora puedes reclamar todas las recompensas doradas que tengas desbloqueadas.',
+            icon: '🎉',
+          })
+        } else {
+          setActiveAppAlert({
+            title: 'NO SE PUDO ACTIVAR',
+            message: error || `Saldo insuficiente. Se requieren ${VIP_PASS_PRECIO_GEMAS.toLocaleString()} 💎 gemas para comprar el Pase VIP.`,
+            icon: '⚠️',
+          })
+        }
+      },
+    })
+  }, [buyVipPass])
 
   const handleGoToGame = () => {
     setScreen('menu')
@@ -1167,29 +1196,7 @@ function App() {
                 userElo={userElo}
                 hasVipPass={hasVipPass}
                 claimedVipLevels={claimedVipLevels}
-                onBuyVipPass={async () => {
-                  const { success: ok, error } = await buyVipPass()
-                  if (!ok && error) {
-                    setActiveAppAlert({
-                      title: 'NO SE PUDO ACTIVAR',
-                      message: error,
-                      icon: '⚠️',
-                    })
-                  }
-                  if (ok) {
-                    setActiveAppAlert({
-                      title: '¡PASE VIP ACTIVADO!',
-                      message: '👑 ¡PASE VIP DE TEMPORADA ACTIVADO!\nAhora puedes reclamar todas las recompensas doradas.',
-                      icon: '👑',
-                    })
-                  } else {
-                    setActiveAppAlert({
-                      title: 'SALDO INSUFICIENTE',
-                      message: '⚠️ Saldo insuficiente ($10.00 USD requeridos).\nRecarga saldo en la Tienda.',
-                      icon: '⚠️',
-                    })
-                  }
-                }}
+                onBuyVipPass={handleBuyVipPassDirect}
                 onClaimReward={async (lvl) => {
                   const res = await claimPassReward(lvl.reward, lvl.level)
                   if (res?.success) {

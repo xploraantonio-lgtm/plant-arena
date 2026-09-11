@@ -95,7 +95,7 @@ export default function BattlePass({
             </div>
           ) : (
             <button className="battle-pass-buy-btn" type="button" onClick={onBuyVipPass}>
-              👑 ACTIVAR PASE VIP ({VIP_PASS_PRECIO_GEMAS} 💎)
+              👑 COMPRAR PASE VIP ({VIP_PASS_PRECIO_GEMAS.toLocaleString()} 💎)
             </button>
           )}
         </div>
@@ -120,7 +120,8 @@ export default function BattlePass({
               let stateClass = 'pass-grid-node--locked'
               if (isClaimed) stateClass = 'pass-grid-node--claimed'
               else if (isReady) stateClass = 'pass-grid-node--ready'
-              else if (isUnlocked) stateClass = 'pass-grid-node--unlocked'
+              else if (hasVipPass && isUnlocked) stateClass = 'pass-grid-node--unlocked'
+              else stateClass = 'pass-grid-node--locked'
 
               return (
                 <button
@@ -137,7 +138,15 @@ export default function BattlePass({
                   <div className="pass-grid-node__top">
                     <span className="pass-grid-node__lvl">LVL {passLvl.level}</span>
                     <span className="pass-grid-node__status">
-                      {isClaimed ? '✅' : isReady ? '✨' : !isUnlocked ? '🔒' : '👑'}
+                      {isClaimed
+                        ? '✅'
+                        : isReady
+                        ? '✨'
+                        : !hasVipPass
+                        ? '🔒'
+                        : !isUnlocked
+                        ? '🔒'
+                        : '👑'}
                     </span>
                   </div>
 
@@ -209,7 +218,7 @@ export default function BattlePass({
                 className="pass-pedestal-vip-btn"
                 onClick={onBuyVipPass}
               >
-                👑 ACTIVAR PASE VIP ({VIP_PASS_PRECIO_GEMAS} 💎)
+                👑 COMPRAR PASE VIP ({VIP_PASS_PRECIO_GEMAS.toLocaleString()} 💎)
               </button>
             ) : (
               <div className="pass-pedestal-status-btn pass-pedestal-status-btn--locked">

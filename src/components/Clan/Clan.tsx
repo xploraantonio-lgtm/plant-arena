@@ -29,7 +29,7 @@ interface ClanProps {
   onRefreshUserData?: () => Promise<void> | void
 }
 
-const BADGES = ['👑', '⚡', '🛡️', '🔥', '🌿', '❄️', '💚', '🥊', '🎯', '💀', '💎', '🌸']
+const BADGES = ['👑', '⚡', '🛡️', '🔥', '🌿', '❄️', '💚', '🥊', '🎯', '💀', '💎', '🌸', '🌭']
 
 interface ClanModalDialog {
   title: string
@@ -432,7 +432,7 @@ export default function Clan({
     }
   }
 
-  // JOIN CLAN (2 Gemas 💎)
+  // JOIN CLAN (200 Gemas 💎)
   const handleJoinClan = (clan: ClanData) => {
     if (!ClanManager.isValidUuid(clan.id)) {
       showModalAlert('CLAN NO VÁLIDO', 'Este clan no existe en el servidor.', '⚠️', 'warning')
@@ -699,7 +699,7 @@ export default function Clan({
     )
   }
 
-  // EXECUTE CLAN WAR RAID (5 Gemas 💎)
+  // EXECUTE CLAN WAR RAID (500 Gemas 💎)
   const handleExecuteRaid = (defenderClan: ClanData) => {
     if (!userClan) return
     if (userClan.status === 'defeated') {
@@ -811,14 +811,14 @@ export default function Clan({
             className={`clan-tab-btn ${noClanTab === 'browse' ? 'clan-tab-btn--active' : ''}`}
             onClick={() => setNoClanTab('browse')}
           >
-            🔍 BUSCAR Y UNIRSE (2 💎)
+            🔍 BUSCAR Y UNIRSE (200 💎)
           </button>
           <button
             type="button"
             className={`clan-tab-btn ${noClanTab === 'create' ? 'clan-tab-btn--active' : ''}`}
             onClick={() => setNoClanTab('create')}
           >
-            ➕ FUNDAR NUEVO CLAN (5 💎)
+            ➕ FUNDAR NUEVO CLAN (500 💎)
           </button>
         </div>
 
@@ -898,7 +898,7 @@ export default function Clan({
                           ) : isSelectedDefeated ? (
                             <span className="clan-defeat-pill">🛑 EN DERROTA</span>
                           ) : (
-                            <span className="clan-pill--open">🟢 ABIERTO (2 💎)</span>
+                            <span className="clan-pill--open">🟢 ABIERTO (200 💎)</span>
                           )}
                         </div>
                         <p className="clan-showcase-desc">{selectedClan.description || 'Clan competitivo enfocado en guerras y donaciones de semillas.'}</p>
@@ -981,7 +981,7 @@ export default function Clan({
                           className="clan-showcase-btn clan-showcase-btn--join"
                           onClick={() => handleJoinClan(selectedClan)}
                         >
-                          ⚡ UNIRSE A {selectedClan.name.toUpperCase()} (2 💎)
+                          ⚡ UNIRSE A {selectedClan.name.toUpperCase()} (200 💎)
                         </button>
                       )}
                     </div>
@@ -1065,7 +1065,7 @@ export default function Clan({
             </div>
 
             <button type="submit" className="clan-submit-create-btn">
-              👑 FUNDAR CLAN (5 💎 GEMAS)
+              👑 FUNDAR CLAN (500 💎 GEMAS)
             </button>
           </form>
         )}
@@ -1463,7 +1463,7 @@ export default function Clan({
                                 disabled={isDefeated}
                                 onClick={() => handleExecuteRaid(rival)}
                               >
-                                ⚔️ ASALTAR BOTÍN (5 💎)
+                                ⚔️ ASALTAR BOTÍN (500 💎)
                               </button>
                             )}
                           </div>
@@ -2035,7 +2035,7 @@ export default function Clan({
                     <span className="clan-setting-tile__emoji">🟢</span>
                     <div className="clan-setting-tile__info">
                       <strong>ABIERTO</strong>
-                      <small>Ingreso directo (2 Gemas 💎)</small>
+                      <small>Ingreso directo (200 Gemas 💎)</small>
                     </div>
                   </button>
 
@@ -2150,7 +2150,7 @@ export default function Clan({
                   <span className="clan-setting-card__icon">⚡</span>
                   <div>
                     <span className="clan-setting-card__title">Aprobación Instantánea</span>
-                    <span className="clan-setting-card__desc">Acepta automáticamente a jugadores que cumplan el ELO y aporten 2 Gemas 💎</span>
+                    <span className="clan-setting-card__desc">Acepta automáticamente a jugadores que cumplan el ELO y aporten 200 Gemas 💎</span>
                   </div>
                 </div>
                 <button

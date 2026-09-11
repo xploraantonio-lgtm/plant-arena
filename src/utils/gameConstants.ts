@@ -183,7 +183,7 @@ export const PLANT_CONFIGS: Record<PlantId, PlantConfig> = {
     id: 'jalapeno',
     name: 'Jalapeño',
     cost: 125,
-    cooldownMs: 15000,
+    cooldownMs: 45000,
     maxHp: 1,
     category: 'defensive',
     damage: 1000,
