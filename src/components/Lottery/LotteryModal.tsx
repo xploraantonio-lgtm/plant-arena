@@ -26,53 +26,40 @@ interface WheelSector {
   icon: string
   color: string
   textColor: string
-  type: 'token' | 'gold' | 'pack' | 'plant' | 'none'
+  type: 'token' | 'gold' | 'pack' | 'plant' | 'item' | 'none'
   valueUsd?: number
   goldAmount?: number
   packId?: string
   packQty?: number
   plantId?: string
   plantQty?: number
+  itemId?: string
+  itemQty?: number
   rarity: 'common' | 'rare' | 'epic' | 'legendary' | 'jackpot'
 }
 
+export const PAID_SPIN_COST_GEMS = 10
+
 const DEFAULT_WHEEL_SECTORS: WheelSector[] = [
   {
-    id: 'jackpot_5',
-    label: '50 Gemas 💎',
+    id: 'jackpot_500',
+    label: '500 Gemas 💎',
     icon: '💎',
-    color: '#06b6d4',
+    color: '#7c3aed',
     textColor: '#ffffff',
     type: 'token',
-    valueUsd: 50.0,
-    rarity: 'epic',
+    valueUsd: 500.0,
+    rarity: 'jackpot',
   },
   {
-    id: 'none_1',
-    label: 'Sigue Intentando',
-    icon: '💨',
-    color: '#475569',
+    id: 'item_water',
+    label: '2x Agua 💧',
+    icon: '💧',
+    color: '#0284c7',
     textColor: '#ffffff',
-    type: 'none',
-    rarity: 'common',
-  },
-  {
-    id: 'gold_500',
-    label: '150 Oro',
-    icon: '💰',
-    color: '#f59e0b',
-    textColor: '#ffffff',
-    type: 'gold',
-    goldAmount: 150,
-    rarity: 'rare',
-  },
-  {
-    id: 'none_2',
-    label: 'Sigue Intentando',
-    icon: '💨',
-    color: '#334155',
-    textColor: '#ffffff',
-    type: 'none',
+    type: 'item',
+    itemId: 'water',
+    itemQty: 2,
     rarity: 'common',
   },
   {
@@ -87,32 +74,55 @@ const DEFAULT_WHEEL_SECTORS: WheelSector[] = [
     rarity: 'jackpot',
   },
   {
-    id: 'gold_200',
-    label: '100 Oro',
-    icon: '💰',
-    color: '#10b981',
+    id: 'item_fertilizer',
+    label: 'Fertilizante',
+    icon: '🌿',
+    color: '#16a34a',
     textColor: '#ffffff',
-    type: 'gold',
-    goldAmount: 100,
+    type: 'item',
+    itemId: 'fertilizer',
+    itemQty: 1,
     rarity: 'common',
   },
   {
-    id: 'none_3',
+    id: 'jackpot_10',
+    label: '10 Gemas 💎',
+    icon: '💎',
+    color: '#06b6d4',
+    textColor: '#ffffff',
+    type: 'token',
+    valueUsd: 10.0,
+    rarity: 'epic',
+  },
+  {
+    id: 'item_shovel',
+    label: 'Frag. Pala',
+    icon: '🪏',
+    color: '#d97706',
+    textColor: '#ffffff',
+    type: 'item',
+    itemId: 'shovel_fragment',
+    itemQty: 1,
+    rarity: 'rare',
+  },
+  {
+    id: 'plant_wallnut',
+    label: 'Wall-nut 🥜',
+    icon: '🥜',
+    color: '#854d0e',
+    textColor: '#ffffff',
+    type: 'plant',
+    plantId: 'wallnut',
+    plantQty: 1,
+    rarity: 'rare',
+  },
+  {
+    id: 'none_1',
     label: 'Sigue Intentando',
     icon: '💨',
-    color: '#64748b',
+    color: '#475569',
     textColor: '#ffffff',
     type: 'none',
-    rarity: 'common',
-  },
-  {
-    id: 'gold_50',
-    label: '50 Oro',
-    icon: '💰',
-    color: '#8b5cf6',
-    textColor: '#ffffff',
-    type: 'gold',
-    goldAmount: 50,
     rarity: 'common',
   },
 ]
@@ -356,7 +366,16 @@ export default function LotteryModal({
       const dbSectors = await lotteryService.getLotterySectors()
       if (!dbSectors || dbSectors.length === 0) return
 
-      const standardOrder = ['jackpot_5', 'none_1', 'gold_500', 'none_2', 'pack_basic', 'gold_200', 'none_3', 'gold_50']
+      const standardOrder = [
+        'jackpot_500',
+        'item_water',
+        'pack_basic',
+        'item_fertilizer',
+        'jackpot_10',
+        'item_shovel',
+        'plant_wallnut',
+        'none_1',
+      ]
 
       const mapped: WheelSector[] = dbSectors.map((row) => {
         const tpl = DEFAULT_WHEEL_SECTORS.find((s) => s.id === row.sector_id)
@@ -370,22 +389,26 @@ export default function LotteryModal({
             packQty: row.pack_qty ?? tpl.packQty,
             plantId: row.plant_id || tpl.plantId,
             plantQty: row.plant_qty ?? tpl.plantQty,
+            itemId: (row as any).item_id || tpl.itemId,
+            itemQty: (row as any).item_qty ?? tpl.itemQty,
           }
         }
         return {
           id: row.sector_id,
           label: row.label || row.sector_id,
-          icon: row.reward_type === 'gems' ? '💎' : row.reward_type === 'gold' ? '💰' : row.reward_type === 'pack' ? '👑' : row.reward_type === 'plant' ? '🌱' : '💨',
-          color: row.reward_type === 'gems' ? '#06b6d4' : row.reward_type === 'gold' ? '#f59e0b' : row.reward_type === 'pack' ? '#eab308' : row.reward_type === 'plant' ? '#10b981' : '#64748b',
+          icon: row.reward_type === 'gems' ? '💎' : row.reward_type === 'gold' ? '💰' : row.reward_type === 'pack' ? '👑' : row.reward_type === 'plant' ? '🥜' : row.reward_type === 'item' ? ((row as any).item_id === 'water' ? '💧' : (row as any).item_id === 'fertilizer' ? '🌿' : '🪏') : '💨',
+          color: row.reward_type === 'gems' && Number(row.gems_amount) >= 500 ? '#7c3aed' : row.reward_type === 'gems' ? '#06b6d4' : row.reward_type === 'gold' ? '#f59e0b' : row.reward_type === 'pack' ? '#eab308' : row.reward_type === 'plant' ? '#854d0e' : row.reward_type === 'item' ? ((row as any).item_id === 'water' ? '#0284c7' : (row as any).item_id === 'fertilizer' ? '#16a34a' : '#d97706') : '#475569',
           textColor: '#ffffff',
-          type: row.reward_type === 'gems' ? 'token' : row.reward_type === 'gold' ? 'gold' : row.reward_type === 'pack' ? 'pack' : row.reward_type === 'plant' ? 'plant' : 'none',
+          type: row.reward_type === 'gems' ? 'token' : row.reward_type === 'gold' ? 'gold' : row.reward_type === 'pack' ? 'pack' : row.reward_type === 'plant' ? 'plant' : row.reward_type === 'item' ? 'item' : 'none',
           valueUsd: row.gems_amount ? Number(row.gems_amount) : undefined,
           goldAmount: row.gold_amount ? Number(row.gold_amount) : undefined,
           packId: row.pack_id ?? undefined,
           packQty: row.pack_qty ?? undefined,
           plantId: row.plant_id ?? undefined,
           plantQty: row.plant_qty ?? undefined,
-          rarity: row.reward_type === 'pack' ? 'jackpot' : row.reward_type === 'gems' ? 'epic' : row.reward_type === 'gold' ? 'rare' : 'common',
+          itemId: (row as any).item_id ?? undefined,
+          itemQty: (row as any).item_qty ?? undefined,
+          rarity: row.reward_type === 'gems' && Number(row.gems_amount) >= 500 ? 'jackpot' : row.reward_type === 'pack' ? 'jackpot' : row.reward_type === 'gems' ? 'epic' : row.reward_type === 'plant' || row.reward_type === 'gold' || row.reward_type === 'item' ? 'rare' : 'common',
         }
       })
 
@@ -446,11 +469,11 @@ export default function LotteryModal({
     // Avisos locales sólo para no gastar una llamada en vano. Los que cuentan
     // son los del servidor.
     if (isFree && !canFreeSpin) {
-      alert('Ya has usado tu tiro gratis diario. Puedes girar nuevamente por 100 Gemas 💎.')
+      alert(`Ya has usado tu tiro gratis diario. Puedes girar nuevamente por ${PAID_SPIN_COST_GEMS} Gemas 💎.`)
       return
     }
-    if (!isFree && userTokens < 100.0) {
-      alert('Gemas insuficientes (100 Gemas 💎 requeridas para un tiro adicional).')
+    if (!isFree && userTokens < PAID_SPIN_COST_GEMS) {
+      alert(`Gemas insuficientes (${PAID_SPIN_COST_GEMS} Gemas 💎 requeridas para un tiro adicional).`)
       return
     }
 
@@ -735,7 +758,7 @@ export default function LotteryModal({
                     className={`lottery-wheel-center-hub ${isSpinning ? 'lottery-hub--spinning' : ''} ${!canFreeSpin ? 'lottery-hub--locked' : ''}`}
                     disabled={isSpinning || !canFreeSpin}
                     onClick={() => handleSpinWheel(true)}
-                    title={canFreeSpin ? 'Girar tiro gratis' : 'Tiro gratis usado. Haz clic en "⚡ GIRAR POR 100 GEMAS 💎"'}
+                    title={canFreeSpin ? 'Girar tiro gratis' : `Tiro gratis usado. Haz clic en "⚡ GIRAR POR ${PAID_SPIN_COST_GEMS} GEMAS 💎"`}
                   >
                     <span>{isSpinning ? '🌀' : 'GIRAR'}</span>
                   </button>
@@ -748,7 +771,7 @@ export default function LotteryModal({
                   <div className="lottery-wheel-hero-badge">⭐ RULETA DE LA SUERTE</div>
                   <h3>¡PRUEBA TU SUERTE CADA DÍA!</h3>
                   <p>
-                    Tienes <strong>1 Tiro Gratis cada 24 horas</strong> garantizado. También puedes adquirir giros extra por tan solo <strong>100 Gemas 💎</strong>.
+                    Tienes <strong>1 Tiro Gratis cada 24 horas</strong> garantizado. También puedes adquirir giros extra por tan solo <strong>{PAID_SPIN_COST_GEMS} Gemas 💎</strong>.
                   </p>
                 </div>
 
@@ -776,13 +799,13 @@ export default function LotteryModal({
                   <button
                     type="button"
                     className="lottery-spin-btn lottery-spin-btn--paid"
-                    disabled={isSpinning || userTokens < 100.0}
+                    disabled={isSpinning || userTokens < PAID_SPIN_COST_GEMS}
                     onClick={() => {
                       soundManager.playSound('click', 0.4)
                       setShowConfirmPaidModal(true)
                     }}
                   >
-                    <span>⚡ GIRAR POR 100 GEMAS 💎</span>
+                    <span>⚡ GIRAR POR {PAID_SPIN_COST_GEMS} GEMAS 💎</span>
                   </button>
                 </div>
 
@@ -791,16 +814,28 @@ export default function LotteryModal({
                   <span className="lottery-prizes-title">🎁 PREMIOS EN ESTE SORTEO:</span>
                   <div className="lottery-prizes-tags-grid">
                     <div className="lottery-prize-tag lottery-prize-tag--jackpot">
-                      👑 Sobre Básico (Jackpot · 2%)
+                      💎 500 Gemas (MEGA JACKPOT)
+                    </div>
+                    <div className="lottery-prize-tag lottery-prize-tag--jackpot">
+                      👑 Sobre Básico
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--legendary">
-                      💎 50 Gemas (8%)
+                      💎 10 Gemas (Giro Extra)
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--gold">
-                      💰 150 Oro (10%) · 100 Oro (15%) · 50 Oro (10%)
+                      🥜 Carta Wall-nut
+                    </div>
+                    <div className="lottery-prize-tag lottery-prize-tag--gold">
+                      🪏 Fragmento de Pala
+                    </div>
+                    <div className="lottery-prize-tag lottery-prize-tag--gold">
+                      🌿 Fertilizante de Cultivo
+                    </div>
+                    <div className="lottery-prize-tag lottery-prize-tag--gold">
+                      💧 2x Agua para Parcelas
                     </div>
                     <div className="lottery-prize-tag lottery-prize-tag--epic">
-                      💨 Sigue Intentando (55%)
+                      💨 Sigue Intentando
                     </div>
                   </div>
 
@@ -1365,14 +1400,18 @@ export default function LotteryModal({
               <h3 className="lottery-prize-name">{winningSector.label}</h3>
               <p className="lottery-prize-desc">
                 {winningSector.type === 'none'
-                  ? '¡No te desanimes! Vuelve mañana para tu tiro gratis diario o gira por 100 Gemas 💎.'
+                  ? `¡No te desanimes! Vuelve mañana para tu tiro gratis diario o gira por ${PAID_SPIN_COST_GEMS} Gemas 💎.`
                   : winningSector.type === 'token'
                   ? `¡Se han acreditado ${winningSector.valueUsd?.toFixed(0)} Gemas 💎 a tu cuenta!`
                   : winningSector.type === 'gold'
                   ? `¡Has ganado ${winningSector.goldAmount?.toLocaleString()} Monedas de Oro!`
                   : winningSector.type === 'pack'
                   ? `¡Se ha añadido ${winningSector.packQty}x ${winningSector.label} a tus sobres pendientes!`
-                  : `¡Has recibido ${winningSector.plantQty}x copias de planta para tu jardín!`}
+                  : winningSector.type === 'plant'
+                  ? `¡Has recibido ${winningSector.plantQty ?? 1}x carta Wall-nut 🥜 para tu mazo o jardín!`
+                  : winningSector.type === 'item'
+                  ? `¡Se ha añadido ${winningSector.label} a tu inventario de cultivo en el jardín!`
+                  : `¡Recompensa acreditada con éxito!`}
               </p>
               <button
                 type="button"
@@ -1423,7 +1462,7 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">⚡</div>
               <h3>CONFIRMAR GIRO DE RULETA</h3>
               <p>
-                ¿Deseas pagar <strong>100 Gemas 💎</strong> de tu saldo para girar la Ruleta de la Suerte y probar tu suerte?
+                ¿Deseas pagar <strong>{PAID_SPIN_COST_GEMS} Gemas 💎</strong> de tu saldo para girar la Ruleta de la Suerte y probar tu suerte?
               </p>
               <div className="lottery-confirm-balance">
                 Saldo actual: <strong>{userTokens} Gemas 💎</strong>
@@ -1444,7 +1483,7 @@ export default function LotteryModal({
                     handleSpinWheel(false)
                   }}
                 >
-                  SÍ, GIRAR (100 💎)
+                  SÍ, GIRAR ({PAID_SPIN_COST_GEMS} 💎)
                 </button>
               </div>
             </div>

@@ -272,39 +272,45 @@ export interface Database {
         Row: {
           sector_id: string
           label: string
-          reward_type: 'gems' | 'gold' | 'pack' | 'plant' | 'none'
+          reward_type: 'gems' | 'gold' | 'pack' | 'plant' | 'item' | 'none'
           gems_amount: number | null
           gold_amount: number | null
           pack_id: string | null
           pack_qty: number | null
           plant_id: string | null
           plant_qty: number | null
+          item_id?: string | null
+          item_qty?: number | null
           weight: number
           is_active: boolean
         }
         Insert: {
           sector_id: string
           label: string
-          reward_type: 'gems' | 'gold' | 'pack' | 'plant' | 'none'
+          reward_type: 'gems' | 'gold' | 'pack' | 'plant' | 'item' | 'none'
           gems_amount?: number | null
           gold_amount?: number | null
           pack_id?: string | null
           pack_qty?: number | null
           plant_id?: string | null
           plant_qty?: number | null
+          item_id?: string | null
+          item_qty?: number | null
           weight: number
           is_active?: boolean
         }
         Update: {
           sector_id?: string
           label?: string
-          reward_type?: 'gems' | 'gold' | 'pack' | 'plant' | 'none'
+          reward_type?: 'gems' | 'gold' | 'pack' | 'plant' | 'item' | 'none'
           gems_amount?: number | null
           gold_amount?: number | null
           pack_id?: string | null
           pack_qty?: number | null
           plant_id?: string | null
           plant_qty?: number | null
+          item_id?: string | null
+          item_qty?: number | null
           weight?: number
           is_active?: boolean
         }

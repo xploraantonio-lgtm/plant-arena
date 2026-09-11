@@ -412,6 +412,8 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       goldAmount: s.reward_type === 'gold' ? Number(s.gold_amount) || 0 : null,
       packQty: s.reward_type === 'pack' ? Number(s.pack_qty) || 1 : null,
       plantQty: s.reward_type === 'plant' ? Number(s.plant_qty) || 1 : null,
+      itemId: s.reward_type === 'item' ? ((s as any).item_id || null) : null,
+      itemQty: s.reward_type === 'item' ? (Number((s as any).item_qty) || 1) : null,
     }))
 
     const res = await adminService.adminSaveLotterySectors(payload)

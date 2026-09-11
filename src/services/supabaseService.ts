@@ -2265,6 +2265,8 @@ export const SupabaseService = {
     goldAmount?: number | null
     packQty?: number | null
     plantQty?: number | null
+    itemId?: string | null
+    itemQty?: number | null
   }>): Promise<{ success: boolean; error?: string; sectors?: number; weightTotal?: number }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
