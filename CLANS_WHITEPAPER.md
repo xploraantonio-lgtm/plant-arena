@@ -75,33 +75,31 @@ Cualquier miembro puede realizar aportes adicionales de Gemas al Tesoro (opcione
 
 ---
 
-## 4. Guerra de Clanes, Asaltos y Saqueos (War Raids)
+## 4. Guerra de Clanes (Mini-Torneo de Sábados)
 
-### 4.1. Dinámica del Asalto
-* **Monto en Juego:** **500 Gemas 💎 por combate**.
-* **Mecánica de Victoria:** El clan atacante asalta la base enemiga.
-  * **Si Gana:** Suma **+500 Gemas 💎** de botín directo a su Tesoro.
-  * **Si Pierde:** El clan defensor repele el ataque y le arrebata **-500 Gemas 💎** del Tesoro.
+### 4.1. Ventana de Guerra y Formato de Mini-Torneo (4 vs 4)
+* **Día de Guerra:** Las guerras de clanes se disputan los **sábados** dentro de una ventana de tiempo competitiva (horario oficial a coordinar por temporada).
+* **Desafío entre Líderes:** El líder de un clan envía un desafío directo a otro clan rival.
+* **Plazo de Respuesta (30 Minutos):** Al emitirse el desafío, el clan rival dispone de un plazo máximo de **media hora (30 minutos)** para responder, aceptar el reto y reunir a sus representantes.
+* **Entrada a Lobby y Mini-Torneo (4 vs 4):**
+  * Cada clan selecciona a sus **4 mejores jugadores** activos para representar al equipo.
+  * Ambos bandos ingresan a un lobby especial de torneo en formato de enfrentamientos individuales (todos contra todos / duelos 1 vs 1 entre los 4 de cada lado).
+* **Sin Vida de Base:** Las contiendas no involucran puntos de vida ni daño a bases o torres. Se resuelven de forma pura a través de **batallas individuales PvP** entre los jugadores seleccionados.
+* **Botín en Juego (500 Gemas 💎):** El clan que sume el mayor número de victorias individuales al término de los enfrentamientos se proclama vencedor y se adjudica **500 Gemas 💎** directamente del Tesoro rival.
 
-### 4.2. Algoritmo de Probabilidad de Combate
-El resultado de los asaltos considera el poder competitivo global del clan, medido a través de la sumatoria del puntaje ELO de sus miembros activos:
-$$P(\text{Victoria Atacante}) = \begin{cases} 
-0.75 & \text{si } \sum \text{ELO}_{\text{atacante}} \ge \sum \text{ELO}_{\text{defensor}} \\
-0.45 & \text{si } \sum \text{ELO}_{\text{atacante}} < \sum \text{ELO}_{\text{defensor}}
-\end{cases}$$
+### 4.2. Escudos de Protección (Shields)
+* **Escudo Defensivo de 4 Horas:** Tras sufrir una derrota en un desafío de guerra, el clan derrotado recibe automáticamente un escudo temporal de 4 horas durante el cual no puede recibir nuevos desafíos. Esto garantiza tiempo para reorganizarse y planificar la revancha.
 
-### 4.3. Escudos de Protección (Shields)
-* **Escudo Defensivo de 4 Horas:** Al sufrir una derrota o saqueo, el clan derrotado recibe automáticamente un escudo temporal de 4 horas durante el cual ningún clan rival puede volver a atacarlo. Esto garantiza tiempo para reorganizar la defensa y planificar la revancha.
+### 4.3. Estado de Derrota (Defeated State) y Reactivación por Tesoro
+* **Causa de Derrota:** Si tras derrotas consecutivas el Tesoro de un clan desciende hasta **0 Gemas 💎**, el clan entra en **Estado de Derrota (Defeated State)**:
+  * Se inhabilitan las solicitudes de semillas entre compañeros.
+  * Se bloquea la emisión de nuevos desafíos de guerra.
+* **Mecanismo de Reactivación (Fondo Mínimo de 500 Gemas):**
+  * **Requisito:** Para salir del Estado de Derrota y reactivar todas las funciones y guerras, **el fondo del Tesoro del clan debe volver a acumular un mínimo de 500 Gemas 💎**.
+  * **Aportes Colectivos:** No se requiere que un solo jugador pague las 500 gemas de golpe. Todos los miembros del clan pueden colaborar realizando donaciones voluntarias (en cuotas de 50, 100, 200 gemas, etc.).
+  * **Reactivación Automática:** En el instante en que el Tesoro acumulado alcanza o supera las 500 Gemas 💎, el clan se reactiva automáticamente (`status = 'active'`).
 
-### 4.4. Estado de Derrota (Defeated State) y Reparación de Base
-* Si el Tesoro de un clan llega a **0 Gemas 💎** tras sucesivos saqueos, la base entra en **Estado de Derrota (Defeated State)**:
-  * Se inhabilitan las peticiones de semillas.
-  * Se bloquean las declaraciones de guerra hacia otros clanes.
-* **Reparación de Base:**
-  * **Costo:** 500 Gemas 💎.
-  * Restaura la salud de la base (`base_hp = 500`) y reactiva todas las funciones operativas del clan.
-
-### 4.5. Política de Fair Play (Anti-Bullying)
+### 4.4. Política de Fair Play (Anti-Bullying)
 Para evitar que clanes dominantes abusen de gremios en formación o en crisis:
 * **Regla Top 3:** Los 3 clanes con mayor Tesoro del servidor tienen prohibido asaltar a clanes que registren un balance negativo histórico (más derrotas que victorias acumuladas).
 
@@ -189,7 +187,7 @@ Toda la operativa del sistema de Clanes está regida por funciones seguras `SECU
 |---|---|---|
 | `create_clan` | `name, tag, badge, desc` | Descuenta 500 💎 de tasa; crea el clan con $V_0 = 0$; asigna líder. |
 | `join_clan` | `p_clan_id` | Descuenta 200 💎; suma +200 💎 al `vault_gems`; valida 15 miembros máx. |
-| `repair_clan_base` | — | Descuenta 500 💎 del líder; restaura base a 500 HP y estado activo. |
+| `repair_clan_base` | — | Descuenta 500 💎 (donado por cualquiera); reactiva las funciones del clan y permite participar en guerras. |
 | `deposit_to_clan_vault`| `p_amount` | Descuenta monto; suma a `vault_gems`; emite tickets de coliseo (+1 cada 100 💎). |
 | `claim_season_clan_earnings` | — | Liquida cuota individual sobre el excedente de 2,800 💎 hacia `profiles.gems_balance`. |
 | `request_clan_plant_donation` | `p_plant_id` | Publica petición en el clan con cooldown estricto de 24 horas. |

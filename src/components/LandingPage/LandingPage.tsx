@@ -535,6 +535,14 @@ export default function LandingPage({
               🗺️ Road Map
             </a>
             <a
+              href="/whitepaper.html"
+              target="_blank"
+              rel="noreferrer"
+              className="landing-btn-secondary"
+            >
+              📜 Whitepaper
+            </a>
+            <a
               href="https://t.me/+HY1gbZZKmAE5ZDcx"
               target="_blank"
               rel="noreferrer"
@@ -1171,6 +1179,8 @@ export default function LandingPage({
               <a href="#como-jugar">{lang === 'es' ? 'Cómo se Juega' : 'How to Play'}</a>
               <a href="#plantas">{lang === 'es' ? '15 Plantas' : '15 Plants'}</a>
               <a href="#arenas">{lang === 'es' ? '5 Arenas & Elo' : '5 Arenas & Elo'}</a>
+              <a href="/roadmap.html" target="_blank" rel="noreferrer">🗺️ Roadmap</a>
+              <a href="/whitepaper.html" target="_blank" rel="noreferrer">📜 Whitepaper</a>
             </div>
             <div className="landing-footer__col">
               <h4>{lang === 'es' ? 'Comunidad' : 'Community'}</h4>

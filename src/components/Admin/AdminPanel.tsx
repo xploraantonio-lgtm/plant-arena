@@ -84,7 +84,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const [codeBoard, setCodeBoard] = useState<CodeBoardEntry[]>([])
   const [codePrizePool, setCodePrizePool] = useState(50)
   const [codeFreeAttempts, setCodeFreeAttempts] = useState(3)
-  const [codeAttemptCost, setCodeAttemptCost] = useState(10)
+  const [codeAttemptCost, setCodeAttemptCost] = useState(5)
 
   const DEFAULT_CODE_PRIZE_TIERS: CodeRoundPrizeTier[] = [
     { place: 1, amount: 50, currency: 'gems' },

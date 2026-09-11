@@ -627,6 +627,11 @@
   transform: none !important;
 }
 
+.lottery-mini-plant-card--round-closed {
+  opacity: 0.65;
+  filter: grayscale(35%);
+}
+
 .lottery-mini-plant-img {
   width: 26px;
   height: 26px;
@@ -970,6 +975,122 @@
 
 .lottery-pin {
   font-size: 10px;
+}
+
+/* ================= SOLVED ROUND BANNER (JUEGA TAB) ================= */
+.lottery-code-solved-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.lottery-code-solved-banner {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+  border: 2px solid #eab308;
+  border-radius: 16px;
+  padding: 22px 28px;
+  text-align: center;
+  max-width: 520px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 0 32px rgba(234, 179, 8, 0.35);
+  animation: lotteryFadeIn 0.3s ease-out;
+}
+
+.lottery-code-solved-badge {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: #000000;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  padding: 5px 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 0 14px rgba(234, 179, 8, 0.6);
+}
+
+.lottery-code-solved-banner h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.lottery-code-solved-banner p {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.lottery-code-solved-details {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+  margin: 4px 0;
+  flex-wrap: wrap;
+}
+
+.lottery-code-detail-item {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  min-width: 105px;
+}
+
+.lottery-code-detail-label {
+  font-size: 9.5px;
+  color: #94a3b8;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.lottery-code-detail-value {
+  font-size: 13px;
+  font-weight: 900;
+  color: #f8fafc;
+}
+
+.lottery-code-detail-value--gold {
+  color: #facc15;
+}
+
+.lottery-code-detail-value--green {
+  color: #4ade80;
+}
+
+.lottery-code-solved-notice {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px dashed rgba(96, 165, 250, 0.4);
+  color: #93c5fd;
+  font-size: 11px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  line-height: 1.4;
+  margin: 2px 0;
+}
+
+.lottery-code-solved-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
 }
 
 /* ================= PRIZE OVERLAY MODAL ================= */

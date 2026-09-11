@@ -273,7 +273,17 @@ export default function LotteryModal({
       lotteryService.secretCodeLeaderboard(),
     ])
     if (st) {
-      setCodeRound((st.round as CodeRound) ?? null)
+      const newRound = (st.round as CodeRound) ?? null
+      setCodeRound((prevRound) => {
+        if (newRound?.id !== prevRound?.id) {
+          setSelectedSequence(Array(SECRET_CODE_LENGTH).fill(null))
+          setCodeWonPrize(false)
+        } else if (newRound?.status === 'open' && prevRound?.status !== 'open') {
+          setSelectedSequence(Array(SECRET_CODE_LENGTH).fill(null))
+          setCodeWonPrize(false)
+        }
+        return newRound
+      })
       setCodeAttemptsLeft(st.attemptsLeft ?? 0)
       setCodeFreeUsed(st.freeUsed ?? 0)
       setCodeExtra(st.extraAttempts ?? 0)
@@ -399,8 +409,18 @@ export default function LotteryModal({
   useEffect(() => {
     if (!isOpen) return
     LEGACY_CODE_KEYS.forEach((k) => localStorage.removeItem(k))
+    setCodeWonPrize(false)
     void loadCodeData()
     void loadWheelSectors()
+  }, [isOpen, activeTab])
+
+  // Sondeo de sincronización automática en la pestaña del código secreto cada 4s
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'code') return
+    const interval = setInterval(() => {
+      void loadCodeData()
+    }, 4000)
+    return () => clearInterval(interval)
   }, [isOpen, activeTab])
 
   if (!isOpen) return null
@@ -489,8 +509,20 @@ export default function LotteryModal({
 
   // ===================== CODE (SECUENCIA) ACTIONS =====================
   const handleSelectPlantForSlot = (plantId: PlantId) => {
-    if (isSpinning || !roundIsOpen || codeWonPrize) return
-    if (selectedSequence.includes(plantId)) return
+    if (!roundIsOpen) {
+      soundManager.playSound('defeat', 0.2)
+      setCodeBannerNotice('⏸️ La ronda anterior finalizó. Espera un momento mientras inicia la siguiente ronda.')
+      setTimeout(() => setCodeBannerNotice(null), 3500)
+      return
+    }
+    if (codeWonPrize) {
+      setCodeWonPrize(false)
+    }
+    if (selectedSequence.includes(plantId)) {
+      setCodeBannerNotice('⚠️ Esta planta ya está incluida en la secuencia actual.')
+      setTimeout(() => setCodeBannerNotice(null), 2000)
+      return
+    }
     soundManager.playSound('click', 0.3)
     const firstEmptyIndex = selectedSequence.findIndex((s) => s === null)
     if (firstEmptyIndex !== -1) {
@@ -506,7 +538,8 @@ export default function LotteryModal({
   }
 
   const handleClearSlot = (index: number) => {
-    if (!roundIsOpen || codeWonPrize) return
+    if (!roundIsOpen) return
+    if (codeWonPrize) setCodeWonPrize(false)
     soundManager.playSound('click', 0.3)
     const next = [...selectedSequence]
     next[index] = null
@@ -514,7 +547,8 @@ export default function LotteryModal({
   }
 
   const handleClearAllSlots = () => {
-    if (!roundIsOpen || codeWonPrize) return
+    if (!roundIsOpen) return
+    if (codeWonPrize) setCodeWonPrize(false)
     soundManager.playSound('click', 0.3)
     setSelectedSequence(Array(SECRET_CODE_LENGTH).fill(null))
   }
@@ -589,8 +623,9 @@ export default function LotteryModal({
       setCodeBannerNotice('🏆 ¡Código descifrado! La ronda se ha cerrado y el premio está repartido.')
     } else {
       soundManager.playSound('defeat', 0.4)
+      const missCount = Math.max(0, SECRET_CODE_LENGTH - (res.exactCount || 0) - (res.wrongPosCount || 0))
       setCodeBannerNotice(
-        `${res.pct}% de acercamiento · ${res.exactCount} exactas, ${res.wrongPosCount} en otra posición`
+        `🔍 Pistas Mastermind: 🟢 ${res.exactCount || 0} exactas · 🟡 ${res.wrongPosCount || 0} en otra posición · 🔴 ${missCount} descartadas`
       )
       setTimeout(() => setCodeBannerNotice(null), 5000)
     }
@@ -839,212 +874,263 @@ export default function LotteryModal({
 
             {/* SUBTAB 1: JUEGA */}
             {codeSubTab === 'play' && (
-              <div className="lottery-code-layout-grid">
-                {/* LEFT: PLANT PICKER */}
-                <div className="lottery-code-picker-pane">
-                  <div className="lottery-code-pane-header">
-                    <h4>🌱 SELECCIONA TUS PLANTAS</h4>
-                    <small>Haz clic para añadir a la combinación</small>
-                  </div>
+              !roundIsOpen ? (
+                /* BANNER Y PANTALLA DE CÓDIGO DESCIFRADO / RONDA FINALIZADA */
+                <div className="lottery-code-solved-container">
+                  <div className="lottery-code-solved-banner">
+                    <div className="lottery-code-solved-badge">🏆 ¡CÓDIGO DESCIFRADO!</div>
+                    <h3>Espera la siguiente ronda...</h3>
+                    <p>
+                      {codeRound?.winnerId
+                        ? `¡Un jugador descifró la secuencia secreta de la Ronda #${codeRound.roundNumber} y se ha repartido el bote!`
+                        : `La Ronda #${codeRound?.roundNumber ?? ''} ha concluido y las recompensas han sido acreditadas.`}
+                    </p>
 
-                  <div className="lottery-plants-compact-grid">
-                    {ALL_PLANTS_LIST.map((plantId) => {
-                      const conf = PLANT_CONFIGS[plantId]
-                      const iconSrc = conf?.packetActive || conf?.icon
-                      const isAlreadySelected = selectedSequence.includes(plantId)
-                      return (
+                    <div className="lottery-code-solved-details">
+                      <div className="lottery-code-detail-item">
+                        <span className="lottery-code-detail-label">Ronda</span>
+                        <span className="lottery-code-detail-value">#{codeRound?.roundNumber ?? '—'}</span>
+                      </div>
+                      <div className="lottery-code-detail-item">
+                        <span className="lottery-code-detail-label">Bote 1er Puesto</span>
+                        <span className="lottery-code-detail-value lottery-code-detail-value--gold">
+                          {codeRound?.prizesConfig?.[0]
+                            ? `${codeRound.prizesConfig[0].amount} ${codeRound.prizesConfig[0].currency === 'gold' ? '💰 Oro' : '💎 Gemas'}`
+                            : `${codeRound?.prizePool ?? 50} 💎 Gemas`}
+                        </span>
+                      </div>
+                      <div className="lottery-code-detail-item">
+                        <span className="lottery-code-detail-label">Estado</span>
+                        <span className="lottery-code-detail-value lottery-code-detail-value--green">
+                          ✅ Repartido
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="lottery-code-solved-notice">
+                      📢 El Administrador abrirá una nueva ronda de 5 plantas próximamente. Puedes consultar el ranking final o tu historial mientras tanto.
+                    </div>
+
+                    <div className="lottery-code-solved-actions">
+                      <button
+                        type="button"
+                        className="lottery-code-check-btn"
+                        onClick={() => setCodeSubTab('ranking')}
+                      >
+                        🏆 Ver Clasificación y Ganadores
+                      </button>
+                      <button
+                        type="button"
+                        className="lottery-code-clear-btn"
+                        onClick={() => setCodeSubTab('history')}
+                      >
+                        📜 Ver Mi Historial
+                      </button>
+                      {isAdmin && (
                         <button
-                          key={plantId}
                           type="button"
-                          className={`lottery-mini-plant-card ${isAlreadySelected ? 'lottery-mini-plant-card--in-use' : ''}`}
-                          disabled={!roundIsOpen || codeWonPrize || isAlreadySelected}
-                          onClick={() => handleSelectPlantForSlot(plantId)}
-                          title={isAlreadySelected ? `${conf.name} (Ya añadida a la combinación)` : conf.name}
+                          className="lottery-code-subtab-btn"
+                          style={{
+                            background: 'rgba(234, 179, 8, 0.2)',
+                            color: '#facc15',
+                            border: '1.5px solid #eab308',
+                            fontWeight: 800,
+                            padding: '6px 14px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => {
+                            soundManager.playSound('click', 0.3)
+                            onClose()
+                            onOpenAdmin?.()
+                          }}
                         >
-                          <img src={iconSrc} alt={conf.name} className="lottery-mini-plant-img" />
-                          <span className="lottery-mini-plant-name">{conf.name}</span>
+                          🛡️ Iniciar Nueva Ronda (Panel Admin)
                         </button>
-                      )
-                    })}
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {/* RIGHT: SEQUENCE SLOTS & CONTROLS */}
-                <div className="lottery-code-game-pane">
-                  {/* PROMO HERO BANNER */}
-                  <div className="lottery-code-promo-banner">
-                    <div className="lottery-promo-badge">
-                      {roundIsOpen
-                        ? `🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizesConfig?.[0]?.amount ?? codeRound?.prizePool ?? 50} ${codeRound?.prizesConfig?.[0]?.currency === 'gold' ? '💰' : '💎'}`
-                        : codeRound
-                          ? `⏸️ RONDA #${codeRound.roundNumber} FINALIZADA`
-                          : '⏸️ SIN RONDA ACTIVA'}
+              ) : (
+                <div className="lottery-code-layout-grid">
+                  {/* LEFT: PLANT PICKER */}
+                  <div className="lottery-code-picker-pane">
+                    <div className="lottery-code-pane-header">
+                      <h4>🌱 SELECCIONA TUS PLANTAS</h4>
+                      <small>Haz clic para añadir a la combinación</small>
                     </div>
-                    <h3>¡ADIVINA LA SECUENCIA DE {SECRET_CODE_LENGTH} PLANTAS!</h3>
-                    {roundIsOpen ? (
+
+                    <div className="lottery-plants-compact-grid">
+                      {ALL_PLANTS_LIST.map((plantId) => {
+                        const conf = PLANT_CONFIGS[plantId]
+                        const iconSrc = conf?.packetActive || conf?.icon
+                        const isAlreadySelected = selectedSequence.includes(plantId)
+                        return (
+                          <button
+                            key={plantId}
+                            type="button"
+                            className={`lottery-mini-plant-card ${isAlreadySelected ? 'lottery-mini-plant-card--in-use' : ''}`}
+                            disabled={isAlreadySelected}
+                            onClick={() => handleSelectPlantForSlot(plantId)}
+                            title={
+                              isAlreadySelected
+                                ? `${conf.name} (Ya añadida a la combinación)`
+                                : conf.name
+                            }
+                          >
+                            <img src={iconSrc} alt={conf.name} className="lottery-mini-plant-img" />
+                            <span className="lottery-mini-plant-name">{conf.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* RIGHT: SEQUENCE SLOTS & CONTROLS */}
+                  <div className="lottery-code-game-pane">
+                    {/* PROMO HERO BANNER */}
+                    <div className="lottery-code-promo-banner">
+                      <div className="lottery-promo-badge">
+                        {`🔐 RONDA #${codeRound?.roundNumber} · BOTE ${codeRound?.prizesConfig?.[0]?.amount ?? codeRound?.prizePool ?? 50} ${codeRound?.prizesConfig?.[0]?.currency === 'gold' ? '💰' : '💎'}`}
+                      </div>
+                      <h3>¡ADIVINA LA SECUENCIA DE {SECRET_CODE_LENGTH} PLANTAS!</h3>
                       <p>
-                        {codeRound?.freeAttempts ?? 3} intentos gratis por ronda. <strong>Semáforo estilo Wordle</strong> por cada casilla:{' '}
-                        <span style={{ color: '#4ade80' }}>🟢 Verde</span> = casilla exacta,{' '}
-                        <span style={{ color: '#facc15' }}>🟡 Amarillo</span> = en otra casilla,{' '}
-                        <span style={{ color: '#94a3b8' }}>🔴 Rojo</span> = descartada.{' '}
-                        ¡El primero en descifrar las {SECRET_CODE_LENGTH} en orden se lleva{' '}
+                        {codeRound?.freeAttempts ?? 3} intentos gratis por ronda (Reintentos: <strong>5 💎</strong>). Pistas globales <strong>Mastermind (Ciego)</strong>:{' '}
+                        <span style={{ color: '#4ade80' }}>🟢 Exactas</span> = posición correcta,{' '}
+                        <span style={{ color: '#facc15' }}>🟡 Desubicadas</span> = en otra casilla,{' '}
+                        <span style={{ color: '#f87171' }}>🔴 Descartadas</span> = no están en el código.{' '}
+                        <em>¡Las pistas no revelan la casilla exacta, deberás deducirlo!</em>{' '}
+                        ¡El primero en descifrar las {SECRET_CODE_LENGTH} se lleva{' '}
                         <strong>
                           {codeRound?.prizesConfig?.[0]
                             ? `${codeRound.prizesConfig[0].amount} ${codeRound.prizesConfig[0].currency === 'gold' ? '💰' : '💎'}`
                             : `${codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} 💎`}
                         </strong>!
                       </p>
-                    ) : (
-                      <p>
-                        {codeRound?.winnerId
-                          ? '🏆 ¡El código ya ha sido descifrado y la ronda está cerrada! Vuelve cuando se abra la siguiente.'
-                          : 'No hay ninguna ronda abierta ahora mismo. Vuelve cuando se abra la siguiente.'}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 4 ACTIVE SLOTS */}
-                  <div className="lottery-code-slots-row">
-                    {selectedSequence.map((plantId, idx) => {
-                      const conf = plantId ? PLANT_CONFIGS[plantId] : null
-                      const iconSrc = conf ? conf.packetActive || conf.icon : null
-
-                      return (
-                        <div
-                          key={idx}
-                          className={`lottery-code-slot ${plantId ? 'lottery-code-slot--filled' : ''}`}
-                          onClick={() => plantId && handleClearSlot(idx)}
-                          title={plantId ? `Quitar ${conf?.name}` : `Slot #${idx + 1} vacío`}
-                        >
-                          <span className="lottery-slot-num">{idx + 1}</span>
-                          {iconSrc ? (
-                            <div className="lottery-slot-filled-content">
-                              <img src={iconSrc} alt={conf?.name} className="lottery-slot-img" />
-                              <span className="lottery-slot-plant-name">{conf?.name}</span>
-                              <span className="lottery-slot-remove-badge">✕</span>
-                            </div>
-                          ) : (
-                            <span className="lottery-slot-empty-icon">❓</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* ACTIONS & ATTEMPTS STATUS */}
-                  <div className="lottery-code-controls-row">
-                    <button
-                      type="button"
-                      className="lottery-code-clear-btn"
-                      onClick={handleClearAllSlots}
-                      disabled={selectedSequence.every((s) => s === null)}
-                    >
-                      🧹 LIMPIAR
-                    </button>
-
-                    <div className="lottery-attempts-indicator">
-                      <span>Intentos:</span>
-                      <strong>
-                        {totalAttemptsAvailable} ({freeAttemptsLeft} gratis + {codeExtra} extra)
-                      </strong>
                     </div>
 
-                    <button
-                      type="button"
-                      className="lottery-code-buy-btn"
-                      onClick={() => {
-                        soundManager.playSound('click', 0.4)
-                        setShowConfirmCodeBuyModal(true)
-                      }}
-                      disabled={userTokens < 10.0}
-                      title="Pagar 10 Gemas 💎 por 1 intento adicional"
-                    >
-                      ⚡ +1 INTENTO (10 💎 Gemas)
-                    </button>
+                    {/* 5 ACTIVE SLOTS */}
+                    <div className="lottery-code-slots-row">
+                      {selectedSequence.map((plantId, idx) => {
+                        const conf = plantId ? PLANT_CONFIGS[plantId] : null
+                        const iconSrc = conf ? conf.packetActive || conf.icon : null
 
-                    <button
-                      type="button"
-                      className="lottery-code-check-btn"
-                      onClick={() => {
-                        if (totalAttemptsAvailable <= 0) {
-                          setShowConfirmCodeBuyModal(true)
-                          return
-                        }
-                        handleCheckCode()
-                      }}
-                      disabled={selectedSequence.some((s) => s === null)}
-                    >
-                      🔮 VERIFICAR CÓDIGO
-                    </button>
-                  </div>
-
-                  {/* ÚLTIMO INTENTO REALIZADO (PREVIEW) */}
-                  {codeHistory.length > 0 && (() => {
-                    const lastAtt = codeHistory[0]
-                    const missCount = Math.max(0, (lastAtt.sequence?.length || SECRET_CODE_LENGTH) - lastAtt.exactCount - lastAtt.wrongPosCount)
-                    return (
-                      <div className="lottery-code-last-attempt-card">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '9px', fontWeight: 800, color: '#fbbf24' }}>Último Intento:</span>
-                          <div className="lottery-history-cards">
-                            {lastAtt.sequence.map((pId, pIdx) => {
-                              const pConf = PLANT_CONFIGS[pId as PlantId]
-                              const pIcon = pConf ? pConf.packetActive || pConf.icon : ''
-                              const slotRes = lastAtt.slotResults?.[pIdx]
-                              const resClass = slotRes ? `lottery-hist-mini-card--${slotRes}` : ''
-                              const tooltip = slotRes === 'exact'
-                                ? `${pConf?.name} · Casilla #${pIdx + 1}: ¡Exacta en su lugar! 🟢`
-                                : slotRes === 'wrong'
-                                ? `${pConf?.name} · En el código, pero en OTRA casilla 🟡`
-                                : slotRes === 'miss'
-                                ? `${pConf?.name} · Descartada (no está en el código) 🔴`
-                                : pConf?.name
-
-                              return (
-                                <div key={pIdx} className={`lottery-hist-mini-card ${resClass}`} title={tooltip}>
-                                  <img src={pIcon} alt={pConf?.name} />
-                                  {slotRes && (
-                                    <span className={`lottery-hist-slot-dot lottery-hist-slot-dot--${slotRes}`}>
-                                      {slotRes === 'exact' ? '🟢' : slotRes === 'wrong' ? '🟡' : '🔴'}
-                                    </span>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                          <div className="lottery-history-badges">
-                            {lastAtt.exactCount > 0 && (
-                              <span className="lottery-count-badge lottery-count-badge--exact" title={`${lastAtt.exactCount} plantas en posición exacta`}>
-                                🟢 {lastAtt.exactCount}
-                              </span>
-                            )}
-                            {lastAtt.wrongPosCount > 0 && (
-                              <span className="lottery-count-badge lottery-count-badge--wrong" title={`${lastAtt.wrongPosCount} plantas en otra casilla`}>
-                                🟡 {lastAtt.wrongPosCount}
-                              </span>
-                            )}
-                            {missCount > 0 && (
-                              <span className="lottery-count-badge lottery-count-badge--miss" title={`${missCount} plantas descartadas`}>
-                                🔴 {missCount}
-                              </span>
+                        return (
+                          <div
+                            key={idx}
+                            className={`lottery-code-slot ${plantId ? 'lottery-code-slot--filled' : ''}`}
+                            onClick={() => plantId && handleClearSlot(idx)}
+                            title={plantId ? `Quitar ${conf?.name}` : `Slot #${idx + 1} vacío`}
+                          >
+                            <span className="lottery-slot-num">{idx + 1}</span>
+                            {iconSrc ? (
+                              <div className="lottery-slot-filled-content">
+                                <img src={iconSrc} alt={conf?.name} className="lottery-slot-img" />
+                                <span className="lottery-slot-plant-name">{conf?.name}</span>
+                                <span className="lottery-slot-remove-badge">✕</span>
+                              </div>
+                            ) : (
+                              <span className="lottery-slot-empty-icon">❓</span>
                             )}
                           </div>
-                          <strong className="lottery-history-pct" style={{ fontSize: '11px', marginLeft: 'auto' }}>
-                            {Number(lastAtt.pct).toFixed(1)}%
-                          </strong>
-                        </div>
-                        <button
-                          type="button"
-                          className="lottery-view-all-btn"
-                          onClick={() => setCodeSubTab('history')}
-                        >
-                          📜 Ver Historial ({codeHistory.length}) ➔
-                        </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* ACTIONS & ATTEMPTS STATUS */}
+                    <div className="lottery-code-controls-row">
+                      <button
+                        type="button"
+                        className="lottery-code-clear-btn"
+                        onClick={handleClearAllSlots}
+                        disabled={selectedSequence.every((s) => s === null)}
+                      >
+                        🧹 LIMPIAR
+                      </button>
+
+                      <div className="lottery-attempts-indicator">
+                        <span>Intentos:</span>
+                        <strong>
+                          {totalAttemptsAvailable} ({freeAttemptsLeft} gratis + {codeExtra} extra)
+                        </strong>
                       </div>
-                    )
-                  })()}
+
+                      <button
+                        type="button"
+                        className="lottery-code-buy-btn"
+                        onClick={() => {
+                          soundManager.playSound('click', 0.4)
+                          setShowConfirmCodeBuyModal(true)
+                        }}
+                        disabled={userTokens < 5.0}
+                        title="Pagar 5 Gemas 💎 por 1 intento adicional"
+                      >
+                        ⚡ +1 INTENTO (5 💎 Gemas)
+                      </button>
+
+                      <button
+                        type="button"
+                        className="lottery-code-check-btn"
+                        onClick={() => {
+                          if (totalAttemptsAvailable <= 0) {
+                            setShowConfirmCodeBuyModal(true)
+                            return
+                          }
+                          handleCheckCode()
+                        }}
+                        disabled={selectedSequence.some((s) => s === null)}
+                      >
+                        🔮 VERIFICAR CÓDIGO
+                      </button>
+                    </div>
+
+                    {/* ÚLTIMO INTENTO REALIZADO (PREVIEW MASTERMIND CIEGO) */}
+                    {codeHistory.length > 0 && (() => {
+                      const lastAtt = codeHistory[0]
+                      const missCount = Math.max(0, (lastAtt.sequence?.length || SECRET_CODE_LENGTH) - lastAtt.exactCount - lastAtt.wrongPosCount)
+                      return (
+                        <div className="lottery-code-last-attempt-card">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 800, color: '#fbbf24' }}>Último Intento:</span>
+                            <div className="lottery-history-cards">
+                              {lastAtt.sequence.map((pId, pIdx) => {
+                                const pConf = PLANT_CONFIGS[pId as PlantId]
+                                const pIcon = pConf ? pConf.packetActive || pConf.icon : ''
+                                return (
+                                  <div key={pIdx} className="lottery-hist-mini-card" title={pConf?.name || `Planta #${pIdx + 1}`}>
+                                    <img src={pIcon} alt={pConf?.name} />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <div className="lottery-history-badges">
+                              <span className="lottery-count-badge lottery-count-badge--exact" title={`${lastAtt.exactCount} plantas en posición exacta`}>
+                                🟢 {lastAtt.exactCount} {lastAtt.exactCount === 1 ? 'Exacta' : 'Exactas'}
+                              </span>
+                              <span className="lottery-count-badge lottery-count-badge--wrong" title={`${lastAtt.wrongPosCount} plantas en otra casilla`}>
+                                🟡 {lastAtt.wrongPosCount} {lastAtt.wrongPosCount === 1 ? 'Desubicada' : 'Desubicadas'}
+                              </span>
+                              <span className="lottery-count-badge lottery-count-badge--miss" title={`${missCount} plantas descartadas`}>
+                                🔴 {missCount} {missCount === 1 ? 'Descartada' : 'Descartadas'}
+                              </span>
+                            </div>
+                            <strong className="lottery-history-pct" style={{ fontSize: '11px', marginLeft: 'auto' }}>
+                              {Number(lastAtt.pct).toFixed(1)}%
+                            </strong>
+                          </div>
+                          <button
+                            type="button"
+                            className="lottery-view-all-btn"
+                            onClick={() => setCodeSubTab('history')}
+                          >
+                            📜 Ver Historial ({codeHistory.length}) ➔
+                          </button>
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
-              </div>
+              )
             )}
 
             {/* SUBTAB 2: HISTORIAL */}
@@ -1052,9 +1138,9 @@ export default function LotteryModal({
               <div className="lottery-code-full-pane">
                 <div className="lottery-code-history-box" style={{ flex: 1 }}>
                   <div className="lottery-history-header">
-                    <h5>📜 HISTORIAL Y SEMÁFORO DE CASILLAS (WORDLE):</h5>
+                    <h5>📜 HISTORIAL Y PISTAS GLOBALES (MASTERMIND CIEGO):</h5>
                     <div className="lottery-pins-legend">
-                      <span className="pin-tag pin-tag--exact">🟢 Casilla Correcta</span>
+                      <span className="pin-tag pin-tag--exact">🟢 Posición Exacta</span>
                       <span className="pin-tag pin-tag--wrong">🟡 En otra Casilla</span>
                       <span className="pin-tag pin-tag--miss">🔴 Descartada</span>
                     </div>
@@ -1085,45 +1171,24 @@ export default function LotteryModal({
                               {att.sequence.map((pId, pIdx) => {
                                 const pConf = PLANT_CONFIGS[pId as PlantId]
                                 const pIcon = pConf ? pConf.packetActive || pConf.icon : ''
-                                const slotRes = att.slotResults?.[pIdx]
-                                const resClass = slotRes ? `lottery-hist-mini-card--${slotRes}` : ''
-                                const tooltip = slotRes === 'exact'
-                                  ? `${pConf?.name} · Casilla #${pIdx + 1}: ¡Exacta en su lugar! 🟢`
-                                  : slotRes === 'wrong'
-                                  ? `${pConf?.name} · En el código, pero en OTRA casilla 🟡`
-                                  : slotRes === 'miss'
-                                  ? `${pConf?.name} · Descartada (no está en el código) 🔴`
-                                  : pConf?.name
-
                                 return (
-                                  <div key={pIdx} className={`lottery-hist-mini-card ${resClass}`} title={tooltip}>
+                                  <div key={pIdx} className="lottery-hist-mini-card" title={pConf?.name || `Planta #${pIdx + 1}`}>
                                     <img src={pIcon} alt={pConf?.name} />
-                                    {slotRes && (
-                                      <span className={`lottery-hist-slot-dot lottery-hist-slot-dot--${slotRes}`}>
-                                        {slotRes === 'exact' ? '🟢' : slotRes === 'wrong' ? '🟡' : '🔴'}
-                                      </span>
-                                    )}
                                   </div>
                                 )
                               })}
                             </div>
 
                             <div className="lottery-history-badges">
-                              {att.exactCount > 0 && (
-                                <span className="lottery-count-badge lottery-count-badge--exact" title={`${att.exactCount} en la casilla correcta`}>
-                                  🟢 {att.exactCount}
-                                </span>
-                              )}
-                              {att.wrongPosCount > 0 && (
-                                <span className="lottery-count-badge lottery-count-badge--wrong" title={`${att.wrongPosCount} en el código pero en otra casilla`}>
-                                  🟡 {att.wrongPosCount}
-                                </span>
-                              )}
-                              {missCount > 0 && (
-                                <span className="lottery-count-badge lottery-count-badge--miss" title={`${missCount} descartadas`}>
-                                  🔴 {missCount}
-                                </span>
-                              )}
+                              <span className="lottery-count-badge lottery-count-badge--exact" title={`${att.exactCount} plantas en posición exacta`}>
+                                🟢 {att.exactCount} {att.exactCount === 1 ? 'Exacta' : 'Exactas'}
+                              </span>
+                              <span className="lottery-count-badge lottery-count-badge--wrong" title={`${att.wrongPosCount} plantas en el código pero en otra casilla`}>
+                                🟡 {att.wrongPosCount} {att.wrongPosCount === 1 ? 'Desubicada' : 'Desubicadas'}
+                              </span>
+                              <span className="lottery-count-badge lottery-count-badge--miss" title={`${missCount} plantas descartadas`}>
+                                🔴 {missCount} {missCount === 1 ? 'Descartada' : 'Descartadas'}
+                              </span>
                             </div>
 
                             <strong
@@ -1392,7 +1457,7 @@ export default function LotteryModal({
               <div className="lottery-confirm-icon">🎯</div>
               <h3>COMPRAR INTENTOS DE CÓDIGO</h3>
               <p>
-                ¿Deseas pagar <strong>10 Gemas 💎</strong> para adquirir <strong>1 INTENTO ADICIONAL</strong> y descifrar la secuencia para ganar el <strong>Gran Premio de {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} Gemas 💎</strong>?
+                ¿Deseas pagar <strong>5 Gemas 💎</strong> para adquirir <strong>1 INTENTO ADICIONAL</strong> y descifrar la secuencia para ganar el <strong>Gran Premio de {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} Gemas 💎</strong>?
               </p>
               <div className="lottery-confirm-balance">
                 Saldo actual: <strong>{userTokens} Gemas 💎</strong> (Recibes: +1 Intento)
@@ -1412,9 +1477,9 @@ export default function LotteryModal({
                     setShowConfirmCodeBuyModal(false)
                     handleBuyCodeAttempts()
                   }}
-                  disabled={userTokens < 10.0}
+                  disabled={userTokens < 5.0}
                 >
-                  SÍ, COMPRAR 1 INTENTO (10 💎)
+                  SÍ, COMPRAR 1 INTENTO (5 💎)
                 </button>
               </div>
             </div>

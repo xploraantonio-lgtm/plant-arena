@@ -538,8 +538,8 @@ export class ClanManager {
     const attacker = clans.find((c) => c.id === attackerClanId)
     const defender = clans.find((c) => c.id === defenderClanId)
     if (!attacker || !defender) return { success: false, winnerClan: attacker!, loserClan: defender!, stolenAmount: 0, error: 'Clan no encontrado.' }
-    if (attacker.status === 'defeated') return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'Tu base está en Estado de Derrota. Debes Reparar la Base primero.' }
-    if (defender.status === 'defeated') return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'El clan rival ya está en Estado de Derrota ($0.00 en tesoro).' }
+    if (attacker.status === 'defeated') return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'Tu clan está en Estado de Derrota. El fondo del tesoro debe alcanzar al menos 500 gemas para participar en guerras.' }
+    if (defender.status === 'defeated') return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'El clan rival está en Estado de Derrota (0 gemas en tesoro).' }
 
     // Check 24h shield on defender
     if (defender.shieldUntil && defender.shieldUntil > Date.now()) {

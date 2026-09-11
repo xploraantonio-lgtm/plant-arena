@@ -2094,7 +2094,7 @@ export const SupabaseService = {
       prize2nd: opts?.prize2nd ?? (opts?.prizesConfig?.[1]?.amount ?? 0),
       prize3rd: opts?.prize3rd ?? (opts?.prizesConfig?.[2]?.amount ?? 0),
       freeAttempts: opts?.freeAttempts ?? 3,
-      attemptCost: opts?.attemptCost ?? 10,
+      attemptCost: opts?.attemptCost ?? 5,
       prizesConfig: opts?.prizesConfig ?? [],
       settlePrevious: opts?.settlePrevious ?? true,
     }

@@ -155,7 +155,7 @@ Line 153:  </div>
 Line 154:  <div class="hero-row" style="margin-top:24px">
 Line 155:   <div>
 Line 156:    <h3>Protecciones de juego</h3>
-Line 157:    <ul><li><b>Escudo 4h:</b> tras sufrir una derrota o saqueo, el clan no puede volver a ser atacado durante 4 horas.</li><li><b>Estado de derrota:</b> si el tesoro llega a 0 💎, se bloquean peticiones de semillas y nuevas declaraciones de guerra.</li><li><b>Reparación:</b> cuesta 500 💎 y restaura la base a 500 HP.</li><li><b>Fair Play:</b> los 3 clanes con mayor tesoro no pueden asaltar clanes con balance histórico negativo.</li></ul>
+Line 157:    <ul><li><b>Escudo 4h:</b> tras sufrir una derrota o saqueo, el clan no puede volver a ser atacado durante 4 horas.</li><li><b>Estado de derrota:</b> si el tesoro llega a 0 💎, se bloquean peticiones de semillas y nuevas declaraciones de guerra.</li><li><b>Reactivar:</b> cuesta 500 gemas, puede ser donado por cualquiera, reactiva las funciones del clan y permite participar nuevamente en guerras.</li><li><b>Fair Play:</b> los 3 clanes con mayor tesoro no pueden asaltar clanes con balance histórico negativo.</li></ul>
 Line 158:   </div>
 Line 159: <IMAGE length 353263>
 Line 160:  </div>
