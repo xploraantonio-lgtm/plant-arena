@@ -77,7 +77,13 @@ function App() {
   const [activeOpeningResult, setActiveOpeningResult] = useState<PackDropResult | PackDropResult[] | null>(null)
   const [activePvpRewardDrops, setActivePvpRewardDrops] = useState<PvpRewardDrop[] | null>(null)
   const [lastOpenedPackType, setLastOpenedPackType] = useState<PackId | null>(null)
-  const [activeAppAlert, setActiveAppAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
+  const [activeAppAlert, setActiveAppAlert] = useState<{
+    title: string
+    message: string
+    icon: string
+    actionLabel?: string
+    onAction?: () => void
+  } | null>(null)
 
   useEffect(() => {
     const handleGameAlert = (e: Event) => {
@@ -364,6 +370,34 @@ function App() {
   const [mazosDeLaSala, setMazosDeLaSala] = useState<{ mio: unknown; rival: unknown } | null>(null)
   const [partidaAsincrona, setPartidaAsincrona] = useState<boolean>(false)
 
+  // Reaccionar a errores asíncronos de la cola (por ej. agotamiento de energías en backend)
+  useEffect(() => {
+    if (screen === 'searching' && estadoCola.error) {
+      setScreen('menu')
+      if (
+        estadoCola.error === 'sin_energia' ||
+        estadoCola.error.includes('energía') ||
+        estadoCola.error.includes('energia')
+      ) {
+        setActiveAppAlert({
+          title: 'ENERGÍA AGOTADA',
+          message:
+            '⚡ Has agotado tus energías de Ranked. Se recargan automáticamente a las 00:00 UTC, o puedes recargar ahora en la Tienda.',
+          icon: '⚡',
+          actionLabel: 'IR A TIENDA',
+          onAction: () => handleOpenShop('energy'),
+        })
+      } else {
+        setActiveAppAlert({
+          title: 'ERROR EN EMPAREJAMIENTO',
+          message: estadoCola.error,
+          icon: '⚠️',
+        })
+      }
+      void refreshFromServer()
+    }
+  }, [screen, estadoCola.error, refreshFromServer])
+
   /**
    * Cuando el servidor empareja, se leen la semilla y los jugadores de la sala y
    * se entra a la batalla. La semilla NO la elige el cliente.
@@ -425,6 +459,9 @@ function App() {
       })
       setPartidaAsincrona(Boolean(sala.isAsyncMatch))
       setBattleMatchMode(sala.mode as 'ranked' | 'friendly' | 'colosseum' | 'tournament')
+      if (sala.mode === 'ranked' && userElo >= 1602) {
+        setPlayerEnergy((prev) => Math.max(0, prev - 1))
+      }
       if (sala.mode === 'friendly') {
         setFriendlyBet(Number((sala as any).colosseumBet) || 0)
       }
@@ -602,7 +639,28 @@ function App() {
     setModoBuscando('ranked')
     setScreen('searching')
 
-    void buscar('ranked')
+    const r = await buscar('ranked')
+    if (!r.ok) {
+      setScreen('menu')
+      if (r.error === 'sin_energia' || r.error?.includes('energía') || r.error?.includes('energia')) {
+        setActiveAppAlert({
+          title: 'ENERGÍA AGOTADA',
+          message:
+            '⚡ Has agotado tus partidas competitivas de hoy. Tu energía se recarga automáticamente a las 00:00 UTC, o puedes recargar ahora en la Tienda.',
+          icon: '⚡',
+          actionLabel: 'IR A TIENDA',
+          onAction: () => handleOpenShop('energy'),
+        })
+      } else if (r.error && r.error !== 'cancelled') {
+        setActiveAppAlert({
+          title: 'NO SE PUDO BUSCAR PARTIDA',
+          message: r.error,
+          icon: '⚠️',
+        })
+      }
+      void refreshFromServer()
+      return
+    }
   }
 
   /**
@@ -1280,13 +1338,38 @@ function App() {
               </div>
               <p className="main-menu-dialog-msg">{activeAppAlert.message}</p>
               <div className="main-menu-dialog-actions">
-                <button
-                  type="button"
-                  className="main-menu-dialog-btn"
-                  onClick={() => setActiveAppAlert(null)}
-                >
-                  ENTENDIDO
-                </button>
+                {activeAppAlert.actionLabel && activeAppAlert.onAction ? (
+                  <>
+                    <button
+                      type="button"
+                      className="main-menu-dialog-btn"
+                      onClick={() => {
+                        const cb = activeAppAlert.onAction
+                        setActiveAppAlert(null)
+                        cb?.()
+                      }}
+                      style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}
+                    >
+                      {activeAppAlert.actionLabel}
+                    </button>
+                    <button
+                      type="button"
+                      className="main-menu-dialog-btn"
+                      onClick={() => setActiveAppAlert(null)}
+                      style={{ background: 'rgba(255,255,255,0.1)' }}
+                    >
+                      CERRAR
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="main-menu-dialog-btn"
+                    onClick={() => setActiveAppAlert(null)}
+                  >
+                    ENTENDIDO
+                  </button>
+                )}
               </div>
             </div>
           </div>

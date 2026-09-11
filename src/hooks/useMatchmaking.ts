@@ -139,6 +139,17 @@ export function useMatchmaking() {
         const claimRes = await MatchmakingService.claimRankedAsyncOpponent()
         if (!vivoRef.current) return
 
+        if (claimRes.error) {
+          pararSondeo()
+          buscandoRef.current = false
+          claimingRef.current = false
+          setEstado({
+            ...ESTADO_INICIAL,
+            error: claimRes.error,
+          })
+          return
+        }
+
         if (claimRes.matched && claimRes.roomId) {
           pararSondeo()
           buscandoRef.current = false

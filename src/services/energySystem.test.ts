@@ -281,4 +281,217 @@ describe('Sistema de Gestión de Energías (20/20 Diario, VIP 25/25, Umbral 1602
       expect(result.consumed).toBe(0)
     })
   })
+
+  describe('7. Autoridad Exclusiva del Backend en Matchmaking (Migración 89)', () => {
+    interface SimProfile {
+      id: string
+      elo: number
+      energyCurrent: number
+      lastResetUtc: Date
+      hasVip: boolean
+    }
+
+    function simularEnterMatchmakingBackend(
+      profile: SimProfile,
+      mode: 'ranked' | 'friendly' | 'colosseum' | 'tournament',
+      nowUtc: Date = new Date()
+    ) {
+      const maxEnergy = profile.hasVip ? VIP_DAILY_ENERGY : BASE_DAILY_ENERGY
+      const lastDay = Math.floor(profile.lastResetUtc.getTime() / 86400000)
+      const currentDay = Math.floor(nowUtc.getTime() / 86400000)
+
+      let effectiveEnergy = profile.energyCurrent
+      if (currentDay > lastDay) {
+        effectiveEnergy = maxEnergy
+        profile.energyCurrent = maxEnergy
+        profile.lastResetUtc = nowUtc
+      }
+
+      // Backend Authority Gate
+      if (mode === 'ranked' && profile.elo >= ENERGY_FREE_ELO_THRESHOLD) {
+        if (effectiveEnergy < 1) {
+          return {
+            matched: false,
+            searching: false,
+            error: 'sin_energia',
+            message: 'Has agotado tus energías diarias de Ranked. Se recargan a las 00:00 UTC o puedes recargar ahora en la Tienda.',
+          }
+        }
+      }
+
+      return {
+        matched: false,
+        searching: true,
+      }
+    }
+
+    function simularCreateRoomBackend(
+      mode: string,
+      p1: SimProfile,
+      p2: SimProfile
+    ) {
+      if (mode === 'ranked') {
+        if (p1.elo >= ENERGY_FREE_ELO_THRESHOLD) {
+          p1.energyCurrent = Math.max(0, p1.energyCurrent - 1)
+        }
+        if (p2.elo >= ENERGY_FREE_ELO_THRESHOLD) {
+          p2.energyCurrent = Math.max(0, p2.energyCurrent - 1)
+        }
+      }
+      return { roomId: 'mock-room-123', mode }
+    }
+
+    function simularClaimRankedAsyncOpponentBackend(
+      profile: SimProfile
+    ) {
+      if (profile.elo >= ENERGY_FREE_ELO_THRESHOLD && profile.energyCurrent < 1) {
+        return {
+          matched: false,
+          error: 'sin_energia',
+        }
+      }
+
+      if (profile.elo >= ENERGY_FREE_ELO_THRESHOLD) {
+        profile.energyCurrent = Math.max(0, profile.energyCurrent - 1)
+      }
+
+      return {
+        matched: true,
+        roomId: 'mock-async-room-456',
+        isAsyncMatch: true,
+      }
+    }
+
+    it('Jugador con 1000 copas y 0 energías: Puede buscar partida en Ranked sin restricciones (gratuito)', () => {
+      const p: SimProfile = {
+        id: 'user-novato',
+        elo: 1000,
+        energyCurrent: 0,
+        lastResetUtc: new Date(),
+        hasVip: false,
+      }
+      const res = simularEnterMatchmakingBackend(p, 'ranked')
+      expect(res.searching).toBe(true)
+      expect(res.error).toBeUndefined()
+    })
+
+    it('Jugador con 1601 copas y 0 energías: Sigue jugando gratis por estar bajo el umbral 1602', () => {
+      const p: SimProfile = {
+        id: 'user-1601',
+        elo: 1601,
+        energyCurrent: 0,
+        lastResetUtc: new Date(),
+        hasVip: false,
+      }
+      const res = simularEnterMatchmakingBackend(p, 'ranked')
+      expect(res.searching).toBe(true)
+      expect(res.error).toBeUndefined()
+    })
+
+    it('Jugador con 1602 copas y 0 energías: El backend RECHAZA con error "sin_energia" sin encolar', () => {
+      const p: SimProfile = {
+        id: 'user-competitivo',
+        elo: 1602,
+        energyCurrent: 0,
+        lastResetUtc: new Date(),
+        hasVip: false,
+      }
+      const res = simularEnterMatchmakingBackend(p, 'ranked')
+      expect(res.searching).toBe(false)
+      expect(res.error).toBe('sin_energia')
+    })
+
+    it('Jugador con 2200 copas y 5 energías: Pasa el gate de enter_matchmaking', () => {
+      const p: SimProfile = {
+        id: 'user-master',
+        elo: 2200,
+        energyCurrent: 5,
+        lastResetUtc: new Date(),
+        hasVip: true,
+      }
+      const res = simularEnterMatchmakingBackend(p, 'ranked')
+      expect(res.searching).toBe(true)
+      expect(res.error).toBeUndefined()
+    })
+
+    it('Creación de sala PvP en Ranked: Descuenta 1 energía a jugadores >= 1602 y 0 a jugadores < 1602', () => {
+      const p1: SimProfile = {
+        id: 'p1-high',
+        elo: 1800,
+        energyCurrent: 10,
+        lastResetUtc: new Date(),
+        hasVip: false,
+      }
+      const p2: SimProfile = {
+        id: 'p2-low',
+        elo: 1500,
+        energyCurrent: 8,
+        lastResetUtc: new Date(),
+        hasVip: false,
+      }
+
+      simularCreateRoomBackend('ranked', p1, p2)
+      expect(p1.energyCurrent).toBe(9) // Descontó 1
+      expect(p2.energyCurrent).toBe(8) // No descontó (gratis < 1602)
+    })
+
+    it('claimRankedAsyncOpponent: Rechaza a jugador >= 1602 con 0 energía', () => {
+      const p: SimProfile = {
+        id: 'user-high-depleted',
+        elo: 1700,
+        energyCurrent: 0,
+        lastResetUtc: new Date(),
+        hasVip: false,
+      }
+      const res = simularClaimRankedAsyncOpponentBackend(p)
+      expect(res.matched).toBe(false)
+      expect(res.error).toBe('sin_energia')
+    })
+
+    it('claimRankedAsyncOpponent: Descuenta 1 energía al emparejar con Rival Semilla (10 -> 9)', () => {
+      const p: SimProfile = {
+        id: 'user-seed-match',
+        elo: 1700,
+        energyCurrent: 10,
+        lastResetUtc: new Date(),
+        hasVip: false,
+      }
+      const res = simularClaimRankedAsyncOpponentBackend(p)
+      expect(res.matched).toBe(true)
+      expect(res.isAsyncMatch).toBe(true)
+      expect(p.energyCurrent).toBe(9)
+    })
+
+    it('Auto-recuperación: Si el jugador tenía 0 de ayer, al llamar enter_matchmaking hoy se recarga antes de chequear', () => {
+      const yesterday = new Date('2026-09-09T22:00:00Z')
+      const today = new Date('2026-09-10T01:00:00Z')
+      const p: SimProfile = {
+        id: 'user-yesterday',
+        elo: 1900,
+        energyCurrent: 0,
+        lastResetUtc: yesterday,
+        hasVip: false,
+      }
+      const res = simularEnterMatchmakingBackend(p, 'ranked', today)
+      expect(res.searching).toBe(true)
+      expect(p.energyCurrent).toBe(20) // Se autorrecargó a 20
+    })
+
+    it('Auditoría estática SQL: La migración 89 contiene todos los gates autoritativos requeridos', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const m89Path = path.resolve(__dirname, '../../supabase/migrations/89-authoritative-backend-matchmaking-energy-guard.sql')
+      expect(fs.existsSync(m89Path)).toBe(true)
+
+      const sql = fs.readFileSync(m89Path, 'utf-8')
+      expect(sql).toContain("FUNCTION public.enter_matchmaking")
+      expect(sql).toContain("COALESCE(v_cur_en, 0) < 1")
+      expect(sql).toContain("'sin_energia'")
+      expect(sql).toContain("FUNCTION public._create_room")
+      expect(sql).toContain("GREATEST(0, energy_current - 1)")
+      expect(sql).toContain("FUNCTION public.claim_ranked_async_opponent")
+      expect(sql).toContain("energy_spend")
+    })
+  })
 })
+

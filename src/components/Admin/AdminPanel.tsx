@@ -147,9 +147,9 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const [seasonNumber, setSeasonNumber] = useState(1)
   const [seasonName, setSeasonName] = useState('Temporada 1: Cosecha de Gloria')
   const [seasonDurationDays, setSeasonDurationDays] = useState(30)
-  const [top1EloReward, setTop1EloReward] = useState(40000)
-  const [top2EloReward, setTop2EloReward] = useState(25000)
-  const [top3EloReward, setTop3EloReward] = useState(15000)
+  const [top1EloReward, setTop1EloReward] = useState(4000)
+  const [top2EloReward, setTop2EloReward] = useState(2500)
+  const [top3EloReward, setTop3EloReward] = useState(1500)
   const [top1ColoReward, setTop1ColoReward] = useState(50)
   const [top2ColoReward, setTop2ColoReward] = useState(25)
   const [top3ColoReward, setTop3ColoReward] = useState(10)
@@ -580,6 +580,29 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       setIsLoading(false)
     } else {
       showNotice('✅ Temporada guardada en memoria local.')
+    }
+  }
+
+  // SETTLE SEASON REWARDS (OFFICIAL $100 USD / 10,000 GEMS)
+  const handleSettleSeason = async () => {
+    if (!confirm('¿Estás seguro de finalizar la temporada actual y acreditar los $100 USD (10,000 gemas) + sobres al Top 20 del Ranking ELO?')) return
+    if (!isSupabaseConfigured()) return
+    setIsLoading(true)
+    try {
+      const { data, error } = await (supabase.rpc as any)('settle_season_rewards', {})
+      if (error) {
+        alert('Error al liquidar temporada: ' + error.message)
+      } else {
+        soundManager.playSound('victory', 0.9)
+        const summary = (data as any)?.summary || 'Premios acreditados al Top 20 exitosamente.'
+        showNotice('🏆 ' + summary)
+        alert('✅ ¡Temporada liquidada con éxito!\n' + JSON.stringify(data, null, 2))
+        loadAllData()
+      }
+    } catch (e: any) {
+      alert('Excepción al liquidar temporada: ' + e.message)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -1736,6 +1759,24 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
               >
                 💾 GUARDAR TEMPORADA Y PREMIOS EN SUPABASE
               </button>
+
+              <div style={{ marginTop: 24, padding: 14, background: 'rgba(239, 68, 68, 0.12)', border: '1.5px solid rgba(239, 68, 68, 0.4)', borderRadius: 8 }}>
+                <h4 style={{ margin: '0 0 8px 0', color: '#f87171', fontSize: '13px' }}>
+                  🏆 Zona de Cierre y Acreditación de Premios Oficiales ($100 USD / 10,000 💎)
+                </h4>
+                <p style={{ fontSize: 11.5, margin: '0 0 12px 0', opacity: 0.9, lineHeight: 1.4 }}>
+                  Acredita de forma autoritativa el 100% del pozo de 10,000 Gemas ($100 USD) + sobres a los ganadores del Ranking ELO: Top 1 (4k 💎 + Pack Legendario), Top 2 (2.5k 💎 + Pack Épico), Top 3 (1.5k 💎 + 2 Packs Comunes), Top 4 (1.2k 💎 + 2k Oro), Top 5 (800 💎 + 1k Oro), y oro a Top 6-20.
+                </p>
+                <button
+                  type="button"
+                  className="admin-submit-btn"
+                  onClick={handleSettleSeason}
+                  disabled={isLoading}
+                  style={{ background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: '#fff', fontWeight: 800 }}
+                >
+                  {isLoading ? '⏳ Procesando...' : '👑 FINALIZAR TEMPORADA Y ACREDITAR RECOMPENSAS'}
+                </button>
+              </div>
             </div>
           </div>
         )}
