@@ -944,11 +944,47 @@ export function useInventory() {
     window.addEventListener('refresh_pack_slots', handleRefreshSlots)
     window.addEventListener('refresh_reward_packs', handleRefreshRewardPacks)
     window.addEventListener('refresh_user_inventory', handleRefreshInventory)
+
+    // 1. Carga autoritativa inicial de saldo y energía al iniciar
+    void refreshBalance()
+
+    // 2. Al regresar a la pestaña del juego (por ejemplo, tras pasar medianoche)
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void refreshBalance()
+      }
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility)
+    }
+
+    // 3. Temporizador puntual a las 00:00:01 UTC exactas para recarga en vivo
+    let midnightTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleMidnightReset = () => {
+      const now = new Date()
+      const nextMidnightUtc = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+        0, 0, 1, 0
+      ))
+      const msUntilMidnight = Math.max(1000, nextMidnightUtc.getTime() - now.getTime())
+      midnightTimer = setTimeout(() => {
+        void refreshBalance()
+        scheduleMidnightReset()
+      }, msUntilMidnight)
+    }
+    scheduleMidnightReset()
+
     return () => {
       window.removeEventListener('refresh_user_balance', handleRefresh)
       window.removeEventListener('refresh_pack_slots', handleRefreshSlots)
       window.removeEventListener('refresh_reward_packs', handleRefreshRewardPacks)
       window.removeEventListener('refresh_user_inventory', handleRefreshInventory)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility)
+      }
+      if (midnightTimer) clearTimeout(midnightTimer)
     }
   }, [])
 

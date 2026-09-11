@@ -184,6 +184,7 @@ function App() {
     colosseumMaxStreak,
     resolveColosseumMatch,
     playerEnergy,
+    setPlayerEnergy,
     maxPlayerEnergy,
     buyEnergyPack,
   } = useInventory()
@@ -231,6 +232,10 @@ function App() {
 
       if (Number.isFinite(eloReal)) {
         setUserElo(eloReal)
+      }
+
+      if (balance.energy_current !== undefined) {
+        setPlayerEnergy(Number(balance.energy_current))
       }
     })
 

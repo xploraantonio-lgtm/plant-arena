@@ -112,6 +112,7 @@ export function useAuth() {
                 colosseum_current_streak: Number(b.colosseum_current_streak),
                 colosseum_max_streak: Number(b.colosseum_max_streak),
                 elo_rating: Number(b.elo_rating),
+                energy_current: b.energy_current !== undefined ? Number(b.energy_current) : (prev as any).energy_current,
               }
             : prev
         )
