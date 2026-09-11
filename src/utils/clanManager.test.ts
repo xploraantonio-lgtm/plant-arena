@@ -119,4 +119,80 @@ describe('ClanManager & Gem Valuations', () => {
     const topShare = ClanManager.claimSeasonVaultPayout(clan.id, 'GuerreroTop')
     expect(topShare).toBe(500)
   })
+
+  it('ensures newly created clans have active status and are not defeated', () => {
+    const clan = ClanManager.createClan('Nova Clanes', 'NC', '🔥', 'Clan recién creado', 'Líder Uno', 1200)
+    expect(clan.status).toBe('active')
+    expect(clan.vaultUsd).toBe(0.0)
+    expect(clan.losses).toBe(0)
+    expect(clan.wins).toBe(0)
+  })
+
+  it('updates and persists clan settings (privacy, minElo, warPermission, autoAccept)', () => {
+    const clan = ClanManager.createClan('Titan Squad', 'TS', '🛡️', 'Clan competitivo', 'Líder Titan', 1500)
+    const success = ClanManager.updateClanSettings(clan.id, {
+      privacy: 'request',
+      minElo: 1500,
+      warPermission: 'leaders',
+      autoAccept: false,
+    })
+    expect(success).toBe(true)
+
+    const updated = ClanManager.getClans().find((c) => c.id === clan.id)
+    expect(updated?.settings?.privacy).toBe('request')
+    expect(updated?.settings?.minElo).toBe(1500)
+    expect(updated?.settings?.autoAccept).toBe(false)
+  })
+
+  it('handles join requests properly when clan is set to request mode', () => {
+    const clan = ClanManager.createClan('Dragones', 'DG', '🐉', 'Clan con solicitud', 'Líder Dragón', 1600)
+    ClanManager.updateClanSettings(clan.id, {
+      privacy: 'request',
+      minElo: 1200,
+      warPermission: 'leaders',
+      autoAccept: false,
+    })
+
+    // Player with insufficient ELO is blocked
+    const lowEloRes = ClanManager.requestJoinClan(clan.id, 'Noob', 1000)
+    expect(lowEloRes.success).toBe(false)
+    expect(lowEloRes.error).toContain('copas ELO')
+
+    // Player with sufficient ELO sends a pending request
+    const reqRes = ClanManager.requestJoinClan(clan.id, 'GuerreroPro', 1400)
+    expect(reqRes.success).toBe(true)
+    expect(reqRes.joined).toBe(false)
+    expect(reqRes.requestId).toBeDefined()
+
+    // Leader views pending request
+    const requests = ClanManager.getJoinRequests(clan.id)
+    expect(requests.length).toBe(1)
+    expect(requests[0].username).toBe('GuerreroPro')
+    expect(requests[0].status).toBe('pending')
+
+    // Leader accepts request
+    const acceptRes = ClanManager.respondJoinRequest(clan.id, reqRes.requestId!, true)
+    expect(acceptRes.success).toBe(true)
+
+    // Clan now has 2 members and 200 gems in vault
+    const updatedClan = ClanManager.getClans().find((c) => c.id === clan.id)
+    expect(updatedClan?.members.length).toBe(2)
+    expect(updatedClan?.vaultUsd).toBe(200.0)
+  })
+
+  it('reactivates defeated clan as soon as vault has > 0 gems (e.g. 50 gems deposit)', () => {
+    const clan = ClanManager.createClan('Derrotados FC', 'DFC', '💀', 'Clan caído', 'Líder D', 1000)
+    // Manually simulate defeat state after war depletion
+    clan.status = 'defeated'
+    clan.vaultUsd = 0.0
+    ClanManager.saveClans([...ClanManager.getClans().filter((c) => c.id !== clan.id), clan])
+
+    // Deposit 50 gems (not requiring 500)
+    const deposited = ClanManager.depositToVault(clan.id, 50, 'MiembroFiel')
+    expect(deposited).toBe(true)
+
+    const reactivatedClan = ClanManager.getClans().find((c) => c.id === clan.id)
+    expect(reactivatedClan?.vaultUsd).toBe(50)
+    expect(reactivatedClan?.status).toBe('active')
+  })
 })

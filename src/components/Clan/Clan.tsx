@@ -88,6 +88,7 @@ export default function Clan({
   const [clanMinElo, setClanMinElo] = useState<number>(1000)
   const [clanWarPermission, setClanWarPermission] = useState<'leaders' | 'all'>('leaders')
   const [clanAutoAccept, setClanAutoAccept] = useState<boolean>(true)
+  const [pendingRequests, setPendingRequests] = useState<any[]>([])
 
   // Creation form state
   const [newClanName, setNewClanName] = useState('')
@@ -225,6 +226,7 @@ export default function Clan({
         setClanWarPermission(updated.settings.warPermission)
         setClanAutoAccept(updated.settings.autoAccept)
       }
+      setPendingRequests(ClanManager.getJoinRequests(updated.id).filter((r) => r.status === 'pending'))
     }
 
     // 2. Consulta autoritativa en Supabase (Backend)
@@ -263,6 +265,17 @@ export default function Clan({
         }
         setUserClan(clanObj)
         ClanManager.setUserClanId(clanObj.id)
+
+        if (myClanData.clan.settings) {
+          setClanPrivacy(myClanData.clan.settings.privacy || 'public')
+          setClanMinElo(typeof myClanData.clan.settings.minElo === 'number' ? myClanData.clan.settings.minElo : 0)
+          setClanWarPermission(myClanData.clan.settings.warPermission || 'leaders')
+          setClanAutoAccept(myClanData.clan.settings.autoAccept !== false)
+        }
+
+        if (myClanData.requests) {
+          setPendingRequests(myClanData.requests)
+        }
 
         if (myClanData.donations) {
           setDonationRequests(myClanData.donations.map((d: any) => ({
@@ -433,13 +446,21 @@ export default function Clan({
 
     // 2. Persistir en Backend autoritativo en Supabase
     if (ClanManager.isValidUuid(userClan.id)) {
+      // 2a. Guardar ajustes de admisión y competitivos
+      const settingsRes = await supabaseService.updateClanSettings(userClan.id, newSettings)
+      if (!settingsRes.success) {
+        showModalAlert('ERROR EN AJUSTES', settingsRes.message || settingsRes.error || 'No se pudieron guardar los ajustes del clan en el servidor.', '❌', 'error')
+        return
+      }
+
+      // 2b. Guardar distribución porcentual de ganancias
       const sharesPayload = userClan.members.map((m) => ({
         user_id: m.id,
         percentage: Number(memberRewardShares[m.id]) || 0,
       }))
       const res = await supabaseService.updateClanRewardShares(userClan.id, sharesPayload)
       if (!res.success) {
-        showModalAlert('ERROR EN SERVIDOR', res.message || res.error || 'No se pudieron guardar las cuotas en el servidor.', '❌', 'error')
+        showModalAlert('ERROR EN RECOMPENSAS', res.message || res.error || 'No se pudieron guardar las cuotas en el servidor.', '❌', 'error')
         return
       }
     }
@@ -532,6 +553,49 @@ export default function Clan({
     }
   }
 
+  // RESPOND JOIN REQUEST (Líder Acepta o Rechaza)
+  const handleRespondRequest = async (requestId: string, accept: boolean, applicantName: string) => {
+    if (!userClan || !isLeader) return
+    soundManager.playSound('click', 0.4)
+    try {
+      if (!ClanManager.isValidUuid(userClan.id)) {
+        const res = ClanManager.respondJoinRequest(userClan.id, requestId, accept)
+        if (res.success) {
+          showModalAlert(
+            accept ? '¡JUGADOR ACEPTADO!' : 'SOLICITUD RECHAZADA',
+            accept
+              ? `"${applicantName}" se ha unido al clan. Se han transferido +200 Gemas 💎 al Tesoro.`
+              : `Has rechazado la solicitud de "${applicantName}".`,
+            accept ? '🎉' : 'ℹ️',
+            accept ? 'success' : 'info'
+          )
+          await refreshClanData()
+        } else {
+          showModalAlert('ERROR', res.error || 'No se pudo procesar la solicitud.', '❌', 'error')
+        }
+        return
+      }
+
+      const res = await supabaseService.respondClanJoinRequest(requestId, accept)
+      if (!res.success) {
+        showModalAlert('ERROR', res.message || res.error || 'No se pudo procesar la solicitud en el servidor.', '❌', 'error')
+        return
+      }
+
+      showModalAlert(
+        accept ? '¡JUGADOR ACEPTADO!' : 'SOLICITUD RECHAZADA',
+        accept
+          ? `"${applicantName}" se ha unido al clan. Se han transferido +200 Gemas 💎 al Tesoro.`
+          : `Has rechazado la solicitud de "${applicantName}".`,
+        accept ? '🎉' : 'ℹ️',
+        accept ? 'success' : 'info'
+      )
+      await refreshClanData()
+    } catch (err: any) {
+      showModalAlert('ERROR', err?.message || 'Error al procesar la solicitud.', '❌', 'error')
+    }
+  }
+
   // JOIN CLAN (200 Gemas 💎)
   const handleJoinClan = (clan: ClanData) => {
     if (!ClanManager.isValidUuid(clan.id)) {
@@ -540,6 +604,10 @@ export default function Clan({
     }
     if (clan.members.length >= 15) {
       showModalAlert('CLAN LLENO', 'Este clan ya ha alcanzado el límite máximo de 15/15 miembros.', '⚠️', 'warning')
+      return
+    }
+    if (clan.settings?.privacy === 'closed') {
+      showModalAlert('CLAN CERRADO', 'Este clan tiene la admisión cerrada (solo accesible mediante invitación directa del Líder).', '🔒', 'warning')
       return
     }
     if (clan.settings?.minElo && userElo < clan.settings.minElo) {
@@ -561,13 +629,62 @@ export default function Clan({
       return
     }
 
+    const isRequestMode = clan.settings?.privacy === 'request' && clan.settings?.autoAccept === false
+
+    if (isRequestMode) {
+      showModalConfirm(
+        'SOLICITAR INGRESO AL CLAN',
+        `¿Deseas enviar una solicitud de ingreso a "${clan.name}"?\n\nTu puntaje: ${userElo} Copas ELO (Mínimo requerido: ${clan.settings?.minElo || 0}).\nEl Líder del clan revisará tu solicitud. Al ser aceptado, se transferirán 200 Gemas 💎 al Tesoro.`,
+        '📝',
+        async () => {
+          try {
+            if (!ClanManager.isValidUuid(clan.id)) {
+              const res = ClanManager.requestJoinClan(clan.id, playerName, userElo)
+              if (res.success) {
+                soundManager.playSound('plantation', 0.8)
+                showModalAlert('SOLICITUD ENVIADA', `Tu solicitud de ingreso fue enviada al Líder de "${clan.name}".`, '📨', 'success')
+                await refreshClanData()
+              } else {
+                showModalAlert('ERROR', res.error || 'No se pudo enviar la solicitud.', '⚠️', 'warning')
+              }
+              return
+            }
+
+            const res = await supabaseService.requestJoinClan(clan.id)
+            if (!res.success) {
+              if (res.error === 'REQUEST_ALREADY_PENDING') {
+                showModalAlert('SOLICITUD EN CURSO', 'Ya tienes una solicitud de ingreso pendiente en este clan.', '⏳', 'warning')
+              } else {
+                showModalAlert('ERROR AL SOLICITAR', res.message || res.error || 'No se pudo registrar la solicitud.', '❌', 'error')
+              }
+              return
+            }
+
+            soundManager.playSound('plantation', 0.8)
+            showModalAlert(
+              '¡SOLICITUD ENVIADA!',
+              `Tu solicitud de ingreso ha sido enviada al Líder de "${clan.name}".\nTe notificaremos cuando sea revisada.`,
+              '📨',
+              'success'
+            )
+            await refreshClanData()
+          } catch (err: any) {
+            showModalAlert('ERROR', err?.message || 'Error al comunicarse con el servidor.', '❌', 'error')
+          }
+        },
+        'ENVIAR SOLICITUD',
+        'CANCELAR'
+      )
+      return
+    }
+
     showModalConfirm(
       'UNIRSE AL CLAN',
       `¿Deseas pagar 200 Gemas 💎 de entrada para unirte a "${clan.name}"?\n\nEl monto se descontará de tu saldo disponible (${userGems} Gemas 💎) y se inyectará directamente al Tesoro del Clan.`,
       '⚡',
       async () => {
         try {
-          const res = await supabaseService.joinClan(clan.id)
+          const res = await supabaseService.requestJoinClan(clan.id)
           if (!res.success) {
             if (res.error === 'INSUFFICIENT_GEMS') {
               showModalAlert('SALDO INSUFICIENTE', 'Saldo insuficiente (200 Gemas 💎 requeridas).', '⚠️', 'warning')
@@ -577,8 +694,10 @@ export default function Clan({
               showModalAlert('CLAN LLENO', 'El clan ya alcanzó el máximo de 15 miembros.', '⚠️', 'warning')
             } else if (res.error === 'INSUFFICIENT_ELO') {
               showModalAlert('COPAS INSUFICIENTES', 'No cumples con las copas ELO mínimas requeridas por este clan.', '⚠️', 'warning')
+            } else if (res.error === 'CLAN_CLOSED') {
+              showModalAlert('CLAN CERRADO', 'Este clan está cerrado a nuevos ingresos.', '🔒', 'warning')
             } else {
-              showModalAlert('ERROR AL UNIRSE', res.error || 'No se pudo unir al clan.', '❌', 'error')
+              showModalAlert('ERROR AL UNIRSE', res.message || res.error || 'No se pudo unir al clan.', '❌', 'error')
             }
             return
           }
@@ -677,13 +796,13 @@ export default function Clan({
       const wasDefeated = userClan.status === 'defeated'
       const currentVaultVal = Number(userClan.vaultGems ?? userClan.vaultUsd ?? 0)
       const newVault = (res as any).vault_gems ?? (currentVaultVal + depositAmount)
-      const isNowReactivated = wasDefeated && newVault >= 500
+      const isNowReactivated = wasDefeated && newVault > 0
 
       showModalAlert(
         isNowReactivated ? '¡CLAN REACTIVADO Y DEPÓSITO EXITOSO!' : '¡DEPÓSITO EXITOSO + BONOS!',
         `¡Has aportado ${depositAmount} Gemas 💎 al Tesoro del Clan!${
           isNowReactivated
-            ? '\n\n⚡ ¡EL TESORO HA ALCANZADO LAS 500 GEMAS! El clan vuelve a estar ACTIVO y listo para participar en guerras.'
+            ? '\n\n⚡ ¡EL TESORO TIENE FONDOS NUEVAMENTE! El clan vuelve a estar ACTIVO y listo para participar en guerras y donaciones.'
             : ''
         }\n\n🎁 ¡Has recibido de regalo:\n• +${ticketsEarned} Ticket(s) de Coliseo 🎟️\n• +1 Tiro Gratis en la Ruleta de la Suerte 🎡!`,
         isNowReactivated ? '⚡' : '🎉',
@@ -699,8 +818,9 @@ export default function Clan({
   // CREATE DONATION REQUEST (1 COPY / DAY)
   const handleCreateRequest = async () => {
     if (!userClan) return
-    if (userClan.status === 'defeated') {
-      showModalAlert('CLAN EN DERROTA', 'El clan está en Estado de Derrota (Tesoro en 0 💎). El tesoro debe alcanzar al menos 500 gemas para pedir semillas.', '🛑', 'error')
+    const currentVault = Number(userClan.vaultGems ?? userClan.vaultUsd ?? 0)
+    if (userClan.status === 'defeated' && currentVault <= 0) {
+      showModalAlert('CLAN EN DERROTA', 'El clan está en Estado de Derrota (Tesoro en 0 💎). Realiza un depósito al tesoro para reactivarlo.', '🛑', 'error')
       return
     }
 
@@ -709,27 +829,33 @@ export default function Clan({
       const res = await supabaseService.requestClanPlantDonation(selectedRequestPlant)
       if (!res.success) {
         if (res.error === 'COOLDOWN_ACTIVE') {
-          showModalAlert('SOLICITUD EN CURSO', 'Ya tienes una solicitud activa hoy. Solo puedes pedir 1 vez cada 24 horas.', '⏳', 'warning')
-        } else {
-          showModalAlert('ERROR', res.error || 'No se pudo crear la solicitud en el servidor.', '❌', 'error')
+          showModalAlert('LÍMITE DIARIO', 'Solo puedes realizar una solicitud de semilla cada 24 horas.', '⏳', 'warning')
+          return
         }
+        showModalAlert('ERROR', res.error || 'No se pudo crear la solicitud.', '❌', 'error')
         return
       }
 
-      soundManager.playSound('plantation', 0.8)
-      showModalAlert('¡SOLICITUD PUBLICADA!', `¡Solicitud de ${plantInfo.name} publicada en el Clan!\nLos miembros pueden donarte hasta 3 copias.`, '🌱', 'success')
+      soundManager.playSound('click', 0.5)
+      showModalAlert(
+        '¡SOLICITUD PUBLICADA!',
+        `Has solicitado 1 copia de ${plantInfo.name}.\n¡Tus compañeros de clan podrán ayudarte!`,
+        '🌱',
+        'success'
+      )
       setShowRequestSeedModal(false)
       await refreshClanData()
     } catch (e: any) {
-      showModalAlert('ERROR', e?.message || 'Error de conexión', '❌', 'error')
+      showModalAlert('ERROR', e?.message || 'Error al procesar la solicitud.', '❌', 'error')
     }
   }
 
   // DONATE TO REQUEST (Deduct 1 copy from donor, add 1 to requester)
   const handleDonate = (req: ClanDonationRequest) => {
     if (!userClan) return
-    if (userClan.status === 'defeated') {
-      showModalAlert('CLAN EN DERROTA', 'El clan está en Estado de Derrota. El fondo del tesoro debe alcanzar al menos 500 gemas para interactuar.', '🛑', 'error')
+    const currentVault = Number(userClan.vaultGems ?? userClan.vaultUsd ?? 0)
+    if (userClan.status === 'defeated' && currentVault <= 0) {
+      showModalAlert('CLAN EN DERROTA', 'El clan está en Estado de Derrota (Tesoro en 0 💎). Realiza un depósito al tesoro para reactivarlo.', '🛑', 'error')
       return
     }
     if (req.requesterName === playerName) {
@@ -775,8 +901,9 @@ export default function Clan({
   // EXECUTE CLAN WAR RAID (500 Gemas 💎)
   const handleExecuteRaid = (defenderClan: ClanData) => {
     if (!userClan) return
-    if (userClan.status === 'defeated') {
-      showModalAlert('CLAN EN DERROTA', 'Tu clan está en Estado de Derrota. El fondo del tesoro debe alcanzar al menos 500 gemas para participar en guerras.', '🛑', 'error')
+    const currentVault = Number(userClan.vaultGems ?? userClan.vaultUsd ?? 0)
+    if (userClan.status === 'defeated' && currentVault <= 0) {
+      showModalAlert('CLAN EN DERROTA', 'Tu clan está en Estado de Derrota (Tesoro en 0 💎). Realiza un depósito al tesoro para reactivarlo.', '🛑', 'error')
       return
     }
 
@@ -937,7 +1064,9 @@ export default function Clan({
         {noClanTab === 'browse' && (() => {
           const selectedClan = allClans.find((c) => c.id === selectedBrowseClanId) || allClans[0]
           const isSelectedFull = selectedClan ? selectedClan.members.length >= 15 : false
-          const isSelectedDefeated = selectedClan ? selectedClan.status === 'defeated' || (selectedClan.vaultGems ?? selectedClan.vaultUsd) <= 0 : false
+          const isSelectedDefeated = selectedClan
+            ? selectedClan.status === 'defeated' && (selectedClan.vaultGems ?? selectedClan.vaultUsd ?? 0) <= 0
+            : false
           const avgElo = selectedClan
             ? Math.round(selectedClan.members.reduce((acc, m) => acc + m.elo, 0) / Math.max(1, selectedClan.members.length))
             : 0
@@ -956,6 +1085,7 @@ export default function Clan({
                     const isFull = clan.members.length >= 15
                     const isSelected = selectedClan?.id === clan.id
                     const currentVault = clan.vaultGems ?? clan.vaultUsd
+                    const isClanDefeated = clan.status === 'defeated' && Number(currentVault ?? 0) <= 0
 
                     return (
                       <button
@@ -979,8 +1109,14 @@ export default function Clan({
                           </div>
                         </div>
                         <div className="clan-sidebar-item__status">
-                          {isFull ? (
+                          {isClanDefeated ? (
+                            <span className="clan-pill--defeated">DERROTA</span>
+                          ) : isFull ? (
                             <span className="clan-pill--full">LLENO</span>
+                          ) : clan.settings?.privacy === 'closed' ? (
+                            <span className="clan-pill--closed">CERRADO</span>
+                          ) : clan.settings?.privacy === 'request' ? (
+                            <span className="clan-pill--request">SOLICITUD</span>
                           ) : (
                             <span className="clan-pill--open">ABIERTO</span>
                           )}
@@ -1004,12 +1140,21 @@ export default function Clan({
                         <div className="clan-showcase-title-row">
                           <h3>{selectedClan.name}</h3>
                           <span className="clan-showcase-tag">{selectedClan.tag}</span>
-                          {isSelectedFull ? (
-                            <span className="clan-pill--full">🔒 LLENO (15/15)</span>
-                          ) : isSelectedDefeated ? (
+                          {isSelectedDefeated ? (
                             <span className="clan-defeat-pill">🛑 EN DERROTA</span>
+                          ) : isSelectedFull ? (
+                            <span className="clan-pill--full">🔒 LLENO (15/15)</span>
+                          ) : selectedClan.settings?.privacy === 'closed' ? (
+                            <span className="clan-pill--closed">🔒 CERRADO</span>
+                          ) : selectedClan.settings?.privacy === 'request' ? (
+                            <span className="clan-pill--request">
+                              🟡 CON SOLICITUD {selectedClan.settings?.autoAccept ? '(INMEDIATA)' : ''}
+                            </span>
                           ) : (
                             <span className="clan-pill--open">🟢 ABIERTO (200 💎)</span>
+                          )}
+                          {Boolean(selectedClan.settings?.minElo && selectedClan.settings.minElo > 0) && (
+                            <span className="clan-min-elo-pill">🏆 ELO {selectedClan.settings?.minElo}+</span>
                           )}
                         </div>
                         <p className="clan-showcase-desc">{selectedClan.description || 'Clan competitivo enfocado en guerras y donaciones de semillas.'}</p>
@@ -1077,13 +1222,33 @@ export default function Clan({
 
                     {/* Bottom Action Area */}
                     <div className="clan-showcase-action-bar">
-                      {isSelectedFull ? (
+                      {isSelectedDefeated ? (
+                        <button type="button" disabled className="clan-showcase-btn clan-showcase-btn--defeated">
+                          🛑 CLAN EN ESTADO DE DERROTA
+                        </button>
+                      ) : isSelectedFull ? (
                         <button type="button" disabled className="clan-showcase-btn clan-showcase-btn--full">
                           🔒 CLAN COMPLETO (15/15 MIEMBROS)
                         </button>
-                      ) : isSelectedDefeated ? (
-                        <button type="button" disabled className="clan-showcase-btn clan-showcase-btn--defeated">
-                          🛑 CLAN EN ESTADO DE DERROTA (0 💎 Gemas)
+                      ) : selectedClan.settings?.privacy === 'closed' ? (
+                        <button type="button" disabled className="clan-showcase-btn clan-showcase-btn--closed">
+                          🔒 CLAN CERRADO (SOLO INVITACIÓN)
+                        </button>
+                      ) : selectedClan.settings?.privacy === 'request' && !selectedClan.settings?.autoAccept ? (
+                        <button
+                          type="button"
+                          className="clan-showcase-btn clan-showcase-btn--request"
+                          onClick={() => handleJoinClan(selectedClan)}
+                        >
+                          📝 SOLICITAR INGRESO A {selectedClan.name.toUpperCase()} (200 💎)
+                        </button>
+                      ) : selectedClan.settings?.privacy === 'request' && selectedClan.settings?.autoAccept ? (
+                        <button
+                          type="button"
+                          className="clan-showcase-btn clan-showcase-btn--join"
+                          onClick={() => handleJoinClan(selectedClan)}
+                        >
+                          ⚡ UNIRSE A {selectedClan.name.toUpperCase()} (APROBACIÓN INMEDIATA - 200 💎)
                         </button>
                       ) : (
                         <button
@@ -1192,7 +1357,7 @@ export default function Clan({
 
   // ACTIVE CLAN VIEW
   const currentVaultGems = Number(userClan.vaultGems ?? userClan.vaultUsd ?? 0)
-  const isDefeated = userClan.status === 'defeated' && currentVaultGems < 500
+  const isDefeated = userClan.status === 'defeated' && currentVaultGems <= 0
   const isShielded = userClan.shieldUntil && userClan.shieldUntil > Date.now()
   const shieldHours = isShielded ? Math.ceil((userClan.shieldUntil! - Date.now()) / 3600000) : 0
 
@@ -1259,17 +1424,14 @@ export default function Clan({
         </div>
       </div>
 
-      {/* Defeat State Banner (Requires 500 gems to reactivate) */}
+      {/* Defeat State Banner */}
       {isDefeated && (
         <div className="clan-defeat-banner">
           <span className="clan-defeat-banner-icon">🛑</span>
           <div className="clan-defeat-banner-content">
-            <strong>CLAN EN ESTADO DE DERROTA (TESORO EN CERO)</strong>
+            <strong>CLAN EN ESTADO DE DERROTA (TESORO EN CERO 💎)</strong>
             <p>
-              Para reactivar las funciones del clan y participar en guerras, el fondo del tesoro debe alcanzar un mínimo de <strong>500 Gemas 💎</strong>.
-              <br />
-              Tesoro actual: <strong>{currentVaultGems.toFixed(0)} / 500 💎</strong> (Faltan {Math.max(0, 500 - currentVaultGems).toFixed(0)} 💎).
-              Cualquier miembro puede colaborar donando 50 o 100 gemas hasta reactivar el clan.
+              El fondo del tesoro ha llegado a 0 gemas tras una guerra. Para reactivar las funciones del clan y participar en guerras, cualquier miembro puede aportar gemas (incluso 50 💎) para devolver el clan inmediatamente al estado ACTIVO.
             </p>
           </div>
           <button
@@ -1320,6 +1482,50 @@ export default function Clan({
       {/* TAB 1: MEMBERS */}
       {activeTab === 'members' && (
         <div className="clan-members-pane">
+          {/* Solicitudes de ingreso pendientes (Solo Líder) */}
+          {isLeader && pendingRequests.length > 0 && (
+            <div className="clan-pending-requests-card">
+              <div className="clan-pending-requests-card__header">
+                <div className="clan-pending-requests-card__title">
+                  <span className="clan-pending-requests-card__icon">📬</span>
+                  <strong>SOLICITUDES DE INGRESO PENDIENTES ({pendingRequests.length})</strong>
+                </div>
+                <small>Jugadores esperando tu aprobación para ingresar al Clan</small>
+              </div>
+              <div className="clan-pending-requests-list">
+                {pendingRequests.map((req) => (
+                  <div key={req.id} className="clan-pending-request-row">
+                    <div className="clan-pending-request-info">
+                      <span className="clan-pending-request-avatar">🌱</span>
+                      <div>
+                        <strong className="clan-pending-request-name">{req.username}</strong>
+                        <span className="clan-pending-request-meta">🏆 {req.elo} Copas ELO</span>
+                      </div>
+                    </div>
+                    <div className="clan-pending-request-actions">
+                      <button
+                        type="button"
+                        className="clan-req-action-btn clan-req-action-btn--accept"
+                        onClick={() => handleRespondRequest(req.id, true, req.username)}
+                        title="Aceptar e incorporar al clan (+200 💎 al Tesoro)"
+                      >
+                        ✓ ACEPTAR (+200 💎)
+                      </button>
+                      <button
+                        type="button"
+                        className="clan-req-action-btn clan-req-action-btn--reject"
+                        onClick={() => handleRespondRequest(req.id, false, req.username)}
+                        title="Rechazar solicitud"
+                      >
+                        ✕ RECHAZAR
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="clan-members-table-wrap">
             <table className="clan-members-table">
               <thead>
@@ -1443,7 +1649,7 @@ export default function Clan({
 
           if (rivalFilter === 'vulnerable') {
             const isShielded = rival.shieldUntil && rival.shieldUntil > Date.now()
-            const isDefeatedRival = rival.status === 'defeated' || (rival.vaultGems ?? rival.vaultUsd) <= 0
+            const isDefeatedRival = rival.status === 'defeated' && Number(rival.vaultGems ?? rival.vaultUsd ?? 0) <= 0
             return !isShielded && !isDefeatedRival
           }
           if (rivalFilter === 'topVault') {
@@ -1571,7 +1777,7 @@ export default function Clan({
                     </div>
                   ) : (
                     filteredRivals.map((rival) => {
-                      const rivalDefeated = rival.status === 'defeated' || (rival.vaultGems ?? rival.vaultUsd) <= 0
+                      const rivalDefeated = rival.status === 'defeated' && Number(rival.vaultGems ?? rival.vaultUsd ?? 0) <= 0
                       const rivalShielded = rival.shieldUntil && rival.shieldUntil > Date.now()
                       const rivalShieldHours = rivalShielded ? Math.ceil((rival.shieldUntil! - Date.now()) / 3600000) : 0
 

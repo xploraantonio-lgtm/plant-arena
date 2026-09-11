@@ -1614,6 +1614,71 @@ export const SupabaseService = {
     }
   },
 
+  async updateClanSettings(
+    clanId: string,
+    settings: any
+  ): Promise<{ success: boolean; error?: string; message?: string; settings?: any }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('update_clan_settings', {
+        p_clan_id: clanId,
+        p_settings: settings,
+      })
+      if (error) {
+        logError('updateClanSettings', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; error?: string; message?: string; settings?: any }
+    } catch (e: any) {
+      logError('updateClanSettings', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async requestJoinClan(
+    clanId: string
+  ): Promise<{ success: boolean; joined?: boolean; clan_id?: string; request_id?: string; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    const isUuid = !!clanId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clanId)
+    if (!isUuid) {
+      return { success: false, error: 'ID de clan inválido' }
+    }
+    try {
+      const { data, error } = await (supabase.rpc as any)('request_join_clan', {
+        p_clan_id: clanId,
+      })
+      if (error) {
+        logError('requestJoinClan', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; joined?: boolean; clan_id?: string; request_id?: string; error?: string; message?: string }
+    } catch (e: any) {
+      logError('requestJoinClan', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  async respondClanJoinRequest(
+    requestId: string,
+    accept: boolean
+  ): Promise<{ success: boolean; accepted?: boolean; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('respond_clan_join_request', {
+        p_request_id: requestId,
+        p_accept: accept,
+      })
+      if (error) {
+        logError('respondClanJoinRequest', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; accepted?: boolean; error?: string; message?: string }
+    } catch (e: any) {
+      logError('respondClanJoinRequest', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
   async getClansList(): Promise<any[]> {
     if (!isSupabaseConfigured()) return []
     try {
@@ -1629,7 +1694,7 @@ export const SupabaseService = {
     }
   },
 
-  async getMyClanDetails(): Promise<{ clan?: any; members?: any[]; donations?: any[]; deposits?: any[] } | null> {
+  async getMyClanDetails(): Promise<{ clan?: any; members?: any[]; donations?: any[]; deposits?: any[]; requests?: any[] } | null> {
     if (!isSupabaseConfigured()) return null
     try {
       const { data, error } = await (supabase.rpc as any)('get_my_clan_details')

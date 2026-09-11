@@ -63,6 +63,16 @@ export interface ClanWarLog {
   isRevenge?: boolean
 }
 
+export interface ClanJoinRequest {
+  id: string
+  clanId: string
+  userId: string
+  username: string
+  elo: number
+  status: 'pending' | 'accepted' | 'rejected'
+  createdAt: number
+}
+
 export interface ClanData {
   id: string
   name: string
@@ -73,7 +83,7 @@ export interface ClanData {
   members: ClanMember[]
   vaultUsd: number
   vaultGems?: number
-  status: 'active' | 'defeated' // Defeated if vault <= 0
+  status: 'active' | 'defeated' // Active by default, Defeated only if depleted in war
   shieldUntil?: number // 24h shield timestamp
   wins: number
   losses: number
@@ -91,6 +101,7 @@ const STORAGE_KEYS = {
   WAR_LOGS: 'plant_arena_clan_war_logs',
   ACCOUNT_CLAIMED_FULL_BONUS: 'plant_arena_account_claimed_clan_full_bonus',
   VAULT_DEPOSITS: 'plant_arena_clan_vault_deposits',
+  JOIN_REQUESTS: 'plant_arena_clan_join_requests',
 }
 
 export class ClanManager {
@@ -549,8 +560,8 @@ export class ClanManager {
     const attacker = clans.find((c) => c.id === attackerClanId)
     const defender = clans.find((c) => c.id === defenderClanId)
     if (!attacker || !defender) return { success: false, winnerClan: attacker!, loserClan: defender!, stolenAmount: 0, error: 'Clan no encontrado.' }
-    if (attacker.status === 'defeated') return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'Tu clan está en Estado de Derrota. El fondo del tesoro debe alcanzar al menos 500 gemas para participar en guerras.' }
-    if (defender.status === 'defeated') return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'El clan rival está en Estado de Derrota (0 gemas en tesoro).' }
+    if (attacker.status === 'defeated' && (attacker.vaultGems ?? attacker.vaultUsd ?? 0) <= 0) return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'Tu clan está en Estado de Derrota (0 💎). Realiza un depósito al tesoro para reactivarlo.' }
+    if (defender.status === 'defeated' && (defender.vaultGems ?? defender.vaultUsd ?? 0) <= 0) return { success: false, winnerClan: attacker, loserClan: defender, stolenAmount: 0, error: 'El clan rival está en Estado de Derrota (0 gemas en tesoro).' }
 
     // Check 24h shield on defender
     if (defender.shieldUntil && defender.shieldUntil > Date.now()) {
@@ -794,5 +805,115 @@ export class ClanManager {
     })
     this.saveClans(clans)
     return true
+  }
+
+  /**
+   * Get all pending join requests for a clan
+   */
+  static getJoinRequests(clanId: string): ClanJoinRequest[] {
+    const saved = localStorage.getItem(STORAGE_KEYS.JOIN_REQUESTS)
+    if (!saved) return []
+    try {
+      const all: Record<string, ClanJoinRequest[]> = JSON.parse(saved)
+      return all[clanId] || []
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Request to join clan (handles public, request, closed, autoAccept)
+   */
+  static requestJoinClan(
+    clanId: string,
+    playerName: string,
+    playerElo: number
+  ): { success: boolean; joined?: boolean; requestId?: string; error?: string } {
+    const clans = this.getClans()
+    const clan = clans.find((c) => c.id === clanId)
+    if (!clan) return { success: false, error: 'Clan no encontrado.' }
+    if (clan.members.length >= 15) return { success: false, error: 'El clan ya alcanzó el máximo de 15 miembros.' }
+
+    const privacy = clan.settings?.privacy || 'public'
+    const autoAccept = clan.settings?.autoAccept ?? true
+    const minElo = clan.settings?.minElo ?? 0
+
+    if (privacy === 'closed') {
+      return { success: false, error: 'Este clan tiene la admisión cerrada (solo por invitación).' }
+    }
+
+    if (playerElo < minElo) {
+      return { success: false, error: `Se requiere un mínimo de ${minElo} copas ELO para este clan.` }
+    }
+
+    // Direct join if public or autoAccept is on
+    if (privacy === 'public' || autoAccept) {
+      const joined = this.joinClan(clanId, playerName, playerElo)
+      return { success: joined, joined: true }
+    }
+
+    // Otherwise record pending join request
+    const saved = localStorage.getItem(STORAGE_KEYS.JOIN_REQUESTS)
+    let all: Record<string, ClanJoinRequest[]> = {}
+    if (saved) {
+      try {
+        all = JSON.parse(saved)
+      } catch {}
+    }
+    if (!all[clanId]) all[clanId] = []
+
+    const alreadyPending = all[clanId].some((r) => r.username === playerName && r.status === 'pending')
+    if (alreadyPending) {
+      return { success: false, error: 'Ya tienes una solicitud pendiente en este clan.' }
+    }
+
+    const newReq: ClanJoinRequest = {
+      id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      clanId,
+      userId: `user-${playerName}`,
+      username: playerName,
+      elo: playerElo,
+      status: 'pending',
+      createdAt: Date.now(),
+    }
+    all[clanId].unshift(newReq)
+    localStorage.setItem(STORAGE_KEYS.JOIN_REQUESTS, JSON.stringify(all))
+    return { success: true, joined: false, requestId: newReq.id }
+  }
+
+  /**
+   * Respond to a join request (accept or reject by leader)
+   */
+  static respondJoinRequest(
+    clanId: string,
+    requestId: string,
+    accept: boolean
+  ): { success: boolean; error?: string } {
+    const saved = localStorage.getItem(STORAGE_KEYS.JOIN_REQUESTS)
+    if (!saved) return { success: false, error: 'Solicitud no encontrada.' }
+    let all: Record<string, ClanJoinRequest[]> = {}
+    try {
+      all = JSON.parse(saved)
+    } catch {
+      return { success: false, error: 'Error al leer solicitudes.' }
+    }
+    const list = all[clanId] || []
+    const req = list.find((r) => r.id === requestId)
+    if (!req) return { success: false, error: 'Solicitud no encontrada.' }
+    if (req.status !== 'pending') return { success: false, error: 'La solicitud ya fue resuelta.' }
+
+    if (!accept) {
+      req.status = 'rejected'
+      localStorage.setItem(STORAGE_KEYS.JOIN_REQUESTS, JSON.stringify(all))
+      return { success: true }
+    }
+
+    // If accepted, add player to clan
+    const joined = this.joinClan(clanId, req.username, req.elo)
+    if (!joined) return { success: false, error: 'El clan está lleno o no se pudo unir al jugador.' }
+
+    req.status = 'accepted'
+    localStorage.setItem(STORAGE_KEYS.JOIN_REQUESTS, JSON.stringify(all))
+    return { success: true }
   }
 }
