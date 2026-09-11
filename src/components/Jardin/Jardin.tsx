@@ -50,7 +50,7 @@ interface JardinProps {
   plantStatRolls?: Partial<Record<PlantId, PlantStatKey[]>>
   plantInstances?: PlantCardInstance[]
   onUpdateDeck: (newDeck: PlantId[], instanceIds?: string[]) => void
-  onBack: () => void
+  onBack: (instanceIds?: string[]) => void
   onPlay: (instanceIds?: string[]) => void | Promise<void>
   onOpenCollection: () => void
   onOpenShop: () => void
@@ -403,13 +403,37 @@ export default function Jardin({
     await onPlay(deckInstanceIds)
   }
 
+  const handleBack = () => {
+    const currentPlantIds = deckInstanceIds
+      .map(
+        (id) =>
+          displayedCards.find((c) => c.instanceId === id)?.plantId
+      )
+      .filter(Boolean) as PlantId[]
+
+    if (currentPlantIds.length >= 3 && currentPlantIds.length <= 6) {
+      onUpdateDeck(currentPlantIds, deckInstanceIds)
+      try {
+        localStorage.setItem(
+          'plant_arena_active_deck',
+          JSON.stringify(currentPlantIds)
+        )
+        localStorage.setItem(
+          'plant_arena_active_deck_instances',
+          JSON.stringify(deckInstanceIds)
+        )
+      } catch {}
+    }
+    onBack(deckInstanceIds)
+  }
+
   return (
     <div
       className="jardin-screen"
       style={{ backgroundImage: `url(${background})` }}
     >
       <div className="jardin-header">
-        <button type="button" className="jardin-back-btn" onClick={onBack}>
+        <button type="button" className="jardin-back-btn" onClick={handleBack}>
           ⬅ VOLVER AL MENÚ
         </button>
         <div className="jardin-header__center">

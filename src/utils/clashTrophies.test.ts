@@ -116,8 +116,8 @@ describe('Sistema de Copas Ranked estilo Clash Royale', () => {
       expect(arenaNueva.id).toBe(2)
       expect(arenaNueva.name).toContain('Desierto Nocturno')
 
-      // Una vez en Arena 2, el nuevo piso es 1600
-      expect(getTrophyGateForElo(eloNuevo)).toBe(1600)
+      // En Plant Arena se permite descenso entre arenas; el único piso absoluto es 0
+      expect(getTrophyGateForElo(eloNuevo)).toBe(0)
     })
   })
 })

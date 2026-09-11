@@ -657,6 +657,13 @@ function App() {
     return true
   }
 
+  const handleBackFromJardin = (instanceIds?: string[]) => {
+    if (instanceIds && instanceIds.length >= 3 && instanceIds.length <= 6) {
+      void guardarMazoAntesDeBuscar(instanceIds)
+    }
+    setScreen('menu')
+  }
+
   const handlePlayNormal = async (
     instanceIdsOverride?: string[]
   ) => {
@@ -1129,7 +1136,7 @@ function App() {
             plantStatRolls={plantStatRolls}
             plantInstances={plantInstances}
             onUpdateDeck={updateActiveDeck}
-            onBack={() => setScreen('menu')}
+            onBack={handleBackFromJardin}
             onPlay={handlePlayNormal}
             onOpenCollection={handleOpenCollection}
             onOpenShop={handleOpenShop}

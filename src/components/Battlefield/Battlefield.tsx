@@ -33,6 +33,7 @@ import { TICK_MS } from '../../engine/time'
 import { soundManager } from '../../utils/audioManager'
 import { toggleFullscreen } from '../../utils/fullscreen'
 import { resolverLiquidacionPartida } from '../../engine/asyncOpponent'
+import { leerMazo } from '../../engine/mazoDeLaSala'
 import { StrategicPlaytestPostMatch } from '../StrategicPlaytest/StrategicPlaytestPostMatch'
 import type { StrategicPlaytestConfig } from '../../engine/strategicPlaytest'
 import { recordPlantPlacement } from '../../utils/plantUsageTracker'
@@ -424,11 +425,20 @@ export default function Battlefield({
     if (matchMode === 'tournament' && tournamentDeck && tournamentDeck.length > 0) {
       return tournamentDeck
     }
+    const mazoMioParsed = leerMazo(mazosDeLaSala?.mio)
+    if (mazoMioParsed && mazoMioParsed.length >= 3) {
+      const roomDeck = mazoMioParsed
+        .map((c) => c.plantId as PlantId)
+        .filter((id) => id in PLANT_CONFIGS)
+      if (roomDeck.length >= 3) {
+        return roomDeck
+      }
+    }
     if (activeDeck && activeDeck.length > 0) {
       return activeDeck
     }
     return allCatalogCards.slice(0, 6)
-  }, [matchMode, tournamentDeck, activeDeck, allCatalogCards])
+  }, [matchMode, tournamentDeck, mazosDeLaSala, activeDeck, allCatalogCards])
 
   // ── EL REGISTRO DE ACCIONES ────────────────────────────────────────────────
   //
