@@ -638,6 +638,25 @@
   line-height: 1.3;
 }
 
+.market-deck-warning--danger {
+  background: rgba(220, 38, 38, 0.35);
+  border-color: #ef4444;
+  color: #fecaca;
+  font-weight: 800;
+}
+
+.market-plant-notice-box {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: #a7f3d0;
+  font-size: 9.5px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  text-align: center;
+  line-height: 1.35;
+  margin: 4px 0;
+}
+
 /* STEPPER AND PRICE CONTROLS */
 .market-price-input-group {
   width: 100%;

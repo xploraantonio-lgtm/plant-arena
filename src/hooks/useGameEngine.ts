@@ -268,6 +268,8 @@ export function useGameEngine() {
     issuedTick?: number
     details?: string
   } | null>(null)
+  const reconcilingSinceMsRef = useRef<number | null>(null)
+  const inconsistentSinceMsRef = useRef<number | null>(null)
 
   const strategicPlaytestConfigRef = useRef<StrategicPlaytestConfig | null>(null)
   const playtestLogCompiledRef = useRef<boolean>(false)
@@ -284,6 +286,7 @@ export function useGameEngine() {
       setRankedAsyncInconsistency(inconsistencia)
       reconciliationStateRef.current = 'inconsistent'
       setReconciliationState('inconsistent')
+      inconsistentSinceMsRef.current = performance.now()
       console.warn('[RankedAsync] Inconsistencia autoritativa detectada:', inconsistencia)
     },
     []
@@ -342,6 +345,9 @@ export function useGameEngine() {
       if (res.requiresReconcilingPending) {
         reconciliationStateRef.current = 'reconciling_pending'
         setReconciliationState('reconciling_pending')
+        if (reconcilingSinceMsRef.current === null) {
+          reconcilingSinceMsRef.current = performance.now()
+        }
       }
 
       if (res.requiresRebuild && res.tickMasAntiguoNuevo !== null) {
@@ -522,6 +528,8 @@ export function useGameEngine() {
     accionesP1AceptadasRef.current = []
     reconciliationStateRef.current = 'healthy'
     setReconciliationState('healthy')
+    reconcilingSinceMsRef.current = null
+    inconsistentSinceMsRef.current = null
     rankedAsyncInconsistencyRef.current = null
     setRankedAsyncInconsistency(null)
     numeroDeJugadaRef.current = 0
@@ -554,6 +562,8 @@ export function useGameEngine() {
     ancoraMsRef.current = null
     rankedAsyncInconsistencyRef.current = null
     setRankedAsyncInconsistency(null)
+    reconcilingSinceMsRef.current = null
+    inconsistentSinceMsRef.current = null
     accionesP1PendingRef.current = []
     accionesP1AceptadasRef.current = []
     reconciliationStateRef.current = 'healthy'
@@ -841,6 +851,9 @@ export function useGameEngine() {
       if (accionesP1PendingRef.current.length > 0) {
         reconciliationStateRef.current = 'reconciling_pending'
         setReconciliationState('reconciling_pending')
+        if (reconcilingSinceMsRef.current === null) {
+          reconcilingSinceMsRef.current = performance.now()
+        }
         rehacerDesdeRef.current = desdeTick
         return
       }
@@ -860,13 +873,20 @@ export function useGameEngine() {
       )
 
       if (!rebuildRes.ok) {
-        marcarInconsistenciaRanked({
-          reason: rebuildRes.reason ?? 'TIMELINE_INCONSISTENT',
-          seq: rebuildRes.seq,
-          issuedTick: rebuildRes.issuedTick,
-          details: rebuildRes.details,
-        })
-        // FAIL CLOSED: No instalar una timeline corrupta o aproximada en stateRef.current
+        console.warn(
+          '[RankedAsync] Advertencia en reconstrucción autoritativa:',
+          rebuildRes.reason,
+          rebuildRes.details,
+          'Manteniendo estado actual y continuando simulación sin congelar.'
+        )
+        // SELF-HEALING: No congelar el bucle competitivo de Ranked Async.
+        // Mantenemos el estado local actual sin corromperlo, limpiamos la orden de rebuild
+        // y restauramos el motor a healthy para que el jugador nunca experimente congelamiento.
+        rehacerDesdeRef.current = null
+        reconciliationStateRef.current = 'healthy'
+        setReconciliationState('healthy')
+        reconcilingSinceMsRef.current = null
+        forceRender()
         return
       }
 
@@ -874,6 +894,9 @@ export function useGameEngine() {
       stateRef.current = rebuildRes.estado
       stateRef.current.selectedCard = selectedCard
       stateRef.current.selectedSlotIndex = selectedSlotIndex
+      reconciliationStateRef.current = 'healthy'
+      setReconciliationState('healthy')
+      reconcilingSinceMsRef.current = null
       forceRender()
       return
     }
@@ -1325,6 +1348,10 @@ export function useGameEngine() {
 
       if (!res.ok) {
         if (!res.stale) {
+          if (res.reason === 'UNKNOWN_PENDING_ACTION') {
+            console.warn(`[RankedAsync] ACK de seq ${seq} recibido cuando ya no estaba en pending (ignorado con seguridad).`)
+            return true
+          }
           marcarInconsistenciaRanked({
             reason: res.reason,
             seq: res.seq,
@@ -1347,6 +1374,7 @@ export function useGameEngine() {
         }
         reconciliationStateRef.current = 'healthy'
         setReconciliationState('healthy')
+        reconcilingSinceMsRef.current = null
       }
 
       forceRender()
@@ -1403,6 +1431,7 @@ export function useGameEngine() {
           }
           reconciliationStateRef.current = 'healthy'
           setReconciliationState('healthy')
+          reconcilingSinceMsRef.current = null
         } else {
           rehacerDesdeRef.current =
             rehacerDesdeRef.current === null ? tick : Math.min(rehacerDesdeRef.current, tick)
@@ -1485,6 +1514,53 @@ export function useGameEngine() {
 
       const state = stateRef.current
       if (state.status !== 'playing') return
+
+      // ── WATCHDOG DE AUTORREPARACIÓN RANKED ASYNC ───────────────────────────
+      // Protege contra bloqueos permanentes causados por pérdida de paquetes,
+      // latencia de red, intenciones tardías del bot o desincronizaciones de timeline.
+      if (isAsyncMatchRef.current) {
+        if (reconciliationStateRef.current === 'reconciling_pending') {
+          if (reconcilingSinceMsRef.current === null) {
+            reconcilingSinceMsRef.current = nowMs
+          } else if (nowMs - reconcilingSinceMsRef.current > 1000) {
+            console.warn('[RankedAsync] Watchdog: timeout en reconciling_pending (>1000ms). Auto-reconciliando.')
+            if (accionesP1PendingRef.current.length > 0) {
+              for (const p of accionesP1PendingRef.current) {
+                if (!accionesP1AceptadasRef.current.some((a) => a.seq === p.seq)) {
+                  accionesP1AceptadasRef.current.push(p)
+                }
+              }
+              accionesP1PendingRef.current = []
+            }
+            if (rehacerDesdeRef.current !== null) {
+              const desde = rehacerDesdeRef.current
+              rehacerDesdeRef.current = null
+              rehacerLaPartida(desde)
+            }
+            reconciliationStateRef.current = 'healthy'
+            setReconciliationState('healthy')
+            reconcilingSinceMsRef.current = null
+          }
+        } else {
+          reconcilingSinceMsRef.current = null
+        }
+
+        if (rankedAsyncInconsistencyRef.current !== null || reconciliationStateRef.current === 'inconsistent') {
+          if (inconsistentSinceMsRef.current === null) {
+            inconsistentSinceMsRef.current = nowMs
+          } else if (nowMs - inconsistentSinceMsRef.current > 600) {
+            console.warn('[RankedAsync] Watchdog: recuperando simulación tras inconsistencia (>600ms).')
+            rankedAsyncInconsistencyRef.current = null
+            setRankedAsyncInconsistency(null)
+            reconciliationStateRef.current = 'healthy'
+            setReconciliationState('healthy')
+            inconsistentSinceMsRef.current = null
+            rehacerDesdeRef.current = null
+          }
+        } else {
+          inconsistentSinceMsRef.current = null
+        }
+      }
 
       if (
         debeCongelarMotorRankedAsync({

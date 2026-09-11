@@ -1030,11 +1030,43 @@ export function useInventory() {
     // El mazo activo sale de is_in_deck / deck_slot, no de una lista aparte que
     // podía desincronizarse del inventario real.
     const enDeck = inv.instances
-      .filter((i) => i.isInDeck)
+      .filter((i) => i.isInDeck && !i.isListed)
       .sort((a, b) => (a.deckSlot ?? 99) - (b.deckSlot ?? 99))
-    if (enDeck.length > 0) {
+    if (enDeck.length >= 3) {
       setActiveDeckInstances(enDeck.map((i) => i.instanceId))
       setActiveDeck(enDeck.map((i) => i.plantId as PlantId))
+    } else {
+      // Auto-reparación preventiva si el mazo en DB tiene menos de 3 cartas (ej. tras vender/cancelar en mercado)
+      const disponibles = inv.instances.filter((i) => !i.isListed)
+      if (disponibles.length >= 3) {
+        const autoEquipadas: typeof disponibles = []
+        const plantIdsSeen = new Set<string>()
+        for (const inst of disponibles) {
+          if (!plantIdsSeen.has(inst.plantId)) {
+            plantIdsSeen.add(inst.plantId)
+            autoEquipadas.push(inst)
+            if (autoEquipadas.length === 4) break
+          }
+        }
+        if (autoEquipadas.length < 3) {
+          for (const inst of disponibles) {
+            if (!autoEquipadas.some((a) => a.instanceId === inst.instanceId)) {
+              autoEquipadas.push(inst)
+              if (autoEquipadas.length === 3) break
+            }
+          }
+        }
+        const instIds = autoEquipadas.map((i) => i.instanceId)
+        const pIds = autoEquipadas.map((i) => i.plantId as PlantId)
+        setActiveDeckInstances(instIds)
+        setActiveDeck(pIds)
+        void supabaseService.saveActiveDeck(instIds).catch((err: unknown) => {
+          console.warn('[useInventory] Error en auto-heal saveActiveDeck:', err)
+        })
+      } else if (enDeck.length > 0) {
+        setActiveDeckInstances(enDeck.map((i) => i.instanceId))
+        setActiveDeck(enDeck.map((i) => i.plantId as PlantId))
+      }
     }
   }
 

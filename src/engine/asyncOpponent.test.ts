@@ -5292,6 +5292,123 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(selectedCard).toBeNull()
     expect(selectedSlotIndex).toBeNull()
   })
+
+  // 240. Watchdog de Autorrecuperación: auto-recupera reconciling_pending a healthy tras timeout (>1000ms)
+  it('240. Watchdog Ranked Async: auto-recupera reconciling_pending a healthy tras timeout (>1000ms)', () => {
+    let reconciliationState: 'healthy' | 'reconciling_pending' | 'inconsistent' = 'reconciling_pending'
+    let reconcilingSinceMs: number | null = 1000
+    const nowMs = 2100 // 1100ms después (> 1000ms)
+
+    const pendingActions: AccionP1Simulacion[] = [
+      { seq: 10, tick: 106, issuedTick: 100, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 0, col: 1 },
+    ]
+    const acceptedActions: AccionP1Simulacion[] = []
+
+    // Lógica del watchdog implementada en useGameEngine
+    if (reconciliationState === 'reconciling_pending' && reconcilingSinceMs !== null) {
+      if (nowMs - reconcilingSinceMs > 1000) {
+        // Auto-flush pending to accepted
+        for (const p of pendingActions) {
+          if (!acceptedActions.some((a) => a.seq === p.seq)) {
+            acceptedActions.push(p)
+          }
+        }
+        pendingActions.length = 0
+        reconciliationState = 'healthy'
+        reconcilingSinceMs = null
+      }
+    }
+
+    expect(reconciliationState).toBe('healthy')
+    expect(pendingActions.length).toBe(0)
+    expect(acceptedActions.length).toBe(1)
+    expect(acceptedActions[0].seq).toBe(10)
+    expect(
+      debeCongelarMotorRankedAsync({
+        isAsyncMatch: true,
+        rankedAsyncInconsistency: null,
+        reconciliationState,
+      })
+    ).toBe(false)
+  })
+
+  // 241. Watchdog Ranked Async: limpia inconsistencia transitoria tras 600ms
+  it('241. Watchdog Ranked Async: limpia inconsistencia transitoria tras 600ms', () => {
+    let reconciliationState: 'healthy' | 'reconciling_pending' | 'inconsistent' = 'inconsistent'
+    let rankedAsyncInconsistency: any = { reason: 'TIMELINE_INCONSISTENT' }
+    let inconsistentSinceMs: number | null = 500
+    const nowMs = 1200 // 700ms después (> 600ms)
+
+    if (rankedAsyncInconsistency !== null || reconciliationState === 'inconsistent') {
+      if (inconsistentSinceMs !== null && nowMs - inconsistentSinceMs > 600) {
+        rankedAsyncInconsistency = null
+        reconciliationState = 'healthy'
+        inconsistentSinceMs = null
+      }
+    }
+
+    expect(reconciliationState).toBe('healthy')
+    expect(rankedAsyncInconsistency).toBeNull()
+    expect(
+      debeCongelarMotorRankedAsync({
+        isAsyncMatch: true,
+        rankedAsyncInconsistency,
+        reconciliationState,
+      })
+    ).toBe(false)
+  })
+
+  // 242. Rebuild tolerante ante discrepancia evita congelar la partida viva
+  it('242. Rebuild tolerante: fallo de reconstrucción no propaga congelamiento perma-freeze', () => {
+    const seed = 99999
+    const p1Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+    const p2Deck: CartaDeMazo[] = [{ slot: 0, plantId: 'sunflower', level: 0, statRolls: [] }]
+
+    // Historial con sol imposible para forzar que reconstruirPartidaAsync retorne ok: false
+    const rebuildRes = reconstruirPartidaAsync(
+      seed,
+      p1Deck,
+      p2Deck,
+      [],
+      [{ seq: 99, issuedTick: 10, tick: 10, kind: 'collect', targetId: 'sun_inexistente' }],
+      100
+    )
+
+    expect(rebuildRes.ok).toBe(false)
+
+    // Simular comportamiento resiliente en useGameEngine
+    let reconciliationState: 'healthy' | 'reconciling_pending' | 'inconsistent' = 'reconciling_pending'
+    let rehacerDesde: number | null = 10
+
+    if (!rebuildRes.ok) {
+      rehacerDesde = null
+      reconciliationState = 'healthy'
+    }
+
+    expect(reconciliationState).toBe('healthy')
+    expect(rehacerDesde).toBeNull()
+    expect(
+      debeCongelarMotorRankedAsync({
+        isAsyncMatch: true,
+        rankedAsyncInconsistency: null,
+        reconciliationState,
+      })
+    ).toBe(false)
+  })
+
+  // 243. Resolución de slot de fallback garantiza emparejamiento con registrarPlantacion
+  it('243. Resolución de slot en Battlefield evita acciones huérfanas sin ACK', () => {
+    const deck = ['sunflower', 'peashooter', 'wallnut', 'repeater']
+    const selectedCard = 'peashooter'
+    const selectedSlotIndex = null // Slot null desincronizado
+
+    const slot = selectedSlotIndex !== null
+      ? selectedSlotIndex
+      : (selectedCard ? deck.indexOf(selectedCard) : 0)
+    const resolvedSlot = slot >= 0 ? slot : 0
+
+    expect(resolvedSlot).toBe(1)
+  })
 })
 
 

@@ -221,6 +221,12 @@ export default function LotteryModal({
   const [showConfirmPaidModal, setShowConfirmPaidModal] = useState(false)
   const [showConfirmCodeBuyModal, setShowConfirmCodeBuyModal] = useState(false)
 
+  // Saldo visual reactivo e instantáneo para reflejar descuentos en tiempo real
+  const [currentGems, setCurrentGems] = useState(userTokens)
+  useEffect(() => {
+    setCurrentGems(userTokens)
+  }, [userTokens])
+
   // ── TAB 2: CÓDIGO SECRETO — TODO DESDE EL SERVIDOR ────────────────────────
   //
   // El estado local anterior guardaba el propio código secreto en localStorage
@@ -472,7 +478,7 @@ export default function LotteryModal({
       alert(`Ya has usado tu tiro gratis diario. Puedes girar nuevamente por ${PAID_SPIN_COST_GEMS} Gemas 💎.`)
       return
     }
-    if (!isFree && userTokens < PAID_SPIN_COST_GEMS) {
+    if (!isFree && currentGems < PAID_SPIN_COST_GEMS) {
       alert(`Gemas insuficientes (${PAID_SPIN_COST_GEMS} Gemas 💎 requeridas para un tiro adicional).`)
       return
     }
@@ -486,6 +492,12 @@ export default function LotteryModal({
       setIsSpinning(false)
       alert(res.error || 'No se pudo girar la ruleta.')
       return
+    }
+
+    // Reflejo visual inmediato del descuento de gemas
+    if (!isFree) {
+      setCurrentGems((prev) => Math.max(0, prev - PAID_SPIN_COST_GEMS))
+      void onRewardsChanged?.()
     }
 
     if (isFree) {
@@ -520,6 +532,12 @@ export default function LotteryModal({
       setIsSpinning(false)
       setWinningSector(sectorToWin)
       setShowPrizeModal(true)
+
+      // Si el premio fue en gemas, acreditar inmediatamente en saldo visual
+      if (sectorToWin.type === 'token' && sectorToWin.valueUsd) {
+        setCurrentGems((prev) => prev + (sectorToWin.valueUsd ?? 0))
+      }
+
       if (sectorToWin.type === 'none') {
         soundManager.playSound('click', 0.8)
       } else {
@@ -593,6 +611,10 @@ export default function LotteryModal({
       setTimeout(() => setCodeBannerNotice(null), 4000)
       return
     }
+
+    // Reflejo visual inmediato del descuento de gemas
+    setCurrentGems((prev) => Math.max(0, prev - (res.spent ?? 5)))
+    void onRewardsChanged?.()
 
     soundManager.playSound('plantation', 0.8)
     setCodeBannerNotice(`¡+${res.attemptsAdded} intentos por ${res.spent} 💎! 🎯`)
@@ -676,7 +698,7 @@ export default function LotteryModal({
           <div className="lottery-header__right">
             <div className="lottery-user-balance">
               <span>💎 Saldo:</span>
-              <strong>{userTokens} Gemas</strong>
+              <strong>{currentGems} Gemas</strong>
             </div>
             <button type="button" className="lottery-close-btn" onClick={onClose}>
               ✕
@@ -799,7 +821,7 @@ export default function LotteryModal({
                   <button
                     type="button"
                     className="lottery-spin-btn lottery-spin-btn--paid"
-                    disabled={isSpinning || userTokens < PAID_SPIN_COST_GEMS}
+                    disabled={isSpinning || currentGems < PAID_SPIN_COST_GEMS}
                     onClick={() => {
                       soundManager.playSound('click', 0.4)
                       setShowConfirmPaidModal(true)
@@ -1097,7 +1119,7 @@ export default function LotteryModal({
                           soundManager.playSound('click', 0.4)
                           setShowConfirmCodeBuyModal(true)
                         }}
-                        disabled={userTokens < 5.0}
+                        disabled={currentGems < 5.0}
                         title="Pagar 5 Gemas 💎 por 1 intento adicional"
                       >
                         ⚡ +1 INTENTO (5 💎 Gemas)
@@ -1465,7 +1487,7 @@ export default function LotteryModal({
                 ¿Deseas pagar <strong>{PAID_SPIN_COST_GEMS} Gemas 💎</strong> de tu saldo para girar la Ruleta de la Suerte y probar tu suerte?
               </p>
               <div className="lottery-confirm-balance">
-                Saldo actual: <strong>{userTokens} Gemas 💎</strong>
+                Saldo actual: <strong>{currentGems} Gemas 💎</strong>
               </div>
               <div className="lottery-confirm-actions">
                 <button
@@ -1499,7 +1521,7 @@ export default function LotteryModal({
                 ¿Deseas pagar <strong>5 Gemas 💎</strong> para adquirir <strong>1 INTENTO ADICIONAL</strong> y descifrar la secuencia para ganar el <strong>Gran Premio de {codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50} Gemas 💎</strong>?
               </p>
               <div className="lottery-confirm-balance">
-                Saldo actual: <strong>{userTokens} Gemas 💎</strong> (Recibes: +1 Intento)
+                Saldo actual: <strong>{currentGems} Gemas 💎</strong> (Recibes: +1 Intento)
               </div>
               <div className="lottery-confirm-actions">
                 <button
@@ -1516,7 +1538,7 @@ export default function LotteryModal({
                     setShowConfirmCodeBuyModal(false)
                     handleBuyCodeAttempts()
                   }}
-                  disabled={userTokens < 5.0}
+                  disabled={currentGems < 5.0}
                 >
                   SÍ, COMPRAR 1 INTENTO (5 💎)
                 </button>

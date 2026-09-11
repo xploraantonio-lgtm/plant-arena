@@ -583,45 +583,59 @@ function App() {
   ): Promise<boolean> => {
     let ids = instanceIdsOverride ?? activeDeckInstances
 
-    // Usuarios que tenían el Jardín abierto antes del hotfix pueden
-    // conservar IDs locales antiguos como "inst_base_jalapeno".
-    // Los convertimos a las UUID reales recién creadas en servidor.
-    if (ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
-      const inventario = await inventoryService.myInventory()
-
-      if (!inventario) {
-        return false
-      }
-
-      ids = ids
-        .map((id) => {
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
-            return id
-          }
-
-          if (id.startsWith('inst_base_')) {
-            const plantId = id.replace('inst_base_', '')
-
-            return inventario.instances.find(
-              (inst) => inst.plantId === plantId
-            )?.instanceId
-          }
-
-          return undefined
-        })
-        .filter((id): id is string => Boolean(id))
+    const inventario = await inventoryService.myInventory()
+    if (!inventario) {
+      return false
     }
 
-    if (ids.length < 3 || ids.length > 6) {
+    // Convertir IDs legados como "inst_base_..." a UUIDs
+    ids = ids
+      .map((id) => {
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+          return id
+        }
+
+        if (id.startsWith('inst_base_')) {
+          const plantId = id.replace('inst_base_', '')
+          return inventario.instances.find(
+            (inst) => inst.plantId === plantId
+          )?.instanceId
+        }
+
+        return undefined
+      })
+      .filter((id): id is string => Boolean(id))
+
+    // Validar contra el inventario real: solo instancias que pertenezcan al usuario y NO estén en venta
+    const unlistedInstances = inventario.instances.filter((inst) => !inst.isListed)
+    const validInstanceSet = new Set(unlistedInstances.map((inst) => inst.instanceId))
+
+    let cleanIds = ids.filter((id) => validInstanceSet.has(id))
+
+    // Si por ventas en el mercado o desincronización quedaron menos de 3 cartas, auto-rellenar
+    if (cleanIds.length < 3) {
+      for (const inst of unlistedInstances) {
+        if (!cleanIds.includes(inst.instanceId)) {
+          cleanIds.push(inst.instanceId)
+          if (cleanIds.length >= 4) break
+        }
+      }
+    }
+
+    if (cleanIds.length > 6) {
+      cleanIds = cleanIds.slice(0, 6)
+    }
+
+    if (cleanIds.length < 3) {
       setActiveAppAlert({
         title: 'MAZO INVÁLIDO',
-        message: 'Debes seleccionar entre 3 y 6 plantas antes de jugar.',
+        message: 'Debes tener al menos 3 plantas disponibles (no en venta) para jugar.',
         icon: '⚠️',
       })
       return false
     }
 
-    const resultado = await profileService.saveActiveDeck(ids)
+    const resultado = await profileService.saveActiveDeck(cleanIds)
 
     if (!resultado.success) {
       setActiveAppAlert({
@@ -633,6 +647,12 @@ function App() {
       })
       return false
     }
+
+    // Sincronizar estado local en caso de que se hayan purgado cartas en venta
+    const plantIdsForDeck = cleanIds
+      .map((id) => unlistedInstances.find((inst) => inst.instanceId === id)?.plantId as PlantId)
+      .filter(Boolean)
+    updateActiveDeck(plantIdsForDeck, cleanIds)
 
     return true
   }

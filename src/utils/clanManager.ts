@@ -10,6 +10,7 @@ export interface ClanMember {
   consecutiveRoundsMissed?: number // Rondas seguidas sin participar en guerra (mínimo 2 para poder expulsar por inactividad)
   roundsParticipated?: number // Rondas participadas en la temporada (>= 2 protege contra expulsión hasta fin de temporada)
   walkoverLosses?: number // Derrotas por W.O. por no presentarse (>= 1 permite expulsar)
+  rewardPercentage?: number // Cuota porcentual asignada para el reparto de ganancias (0 - 100%)
 }
 
 export interface ClanSettings {
@@ -80,6 +81,7 @@ export interface ClanData {
   fullBonusClaimedMembers: string[] // List of player names/IDs that claimed 2 green packs
   seasonPayoutClaimedMembers: string[]
   settings?: ClanSettings
+  rewardShares?: Record<string, number>
 }
 
 const STORAGE_KEYS = {
@@ -404,8 +406,17 @@ export class ClanManager {
     const surplus = Math.max(0, totalVault - WAR_RESERVE)
     if (surplus <= 0) return 0
 
-    const memberCount = Math.max(1, clan.members.length)
-    const shareGems = Number((surplus / memberCount).toFixed(0))
+    const member = clan.members.find((m) => m.name === playerName || m.id === playerName)
+    let shareGems = 0
+
+    if (member && typeof member.rewardPercentage === 'number') {
+      if (member.rewardPercentage <= 0) return 0
+      shareGems = Math.floor(surplus * (member.rewardPercentage / 100))
+    } else {
+      const memberCount = Math.max(1, clan.members.length)
+      shareGems = Number((surplus / memberCount).toFixed(0))
+    }
+
     if (shareGems <= 0) return 0
 
     clan.seasonPayoutClaimedMembers.push(playerName)
@@ -761,6 +772,26 @@ export class ClanManager {
     if (!clan) return false
 
     clan.settings = { ...settings }
+    this.saveClans(clans)
+    return true
+  }
+
+  /**
+   * Update clan reward distribution shares (%) per member
+   */
+  static updateClanRewardShares(clanId: string, shares: Record<string, number>): boolean {
+    const clans = this.getClans()
+    const clan = clans.find((c) => c.id === clanId)
+    if (!clan) return false
+
+    clan.rewardShares = { ...shares }
+    clan.members.forEach((m) => {
+      if (typeof shares[m.id] === 'number') {
+        m.rewardPercentage = shares[m.id]
+      } else if (typeof shares[m.name] === 'number') {
+        m.rewardPercentage = shares[m.name]
+      }
+    })
     this.saveClans(clans)
     return true
   }

@@ -169,6 +169,10 @@ export default function Marketplace({
   const canSell = accessInfo.canSell
   const copasActuales = accessInfo.copasActuales
 
+  // Total de cartas de plantas disponibles que posee el jugador
+  const availablePlantsCount = useMemo(() => {
+    return (plantInstances || []).length
+  }, [plantInstances])
 
   // Lista unificada de cartas de plantas e ítems de farming vendibles
   const sellableItems = useMemo<SellableMarketItem[]>(() => {
@@ -348,7 +352,7 @@ export default function Marketplace({
     if (txFilter === 'marketplace') return transactions.filter((t) => t.type === 'marketplace_sale')
     if (txFilter === 'withdrawal') return transactions.filter((t) => t.type === 'withdrawal')
     if (txFilter === 'shop') return transactions.filter((t) => t.type === 'shop_pack' || t.type === 'shop_gold')
-    if (txFilter === 'reward') return transactions.filter((t) => t.type === 'lottery_win' || t.type === 'reward_code' || t.type === 'tournament_reward')
+    if (txFilter === 'reward') return transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward')
     return transactions
   }, [transactions, txFilter])
 
@@ -542,11 +546,24 @@ export default function Marketplace({
       return
     }
 
+    // Comprobación de inventario mínimo: el jugador debe conservar al menos 3 plantas para poder jugar
+    if (availablePlantsCount <= 3) {
+      showModalAlert(
+        'INVENTARIO MÍNIMO REQUERIDO',
+        'No puedes vender esta planta. Necesitas conservar un mínimo de 3 plantas en tu inventario para poder armar un mazo y combatir en la Arena.',
+        '🛑',
+        'warning'
+      )
+      return
+    }
+
     showModalConfirm(
-      'PUBLICAR OFERTA EN EL MERCADO',
-      `¿Confirmas poner en venta "${selectedItem.name}" (Nivel ${selectedItem.level}) por ${sellPriceGems} 💎?\n\n` +
-        `El comprador paga ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct} % (${comision} 💎) y tú recibes ${neto} 💎.\n\n` +
-        '⚠️ La carta se retira de tu Jardín y de tu Mazo mientras esté publicada.',
+      '⚠️ ¿VENDER TU CARTA DE PLANTA?',
+      `Vas a poner en venta tu carta jugable "${selectedItem.name}" (Nivel ${selectedItem.level}) por ${sellPriceGems} 💎.\n\n` +
+        `❌ ¡ATENCIÓN! NO estás vendiendo copias. Las copias NO se venden en el mercado (las copias solo sirven para FUSIÓN y mejoras de nivel +15% stats).\n\n` +
+        `⚠️ Venderás tu PLANTA ÚNICA: se retirará de tu Jardín y de tu Mazo de Batalla. Si otro jugador la compra, dejará de pertenecerte (solo podrás tener otra si la compras a otro jugador).\n\n` +
+        `El comprador pagará ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct}% (${comision} 💎) y recibirás ${neto} 💎 al concretarse la venta.\n\n` +
+        `¿Estás seguro de que deseas ponerla en venta?`,
       '🏷️',
       async () => {
         const r = await marketplaceService.listMarketplaceItem('plant', selectedItem.instanceId, sellPriceGems, 1)
@@ -564,10 +581,11 @@ export default function Marketplace({
         )
         setActiveTab('browse')
         await refreshListings()
+        window.dispatchEvent(new Event('refresh_user_inventory'))
         onServerChange?.()
       },
-      `SÍ, VENDER (${sellPriceGems} 💎)`,
-      'CANCELAR'
+      `SÍ, VENDER MI PLANTA (${sellPriceGems} 💎)`,
+      'CANCELAR (CONSERVAR MI PLANTA)'
     )
   }
 
@@ -596,6 +614,7 @@ export default function Marketplace({
           'info'
         )
         await refreshListings()
+        window.dispatchEvent(new Event('refresh_user_inventory'))
         onServerChange?.()
       },
       'RETIRAR Y RECUPERAR',
@@ -818,6 +837,27 @@ export default function Marketplace({
       {/* TAB 2: SELL MY PLANT OR FARMING ITEM */}
       {activeTab === 'sell' && canSell && (
         <div className="market-sell-pane">
+          {/* BANNER INFORMATIVO: COPIAS VS PLANTAS JUGABLES */}
+          <div className="market-sell-info-banner">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '1.2rem' }}>💡</span>
+              <strong style={{ color: '#fbbf24', fontSize: '11px', letterSpacing: '0.5px' }}>
+                INFORMACIÓN IMPORTANTE SOBRE LA VENTA DE PLANTAS
+              </strong>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: '18px', lineHeight: '1.45', color: '#cbd5e1' }}>
+              <li>
+                <strong>Vendes tu planta jugable, NO copias:</strong> Las copias NO se venden en el mercado. Las copias solo se consiguen en sobres/recompensas y se usan exclusivamente para <strong>Fusión y mejoras (+15% stats)</strong>.
+              </li>
+              <li>
+                <strong>Se retira de tu Mazo y Jardín:</strong> Mientras tu planta esté publicada o si otro jugador la compra, no podrás usarla en batallas.
+              </li>
+              <li>
+                <strong>Mínimo 3 plantas requeridas:</strong> Debes conservar al menos 3 cartas de plantas en tu inventario para poder combatir en la Arena.
+              </li>
+            </ul>
+          </div>
+
           <div className="market-sell-form-grid">
             {/* Column 1: Select Item to Sell */}
             <div className="market-sell-column">
@@ -1008,9 +1048,19 @@ export default function Marketplace({
                       />
                       <h4>{PLANT_CONFIGS[selectedItem.plantId]?.name}</h4>
 
+                      <div className="market-plant-notice-box">
+                        🌱 <strong>Venderás tu carta jugable</strong>, no copias. Las copias solo se usan para Fusión (+15% stats).
+                      </div>
+
                       {selectedItem.inDeck && (
                         <div className="market-deck-warning">
                           ⚠️ Esta carta está equipada en tu Mazo de Batalla. Se desequipará automáticamente al ponerla en venta.
+                        </div>
+                      )}
+
+                      {availablePlantsCount <= 3 && (
+                        <div className="market-deck-warning market-deck-warning--danger">
+                          🛑 No puedes vender esta planta: necesitas conservar al menos 3 plantas para poder combatir en la Arena.
                         </div>
                       )}
 
@@ -1100,12 +1150,20 @@ export default function Marketplace({
 
                   <button
                     type="submit"
-                    disabled={!canSell || sellPriceGems < selectedItem.minPrice}
-                    className={`market-publish-btn ${!canSell ? 'market-publish-btn--locked' : ''}`}
-                    title={!canSell ? 'Requiere Pase PvP o 1,350 Copas para vender en el mercado' : undefined}
+                    disabled={!canSell || sellPriceGems < selectedItem.minPrice || (selectedItem.kind === 'plant' && availablePlantsCount <= 3)}
+                    className={`market-publish-btn ${!canSell || (selectedItem.kind === 'plant' && availablePlantsCount <= 3) ? 'market-publish-btn--locked' : ''}`}
+                    title={
+                      !canSell
+                        ? 'Requiere Pase PvP o 1,350 Copas para vender en el mercado'
+                        : selectedItem.kind === 'plant' && availablePlantsCount <= 3
+                        ? 'Debes conservar al menos 3 plantas para poder jugar'
+                        : undefined
+                    }
                   >
                     {!canSell
                       ? '🔒 REQUIERE PASE PVP O 1,350 COPAS'
+                      : selectedItem.kind === 'plant' && availablePlantsCount <= 3
+                      ? '🛑 MÍNIMO 3 PLANTAS REQUERIDAS PARA JUGAR'
                       : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes ${sellPriceGems - Math.round((sellPriceGems * comisionPct) / 100)} 💎`}
                   </button>
 
@@ -1222,7 +1280,7 @@ export default function Marketplace({
               className={`market-tx-filter-chip ${txFilter === 'reward' ? 'market-tx-filter-chip--active' : ''}`}
               onClick={() => setTxFilter('reward')}
             >
-              🎁 PREMIOS & RULETA ({transactions.filter((t) => t.type === 'lottery_win' || t.type === 'reward_code' || t.type === 'tournament_reward').length})
+              🎁 PREMIOS & RULETA ({transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward').length})
             </button>
           </div>
 
@@ -1281,7 +1339,8 @@ export default function Marketplace({
                         {tx.type === 'withdrawal' && '💳 RETIRO BNB CHAIN'}
                         {isPack && '🎒 TIENDA · SOBRE'}
                         {!isPack && tx.type === 'shop_gold' && '💰 TIENDA · ORO'}
-                        {tx.type === 'lottery_win' && '🎰 RULETA JACKPOT'}
+                        {tx.type === 'lottery_spin' && '🎡 GIRO DE RULETA'}
+                        {tx.type === 'lottery_win' && (tx.amountGems && tx.amountGems >= 50 ? '🎰 JACKPOT RULETA' : '🎁 PREMIO DE RULETA')}
                         {tx.type === 'reward_code' && '🎁 CÓDIGO ESPECIAL'}
                         {tx.type === 'tournament_reward' && '🏆 CÓDIGO SECRETO'}
                       </span>
@@ -1329,8 +1388,10 @@ export default function Marketplace({
                                 ? 'compró oro en Tienda'
                                 : tx.type.startsWith('shop')
                                 ? 'compró en Tienda'
+                                : tx.type === 'lottery_spin'
+                                ? 'giró la Ruleta de la Suerte'
                                 : tx.type === 'lottery_win'
-                                ? 'ganó en la Ruleta'
+                                ? 'probó suerte en la Ruleta'
                                 : tx.type === 'reward_code'
                                 ? 'canjeó código promocional'
                                 : tx.type === 'tournament_reward'
@@ -1347,19 +1408,53 @@ export default function Marketplace({
                     <div className="market-tx-card__right">
                       {tx.type === 'withdrawal' ? (
                         <div className="market-tx-amount-box market-tx-amount-box--gems">
-                          <span className="market-tx-amount-num" style={{ color: '#f87171' }}>
+                          <span className="market-tx-amount-num" style={{ color: '#f87171', fontWeight: 'bold' }}>
                             -{(tx.amountGems || (tx.amountUsd ? Math.round(tx.amountUsd * 100) : 0)).toLocaleString()} 💎
                           </span>
                         </div>
-                      ) : tx.amountGems ? (
+                      ) : tx.type === 'lottery_spin' || tx.description.toLowerCase().includes('giro en ruleta') || tx.description.toLowerCase().includes('giro adicional') ? (
                         <div className="market-tx-amount-box market-tx-amount-box--gems">
-                          <span className="market-tx-amount-num">
-                            {tx.amountGems.toLocaleString()} 💎
+                          <span className="market-tx-amount-num" style={{ color: '#f87171', fontWeight: 'bold' }}>
+                            -{Math.abs(tx.amountGems || 10).toLocaleString()} 💎
+                          </span>
+                        </div>
+                      ) : (tx.type === 'lottery_win' || tx.description.toLowerCase().includes('premio de ruleta')) && tx.amountGems && tx.amountGems > 0 ? (
+                        <div className="market-tx-amount-box market-tx-amount-box--gems">
+                          <span className="market-tx-amount-num" style={{ color: '#4ade80', fontWeight: 'bold' }}>
+                            +{tx.amountGems.toLocaleString()} 💎
+                          </span>
+                        </div>
+                      ) : tx.amountGems && tx.amountGems > 0 ? (
+                        <div className="market-tx-amount-box market-tx-amount-box--gems">
+                          <span className="market-tx-amount-num" style={{ color: '#4ade80', fontWeight: 'bold' }}>
+                            +{tx.amountGems.toLocaleString()} 💎
                           </span>
                         </div>
                       ) : (
                         <div className="market-tx-amount-box">
-                          <span className="market-tx-amount-tag">OFICIAL</span>
+                          <span
+                            className="market-tx-amount-tag"
+                            style={{
+                              color: tx.description.includes('Agua') ? '#38bdf8' :
+                                     tx.description.includes('Oro') ? '#facc15' :
+                                     tx.description.includes('Fertilizante') ? '#4ade80' :
+                                     tx.description.includes('Pala') ? '#fb923c' :
+                                     tx.description.includes('Wall-nut') ? '#fbbf24' :
+                                     tx.description.includes('Sobre') ? '#c084fc' :
+                                     tx.description.includes('Sigue') ? '#94a3b8' : '#94a3b8',
+                              fontSize: '11px',
+                              fontWeight: 'bold',
+                              letterSpacing: '0.5px',
+                            }}
+                          >
+                            {tx.description.includes('Agua') ? '💧 2x AGUA' :
+                             tx.description.includes('Oro') ? '💰 ORO' :
+                             tx.description.includes('Fertilizante') ? '🌱 FERTILIZANTE' :
+                             tx.description.includes('Pala') ? '⛏️ PALA' :
+                             tx.description.includes('Wall-nut') ? '🥜 WALL-NUT' :
+                             tx.description.includes('Sobre') ? '👑 SOBRE' :
+                             tx.description.includes('Sigue') ? '🍀 SUERTE' : 'OFICIAL'}
+                          </span>
                         </div>
                       )}
                     </div>

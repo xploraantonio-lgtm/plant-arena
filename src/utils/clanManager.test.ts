@@ -95,4 +95,28 @@ describe('ClanManager & Gem Valuations', () => {
     mockLocalStorage.setItem('plant_arena_user_clan_id', validUuid)
     expect(ClanManager.getUserClanId()).toBe(validUuid)
   })
+
+  it('distributes season earnings by custom percentages (e.g. 60% active, 40% helper, 0% inactive)', () => {
+    const clan = ClanManager.createClan('Imperio Solar', 'IS', '👑', 'Clan de élite', 'Líder Supremo', 1300)
+    ClanManager.joinClan(clan.id, 'GuerreroTop', 1250)
+    ClanManager.joinClan(clan.id, 'Inactivo', 1000)
+
+    // Deposit 3,400 gems to reach 3,800 gems total (surplus = 1,000 gems above the 2,800 reserve)
+    ClanManager.depositToVault(clan.id, 3400.0)
+
+    // Leader configures percentages: Leader 50%, GuerreroTop 50%, Inactivo 0% (sum = 100%)
+    const shares = {
+      'Líder Supremo': 50,
+      'GuerreroTop': 50,
+      'Inactivo': 0,
+    }
+    ClanManager.updateClanRewardShares(clan.id, shares)
+
+    // Inactivo receives 0 gems because percentage is 0%
+    expect(ClanManager.claimSeasonVaultPayout(clan.id, 'Inactivo')).toBe(0)
+
+    // GuerreroTop receives 50% of 1000 = 500 gems
+    const topShare = ClanManager.claimSeasonVaultPayout(clan.id, 'GuerreroTop')
+    expect(topShare).toBe(500)
+  })
 })

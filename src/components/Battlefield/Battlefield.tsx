@@ -1542,17 +1542,18 @@ export default function Battlefield({
                     }
                   } else {
                     const carta = selectedCard
-                    const slot = selectedSlotIndex
+                    const slot = selectedSlotIndex !== null
+                      ? selectedSlotIndex
+                      : (carta ? effectiveDeck.indexOf(carta) : 0)
+                    const resolvedSlot = slot >= 0 ? slot : 0
                     const seq = roomId ? ++ordenRef.current : undefined
-                    const enTic = placePlant(lane.id, col, undefined, undefined, seq)
+                    const enTic = placePlant(lane.id, col, carta, resolvedSlot, seq)
                     if (enTic !== null) {
                       recordPlantPlacement(carta)
-                      if (slot !== null) {
-                        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                          try { navigator.vibrate(15) } catch {}
-                        }
-                        registrarPlantacion(carta, lane.id, col, enTic, slot, seq)
+                      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                        try { navigator.vibrate(15) } catch {}
                       }
+                      registrarPlantacion(carta, lane.id, col, enTic, resolvedSlot, seq)
                     }
                   }
                 }

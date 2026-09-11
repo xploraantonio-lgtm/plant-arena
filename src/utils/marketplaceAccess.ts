@@ -15,7 +15,8 @@ export interface MarketplaceAccessResult {
 
 export function evaluateMarketplaceAccess(
   hasVipPass?: boolean,
-  userElo?: number
+  userElo?: number,
+  vipPassExpiresAt?: string | null
 ): MarketplaceAccessResult {
   const copasActuales =
     typeof userElo === 'number' && Number.isFinite(userElo)
@@ -24,7 +25,11 @@ export function evaluateMarketplaceAccess(
   const copasRequeridas = MARKETPLACE_MIN_COPAS
   const copasFaltantes = Math.max(0, copasRequeridas - copasActuales)
 
-  if (Boolean(hasVipPass)) {
+  const isVipActive =
+    Boolean(hasVipPass) &&
+    (!vipPassExpiresAt || new Date(vipPassExpiresAt).getTime() > Date.now())
+
+  if (isVipActive) {
     return {
       hasAccess: true,
       canSell: true,

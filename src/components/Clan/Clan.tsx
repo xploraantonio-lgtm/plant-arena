@@ -82,6 +82,8 @@ export default function Clan({
   const [showKickModal, setShowKickModal] = useState(false)
 
   // Clan Settings State
+  const [settingsTab, setSettingsTab] = useState<'general' | 'competitive' | 'rewards'>('general')
+  const [memberRewardShares, setMemberRewardShares] = useState<Record<string, number>>({})
   const [clanPrivacy, setClanPrivacy] = useState<'public' | 'request' | 'closed'>('public')
   const [clanMinElo, setClanMinElo] = useState<number>(1000)
   const [clanWarPermission, setClanWarPermission] = useState<'leaders' | 'all'>('leaders')
@@ -126,6 +128,11 @@ export default function Clan({
   }
 
   const playerName = UserManager.getProfile().name || 'Guerrero'
+  const isLeader = Boolean(
+    userClan &&
+    (userClan.leader === playerName ||
+     userClan.members.find((m) => m.name === playerName)?.role === 'Líder')
+  )
 
   const showModalAlert = (
     title: string,
@@ -242,6 +249,7 @@ export default function Clan({
             elo: m.elo,
             donatedCount: m.donatedCount || 0,
             joinedAt: typeof m.joinedAt === 'string' ? m.joinedAt.split('T')[0] : '',
+            rewardPercentage: typeof m.rewardPercentage === 'number' ? m.rewardPercentage : undefined,
           })),
           vaultGems: Number(myClanData.clan.vaultGems || 0),
           vaultUsd: Number(myClanData.clan.vaultGems || 0),
@@ -315,6 +323,7 @@ export default function Clan({
                   elo: Number(m.elo || 1000),
                   donatedCount: Number(m.donatedCount || 0),
                   joinedAt: typeof m.joinedAt === 'string' ? m.joinedAt.split('T')[0] : '',
+                  rewardPercentage: typeof m.rewardPercentage === 'number' ? m.rewardPercentage : undefined,
                 }))
               : Array(c.member_count || 1).fill({}).map((_, i) => ({
                   id: `mem-${i}`,
@@ -346,8 +355,13 @@ export default function Clan({
     void refreshClanData()
   }, [])
 
-  // Open Settings Modal & Load Saved Settings
+  // Open Settings Modal & Load Saved Settings (Exclusivo Líder)
   const handleOpenSettings = () => {
+    if (!isLeader) {
+      soundManager.playSound('surrender', 0.5)
+      showModalAlert('ACCESO RESTRINGIDO', 'Solo el Líder del clan puede acceder a la configuración y ajuste de recompensas.', '🔒', 'warning')
+      return
+    }
     soundManager.playSound('click', 0.4)
     if (userClan?.settings) {
       setClanPrivacy(userClan.settings.privacy)
@@ -355,13 +369,59 @@ export default function Clan({
       setClanWarPermission(userClan.settings.warPermission)
       setClanAutoAccept(userClan.settings.autoAccept)
     }
+
+    // Inicializar mapa de porcentajes de miembros
+    if (userClan?.members) {
+      const shares: Record<string, number> = {}
+      const hasAnyConfigured = userClan.members.some((m) => typeof m.rewardPercentage === 'number' && m.rewardPercentage > 0)
+      if (hasAnyConfigured) {
+        userClan.members.forEach((m) => {
+          shares[m.id] = Number(m.rewardPercentage ?? 0)
+        })
+      } else {
+        const count = Math.max(1, userClan.members.length)
+        const baseShare = Math.floor(100 / count)
+        const remainder = 100 - baseShare * count
+        userClan.members.forEach((m, idx) => {
+          shares[m.id] = idx === 0 ? baseShare + remainder : baseShare
+        })
+      }
+      setMemberRewardShares(shares)
+    }
+
+    setSettingsTab('general')
     setShowSettingsModal(true)
   }
 
-  // Save Settings
-  const handleSaveClanSettings = () => {
+  // Save Settings (Con validación autoritativa del 100% de suma de cuotas)
+  const handleSaveClanSettings = async () => {
     if (!userClan) return
+    if (!isLeader) {
+      showModalAlert('ACCESO RESTRINGIDO', 'Solo el Líder del clan puede guardar ajustes.', '🔒', 'warning')
+      return
+    }
+
+    // Validar suma total del 100%
+    const totalPct = Math.round(
+      userClan.members.reduce((sum, m) => sum + (Number(memberRewardShares[m.id]) || 0), 0)
+    )
+
+    if (totalPct !== 100) {
+      soundManager.playSound('surrender', 0.6)
+      showModalAlert(
+        'REPARTO INVÁLIDO (DEBE SUMAR 100%)',
+        `La suma de los porcentajes asignados a los miembros debe ser exactamente 100%.\n\n` +
+          `Actualmente suma: ${totalPct}% (${totalPct < 100 ? `Falta asignar ${100 - totalPct}%` : `Excede por ${totalPct - 100}%`}).\n\n` +
+          'Ajusta las cuotas en la pestaña "REWARDS" antes de guardar.',
+        '⚠️',
+        'warning'
+      )
+      return
+    }
+
     soundManager.playSound('plantation', 0.8)
+
+    // 1. Guardar ajustes y cuotas localmente
     const newSettings = {
       privacy: clanPrivacy,
       minElo: clanMinElo,
@@ -369,11 +429,26 @@ export default function Clan({
       autoAccept: clanAutoAccept,
     }
     ClanManager.updateClanSettings(userClan.id, newSettings)
-    refreshClanData()
+    ClanManager.updateClanRewardShares(userClan.id, memberRewardShares)
+
+    // 2. Persistir en Backend autoritativo en Supabase
+    if (ClanManager.isValidUuid(userClan.id)) {
+      const sharesPayload = userClan.members.map((m) => ({
+        user_id: m.id,
+        percentage: Number(memberRewardShares[m.id]) || 0,
+      }))
+      const res = await supabaseService.updateClanRewardShares(userClan.id, sharesPayload)
+      if (!res.success) {
+        showModalAlert('ERROR EN SERVIDOR', res.message || res.error || 'No se pudieron guardar las cuotas en el servidor.', '❌', 'error')
+        return
+      }
+    }
+
+    await refreshClanData()
     setShowSettingsModal(false)
     showModalAlert(
       'AJUSTES ACTUALIZADOS',
-      'Las reglas de privacidad, copas mínimas y permisos de guerra del clan se han guardado con éxito.',
+      'Las reglas de admisión, permisos de guerra y la distribución porcentual de ganancias (100%) se han guardado con éxito.',
       '⚙️',
       'success'
     )
@@ -947,7 +1022,6 @@ export default function Clan({
                       <div className="clan-metric-card clan-metric-card--vault">
                         <span className="clan-metric-card__label">💎 TESORO ACUMULADO</span>
                         <span className="clan-metric-card__value">{Number(selectedClan.vaultGems ?? selectedClan.vaultUsd).toFixed(0)} Gemas</span>
-                        <small className="clan-metric-card__sub">Bóveda a repartir a fin de temporada</small>
                       </div>
 
                       <div className="clan-metric-card">
@@ -1146,15 +1220,17 @@ export default function Clan({
           </div>
         </div>
 
-        {/* Settings Gear Button (Only Icon, No Text) */}
-        <button
-          type="button"
-          className="clan-settings-gear-btn"
-          onClick={handleOpenSettings}
-          title="Ajustes y Configuración del Clan"
-        >
-          ⚙️
-        </button>
+        {/* Settings Gear Button (Solo visible para el Líder del Clan) */}
+        {isLeader && (
+          <button
+            type="button"
+            className="clan-settings-gear-btn"
+            onClick={handleOpenSettings}
+            title="Ajustes y Configuración del Clan (Solo Líder)"
+          >
+            ⚙️
+          </button>
+        )}
 
         {/* Vault & Actions */}
         <div className="clan-topbar-right">
@@ -1948,8 +2024,12 @@ export default function Clan({
             const currentVault = Number(userClan.vaultGems ?? userClan.vaultUsd)
             const surplusEarnings = Math.max(0, currentVault - WAR_RESERVE)
             const memberCount = Math.max(1, userClan.members.length)
-            const shareEstimate = Math.floor(surplusEarnings / memberCount)
-            const canWithdraw = seasonStatus.isEnded && surplusEarnings > 0 && !isClaimed
+            const myMember = userClan.members.find((m) => m.name === playerName || m.id === playerName)
+            const myPct = typeof myMember?.rewardPercentage === 'number'
+              ? myMember.rewardPercentage
+              : (memberCount > 0 ? Math.round(100 / memberCount) : 0)
+            const shareEstimate = Math.floor(surplusEarnings * (myPct / 100))
+            const canWithdraw = seasonStatus.isEnded && surplusEarnings > 0 && !isClaimed && myPct > 0
 
             return (
               <div className="clan-reward-card clan-reward-card--payout">
@@ -1957,7 +2037,7 @@ export default function Clan({
                 <div className="clan-reward-card__content">
                   <h4>RETIRO DE GANANCIAS DE TEMPORADA (EXCEDENTE)</h4>
                   <p>
-                    Al finalizar los 30 días de temporada, las <strong>ganancias netas generadas en guerras</strong> (todo excedente por encima de la <strong>Reserva Operativa de Guerra de 2,800 Gemas 💎</strong>) se dividen en partes iguales entre los miembros del clan. La reserva base de 2,800 💎 permanece siempre resguardada para los eventos y asaltos de guerra de clanes.
+                    Al finalizar los 30 días de temporada, las <strong>ganancias netas generadas en guerras</strong> (todo excedente por encima de la <strong>Reserva Operativa de Guerra de 2,800 Gemas 💎</strong>) se dividen <strong>porcentualmente</strong> entre los miembros del clan según la participación asignada por el Líder en los Ajustes del Clan. La reserva base de 2,800 💎 permanece siempre resguardada para los eventos y asaltos de guerra.
                   </p>
                   <div className="clan-reward-status-row">
                     <span>
@@ -1966,8 +2046,8 @@ export default function Clan({
                   </div>
                   <div className="clan-reward-status-row">
                     <span>
-                      Tu ganancia retirable (1/{memberCount}): <strong style={{ color: surplusEarnings > 0 ? '#4ade80' : '#94a3b8' }}>
-                        {shareEstimate} Gemas 💎
+                      Tu cuota de ganancia ({myPct}%): <strong style={{ color: surplusEarnings > 0 && myPct > 0 ? '#4ade80' : '#94a3b8' }}>
+                        {shareEstimate} Gemas 💎 {myPct === 0 ? '(0% asignado)' : ''}
                       </strong>
                     </span>
                     {!seasonStatus.isEnded && (
@@ -2078,13 +2158,13 @@ export default function Clan({
       {/* REDESIGNED CLAN SETTINGS MODAL */}
       {showSettingsModal && (
         <div className="clan-modal-backdrop" onClick={() => setShowSettingsModal(false)}>
-          <div className="clan-modal-box clan-settings-modal-box" onClick={(e) => e.stopPropagation()}>
+          <div className="clan-modal-box clan-settings-modal-box clan-settings-modal-box--wide" onClick={(e) => e.stopPropagation()}>
             <div className="clan-modal-header-row">
               <div className="clan-modal-header-title">
                 <span className="clan-modal-header-icon">⚙️</span>
                 <div>
                   <h3>AJUSTES DEL CLAN</h3>
-                  <p>Reglas de admisión, privacidad y gobernanza de guerra</p>
+                  <p>Reglas de admisión, competitividad y reparto de recompensas</p>
                 </div>
               </div>
               <button
@@ -2100,161 +2180,355 @@ export default function Clan({
               </button>
             </div>
 
-            <div className="clan-settings-grid">
-              {/* Setting 1: Privacy Type */}
-              <div className="clan-setting-card">
-                <div className="clan-setting-card__header">
-                  <span className="clan-setting-card__icon">🔒</span>
-                  <div>
-                    <span className="clan-setting-card__title">Privacidad y Admisión</span>
-                    <span className="clan-setting-card__desc">Define cómo ingresan los nuevos miembros</span>
+            {/* Horizontal Settings Tabs Nav */}
+            <div className="clan-settings-tabs-nav">
+              <button
+                type="button"
+                className={`clan-settings-tab-btn ${settingsTab === 'general' ? 'clan-settings-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setSettingsTab('general')
+                }}
+              >
+                <span>⚙️</span> Admisión
+              </button>
+              <button
+                type="button"
+                className={`clan-settings-tab-btn ${settingsTab === 'competitive' ? 'clan-settings-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setSettingsTab('competitive')
+                }}
+              >
+                <span>⚔️</span> Competitivo
+              </button>
+              <button
+                type="button"
+                className={`clan-settings-tab-btn ${settingsTab === 'rewards' ? 'clan-settings-tab-btn--active' : ''}`}
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setSettingsTab('rewards')
+                }}
+              >
+                <span>🎁</span> Rewards (%)
+              </button>
+            </div>
+
+            <div className="clan-settings-tab-content">
+              {settingsTab === 'general' && (
+                <div className="clan-settings-grid">
+                  {/* Setting 1: Privacy Type */}
+                  <div className="clan-setting-card">
+                    <div className="clan-setting-card__header">
+                      <span className="clan-setting-card__icon">🔒</span>
+                      <div>
+                        <span className="clan-setting-card__title">Privacidad y Admisión</span>
+                        <span className="clan-setting-card__desc">Define cómo ingresan los nuevos miembros</span>
+                      </div>
+                    </div>
+                    <div className="clan-setting-tiles-grid">
+                      <button
+                        type="button"
+                        className={`clan-setting-tile ${clanPrivacy === 'public' ? 'clan-setting-tile--active' : ''}`}
+                        onClick={() => {
+                          soundManager.playSound('click', 0.4)
+                          setClanPrivacy('public')
+                        }}
+                      >
+                        <div className="clan-setting-tile__indicator" />
+                        <span className="clan-setting-tile__emoji">🟢</span>
+                        <div className="clan-setting-tile__info">
+                          <strong>ABIERTO</strong>
+                          <small>Ingreso directo (200 Gemas 💎)</small>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`clan-setting-tile ${clanPrivacy === 'request' ? 'clan-setting-tile--active' : ''}`}
+                        onClick={() => {
+                          soundManager.playSound('click', 0.4)
+                          setClanPrivacy('request')
+                        }}
+                      >
+                        <div className="clan-setting-tile__indicator" />
+                        <span className="clan-setting-tile__emoji">🟡</span>
+                        <div className="clan-setting-tile__info">
+                          <strong>CON SOLICITUD</strong>
+                          <small>Requiere aprobación de Líder</small>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`clan-setting-tile ${clanPrivacy === 'closed' ? 'clan-setting-tile--active' : ''}`}
+                        onClick={() => {
+                          soundManager.playSound('click', 0.4)
+                          setClanPrivacy('closed')
+                        }}
+                      >
+                        <div className="clan-setting-tile__indicator" />
+                        <span className="clan-setting-tile__emoji">🔒</span>
+                        <div className="clan-setting-tile__info">
+                          <strong>CERRADO</strong>
+                          <small>Solo invitación privada</small>
+                        </div>
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="clan-setting-tiles-grid">
-                  <button
-                    type="button"
-                    className={`clan-setting-tile ${clanPrivacy === 'public' ? 'clan-setting-tile--active' : ''}`}
-                    onClick={() => {
-                      soundManager.playSound('click', 0.4)
-                      setClanPrivacy('public')
-                    }}
-                  >
-                    <div className="clan-setting-tile__indicator" />
-                    <span className="clan-setting-tile__emoji">🟢</span>
-                    <div className="clan-setting-tile__info">
-                      <strong>ABIERTO</strong>
-                      <small>Ingreso directo (200 Gemas 💎)</small>
-                    </div>
-                  </button>
 
-                  <button
-                    type="button"
-                    className={`clan-setting-tile ${clanPrivacy === 'request' ? 'clan-setting-tile--active' : ''}`}
-                    onClick={() => {
-                      soundManager.playSound('click', 0.4)
-                      setClanPrivacy('request')
-                    }}
-                  >
-                    <div className="clan-setting-tile__indicator" />
-                    <span className="clan-setting-tile__emoji">🟡</span>
-                    <div className="clan-setting-tile__info">
-                      <strong>CON SOLICITUD</strong>
-                      <small>Requiere aprobación de Líder</small>
+                  {/* Setting 4: Auto-Accept Toggle */}
+                  <div className="clan-setting-card clan-setting-card--toggle">
+                    <div className="clan-setting-card__header">
+                      <span className="clan-setting-card__icon">⚡</span>
+                      <div>
+                        <span className="clan-setting-card__title">Aprobación Instantánea</span>
+                        <span className="clan-setting-card__desc">Acepta automáticamente a jugadores que cumplan el ELO y aporten 200 Gemas 💎</span>
+                      </div>
                     </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`clan-setting-tile ${clanPrivacy === 'closed' ? 'clan-setting-tile--active' : ''}`}
-                    onClick={() => {
-                      soundManager.playSound('click', 0.4)
-                      setClanPrivacy('closed')
-                    }}
-                  >
-                    <div className="clan-setting-tile__indicator" />
-                    <span className="clan-setting-tile__emoji">🔒</span>
-                    <div className="clan-setting-tile__info">
-                      <strong>CERRADO</strong>
-                      <small>Solo invitación privada</small>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Setting 2: Minimum ELO Cups */}
-              <div className="clan-setting-card">
-                <div className="clan-setting-card__header">
-                  <span className="clan-setting-card__icon">🏆</span>
-                  <div>
-                    <span className="clan-setting-card__title">Requisito ELO Mínimo</span>
-                    <span className="clan-setting-card__desc">Copas necesarias en la Arena para solicitar ingreso</span>
-                  </div>
-                </div>
-                <div className="clan-setting-elo-grid">
-                  {[0, 1000, 1500, 2000].map((elo) => (
                     <button
-                      key={elo}
                       type="button"
-                      className={`clan-setting-elo-btn ${clanMinElo === elo ? 'clan-setting-elo-btn--active' : ''}`}
+                      className={`clan-setting-switch ${clanAutoAccept ? 'clan-setting-switch--active' : ''}`}
                       onClick={() => {
                         soundManager.playSound('click', 0.4)
-                        setClanMinElo(elo)
+                        setClanAutoAccept((v) => !v)
                       }}
                     >
-                      <span className="clan-setting-elo-val">{elo === 0 ? '0' : elo.toLocaleString()}</span>
-                      <span className="clan-setting-elo-tag">{elo === 0 ? 'Sin Límite' : '🏆 Copas'}</span>
+                      <span className="clan-setting-switch__thumb" />
+                      <span className="clan-setting-switch__label">
+                        {clanAutoAccept ? 'ACTIVADO' : 'DESACTIVADO'}
+                      </span>
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Setting 3: War Permissions */}
-              <div className="clan-setting-card">
-                <div className="clan-setting-card__header">
-                  <span className="clan-setting-card__icon">⚔️</span>
-                  <div>
-                    <span className="clan-setting-card__title">Permisos de Guerra de Clanes</span>
-                    <span className="clan-setting-card__desc">Quién puede declarar asaltos y aceptar guerras</span>
                   </div>
                 </div>
-                <div className="clan-setting-tiles-grid clan-setting-tiles-grid--2col">
-                  <button
-                    type="button"
-                    className={`clan-setting-tile ${clanWarPermission === 'leaders' ? 'clan-setting-tile--active' : ''}`}
-                    onClick={() => {
-                      soundManager.playSound('click', 0.4)
-                      setClanWarPermission('leaders')
-                    }}
-                  >
-                    <div className="clan-setting-tile__indicator" />
-                    <span className="clan-setting-tile__emoji">👑</span>
-                    <div className="clan-setting-tile__info">
-                      <strong>LÍDER Y COLÍDERES</strong>
-                      <small>Control estratégico exclusivo</small>
-                    </div>
-                  </button>
+              )}
 
-                  <button
-                    type="button"
-                    className={`clan-setting-tile ${clanWarPermission === 'all' ? 'clan-setting-tile--active' : ''}`}
-                    onClick={() => {
-                      soundManager.playSound('click', 0.4)
-                      setClanWarPermission('all')
-                    }}
-                  >
-                    <div className="clan-setting-tile__indicator" />
-                    <span className="clan-setting-tile__emoji">⚔️</span>
-                    <div className="clan-setting-tile__info">
-                      <strong>TODOS LOS MIEMBROS</strong>
-                      <small>Cualquiera puede iniciar asaltos</small>
+              {settingsTab === 'competitive' && (
+                <div className="clan-settings-grid">
+                  {/* Setting 2: Minimum ELO Cups */}
+                  <div className="clan-setting-card">
+                    <div className="clan-setting-card__header">
+                      <span className="clan-setting-card__icon">🏆</span>
+                      <div>
+                        <span className="clan-setting-card__title">Requisito ELO Mínimo</span>
+                        <span className="clan-setting-card__desc">Copas necesarias en la Arena para solicitar ingreso</span>
+                      </div>
                     </div>
-                  </button>
-                </div>
-              </div>
+                    <div className="clan-setting-elo-grid">
+                      {[0, 1000, 1500, 2000].map((elo) => (
+                        <button
+                          key={elo}
+                          type="button"
+                          className={`clan-setting-elo-btn ${clanMinElo === elo ? 'clan-setting-elo-btn--active' : ''}`}
+                          onClick={() => {
+                            soundManager.playSound('click', 0.4)
+                            setClanMinElo(elo)
+                          }}
+                        >
+                          <span className="clan-setting-elo-val">{elo === 0 ? '0' : elo.toLocaleString()}</span>
+                          <span className="clan-setting-elo-tag">{elo === 0 ? 'Sin Límite' : '🏆 Copas'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              {/* Setting 4: Auto-Accept Toggle */}
-              <div className="clan-setting-card clan-setting-card--toggle">
-                <div className="clan-setting-card__header">
-                  <span className="clan-setting-card__icon">⚡</span>
-                  <div>
-                    <span className="clan-setting-card__title">Aprobación Instantánea</span>
-                    <span className="clan-setting-card__desc">Acepta automáticamente a jugadores que cumplan el ELO y aporten 200 Gemas 💎</span>
+                  {/* Setting 3: War Permissions */}
+                  <div className="clan-setting-card">
+                    <div className="clan-setting-card__header">
+                      <span className="clan-setting-card__icon">⚔️</span>
+                      <div>
+                        <span className="clan-setting-card__title">Permisos de Guerra de Clanes</span>
+                        <span className="clan-setting-card__desc">Quién puede declarar asaltos y aceptar guerras</span>
+                      </div>
+                    </div>
+                    <div className="clan-setting-tiles-grid clan-setting-tiles-grid--2col">
+                      <button
+                        type="button"
+                        className={`clan-setting-tile ${clanWarPermission === 'leaders' ? 'clan-setting-tile--active' : ''}`}
+                        onClick={() => {
+                          soundManager.playSound('click', 0.4)
+                          setClanWarPermission('leaders')
+                        }}
+                      >
+                        <div className="clan-setting-tile__indicator" />
+                        <span className="clan-setting-tile__emoji">👑</span>
+                        <div className="clan-setting-tile__info">
+                          <strong>LÍDER Y COLÍDERES</strong>
+                          <small>Control estratégico exclusivo</small>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`clan-setting-tile ${clanWarPermission === 'all' ? 'clan-setting-tile--active' : ''}`}
+                        onClick={() => {
+                          soundManager.playSound('click', 0.4)
+                          setClanWarPermission('all')
+                        }}
+                      >
+                        <div className="clan-setting-tile__indicator" />
+                        <span className="clan-setting-tile__emoji">⚔️</span>
+                        <div className="clan-setting-tile__info">
+                          <strong>TODOS LOS MIEMBROS</strong>
+                          <small>Cualquiera puede iniciar asaltos</small>
+                        </div>
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className={`clan-setting-switch ${clanAutoAccept ? 'clan-setting-switch--active' : ''}`}
-                  onClick={() => {
-                    soundManager.playSound('click', 0.4)
-                    setClanAutoAccept((v) => !v)
-                  }}
-                >
-                  <span className="clan-setting-switch__thumb" />
-                  <span className="clan-setting-switch__label">
-                    {clanAutoAccept ? 'ACTIVADO' : 'DESACTIVADO'}
-                  </span>
-                </button>
-              </div>
+              )}
+
+              {settingsTab === 'rewards' && (
+                <div className="clan-rewards-settings-container">
+                  {/* Rewards Banner */}
+                  <div className="clan-rewards-settings-banner">
+                    <div className="clan-rewards-banner-icon">💎</div>
+                    <div className="clan-rewards-banner-text">
+                      <strong>REPARTO SOCIAL DE GANANCIAS DE TEMPORADA</strong>
+                      <p>
+                        Asigna el porcentaje (%) de retiro del excedente de la bóveda para cada miembro según su participación, actividad o inversión.
+                        Si alguien no participó puedes ponerle <strong>0%</strong>, o asignar más a los que invirtieron.
+                        <strong> La suma total debe ser estrictamente 100%.</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Summary & Quick Distribution Row */}
+                  {(() => {
+                    const totalPct = Math.round(
+                      (userClan?.members || []).reduce(
+                        (sum, m) => sum + (Number(memberRewardShares[m.id]) || 0),
+                        0
+                      )
+                    )
+                    const isExactly100 = totalPct === 100
+                    const isUnder = totalPct < 100
+                    const isOver = totalPct > 100
+
+                    const handleEquitableSplit = () => {
+                      if (!userClan?.members?.length) return
+                      soundManager.playSound('click', 0.4)
+                      const count = userClan.members.length
+                      const baseShare = Math.floor(100 / count)
+                      const remainder = 100 - baseShare * count
+                      const newShares: Record<string, number> = {}
+                      userClan.members.forEach((m, idx) => {
+                        newShares[m.id] = idx === 0 ? baseShare + remainder : baseShare
+                      })
+                      setMemberRewardShares(newShares)
+                    }
+
+                    return (
+                      <div className="clan-rewards-stats-bar">
+                        <div className="clan-rewards-total-badge-group">
+                          <span className="clan-rewards-total-label">Suma de Cuotas:</span>
+                          <span
+                            className={`clan-reward-total-pill ${
+                              isExactly100
+                                ? 'clan-reward-total-pill--valid'
+                                : isUnder
+                                ? 'clan-reward-total-pill--under'
+                                : 'clan-reward-total-pill--over'
+                            }`}
+                          >
+                            {isExactly100 && '✅ '}
+                            {isUnder && '⚠️ '}
+                            {isOver && '❌ '}
+                            {totalPct}% / 100%
+                            {isUnder && ` (Falta ${100 - totalPct}%)`}
+                            {isOver && ` (Excede ${totalPct - 100}%)`}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="clan-rewards-equal-btn"
+                          onClick={handleEquitableSplit}
+                          title="Distribuir porcentajes equitativamente entre todos los miembros"
+                        >
+                          ⚖️ Repartir Equitativo
+                        </button>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Members Share List */}
+                  <div className="clan-rewards-members-list">
+                    {(userClan?.members || []).map((m) => {
+                      const currentVal = Number(memberRewardShares[m.id]) || 0
+
+                      const updateVal = (val: number) => {
+                        const clamped = Math.max(0, Math.min(100, Math.round(val)))
+                        setMemberRewardShares((prev) => ({
+                          ...prev,
+                          [m.id]: clamped,
+                        }))
+                      }
+
+                      return (
+                        <div key={m.id} className="clan-reward-member-row">
+                          <div className="clan-reward-member-info">
+                            <span className="clan-reward-member-avatar">
+                              {m.role === 'Líder' ? '👑' : m.role === 'Colíder' ? '🛡️' : '⚔️'}
+                            </span>
+                            <div className="clan-reward-member-meta">
+                              <span className="clan-reward-member-name">
+                                {m.name} {m.name === playerName ? '(Tú)' : ''}
+                              </span>
+                              <span className="clan-reward-member-role-elo">
+                                {m.role} • 🏆 {m.elo ?? 1000} Copas
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="clan-reward-member-controls">
+                            <button
+                              type="button"
+                              className="clan-reward-step-btn"
+                              onClick={() => {
+                                soundManager.playSound('click', 0.2)
+                                updateVal(currentVal - 5)
+                              }}
+                              disabled={currentVal <= 0}
+                              title="Restar 5%"
+                            >
+                              -5%
+                            </button>
+
+                            <div className="clan-reward-input-wrap">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                className="clan-reward-number-input"
+                                value={currentVal}
+                                onChange={(e) => {
+                                  const v = parseInt(e.target.value, 10)
+                                  updateVal(isNaN(v) ? 0 : v)
+                                }}
+                              />
+                              <span className="clan-reward-input-pct">%</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="clan-reward-step-btn"
+                              onClick={() => {
+                                soundManager.playSound('click', 0.2)
+                                updateVal(currentVal + 5)
+                              }}
+                              disabled={currentVal >= 100}
+                              title="Sumar 5%"
+                            >
+                              +5%
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="clan-modal-actions">

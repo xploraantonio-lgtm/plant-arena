@@ -48,4 +48,23 @@ describe('evaluateMarketplaceAccess', () => {
     expect(res.copasActuales).toBe(1000)
     expect(res.copasFaltantes).toBe(350)
   })
+
+  it('permite acceso si tiene Pase VIP y fecha de expiración es futura o nula', () => {
+    const futureDate = new Date(Date.now() + 86400000 * 30).toISOString()
+    const res = evaluateMarketplaceAccess(true, 1000, futureDate)
+    expect(res.canSell).toBe(true)
+    expect(res.unlockedBy).toBe('vip_pass')
+
+    const resNull = evaluateMarketplaceAccess(true, 1000, null)
+    expect(resNull.canSell).toBe(true)
+    expect(resNull.unlockedBy).toBe('vip_pass')
+  })
+
+  it('si el Pase VIP expiró en el pasado y no tiene copas, bloquea venta pero permite compra', () => {
+    const pastDate = new Date(Date.now() - 86400000).toISOString()
+    const res = evaluateMarketplaceAccess(true, 1000, pastDate)
+    expect(res.canSell).toBe(false)
+    expect(res.canBuy).toBe(true)
+    expect(res.unlockedBy).toBe('none')
+  })
 })

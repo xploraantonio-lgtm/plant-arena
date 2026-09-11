@@ -28,6 +28,7 @@ export interface Database {
           colosseum_current_streak: number
           colosseum_max_streak: number
           has_vip_pass: boolean
+          vip_pass_expires_at?: string | null
           claimed_vip_levels: number[]
           is_admin: boolean
           exclude_from_ranking?: boolean
@@ -50,6 +51,7 @@ export interface Database {
           colosseum_current_streak?: number
           colosseum_max_streak?: number
           has_vip_pass?: boolean
+          vip_pass_expires_at?: string | null
           claimed_vip_levels?: number[]
           is_admin?: boolean
           exclude_from_ranking?: boolean
@@ -72,6 +74,7 @@ export interface Database {
           colosseum_current_streak?: number
           colosseum_max_streak?: number
           has_vip_pass?: boolean
+          vip_pass_expires_at?: string | null
           claimed_vip_levels?: number[]
           is_admin?: boolean
           exclude_from_ranking?: boolean
@@ -373,6 +376,7 @@ export interface Database {
           base_hp: number
           max_base_hp: number
           shield_until: string | null
+          reward_shares?: Json | null
           created_at: string
         }
         Insert: {
@@ -388,6 +392,7 @@ export interface Database {
           base_hp?: number
           max_base_hp?: number
           shield_until?: string | null
+          reward_shares?: Json | null
           created_at?: string
         }
         Update: {
@@ -403,6 +408,7 @@ export interface Database {
           base_hp?: number
           max_base_hp?: number
           shield_until?: string | null
+          reward_shares?: Json | null
           created_at?: string
         }
         Relationships: []
@@ -412,18 +418,21 @@ export interface Database {
           clan_id: string
           user_id: string
           role: 'leader' | 'elder' | 'member'
+          reward_percentage?: number | null
           joined_at: string
         }
         Insert: {
           clan_id: string
           user_id: string
           role: 'leader' | 'elder' | 'member'
+          reward_percentage?: number | null
           joined_at?: string
         }
         Update: {
           clan_id?: string
           user_id?: string
           role?: 'leader' | 'elder' | 'member'
+          reward_percentage?: number | null
           joined_at?: string
         }
         Relationships: []

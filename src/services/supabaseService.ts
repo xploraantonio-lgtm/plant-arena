@@ -1559,6 +1559,27 @@ export const SupabaseService = {
     }
   },
 
+  async updateClanRewardShares(
+    clanId: string,
+    shares: { user_id: string; percentage: number }[]
+  ): Promise<{ success: boolean; total_percentage?: number; members_updated?: number; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('update_clan_reward_shares', {
+        p_clan_id: clanId,
+        p_shares: shares,
+      })
+      if (error) {
+        logError('updateClanRewardShares', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; total_percentage?: number; members_updated?: number; error?: string; message?: string }
+    } catch (e: any) {
+      logError('updateClanRewardShares', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
   async requestClanPlantDonation(plantId: string): Promise<{ success: boolean; donation_id?: string; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
