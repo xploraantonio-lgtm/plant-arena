@@ -167,8 +167,6 @@ export default function Marketplace({
   }, [hasVipPass, userElo])
 
   const canSell = accessInfo.canSell
-  const hasAccess = canSell
-  const canBuy = accessInfo.canBuy // ¡Todos pueden comprar!
   const copasActuales = accessInfo.copasActuales
 
 

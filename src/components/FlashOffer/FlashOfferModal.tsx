@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import gemaIcon from '../../assets/ico/gema.webp'
 import { soundManager } from '../../utils/audioManager'
 import { inventoryService } from '../../services/inventoryService'
-import { FLASH_OFFER_PRICE_GEMS } from '../../utils/gameConstants'
+import { FLASH_OFFER_PRICE_GEMS, PLANT_CONFIGS } from '../../utils/gameConstants'
 import './FlashOfferModal.css'
 
 interface FlashOfferModalProps {
@@ -203,7 +203,9 @@ export default function FlashOfferModal({
               </div>
               <div className="flash-offer-stat-item">
                 <span className="flash-offer-stat-label">Recarga</span>
-                <span className="flash-offer-stat-val">15s ⏱️</span>
+                <span className="flash-offer-stat-val">
+                  {PLANT_CONFIGS.jalapeno ? `${PLANT_CONFIGS.jalapeno.cooldownMs / 1000}s ⏱️` : '45s ⏱️'}
+                </span>
               </div>
               <div className="flash-offer-stat-item">
                 <span className="flash-offer-stat-label">Tipo</span>
