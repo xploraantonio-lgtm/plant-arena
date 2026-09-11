@@ -1544,6 +1544,21 @@ export const SupabaseService = {
     }
   },
 
+  async claimSeasonClanEarnings(): Promise<{ success: boolean; share?: number; new_vault?: number; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('claim_season_clan_earnings')
+      if (error) {
+        logError('claimSeasonClanEarnings', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; share?: number; new_vault?: number; error?: string; message?: string }
+    } catch (e: any) {
+      logError('claimSeasonClanEarnings', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
   async requestClanPlantDonation(plantId: string): Promise<{ success: boolean; donation_id?: string; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {

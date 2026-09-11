@@ -1329,20 +1329,20 @@ export default function Shop({
 
               <p className="shop-pack-details-desc">
                 {selectedPackDetails === 'basic'
-                  ? 'Contiene 3 cartas de plantas. Probabilidades equilibradas para ampliar tu equipo inicial de combate.'
+                  ? 'Contiene 3 cartas (2 de soporte + 1 destacada). Diseñado para ampliar tu equipo inicial con 10% de Rara garantizada por sobre.'
                   : selectedPackDetails === 'epic'
-                  ? 'Contiene 4 cartas de plantas para potenciar tu jardín con altas probabilidades de cartas especiales.'
-                  : 'Contiene 4 cartas de plantas de gran poder, sin cartas comunes y con probabilidad de legendaria.'}
+                  ? 'Contiene 4 cartas (3 de soporte + 1 destacada con probabilidad de Épica o Legendaria).'
+                  : 'Contiene 4 cartas sin comunes (3 de soporte + 1 destacada con 10% de Legendaria). Máximo 1 Legendaria por sobre.'}
               </p>
 
               <div className="shop-pack-details-odds">
-                <strong>🎯 PROBABILIDADES DE DROP (POR CARTA):</strong>
+                <strong>🎯 PROBABILIDADES DEL SOBRE (CARTA DESTACADA):</strong>
                 <p>
                   {selectedPackDetails === 'basic'
-                    ? '70% Común | 20% Poco Común | 10% Rara'
+                    ? 'Destacada: 10% Rara | 30% Poco Común | 60% Común (Máx 1 Rara)'
                     : selectedPackDetails === 'epic'
-                    ? '30% Común | 40% Poco Común | 20% Rara | 8% Épica | 2% Legendaria'
-                    : '40% Poco Común | 30% Rara | 20% Épica | 10% Legendaria'}
+                    ? 'Destacada: 2% Legendaria | 8% Épica | 30% Rara | 60% Poco Común'
+                    : 'Destacada: 10% Legendaria | 30% Épica | 40% Rara | 20% Poco Común (10% en el sobre)'}
                 </p>
               </div>
 

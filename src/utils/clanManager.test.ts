@@ -15,24 +15,49 @@ describe('ClanManager & Gem Valuations', () => {
     mockLocalStorage.clear()
   })
 
-  it('creates clan with 500 gems initial vault', () => {
+  it('creates clan with 0 gems initial vault (foundation tax does not enter vault)', () => {
     const clan = ClanManager.createClan('Los Gladiadores', 'LG', '👑', 'Descripción del clan', 'Líder Supremo', 1200)
     expect(clan).toBeDefined()
     expect(clan.name).toBe('LOS GLADIADORES')
     expect(clan.tag).toBe('#LG')
-    expect(clan.vaultUsd).toBe(500.0)
+    expect(clan.vaultUsd).toBe(0.0) // 0 initial gems in vault
     expect(clan.members.length).toBe(1)
     expect(clan.members[0].name).toBe('Líder Supremo')
   })
 
-  it('allows member joining with valid parameters', () => {
+  it('adds 200 gems to vault when a member joins', () => {
     const clan = ClanManager.createClan('Los Gladiadores', 'LG', '👑', 'Descripción del clan', 'Líder Supremo', 1200)
     const success = ClanManager.joinClan(clan.id, 'NuevoGuerrero', 1100)
     expect(success).toBe(true)
 
     const updatedClan = ClanManager.getClans().find((c) => c.id === clan.id)
     expect(updatedClan?.members.length).toBe(2)
-    expect(updatedClan?.vaultUsd).toBe(700.0) // 500 initial + 200 join fee
+    expect(updatedClan?.vaultUsd).toBe(200.0) // 0 initial + 200 join fee
+  })
+
+  it('reaches exactly 2,800 gems base war reserve when full with 15 members (1 leader + 14 joined)', () => {
+    const clan = ClanManager.createClan('Los Gladiadores', 'LG', '👑', 'Descripción del clan', 'Líder Supremo', 1200)
+    for (let i = 1; i <= 14; i++) {
+      ClanManager.joinClan(clan.id, `Miembro_${i}`, 1000 + i * 10)
+    }
+    const fullClan = ClanManager.getClans().find((c) => c.id === clan.id)
+    expect(fullClan?.members.length).toBe(15)
+    expect(fullClan?.vaultUsd).toBe(2800.0) // 14 * 200 = 2,800 💎
+  })
+
+  it('only distributes surplus earnings above the 2,800 gems War Reserve on season payout', () => {
+    const clan = ClanManager.createClan('Los Gladiadores', 'LG', '👑', 'Descripción del clan', 'Líder Supremo', 1200)
+    for (let i = 1; i <= 14; i++) {
+      ClanManager.joinClan(clan.id, `Miembro_${i}`, 1000 + i * 10)
+    }
+    // At 2,800 gems (base reserve), payout must be 0
+    expect(ClanManager.claimSeasonVaultPayout(clan.id, 'Miembro_1')).toBe(0)
+
+    // Clan earns 1,500 gems in clan wars -> Total vault = 4,300 gems (surplus = 1,500 gems)
+    ClanManager.depositToVault(clan.id, 1500.0)
+    const share = ClanManager.claimSeasonVaultPayout(clan.id, 'Miembro_1')
+    // 15 members: 1500 / 15 = 100 gems
+    expect(share).toBe(100)
   })
 
   it('protects active warrior with >= 2 rounds from kick', () => {

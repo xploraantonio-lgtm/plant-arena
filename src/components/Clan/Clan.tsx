@@ -421,7 +421,12 @@ export default function Clan({
       if (onRefreshUserData) void onRefreshUserData()
 
       soundManager.playSound('victory', 0.8)
-      showModalAlert('¡CLAN CREADO!', `¡El clan "${newClanName.trim().toUpperCase()}" ha sido fundado con éxito!\nSe descontaron 500 Gemas 💎 y se depositaron en el Tesoro del Clan.`, '🎉', 'success')
+      showModalAlert(
+        '¡CLAN CREADO!',
+        `¡El clan "${newClanName.trim().toUpperCase()}" ha sido fundado con éxito!\nSe descontaron 500 Gemas 💎 como tasa de registro.\nEl Tesoro del clan inicia en 0 Gemas 💎 y crecerá con las cuotas de ingreso (200 💎) de los miembros que se unan.`,
+        '🎉',
+        'success'
+      )
       if (res.clan_id) {
         ClanManager.setUserClanId(res.clan_id)
       }
@@ -707,6 +712,19 @@ export default function Clan({
       return
     }
 
+    if (userClan.settings?.warPermission === 'leaders') {
+      const myRole = userClan.members.find((m) => m.name === playerName)?.role || (userClan.leader === playerName ? 'Líder' : 'Miembro')
+      if (myRole !== 'Líder' && myRole !== 'Colíder') {
+        showModalAlert(
+          'PERMISO DENEGADO',
+          'Según los ajustes de tu clan, solo el Líder y Colíderes tienen autorización para iniciar asaltos de guerra.',
+          '🛡️',
+          'warning'
+        )
+        return
+      }
+    }
+
     showModalConfirm(
       'ASALTO DE GUERRA (500 Gemas 💎)',
       `¿Deseas asaltar a "${defenderClan.name}" por 500 Gemas 💎 del Tesoro?\n¡Si ganas, tu clan suma +500 Gemas 💎! Si pierdes, ellos se llevan 500 Gemas 💎.`,
@@ -748,34 +766,59 @@ export default function Clan({
     }
   }
 
-  // CLAIM SEASON VAULT PAYOUT
-  const handleClaimSeasonPayout = () => {
+  // CLAIM SEASON VAULT PAYOUT (SOLO GANANCIAS NETAS SOBRE LA RESERVA DE 2,800 💎)
+  const handleClaimSeasonPayout = async () => {
     if (!userClan) return
     const seasonStatus = SeasonManager.getSeasonStatus()
     if (!seasonStatus.isEnded) {
       showModalAlert(
         'TEMPORADA EN CURSO',
-        `El reparto y retiro del Tesoro se habilitará al finalizar los 30 días de la temporada actual (${seasonStatus.formattedCountdown} restantes).`,
+        `El reparto y retiro de ganancias se habilitará al finalizar los 30 días de la temporada actual (${seasonStatus.formattedCountdown} restantes).`,
         '⏳',
         'warning'
       )
       return
     }
-    if ((userClan.vaultGems ?? userClan.vaultUsd) <= 0) {
-      showModalAlert('TESORO EN 0', 'El Tesoro del Clan está en 0 Gemas 💎.', '⚠️', 'warning')
+
+    const WAR_RESERVE = 2800.0
+    const currentVault = Number(userClan.vaultGems ?? userClan.vaultUsd)
+    const surplusEarnings = Math.max(0, currentVault - WAR_RESERVE)
+
+    if (surplusEarnings <= 0) {
+      showModalAlert(
+        'SIN GANANCIAS EXCEDENTES',
+        `El Tesoro actual (${currentVault.toFixed(0)} 💎) se encuentra dentro de la Reserva Operativa de Guerra (2,800 💎).\n\nEsta reserva base permanece siempre en el clan para defender la base y participar en futuras guerras. Solo las ganancias netas generadas por encima de los 2,800 💎 pueden ser retiradas.`,
+        '🛡️',
+        'warning'
+      )
       return
     }
     if (userClan.seasonPayoutClaimedMembers.includes(playerName)) {
-      showModalAlert('YA COBRADO', 'Ya cobraste tu parte del Tesoro de Temporada.', '⚠️', 'warning')
+      showModalAlert('YA COBRADO', 'Ya cobraste tu parte de las ganancias de Temporada.', '⚠️', 'warning')
       return
+    }
+
+    try {
+      const remoteRes = await supabaseService.claimSeasonClanEarnings()
+      if (remoteRes.success && remoteRes.share && remoteRes.share > 0) {
+        onAddTokens(remoteRes.share)
+        soundManager.playSound('victory', 1)
+        showModalAlert('¡GANANCIAS RETIRADAS!', `¡+${Math.floor(remoteRes.share)} Gemas 💎 de ganancias de temporada transferidas a tu saldo!`, '💎', 'success')
+        await refreshClanData()
+        return
+      }
+    } catch {
+      // Fallback a ClanManager local
     }
 
     const share = ClanManager.claimSeasonVaultPayout(userClan.id, playerName)
     if (share > 0) {
       onAddTokens(share)
       soundManager.playSound('victory', 1)
-      showModalAlert('¡TESORO RETIRADO!', `¡+${Math.floor(share)} Gemas 💎 transferidas exitosamente a tu saldo!`, '💎', 'success')
-      refreshClanData()
+      showModalAlert('¡GANANCIAS RETIRADAS!', `¡+${Math.floor(share)} Gemas 💎 transferidas exitosamente a tu saldo!`, '💎', 'success')
+      await refreshClanData()
+    } else {
+      showModalAlert('RESERVA PROTEGIDA', 'No hay ganancias por encima de la reserva de guerra de 2,800 Gemas.', '🛡️', 'info')
     }
   }
 
@@ -799,8 +842,8 @@ export default function Clan({
           <div className="clan-promo-banner__badge">⚔️ ALTO RENDIMIENTO & SAQUEOS REALES</div>
           <h3 className="clan-promo-banner__title">Únete a un Clan (200 💎) o Funda el tuyo (500 💎)</h3>
           <p className="clan-promo-banner__desc">
-            Colabora con 15 jugadores, pide semillas diarias gratis, asalta el tesoro de clanes rivales por 500 Gemas 💎
-            y reparte las ganancias de la temporada entre todos los miembros.
+            Funda tu clan (500 💎 de registro) o ingresa a uno existente por 200 💎 (100% va al Tesoro).
+            Con 15 miembros se consolida la Reserva de Guerra de 2,800 💎 y al finalizar la temporada se reparten las ganancias netas de los asaltos.
           </p>
         </div>
 
@@ -1051,16 +1094,20 @@ export default function Clan({
 
             <div className="clan-create-summary">
               <div className="clan-create-summary__item">
-                <span>Costo de Creación:</span>
+                <span>Tasa de Registro (Impuesto):</span>
                 <strong>500 Gemas 💎</strong>
               </div>
               <div className="clan-create-summary__item">
                 <span>Tesoro Inicial del Clan:</span>
-                <strong style={{ color: '#4ade80' }}>500 Gemas 💎</strong>
+                <strong style={{ color: '#94a3b8' }}>0 Gemas 💎 (Inicia en cero)</strong>
               </div>
               <div className="clan-create-summary__item">
-                <span>Capacidad de Miembros:</span>
-                <strong>15 Jugadores</strong>
+                <span>Tasa de Ingreso por Miembro:</span>
+                <strong style={{ color: '#4ade80' }}>200 Gemas 💎 (100% al Tesoro)</strong>
+              </div>
+              <div className="clan-create-summary__item">
+                <span>Reserva de Guerra (15 Miembros):</span>
+                <strong style={{ color: '#38bdf8' }}>2,800 Gemas 💎</strong>
               </div>
             </div>
 
@@ -1303,7 +1350,7 @@ export default function Clan({
             return !isShielded && !isDefeatedRival
           }
           if (rivalFilter === 'topVault') {
-            return (rival.vaultGems ?? rival.vaultUsd) >= 10
+            return (rival.vaultGems ?? rival.vaultUsd) >= 1000
           }
           return true
         })
@@ -1414,7 +1461,7 @@ export default function Clan({
                       className={`clan-filter-pill ${rivalFilter === 'topVault' ? 'clan-filter-pill--active' : ''}`}
                       onClick={() => setRivalFilter('topVault')}
                     >
-                      💎 Top Tesoros (+10 💎)
+                      💎 Top Tesoros (+1,000 💎)
                     </button>
                   </div>
                 </div>
@@ -1548,7 +1595,7 @@ export default function Clan({
                   </div>
                   <div className="clan-pstat-card">
                     <span className="clan-pstat-val" style={{ color: '#4ade80' }}>
-                      +{(userClan.wins * 5).toFixed(0)} 💎
+                      +{(userClan.wins * 500).toLocaleString()} 💎
                     </span>
                     <span className="clan-pstat-lbl">Botín Acumulado Ganado</span>
                   </div>
@@ -1576,7 +1623,7 @@ export default function Clan({
                             <td><strong>{m.name}</strong></td>
                             <td><span className={`clan-role-badge clan-role--${m.role.toLowerCase()}`}>{m.role}</span></td>
                             <td>🏆 {m.elo}</td>
-                            <td>⚔️ {m.roundsParticipated || 3} rondas</td>
+                            <td>⚔️ {m.roundsParticipated || 0} rondas</td>
                             <td>🌱 {m.donatedCount}</td>
                             <td>
                               <span className={isProtected ? 'clan-status-badge--protected' : 'clan-status-badge--active'}>
@@ -1870,20 +1917,32 @@ export default function Clan({
           {(() => {
             const seasonStatus = SeasonManager.getSeasonStatus()
             const isClaimed = userClan.seasonPayoutClaimedMembers.includes(playerName)
-            const canWithdraw = seasonStatus.isEnded && (userClan.vaultGems ?? userClan.vaultUsd) > 0 && !isClaimed
+            const WAR_RESERVE = 2800.0
+            const currentVault = Number(userClan.vaultGems ?? userClan.vaultUsd)
+            const surplusEarnings = Math.max(0, currentVault - WAR_RESERVE)
+            const memberCount = Math.max(1, userClan.members.length)
+            const shareEstimate = Math.floor(surplusEarnings / memberCount)
+            const canWithdraw = seasonStatus.isEnded && surplusEarnings > 0 && !isClaimed
 
             return (
               <div className="clan-reward-card clan-reward-card--payout">
                 <div className="clan-reward-card__icon">💎</div>
                 <div className="clan-reward-card__content">
-                  <h4>REPARTO DEL TESORO DE TEMPORADA</h4>
+                  <h4>RETIRO DE GANANCIAS DE TEMPORADA (EXCEDENTE)</h4>
                   <p>
-                    Al finalizar los 30 días de temporada, el Tesoro acumulado (<strong>{Number(userClan.vaultGems ?? userClan.vaultUsd).toFixed(0)} Gemas 💎</strong>) se divide en partes iguales entre los miembros del clan.
+                    Al finalizar los 30 días de temporada, las <strong>ganancias netas generadas en guerras</strong> (todo excedente por encima de la <strong>Reserva Operativa de Guerra de 2,800 Gemas 💎</strong>) se dividen en partes iguales entre los miembros del clan. La reserva base de 2,800 💎 permanece siempre resguardada para los eventos y asaltos de guerra de clanes.
                   </p>
                   <div className="clan-reward-status-row">
-                    <span>Tu porción estimada (1/{userClan.members.length}): <strong style={{ color: '#4ade80' }}>
-                      {(Number(userClan.vaultGems ?? userClan.vaultUsd) / Math.max(1, userClan.members.length)).toFixed(0)} Gemas 💎
-                    </strong></span>
+                    <span>
+                      Tesoro Total: <strong>{currentVault.toFixed(0)} 💎</strong> | Reserva: <strong>2,800 💎</strong> | Ganancias: <strong style={{ color: '#4ade80' }}>+{surplusEarnings.toFixed(0)} 💎</strong>
+                    </span>
+                  </div>
+                  <div className="clan-reward-status-row">
+                    <span>
+                      Tu ganancia retirable (1/{memberCount}): <strong style={{ color: surplusEarnings > 0 ? '#4ade80' : '#94a3b8' }}>
+                        {shareEstimate} Gemas 💎
+                      </strong>
+                    </span>
                     {!seasonStatus.isEnded && (
                       <span className="clan-season-time-tag">⏳ Cierra en: {seasonStatus.formattedCountdown}</span>
                     )}
@@ -1894,13 +1953,15 @@ export default function Clan({
                   className={`clan-claim-reward-btn clan-claim-reward-btn--gold ${!canWithdraw ? 'clan-claim-reward-btn--disabled' : ''}`}
                   disabled={!canWithdraw}
                   onClick={handleClaimSeasonPayout}
-                  title={!seasonStatus.isEnded ? `Disponible en ${seasonStatus.formattedCountdown}` : 'Retirar fondos'}
+                  title={!seasonStatus.isEnded ? `Disponible en ${seasonStatus.formattedCountdown}` : surplusEarnings <= 0 ? 'No hay ganancias sobre la reserva de 2,800 💎' : 'Retirar ganancias'}
                 >
                   {isClaimed
-                    ? '✅ RETIRADO'
+                    ? '✅ YA RETIRADO'
                     : !seasonStatus.isEnded
                     ? `⏳ RETIRAR (${seasonStatus.formattedCountdown})`
-                    : '💎 RETIRAR'}
+                    : surplusEarnings <= 0
+                    ? '🛡️ RESERVA PROTEGIDA'
+                    : '💎 RETIRAR GANANCIAS'}
                 </button>
               </div>
             )

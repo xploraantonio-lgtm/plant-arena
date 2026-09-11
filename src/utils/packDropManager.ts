@@ -57,68 +57,116 @@ const POOL_RARA: PlantId[] = ['twinsunflower']
 const POOL_EPICA: PlantId[] = ['aloe', 'tallnut']
 const POOL_LEGENDARIA: PlantId[] = ['iceberglettuce', 'threepeater']
 
-export function rollSingleCardFromPack(packId: PackId, currentlyUnlocked: PlantId[]): PackDropResult {
+export function rollSingleCardFromPack(
+  packId: PackId,
+  currentlyUnlocked: PlantId[],
+  isLuckySlot: boolean = false
+): PackDropResult {
   const rand = Math.random() * 100
   let chosenPlant: PlantId
   let rarityLabel: 'COMÚN' | 'POCO COMÚN' | 'RARA' | 'ÉPICA' | 'LEGENDARIA'
   let rarityColor: string
 
   if (packId === 'basic') {
-    // 3 Cards: 70% Common, 20% Uncommon, 10% Rare
-    if (rand < 70) {
-      chosenPlant = POOL_COMUN[Math.floor(Math.random() * POOL_COMUN.length)]
-      rarityLabel = 'COMÚN'
-      rarityColor = '#4ade80'
-    } else if (rand < 90) {
-      chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
-      rarityLabel = 'POCO COMÚN'
-      rarityColor = '#22d3ee'
+    // 3 Cartas en total: 2 de soporte + 1 destacada (10% Rara en el sobre)
+    if (!isLuckySlot) {
+      if (rand < 75) {
+        chosenPlant = POOL_COMUN[Math.floor(Math.random() * POOL_COMUN.length)]
+        rarityLabel = 'COMÚN'
+        rarityColor = '#4ade80'
+      } else {
+        chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
+        rarityLabel = 'POCO COMÚN'
+        rarityColor = '#22d3ee'
+      }
     } else {
-      chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
-      rarityLabel = 'RARA'
-      rarityColor = '#60a5fa'
+      // Carta Destacada: 60% Común, 30% Poco Común, 10% Rara
+      if (rand < 60) {
+        chosenPlant = POOL_COMUN[Math.floor(Math.random() * POOL_COMUN.length)]
+        rarityLabel = 'COMÚN'
+        rarityColor = '#4ade80'
+      } else if (rand < 90) {
+        chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
+        rarityLabel = 'POCO COMÚN'
+        rarityColor = '#22d3ee'
+      } else {
+        chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
+        rarityLabel = 'RARA'
+        rarityColor = '#60a5fa'
+      }
     }
   } else if (packId === 'epic') {
-    // 4 Cards: 30% Common, 40% Uncommon, 20% Rare, 8% Epic, 2% Legendary
-    if (rand < 30) {
-      chosenPlant = POOL_COMUN[Math.floor(Math.random() * POOL_COMUN.length)]
-      rarityLabel = 'COMÚN'
-      rarityColor = '#4ade80'
-    } else if (rand < 70) {
-      chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
-      rarityLabel = 'POCO COMÚN'
-      rarityColor = '#22d3ee'
-    } else if (rand < 90) {
-      chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
-      rarityLabel = 'RARA'
-      rarityColor = '#60a5fa'
-    } else if (rand < 98) {
-      chosenPlant = POOL_EPICA[Math.floor(Math.random() * POOL_EPICA.length)]
-      rarityLabel = 'ÉPICA'
-      rarityColor = '#c084fc'
+    // 4 Cartas en total: 3 de soporte + 1 destacada (8% Épica, 2% Legendaria en el sobre)
+    if (!isLuckySlot) {
+      if (rand < 40) {
+        chosenPlant = POOL_COMUN[Math.floor(Math.random() * POOL_COMUN.length)]
+        rarityLabel = 'COMÚN'
+        rarityColor = '#4ade80'
+      } else if (rand < 90) {
+        chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
+        rarityLabel = 'POCO COMÚN'
+        rarityColor = '#22d3ee'
+      } else {
+        chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
+        rarityLabel = 'RARA'
+        rarityColor = '#60a5fa'
+      }
     } else {
-      chosenPlant = POOL_LEGENDARIA[Math.floor(Math.random() * POOL_LEGENDARIA.length)]
-      rarityLabel = 'LEGENDARIA'
-      rarityColor = '#fbbf24'
+      // Carta Destacada: 60% Poco Común, 30% Rara, 8% Épica, 2% Legendaria
+      if (rand < 60) {
+        chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
+        rarityLabel = 'POCO COMÚN'
+        rarityColor = '#22d3ee'
+      } else if (rand < 90) {
+        chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
+        rarityLabel = 'RARA'
+        rarityColor = '#60a5fa'
+      } else if (rand < 98) {
+        chosenPlant = POOL_EPICA[Math.floor(Math.random() * POOL_EPICA.length)]
+        rarityLabel = 'ÉPICA'
+        rarityColor = '#c084fc'
+      } else {
+        chosenPlant = POOL_LEGENDARIA[Math.floor(Math.random() * POOL_LEGENDARIA.length)]
+        rarityLabel = 'LEGENDARIA'
+        rarityColor = '#fbbf24'
+      }
     }
   } else {
-    // 4 Cards: 0% Common, 40% Uncommon, 30% Rare, 20% Epic, 10% Legendary
-    if (rand < 40) {
-      chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
-      rarityLabel = 'POCO COMÚN'
-      rarityColor = '#22d3ee'
-    } else if (rand < 70) {
-      chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
-      rarityLabel = 'RARA'
-      rarityColor = '#60a5fa'
-    } else if (rand < 90) {
-      chosenPlant = POOL_EPICA[Math.floor(Math.random() * POOL_EPICA.length)]
-      rarityLabel = 'ÉPICA'
-      rarityColor = '#c084fc'
+    // 4 Cartas en total: 3 de soporte + 1 destacada (10% Legendaria en el sobre, CERO duplicadas)
+    if (!isLuckySlot) {
+      // Soporte: 0% Común, 50% Poco Común, 40% Rara, 10% Épica (0% Legendaria)
+      if (rand < 50) {
+        chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
+        rarityLabel = 'POCO COMÚN'
+        rarityColor = '#22d3ee'
+      } else if (rand < 90) {
+        chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
+        rarityLabel = 'RARA'
+        rarityColor = '#60a5fa'
+      } else {
+        chosenPlant = POOL_EPICA[Math.floor(Math.random() * POOL_EPICA.length)]
+        rarityLabel = 'ÉPICA'
+        rarityColor = '#c084fc'
+      }
     } else {
-      chosenPlant = POOL_LEGENDARIA[Math.floor(Math.random() * POOL_LEGENDARIA.length)]
-      rarityLabel = 'LEGENDARIA'
-      rarityColor = '#fbbf24'
+      // Carta Destacada Jackpot: 20% Poco Común, 40% Rara, 30% Épica, 10% Legendaria
+      if (rand < 20) {
+        chosenPlant = POOL_POCO_COMUN[Math.floor(Math.random() * POOL_POCO_COMUN.length)]
+        rarityLabel = 'POCO COMÚN'
+        rarityColor = '#22d3ee'
+      } else if (rand < 60) {
+        chosenPlant = POOL_RARA[Math.floor(Math.random() * POOL_RARA.length)]
+        rarityLabel = 'RARA'
+        rarityColor = '#60a5fa'
+      } else if (rand < 90) {
+        chosenPlant = POOL_EPICA[Math.floor(Math.random() * POOL_EPICA.length)]
+        rarityLabel = 'ÉPICA'
+        rarityColor = '#c084fc'
+      } else {
+        chosenPlant = POOL_LEGENDARIA[Math.floor(Math.random() * POOL_LEGENDARIA.length)]
+        rarityLabel = 'LEGENDARIA'
+        rarityColor = '#fbbf24'
+      }
     }
   }
 
@@ -138,7 +186,8 @@ export function openSeedPack(packId: PackId, currentlyUnlocked: PlantId[]): Pack
   const results: PackDropResult[] = []
 
   for (let i = 0; i < count; i++) {
-    results.push(rollSingleCardFromPack(packId, currentlyUnlocked))
+    const isLuckySlot = i === count - 1
+    results.push(rollSingleCardFromPack(packId, currentlyUnlocked, isLuckySlot))
   }
 
   return results

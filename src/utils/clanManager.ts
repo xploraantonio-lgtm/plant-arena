@@ -152,7 +152,7 @@ export class ClanManager {
   }
 
   /**
-   * Create a new Clan (Costs $5.00 USD, incepts $5.00 into Clan Vault)
+   * Create a new Clan (Costs 500 Gemas as foundation tax; initial Clan Vault starts at 0 💎)
    */
   static createClan(
     name: string,
@@ -179,7 +179,7 @@ export class ClanManager {
           joinedAt: new Date().toISOString().split('T')[0],
         },
       ],
-      vaultUsd: 500.0, // Initial 500 💎 in vault from creation
+      vaultUsd: 0.0, // Initial 0 💎 in vault from creation (500 💎 is a foundation tax)
       status: 'active',
       wins: 0,
       losses: 0,
@@ -262,7 +262,7 @@ export class ClanManager {
           id: `dep-init-1`,
           clanId,
           depositorName: clan?.leader || 'Fundador',
-          amountUsd: 5.0,
+          amountUsd: 500.0,
           timestamp: Date.now() - 86400000 * 3,
           reason: 'fund',
         },
@@ -270,7 +270,7 @@ export class ClanManager {
           id: `dep-init-${idx + 2}`,
           clanId,
           depositorName: m.name,
-          amountUsd: 2.0,
+          amountUsd: 200.0,
           timestamp: Date.now() - 86400000 * (2 - idx * 0.5),
           reason: 'join' as const,
         })),
@@ -280,7 +280,7 @@ export class ClanManager {
                 id: `dep-init-extra`,
                 clanId,
                 depositorName: starterMembers[1]?.name || 'Colíder',
-                amountUsd: 10.0,
+                amountUsd: 500.0,
                 timestamp: Date.now() - 3600000 * 12,
                 reason: 'deposit' as const,
               },
@@ -402,6 +402,7 @@ export class ClanManager {
 
   /**
    * Claim season vault payout
+   * Only net earnings above the 2,800 💎 untouchable War Reserve are eligible for distribution.
    */
   static claimSeasonVaultPayout(clanId: string, playerName: string): number {
     const clans = this.getClans()
@@ -409,12 +410,19 @@ export class ClanManager {
     if (!clan) return 0
     if (clan.seasonPayoutClaimedMembers.includes(playerName)) return 0
 
+    const WAR_RESERVE = 2800.0
+    const totalVault = clan.vaultGems ?? clan.vaultUsd
+    const surplus = Math.max(0, totalVault - WAR_RESERVE)
+    if (surplus <= 0) return 0
+
     const memberCount = Math.max(1, clan.members.length)
-    const shareUsd = Number((clan.vaultUsd / memberCount).toFixed(2))
+    const shareGems = Number((surplus / memberCount).toFixed(0))
+    if (shareGems <= 0) return 0
 
     clan.seasonPayoutClaimedMembers.push(playerName)
+    clan.vaultUsd = Math.max(WAR_RESERVE, clan.vaultUsd - shareGems)
     this.saveClans(clans)
-    return shareUsd
+    return shareGems
   }
 
   /**
@@ -610,7 +618,7 @@ export class ClanManager {
         challengerClanName: 'SOLAR LEGENDS',
         defenderClanName: 'CYBER PLANTS',
         winnerClanName: 'SOLAR LEGENDS',
-        stolenUsd: 5.0,
+        stolenUsd: 500.0,
         timestamp: Date.now() - 14400000,
       },
       {
@@ -618,7 +626,7 @@ export class ClanManager {
         challengerClanName: 'ANTIGRAVITY GUILD',
         defenderClanName: 'FROST GUILD',
         winnerClanName: 'ANTIGRAVITY GUILD',
-        stolenUsd: 5.0,
+        stolenUsd: 500.0,
         timestamp: Date.now() - 28800000,
       },
     ]
