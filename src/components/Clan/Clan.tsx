@@ -296,14 +296,23 @@ export default function Clan({
             badge: c.badge || '👑',
             description: c.description || '',
             leader: c.leader || 'Líder',
-            members: Array(c.member_count || 1).fill({}).map((_, i) => ({
-              id: `mem-${i}`,
-              name: i === 0 ? c.leader : `Miembro ${i + 1}`,
-              role: i === 0 ? 'Líder' : 'Miembro',
-              elo: 1000,
-              donatedCount: 0,
-              joinedAt: '',
-            })),
+            members: Array.isArray(c.members) && c.members.length > 0
+              ? c.members.map((m: any, idx: number) => ({
+                  id: m.id || `mem-${idx}`,
+                  name: m.name || 'Guerrero',
+                  role: m.role || (idx === 0 ? 'Líder' : 'Miembro'),
+                  elo: Number(m.elo || 1000),
+                  donatedCount: Number(m.donatedCount || 0),
+                  joinedAt: typeof m.joinedAt === 'string' ? m.joinedAt.split('T')[0] : '',
+                }))
+              : Array(c.member_count || 1).fill({}).map((_, i) => ({
+                  id: `mem-${i}`,
+                  name: i === 0 ? c.leader : `Miembro ${i + 1}`,
+                  role: i === 0 ? 'Líder' : 'Miembro',
+                  elo: 1000,
+                  donatedCount: 0,
+                  joinedAt: '',
+                })),
             vaultGems: Number(c.vaultGems || 0),
             vaultUsd: Number(c.vaultGems || 0),
             status: c.status || 'active',
