@@ -595,7 +595,6 @@ export default function Shop({
                   <h4 className="shop-pack-name">Sobre Básico</h4>
                   <div className="shop-pack-pricing-col">
                     <span className="shop-pack-price-tag">{packPrice('basic').toLocaleString('en-US')} 💎 Gemas</span>
-                    <span className="shop-pack-details-price">💵 Precio: $3.00 USD</span>
                   </div>
                 </div>
 
@@ -640,7 +639,6 @@ export default function Shop({
                   <h4 className="shop-pack-name">Sobre Épico</h4>
                   <div className="shop-pack-pricing-col">
                     <span className="shop-pack-price-tag shop-pack-price-tag--epic">{packPrice('epic').toLocaleString('en-US')} 💎 Gemas</span>
-                    <span className="shop-pack-details-price">💵 Precio: $10.00 USD</span>
                   </div>
                 </div>
 
@@ -685,7 +683,6 @@ export default function Shop({
                   <h4 className="shop-pack-name">Sobre Legendario</h4>
                   <div className="shop-pack-pricing-col">
                     <span className="shop-pack-price-tag shop-pack-price-tag--legendary">{packPrice('legendary').toLocaleString('en-US')} 💎 Gemas</span>
-                    <span className="shop-pack-details-price">💵 Precio: $25.00 USD</span>
                   </div>
                 </div>
 
@@ -1312,15 +1309,6 @@ export default function Shop({
                       ? 'Sobre de Semillas Épico'
                       : 'Sobre de Semillas Legendario'}
                   </h3>
-                  <span className="shop-pack-details-price">
-                    💵 Precio: $
-                    {selectedPackDetails === 'basic'
-                      ? '3.00'
-                      : selectedPackDetails === 'epic'
-                      ? '10.00'
-                      : '25.00'}{' '}
-                    USD
-                  </span>
                   <span className="shop-pack-details-gems-val">
                     💎 {packPrice(selectedPackDetails).toLocaleString('en-US')} Gemas
                   </span>
@@ -1329,20 +1317,18 @@ export default function Shop({
 
               <p className="shop-pack-details-desc">
                 {selectedPackDetails === 'basic'
-                  ? 'Contiene 3 cartas (2 de soporte + 1 destacada). Diseñado para ampliar tu equipo inicial con 10% de Rara garantizada por sobre.'
-                  : selectedPackDetails === 'epic'
-                  ? 'Contiene 4 cartas (3 de soporte + 1 destacada con probabilidad de Épica o Legendaria).'
-                  : 'Contiene 4 cartas sin comunes (3 de soporte + 1 destacada con 10% de Legendaria). Máximo 1 Legendaria por sobre.'}
+                  ? 'Contiene 3 cartas.'
+                  : 'Contiene 4 cartas.'}
               </p>
 
               <div className="shop-pack-details-odds">
-                <strong>🎯 PROBABILIDADES DEL SOBRE (CARTA DESTACADA):</strong>
+                <strong>🎯 PROBABILIDADES:</strong>
                 <p>
                   {selectedPackDetails === 'basic'
-                    ? 'Destacada: 10% Rara | 30% Poco Común | 60% Común (Máx 1 Rara)'
+                    ? '70% Común | 20% Poco Común | 10% Rara'
                     : selectedPackDetails === 'epic'
-                    ? 'Destacada: 2% Legendaria | 8% Épica | 30% Rara | 60% Poco Común'
-                    : 'Destacada: 10% Legendaria | 30% Épica | 40% Rara | 20% Poco Común (10% en el sobre)'}
+                    ? '30% Común | 40% Poco Común | 20% Rara | 8% Épica | 2% Legendaria'
+                    : '40% Poco Común | 30% Rara | 20% Épica | 10% Legendaria'}
                 </p>
               </div>
 
