@@ -314,20 +314,16 @@ export default function LotteryModal({
     if (codeRound?.prizesConfig && Array.isArray(codeRound.prizesConfig) && codeRound.prizesConfig.length > 0) {
       return codeRound.prizesConfig
     }
-    // Fallback retrocompatible para rondas legacy sin prizes_config guardado
+    // Si la ronda no tiene prizesConfig guardado, usamos ÚNICAMENTE los premios reales configurados
     const pool = codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50
-    return [
-      { place: 1, amount: pool, currency: 'gems' },
-      { place: 2, amount: 100, currency: 'gold' },
-      { place: 3, amount: 80, currency: 'gold' },
-      { place: 4, amount: 60, currency: 'gold' },
-      { place: 5, amount: 50, currency: 'gold' },
-      { place: 6, amount: 40, currency: 'gold' },
-      { place: 7, amount: 30, currency: 'gold' },
-      { place: 8, amount: 25, currency: 'gold' },
-      { place: 9, amount: 20, currency: 'gold' },
-      { place: 10, amount: 15, currency: 'gold' },
-    ]
+    const list: CodeRoundPrizeTier[] = [{ place: 1, amount: pool, currency: 'gems' }]
+    if (codeRound?.prizes?.[1] && codeRound.prizes[1] > 0) {
+      list.push({ place: 2, amount: codeRound.prizes[1], currency: 'gold' })
+    }
+    if (codeRound?.prizes?.[2] && codeRound.prizes[2] > 0) {
+      list.push({ place: 3, amount: codeRound.prizes[2], currency: 'gold' })
+    }
+    return list
   }, [codeRound])
 
   const top1Tier = configuredTiers.find((t) => t.place === 1) || configuredTiers[0]
@@ -1098,26 +1094,53 @@ export default function LotteryModal({
                         </strong>!
                       </p>
 
-                      {/* Tiras dinámicas de premios de la ronda */}
+                      {/* Tiras dinámicas de premios con estilo gaming */}
                       {configuredTiers.length > 0 && (
-                        <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#facc15' }}>
-                            🏆 Premios configurados:
+                        <div style={{
+                          marginTop: '10px',
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '6px',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: 'rgba(15, 23, 42, 0.75)',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(56, 189, 248, 0.25)',
+                          boxShadow: 'inset 0 0 12px rgba(56, 189, 248, 0.05)',
+                        }}>
+                          <span style={{ fontSize: '11px', fontWeight: 900, color: '#facc15', letterSpacing: '0.5px' }}>
+                            🎮 BOTÍN EN JUEGO:
                           </span>
                           {configuredTiers.map((t) => (
                             <span
                               key={t.place}
                               style={{
-                                fontSize: '10.5px',
-                                padding: '2px 7px',
-                                borderRadius: '4px',
-                                background: t.place === 1 ? 'rgba(234, 179, 8, 0.25)' : 'rgba(0, 0, 0, 0.35)',
-                                border: t.place === 1 ? '1px solid #eab308' : '1px solid rgba(255, 255, 255, 0.1)',
-                                fontWeight: t.place === 1 ? 800 : 600,
+                                fontSize: '11px',
+                                padding: '3px 8px',
+                                borderRadius: '5px',
+                                background: t.place === 1
+                                  ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.3) 0%, rgba(245, 158, 11, 0.15) 100%)'
+                                  : t.place === 2
+                                  ? 'rgba(148, 163, 184, 0.15)'
+                                  : t.place === 3
+                                  ? 'rgba(217, 119, 6, 0.15)'
+                                  : 'rgba(0, 0, 0, 0.45)',
+                                border: t.place === 1
+                                  ? '1px solid #eab308'
+                                  : t.place === 2
+                                  ? '1px solid #94a3b8'
+                                  : t.place === 3
+                                  ? '1px solid #d97706'
+                                  : '1px solid rgba(255, 255, 255, 0.12)',
+                                fontWeight: 800,
+                                fontVariantNumeric: 'tabular-nums',
+                                boxShadow: t.place === 1 ? '0 0 8px rgba(234, 179, 8, 0.3)' : undefined,
                               }}
                             >
-                              {t.place === 1 ? '🥇 #1' : t.place === 2 ? '🥈 #2' : t.place === 3 ? '🥉 #3' : `#${t.place}`}:{' '}
-                              <strong style={{ color: t.currency === 'gems' ? '#38bdf8' : '#f59e0b' }}>
+                              <span style={{ color: t.place === 1 ? '#facc15' : t.place === 2 ? '#e2e8f0' : t.place === 3 ? '#fb923c' : '#94a3b8', marginRight: '3px' }}>
+                                {t.place === 1 ? '🥇' : t.place === 2 ? '🥈' : t.place === 3 ? '🥉' : `#${t.place}`}
+                              </span>
+                              <strong style={{ color: t.currency === 'gems' ? '#38bdf8' : '#facc15' }}>
                                 {t.amount} {t.currency === 'gems' ? '💎' : '💰'}
                               </strong>
                             </span>
@@ -1462,17 +1485,18 @@ export default function LotteryModal({
                   <div
                     style={{
                       marginTop: 12,
-                      padding: '10px 12px',
-                      background: 'rgba(255, 255, 255, 0.03)',
+                      padding: '12px 14px',
+                      background: 'rgba(15, 23, 42, 0.75)',
                       borderRadius: '8px',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(56, 189, 248, 0.25)',
+                      boxShadow: 'inset 0 0 14px rgba(56, 189, 248, 0.05)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
-                      <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#facc15' }}>
-                        🎁 Recompensas Oficiales (Ronda #{codeRound?.roundNumber ?? ''}):
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
+                      <span style={{ fontSize: '11.5px', fontWeight: 900, color: '#facc15', letterSpacing: '0.5px' }}>
+                        🎮 TABLA OFICIAL DE RECOMPENSAS (RONDA #{codeRound?.roundNumber ?? ''}):
                       </span>
-                      <span style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                      <span style={{ fontSize: '10.5px', color: '#38bdf8', fontWeight: 700 }}>
                         {configuredTiers.length} puestos premiados
                       </span>
                     </div>
@@ -1483,14 +1507,30 @@ export default function LotteryModal({
                           style={{
                             fontSize: '11px',
                             padding: '3px 8px',
-                            borderRadius: '4px',
-                            background: t.place === 1 ? 'rgba(250, 204, 21, 0.15)' : 'rgba(0, 0, 0, 0.4)',
-                            border: t.place === 1 ? '1px solid rgba(250, 204, 21, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
-                            fontWeight: 700,
+                            borderRadius: '5px',
+                            background: t.place === 1
+                              ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.3) 0%, rgba(245, 158, 11, 0.15) 100%)'
+                              : t.place === 2
+                              ? 'rgba(148, 163, 184, 0.15)'
+                              : t.place === 3
+                              ? 'rgba(217, 119, 6, 0.15)'
+                              : 'rgba(0, 0, 0, 0.45)',
+                            border: t.place === 1
+                              ? '1px solid #eab308'
+                              : t.place === 2
+                              ? '1px solid #94a3b8'
+                              : t.place === 3
+                              ? '1px solid #d97706'
+                              : '1px solid rgba(255, 255, 255, 0.12)',
+                            fontWeight: 800,
+                            fontVariantNumeric: 'tabular-nums',
+                            boxShadow: t.place === 1 ? '0 0 8px rgba(234, 179, 8, 0.3)' : undefined,
                           }}
                         >
-                          {t.place === 1 ? '🥇 #1' : t.place === 2 ? '🥈 #2' : t.place === 3 ? '🥉 #3' : `#${t.place}`}:{' '}
-                          <strong style={{ color: t.currency === 'gems' ? '#38bdf8' : '#f59e0b' }}>
+                          <span style={{ color: t.place === 1 ? '#facc15' : t.place === 2 ? '#e2e8f0' : t.place === 3 ? '#fb923c' : '#94a3b8', marginRight: '4px' }}>
+                            {t.place === 1 ? '🥇 #1' : t.place === 2 ? '🥈 #2' : t.place === 3 ? '🥉 #3' : `#${t.place}`}
+                          </span>
+                          <strong style={{ color: t.currency === 'gems' ? '#38bdf8' : '#facc15' }}>
                             {t.amount} {t.currency === 'gems' ? '💎 Gemas' : '💰 Oro'}
                           </strong>
                         </span>

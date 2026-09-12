@@ -90,13 +90,6 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     { place: 1, amount: 50, currency: 'gems' },
     { place: 2, amount: 100, currency: 'gold' },
     { place: 3, amount: 80, currency: 'gold' },
-    { place: 4, amount: 60, currency: 'gold' },
-    { place: 5, amount: 50, currency: 'gold' },
-    { place: 6, amount: 40, currency: 'gold' },
-    { place: 7, amount: 30, currency: 'gold' },
-    { place: 8, amount: 25, currency: 'gold' },
-    { place: 9, amount: 20, currency: 'gold' },
-    { place: 10, amount: 15, currency: 'gold' },
   ]
   const [codePrizeTiers, setCodePrizeTiers] = useState<CodeRoundPrizeTier[]>(DEFAULT_CODE_PRIZE_TIERS)
 
@@ -235,6 +228,26 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     soundManager.playSound('victory', 0.8)
     alert(`🎉 ¡Ronda #${res.roundNumber} abierta con éxito! (5 Slots · Top 1: ${top1Label} · ${codePrizeTiers.length} puestos configurados)`)
     showNotice(`🔐 Ronda #${res.roundNumber} abierta con éxito (Top 1: ${top1Label}).`)
+    await loadCodeRounds()
+  }
+
+  const handleSaveActiveRoundPrizes = async () => {
+    setIsLoading(true)
+    const res = await adminService.adminUpdateActiveSecretCodePrizes({
+      prizePool: codePrizePool,
+      prizesConfig: codePrizeTiers,
+    })
+    setIsLoading(false)
+
+    if (!res.success) {
+      alert(`⚠️ Error al guardar premios: ${res.error || 'No se pudo guardar la configuración.'}`)
+      showNotice(`⚠️ ${res.error || 'No se pudo guardar.'}`)
+      return
+    }
+
+    soundManager.playSound('victory', 0.8)
+    alert(`🎉 ¡Recompensas de la Ronda guardadas y actualizadas con éxito en Supabase! (${codePrizeTiers.length} puestos configurados)`)
+    showNotice(`✅ Recompensas actualizadas en Supabase (${codePrizeTiers.length} puestos).`)
     await loadCodeRounds()
   }
 
@@ -1032,41 +1045,125 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                         <strong>{new Date(activa.created_at).toLocaleString()}</strong>
                       </div>
 
-                      {activa.prizes_config && activa.prizes_config.length > 0 ? (
-                        <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#facc15', marginBottom: '6px' }}>
-                            🏆 Premios configurados para esta ronda activa (módulo creador):
+                      {/* EDITOR DE PREMIOS EN TIEMPO REAL DE LA RONDA ACTIVA */}
+                      <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(15, 23, 42, 0.65)', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.35)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '13px', color: '#facc15' }}>
+                              🎮 Premios Oficiales de la Ronda Activa (Editables en Vivo)
+                            </h4>
+                            <small style={{ opacity: 0.8, fontSize: '11px' }}>
+                              Ajusta los premios de esta ronda y pulsa Guardar para aplicar en Supabase al instante:
+                            </small>
                           </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {activa.prizes_config.map((t) => (
+                          <button
+                            type="button"
+                            onClick={handleAddPrizeTier}
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: '11px',
+                              background: '#059669',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontWeight: 700,
+                            }}
+                          >
+                            ➕ Añadir Puesto
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '6px', marginBottom: '10px' }}>
+                          {codePrizeTiers.map((tier, idx) => (
+                            <div
+                              key={tier.place}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                background: 'rgba(255,255,255,0.04)',
+                                padding: '5px 8px',
+                                borderRadius: '5px',
+                                border: tier.place === 1 ? '1px solid rgba(250, 204, 21, 0.4)' : '1px solid rgba(255,255,255,0.06)',
+                              }}
+                            >
                               <span
-                                key={t.place}
                                 style={{
-                                  fontSize: '11px',
-                                  background: 'rgba(0,0,0,0.35)',
-                                  padding: '3px 8px',
-                                  borderRadius: '4px',
-                                  border: '1px solid rgba(255,255,255,0.1)',
+                                  fontWeight: 800,
+                                  fontSize: '12px',
+                                  minWidth: '34px',
+                                  color: tier.place === 1 ? '#facc15' : tier.place === 2 ? '#cbd5e1' : tier.place === 3 ? '#d97706' : '#94a3b8',
                                 }}
                               >
-                                #{t.place}:{' '}
-                                <strong style={{ color: t.currency === 'gems' ? '#38bdf8' : '#f59e0b' }}>
-                                  {t.amount} {t.currency === 'gems' ? '💎' : '💰'}
-                                </strong>
+                                #{tier.place}
                               </span>
-                            ))}
-                          </div>
+                              <input
+                                type="number"
+                                min={0}
+                                style={{
+                                  width: '65px',
+                                  padding: '3px 6px',
+                                  background: '#0f172a',
+                                  border: '1px solid #334155',
+                                  borderRadius: '4px',
+                                  color: '#fff',
+                                  fontSize: '12px',
+                                }}
+                                value={tier.amount}
+                                onChange={(e) => handleUpdatePrizeTier(idx, 'amount', Number(e.target.value))}
+                              />
+                              <select
+                                style={{
+                                  padding: '3px 6px',
+                                  background: '#0f172a',
+                                  border: '1px solid #334155',
+                                  borderRadius: '4px',
+                                  color: '#fff',
+                                  fontSize: '12px',
+                                }}
+                                value={tier.currency}
+                                onChange={(e) => handleUpdatePrizeTier(idx, 'currency', e.target.value as 'gems' | 'gold')}
+                              >
+                                <option value="gems">💎 Gemas</option>
+                                <option value="gold">💰 Oro</option>
+                              </select>
+                              {codePrizeTiers.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePrizeTier(idx)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#ef4444',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    padding: '0 2px',
+                                  }}
+                                  title="Eliminar puesto"
+                                >
+                                  ❌
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', marginBottom: '4px' }}>
-                            ℹ️ Premios estándar (Ronda sin configuración personalizada):
-                          </div>
-                          <div style={{ fontSize: '11px', opacity: 0.8 }}>
-                            #1: {activa.prize_pool_gems} 💎 · #2 al #10: Oro 💰
-                          </div>
-                        </div>
-                      )}
+
+                        <button
+                          type="button"
+                          className="admin-tab-btn admin-tab-btn--active"
+                          style={{
+                            width: '100%',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            fontWeight: 800,
+                            padding: '8px 14px',
+                          }}
+                          disabled={isLoading}
+                          onClick={handleSaveActiveRoundPrizes}
+                        >
+                          {isLoading ? '⏳ Guardando...' : `💾 Guardar Cambios en Ronda #${activa.round_number} (${codePrizeTiers.length} puestos)`}
+                        </button>
+                      </div>
 
                       <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.5 }}>
                         La ronda se cierra sola cuando alguien acierte los 5 (100%).

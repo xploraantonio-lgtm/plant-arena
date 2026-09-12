@@ -2237,16 +2237,24 @@ export const SupabaseService = {
 
     let lastError: any = null
 
-    // 1. PostgREST con p_payload (JSONB oficial de la función en PostgreSQL)
+    // 1. PostgREST con p_payload Y propiedades al mismo nivel
     try {
       const { data, error } = await (supabase.rpc as any)('admin_open_secret_code_round', {
         p_payload: payload,
+        ...payload,
       })
       if (!error && data) {
         if (data.success === false) {
           return data
         }
         if (data.success || (typeof data === 'object' && 'roundId' in data)) {
+          const targetId = (data as any)?.roundId
+          if (targetId && opts?.prizesConfig && opts.prizesConfig.length > 0) {
+            await (supabase.from('secret_code_rounds') as any)
+              .update({ prizes_config: opts.prizesConfig, prize_pool_gems: payload.prizePool })
+              .eq('id', targetId)
+              .catch(() => null)
+          }
           return { success: true, ...data }
         }
       }
@@ -2419,16 +2427,24 @@ export const SupabaseService = {
 
     let lastError: any = null
 
-    // 1. Intentar RPC con p_payload (JSONB)
+    // 1. Intentar RPC con p_payload (JSONB) Y propiedades directas
     try {
       const { data, error } = await (supabase.rpc as any)('admin_restart_secret_code_round', {
         p_payload: payload,
+        ...payload,
       })
       if (!error && data) {
         if (data.success === false) {
           return data
         }
         if (data.success || (typeof data === 'object' && 'roundId' in data)) {
+          const targetId = (data as any)?.roundId
+          if (targetId && opts?.prizesConfig && opts.prizesConfig.length > 0) {
+            await (supabase.from('secret_code_rounds') as any)
+              .update({ prizes_config: opts.prizesConfig, prize_pool_gems: payload.prizePool })
+              .eq('id', targetId)
+              .catch(() => null)
+          }
           return { success: true, ...data }
         }
       }
@@ -2445,6 +2461,13 @@ export const SupabaseService = {
           return data
         }
         if (data.success || (typeof data === 'object' && 'roundId' in data)) {
+          const targetId = (data as any)?.roundId
+          if (targetId && opts?.prizesConfig && opts.prizesConfig.length > 0) {
+            await (supabase.from('secret_code_rounds') as any)
+              .update({ prizes_config: opts.prizesConfig, prize_pool_gems: payload.prizePool })
+              .eq('id', targetId)
+              .catch(() => null)
+          }
           return { success: true, ...data }
         }
       }
@@ -2492,6 +2515,69 @@ export const SupabaseService = {
     const errStr = lastError?.message || lastError?.error_description || (typeof lastError === 'string' ? lastError : 'Error al reiniciar ronda')
     logError('adminRestartSecretCodeRound', errStr)
     return { success: false, error: errStr }
+  },
+
+  /** Guarda / actualiza las recompensas de la ronda activa directamente en Supabase */
+  async adminUpdateActiveSecretCodePrizes(opts: {
+    prizePool?: number
+    prizesConfig: CodeRoundPrizeTier[]
+  }): Promise<{ success: boolean; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+
+    const top1 = opts.prizesConfig.find((t) => t.place === 1)
+    const top2 = opts.prizesConfig.find((t) => t.place === 2)
+    const top3 = opts.prizesConfig.find((t) => t.place === 3)
+    const prize1st = top1?.currency === 'gems' ? top1.amount : (opts.prizePool ?? 50)
+    const prizePool = opts.prizePool ?? (top1?.currency === 'gems' ? top1.amount : 50)
+
+    const payload = {
+      prizePool,
+      prize1st,
+      prize2nd: top2?.amount ?? 0,
+      prize3rd: top3?.amount ?? 0,
+      prizesConfig: opts.prizesConfig,
+    }
+
+    // 1. Intentar RPC oficial
+    try {
+      const { data, error } = await (supabase.rpc as any)('admin_update_secret_code_prizes', {
+        p_payload: payload,
+        ...payload,
+      })
+      if (!error && (data?.success === true || (data && typeof data === 'object' && 'roundId' in data))) {
+        return { success: true }
+      }
+    } catch (_) {}
+
+    // 2. Fallback de actualización directa en la tabla de Supabase
+    try {
+      const { data: openRounds, error: findErr } = await (supabase.from('secret_code_rounds') as any)
+        .select('id')
+        .eq('status', 'open')
+        .order('round_number', { ascending: false })
+        .limit(1)
+
+      if (openRounds && openRounds.length > 0) {
+        const roundId = openRounds[0].id
+        const { error: updErr } = await (supabase.from('secret_code_rounds') as any)
+          .update({
+            prizes_config: opts.prizesConfig,
+            prize_pool_gems: prizePool,
+            prize_1st: prize1st,
+            prize_2nd: top2?.amount ?? 0,
+            prize_3rd: top3?.amount ?? 0,
+          })
+          .eq('id', roundId)
+
+        if (!updErr) return { success: true }
+        return { success: false, error: updErr.message }
+      }
+      if (findErr) return { success: false, error: findErr.message }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+
+    return { success: false, error: 'No se encontró ninguna ronda abierta para actualizar.' }
   },
 
   /** Cierra la ronda abierta. `settle` reparte el bote; sin él, se cancela. */
