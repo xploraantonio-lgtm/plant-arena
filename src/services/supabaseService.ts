@@ -2237,24 +2237,34 @@ export const SupabaseService = {
 
     let lastError: any = null
 
-    // 1. PostgREST Single JSON Parameter con payload directo (recomendado para funciones con único argumento jsonb)
+    // 1. PostgREST con p_payload (JSONB oficial de la función en PostgreSQL)
     try {
-      const { data, error } = await (supabase.rpc as any)('admin_open_secret_code_round', payload)
-      if (!error && (data?.success || (data && typeof data === 'object' && 'roundId' in data))) {
-        return { success: true, ...data }
+      const { data, error } = await (supabase.rpc as any)('admin_open_secret_code_round', {
+        p_payload: payload,
+      })
+      if (!error && data) {
+        if (data.success === false) {
+          return data
+        }
+        if (data.success || (typeof data === 'object' && 'roundId' in data)) {
+          return { success: true, ...data }
+        }
       }
       if (error) lastError = error
     } catch (e: any) {
       lastError = e
     }
 
-    // 2. Intentar llamar con p_payload (JSONB)
+    // 2. PostgREST Single JSON Parameter con payload directo
     try {
-      const { data, error } = await (supabase.rpc as any)('admin_open_secret_code_round', {
-        p_payload: payload,
-      })
-      if (!error && (data?.success || (data && typeof data === 'object' && 'roundId' in data))) {
-        return { success: true, ...data }
+      const { data, error } = await (supabase.rpc as any)('admin_open_secret_code_round', payload)
+      if (!error && data) {
+        if (data.success === false) {
+          return data
+        }
+        if (data.success || (typeof data === 'object' && 'roundId' in data)) {
+          return { success: true, ...data }
+        }
       }
       if (error) lastError = error
     } catch (e: any) {
@@ -2330,19 +2340,25 @@ export const SupabaseService = {
       ]
       const secretSeq = Array.from({ length: 5 }, () => plantList[Math.floor(Math.random() * plantList.length)])
 
+      const newRoundId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined
+      const insertPayload: any = {
+        round_number: nextNum,
+        status: 'open',
+        secret: secretSeq,
+        free_attempts: payload.freeAttempts,
+        prize_pool_gems: payload.prizePool,
+        prize_1st: payload.prize1st,
+        prize_2nd: payload.prize2nd,
+        prize_3rd: payload.prize3rd,
+        prizes_config: payload.prizesConfig,
+        code_version: 2,
+      }
+      if (newRoundId) {
+        insertPayload.id = newRoundId
+      }
+
       const { data: insertData, error: insertError } = await (supabase.from('secret_code_rounds') as any)
-        .insert({
-          round_number: nextNum,
-          status: 'open',
-          secret: secretSeq,
-          free_attempts: payload.freeAttempts,
-          prize_pool_gems: payload.prizePool,
-          prize_1st: payload.prize1st,
-          prize_2nd: payload.prize2nd,
-          prize_3rd: payload.prize3rd,
-          prizes_config: payload.prizesConfig,
-          code_version: 2,
-        })
+        .insert(insertPayload)
         .select('id, round_number')
         .single()
 
@@ -2353,7 +2369,12 @@ export const SupabaseService = {
           roundNumber: insertData.round_number,
         }
       }
-    } catch (_) {}
+      if (insertError) {
+        lastError = insertError
+      }
+    } catch (e: any) {
+      if (e) lastError = e
+    }
 
     const errStr = lastError?.message || lastError?.error_description || (typeof lastError === 'string' ? lastError : 'Error al conectar con Supabase. Asegúrate de ejecutar la migración 72 en el editor SQL de Supabase.')
     logError('adminOpenSecretCodeRound', errStr)
@@ -2398,24 +2419,34 @@ export const SupabaseService = {
 
     let lastError: any = null
 
-    // 1. PostgREST Single JSON Parameter con payload directo
+    // 1. Intentar RPC con p_payload (JSONB)
     try {
-      const { data, error } = await (supabase.rpc as any)('admin_restart_secret_code_round', payload)
-      if (!error && (data?.success || (data && typeof data === 'object' && 'roundId' in data))) {
-        return { success: true, ...data }
+      const { data, error } = await (supabase.rpc as any)('admin_restart_secret_code_round', {
+        p_payload: payload,
+      })
+      if (!error && data) {
+        if (data.success === false) {
+          return data
+        }
+        if (data.success || (typeof data === 'object' && 'roundId' in data)) {
+          return { success: true, ...data }
+        }
       }
       if (error) lastError = error
     } catch (e: any) {
       lastError = e
     }
 
-    // 2. Intentar RPC con p_payload (JSONB)
+    // 2. PostgREST Single JSON Parameter con payload directo
     try {
-      const { data, error } = await (supabase.rpc as any)('admin_restart_secret_code_round', {
-        p_payload: payload,
-      })
-      if (!error && (data?.success || (data && typeof data === 'object' && 'roundId' in data))) {
-        return { success: true, ...data }
+      const { data, error } = await (supabase.rpc as any)('admin_restart_secret_code_round', payload)
+      if (!error && data) {
+        if (data.success === false) {
+          return data
+        }
+        if (data.success || (typeof data === 'object' && 'roundId' in data)) {
+          return { success: true, ...data }
+        }
       }
       if (error) lastError = error
     } catch (e: any) {
