@@ -2454,7 +2454,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
             <div className="admin-alert-banner" style={{ borderColor: '#ef4444' }}>
               🛡️ <strong>Gestión Autoritativa de Recompensas de Clanes (Daño a Clanes Rivales)</strong>
               <br />
-              • <strong>Diaria (00:00 UTC) Top 10:</strong> Top 1 (500 💰 c/u + ⚔️ Pack PvP con temporizador de 5 min para abrir, no expira), Top 2 (200 💰 c/u), Top 3 (100 💰 c/u), Top 4-10 (50 💰 c/u).
+              • <strong>Diaria (00:00 UTC) Top 10:</strong> Top 1 (500 💰 c/u + ⚔️ Pack PvP Campeón), Top 2 (200 💰 c/u), Top 3 (100 💰 c/u), Top 4-10 (50 💰 c/u).
               <br />
               • <strong>Fin de Temporada:</strong> Reparto de Pozo en Gemas 💎 a los 5 clanes con mayor daño acumulado de temporada.
             </div>

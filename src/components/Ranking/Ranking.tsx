@@ -1700,7 +1700,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                     </span>
                   </div>
                   <p className="clan-hero-desc">
-                    El ranking de clanes se define por <strong>daño total infligido a clanes rivales</strong> en asaltos y guerras. A las <strong>00:00 UTC</strong> se reparte oro a todos los miembros del Top 10 y el <strong>Pack PvP Exclusivo</strong> (temporizador de 5 min para abrir, no expira) para el Top 1.
+                    ⚔️ ¡Compite en Asaltos y Guerra de Clanes! El daño infligido a rivales otorga botín diario a las <strong>00:00 UTC</strong>: Oro al Top 10 y Pack PvP Campeón al Top 1.
                   </p>
                 </div>
 
@@ -1711,7 +1711,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                       <GoldIcon size={16} style={{ marginRight: '4px' }} />
                       500 c/u + ⚔️ Pack PvP
                     </div>
-                    <small>⏳ 5 min para abrir (no expira)</small>
+                    <small>Pack Campeón ⚔️</small>
                   </div>
                   <div className="clan-reward-pill clan-reward-pill--top2" title="Top 2 Diario">
                     <div className="clan-reward-pill__rank">🥈 Top 2</div>
@@ -1759,12 +1759,12 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                         <span className="clan-flash-icon">{isReady ? '🎁' : '⏳'}</span>
                         <div>
                           <strong>
-                            {isReady ? '¡PACK PVP EXCLUSIVO LISTO PARA ABRIR!' : '🔒 PACK PVP EN DESBLOQUEO (5 MIN)'}
+                            {isReady ? '⚔️ ¡PACK PVP CAMPEÓN DESBLOQUEADO!' : '🔒 DESBLOQUEANDO PACK PVP...'}
                           </strong>
                           <p>
                             {isReady
-                              ? '¡El temporizador estricto de 5 minutos ha finalizado! Tu Sobre PvP Exclusivo del Top 1 Diario está listo para ser abierto cuando desees (no expira).'
-                              : `Tu clan conquistó el Top 1 Diario. Tu Sobre PvP Exclusivo requiere un temporizador de 5 minutos para abrirse (no expira, recién se podrá abrir en ${timeFormatted}).`}
+                              ? '¡Victoria legendaria! Reclama tu Sobre PvP Exclusivo por liderar el Top 1 Diario.'
+                              : `Tu clan conquistó el Top 1 Diario. Botín en preparación (disponible en ${timeFormatted}).`}
                           </p>
                         </div>
                       </div>
@@ -1779,7 +1779,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           ? '⏳ Abriendo...'
                           : isReady
                           ? '🎁 ¡ABRIR PACK PVP AHORA!'
-                          : `⏳ Bloqueado (${timeFormatted})`}
+                          : `⏳ Listo en ${timeFormatted}`}
                       </button>
                     </div>
                   )
@@ -1864,9 +1864,9 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
 
                         <div className="podium-v2-prize-box podium-v2-prize-box--gold" title="Premio Diario Top 1">
                           <div className="podium-v2-gems-val" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-                            <GoldIcon size={18} /> 500 ORO x Miembro
+                            <GoldIcon size={18} /> 500 ORO / miembro
                           </div>
-                          <div className="podium-v2-pack-val">⚔️ 1x Pack PvP (5 min)</div>
+                          <div className="podium-v2-pack-val">⚔️ Pack PvP Campeón</div>
                         </div>
 
                         <div className="podium-v2-stats-row" style={{ justifyContent: 'center' }}>
@@ -1903,7 +1903,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           </div>
                           <span className="clan-tag-pill clan-tag-pill--sm">{clanLeaderboard[1].tag}</span>
                           <div className="podium-v2-sub-prize" style={{ color: '#fbbf24', fontWeight: 800, fontSize: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                            <GoldIcon size={14} /> 200 Oro x miembro
+                            <GoldIcon size={14} /> 200 Oro / miembro
                           </div>
                           <div className="podium-v2-sub-stats" style={{ color: '#ef4444', fontWeight: 900 }}>
                             ⚔️ {clanLeaderboard[1].damageDealt.toLocaleString()}
@@ -1931,7 +1931,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           </div>
                           <span className="clan-tag-pill clan-tag-pill--sm">{clanLeaderboard[2].tag}</span>
                           <div className="podium-v2-sub-prize" style={{ color: '#fbbf24', fontWeight: 800, fontSize: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                            <GoldIcon size={14} /> 100 Oro x miembro
+                            <GoldIcon size={14} /> 100 Oro / miembro
                           </div>
                           <div className="podium-v2-sub-stats" style={{ color: '#ef4444', fontWeight: 900 }}>
                             ⚔️ {clanLeaderboard[2].damageDealt.toLocaleString()}
@@ -1976,14 +1976,14 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                     {/* Table Container */}
                     <div className="lb-table-wrap" ref={clansTableRef}>
                       {paginatedClanList.length > 0 ? (
-                        <table className="lb-table">
+                        <table className="lb-table lb-table--clans">
                           <thead>
                             <tr>
-                              <th style={{ width: '45px', textAlign: 'center' }}>#</th>
-                              <th>CLAN</th>
-                              <th style={{ width: '130px', textAlign: 'center' }}>MIEMBROS</th>
-                              <th style={{ width: '150px', textAlign: 'right' }}>DAÑO A OTROS CLANES</th>
-                              <th style={{ width: '160px', textAlign: 'center' }}>RECOMPENSA DIARIA</th>
+                              <th className="lb-th-rank">#</th>
+                              <th className="lb-th-clan">CLAN</th>
+                              <th className="lb-th-members">MIEMBROS</th>
+                              <th className="lb-th-damage">DAÑO A CLANES</th>
+                              <th className="lb-th-rewards">PREMIO DIARIO</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1994,7 +1994,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                                   <td className="lb-col-rank">
                                     {cln.rank === 1 ? '🥇 #1' : cln.rank === 2 ? '🥈 #2' : cln.rank === 3 ? '🥉 #3' : `#${cln.rank}`}
                                   </td>
-                                  <td className="lb-col-player">
+                                  <td className="lb-col-player lb-col-clan-info">
                                     <div className="lb-player-cell">
                                       <span className="clan-table-badge">{cln.badge}</span>
                                       <div className="clan-table-names">
@@ -2007,18 +2007,18 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                                       </div>
                                     </div>
                                   </td>
-                                  <td style={{ textAlign: 'center', color: '#94a3b8', fontSize: '11px', fontWeight: 800 }}>
+                                  <td className="lb-col-members">
                                     👥 {cln.memberCount}/15
                                   </td>
-                                  <td style={{ textAlign: 'right', fontWeight: 900, color: '#ef4444', fontSize: '12px' }}>
-                                    ⚔️ {cln.damageDealt.toLocaleString()}
+                                  <td className="lb-col-damage">
+                                    <span className="lb-damage-total">⚔️ {cln.damageDealt.toLocaleString()}</span>
                                     {cln.dailyDamageDealt > 0 && (
-                                      <span style={{ display: 'block', fontSize: '10px', color: '#f59e0b', fontWeight: 700 }}>
+                                      <span className="lb-damage-today">
                                         (+{cln.dailyDamageDealt} hoy)
                                       </span>
                                     )}
                                   </td>
-                                  <td className="lb-col-rewards" style={{ textAlign: 'center' }}>
+                                  <td className="lb-col-rewards">
                                     {dailyRew.goldPerMember > 0 ? (
                                       <span
                                         className={`lb-reward-badge ${cln.rank === 1 ? 'lb-reward-badge--top1' : cln.rank === 2 ? 'lb-reward-badge--top2' : cln.rank === 3 ? 'lb-reward-badge--top3' : 'lb-reward-badge--gold-tier'}`}
@@ -2150,18 +2150,18 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                       <span className="clan-tag-pill clan-tag-pill--sm">{myClanRankEntry.tag}</span>
                     </div>
                     <div className="clan-user-status-right">
-                      <span>⚔️ <strong>{myClanRankEntry.damageDealt.toLocaleString()}</strong> Daño infligido</span>
+                      <span>⚔️ <strong>{myClanRankEntry.damageDealt.toLocaleString()}</strong> Daño de Guerra</span>
                       <span className="clan-status-sep">|</span>
                       <span>🏆 <strong>{myClanRankEntry.wins}</strong>V / <strong>{myClanRankEntry.losses}</strong>D</span>
                       <span className="clan-status-sep">|</span>
                       <span className="clan-status-prize">
-                        🎁 Premio diario estimado: <strong>{ClanManager.getDailyRewardsForRank(myClanRankEntry.rank).badge}</strong>
+                        🎁 Botín Diario: <strong>{ClanManager.getDailyRewardsForRank(myClanRankEntry.rank).badge}</strong>
                       </span>
                     </div>
                   </div>
                 ) : (
                   <div className="clan-user-status-content clan-user-status-content--none">
-                    <span>🛡️ Actualmente no perteneces a ningún clan. ¡Únete o funda un clan para competir por el daño diario y ganar oro!</span>
+                    <span>🛡️ Sin clan activo. ¡Únete o funda un clan para entrar a la Guerra y reclamar botín diario!</span>
                   </div>
                 )}
               </div>

@@ -222,10 +222,10 @@ export default function TournamentModal({
     }
   }
 
-  // Reentry handler (3 gems for 2 lives)
+  // Reentry handler (200 gems for 2 lives)
   const handleReenter = async () => {
     if (!selectedTourney || !details?.my_participation?.registered) return
-    const reentryCost = 3
+    const reentryCost = 200
     if (userTokens < reentryCost) {
       alert(`Necesitas ${reentryCost} 💎 para reentrar al torneo. Tu saldo actual es: ${userTokens} 💎.`)
       return
@@ -684,7 +684,7 @@ export default function TournamentModal({
                                 onClick={handleReenter}
                                 disabled={isReentering}
                               >
-                                {isReentering ? 'Procesando Reentrada…' : '🔄 Reentrar al Torneo (3 💎 — 2 Vidas)'}
+                                {isReentering ? 'Procesando Reentrada…' : '🔄 Reentrar al Torneo (200 💎 — 2 Vidas)'}
                               </button>
                             </div>
                           )}

@@ -775,7 +775,7 @@ export default function LotteryModal({
       soundManager.playSound('defeat', 0.4)
       const missCount = Math.max(0, SECRET_CODE_LENGTH - (res.exactCount || 0) - (res.wrongPosCount || 0))
       setCodeBannerNotice(
-        `🔍 Pistas Mastermind: 🟢 ${res.exactCount || 0} exactas · 🟡 ${res.wrongPosCount || 0} en otra posición · 🔴 ${missCount} descartadas`
+        `🎯 Radar Táctico: 🟢 ${res.exactCount || 0} en posición · 🟡 ${res.wrongPosCount || 0} fuera de lugar · 🔴 ${missCount} descartadas`
       )
       setTimeout(() => setCodeBannerNotice(null), 5000)
     }
@@ -1298,8 +1298,8 @@ export default function LotteryModal({
                     <div className="lottery-code-hints-section">
                       <div className="lottery-code-hints-header">
                         <div className="lottery-code-hints-title">
-                          <span style={{ fontSize: '11px', fontWeight: 900, color: '#facc15' }}>💬 CHAT DE PISTAS</span>
-                          <span style={{ fontSize: '9px', color: '#94a3b8' }}>Deducción sin revelar casillas</span>
+                          <span style={{ fontSize: '11px', fontWeight: 900, color: '#facc15' }}>📡 PISTAS DE INTELIGENCIA</span>
+                          <span style={{ fontSize: '9px', color: '#94a3b8' }}>Deduce la combinación secreta</span>
                         </div>
                         <button
                           type="button"
@@ -1308,14 +1308,14 @@ export default function LotteryModal({
                           disabled={buyingHint || currentGems < 10 || !roundIsOpen}
                           title="Pagar 10 Gemas 💎 para adquirir una pista deductiva"
                         >
-                          {buyingHint ? '⏳ Comprando...' : '💡 COMPRAR PISTA (10 💎)'}
+                          {buyingHint ? '⏳ Comprando...' : '📡 COMPRAR PISTA (10 💎)'}
                         </button>
                       </div>
 
                       <div className="lottery-code-hints-chat">
                         {codeHints.length === 0 ? (
                           <div className="lottery-hints-empty">
-                            <span>💡 ¿Atascado? Compra una pista por 10 💎 para descartar plantas o deducir familias secretas.</span>
+                            <span>📡 ¿Sin pistas? Adquiere inteligencia táctica por 10 💎 para descartar sospechosas o revelar familias clave.</span>
                           </div>
                         ) : (
                           codeHints.map((h, i) => (
@@ -1337,7 +1337,7 @@ export default function LotteryModal({
               <div className="lottery-code-full-pane">
                 <div className="lottery-code-history-box" style={{ flex: 1 }}>
                   <div className="lottery-history-header">
-                    <h5>📜 HISTORIAL Y PISTAS GLOBALES (MASTERMIND CIEGO):</h5>
+                    <h5>📜 HISTORIAL Y RADAR DE DETECCIÓN:</h5>
                     <div className="lottery-pins-legend">
                       <span className="pin-tag pin-tag--exact">🟢 Posición Exacta</span>
                       <span className="pin-tag pin-tag--wrong">🟡 En otra Casilla</span>

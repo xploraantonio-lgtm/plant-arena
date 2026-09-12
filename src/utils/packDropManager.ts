@@ -1,6 +1,6 @@
 import type { PlantId } from '../types/game'
 
-export type PackId = 'basic' | 'epic' | 'legendary' | 'pvp'
+export type PackId = 'basic' | 'epic' | 'legendary'
 
 export interface InventoryPack {
   instanceId: string
@@ -48,14 +48,6 @@ export const PACK_DEFINITIONS: Record<PackId, PackDefinition> = {
     name: 'Sobre de Semillas VIP Legendario',
     priceGems: 2500,
     priceUsd: 2500,
-    cardCount: 4,
-    icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.webp',
-    rarity: 'legendary',
-  },
-  pvp: {
-    name: 'Sobre de Combate PvP Exclusivo ⚔️',
-    priceGems: 0,
-    priceUsd: 0,
     cardCount: 4,
     icon: '/game-assets/greenfoot/seed_pack_legendary_whitebg.webp',
     rarity: 'legendary',

@@ -1085,8 +1085,8 @@ export class ClanManager {
       return {
         goldPerMember: 500,
         hasPvpPack: true,
-        badge: '500 💰 + ⚔️ Pack PvP (5 min)',
-        text: '500 Oro para cada miembro + 1x Pack PvP Exclusivo (temporizador de 5 min para abrir, no expira)',
+        badge: '500 💰 + ⚔️ Pack PvP',
+        text: '500 Oro / miembro + ⚔️ Pack PvP Campeón',
       }
     }
     if (rank === 2) {
@@ -1094,7 +1094,7 @@ export class ClanManager {
         goldPerMember: 200,
         hasPvpPack: false,
         badge: '200 💰 Oro',
-        text: '200 Oro para cada miembro del clan',
+        text: '200 Oro / miembro',
       }
     }
     if (rank === 3) {
@@ -1102,7 +1102,7 @@ export class ClanManager {
         goldPerMember: 100,
         hasPvpPack: false,
         badge: '100 💰 Oro',
-        text: '100 Oro para cada miembro del clan',
+        text: '100 Oro / miembro',
       }
     }
     if (rank >= 4 && rank <= 10) {
@@ -1110,14 +1110,14 @@ export class ClanManager {
         goldPerMember: 50,
         hasPvpPack: false,
         badge: '50 💰 Oro',
-        text: '50 Oro para cada miembro del clan',
+        text: '50 Oro / miembro',
       }
     }
     return {
       goldPerMember: 0,
       hasPvpPack: false,
-      badge: 'Sin premio',
-      text: 'Fuera de la zona de premios diaria',
+      badge: 'Sin botín',
+      text: 'Fuera de zona de botín',
     }
   }
 

@@ -358,7 +358,7 @@ export default function Marketplace({
     if (txFilter === 'marketplace') return transactions.filter((t) => t.type === 'marketplace_sale')
     if (txFilter === 'withdrawal') return transactions.filter((t) => t.type === 'withdrawal')
     if (txFilter === 'shop') return transactions.filter((t) => t.type === 'shop_pack' || t.type === 'shop_gold')
-    if (txFilter === 'reward') return transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward' || t.type === 'referral_reward')
+    if (txFilter === 'reward') return transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward' || t.type === 'tournament_reentry' || t.type === 'referral_reward')
     return transactions
   }, [transactions, txFilter])
 
@@ -1445,7 +1445,8 @@ export default function Marketplace({
                         {tx.type === 'lottery_spin' && '🎡 GIRO DE RULETA'}
                         {tx.type === 'lottery_win' && (tx.amountGems && tx.amountGems >= 50 ? '🎰 JACKPOT RULETA' : '🎁 PREMIO DE RULETA')}
                         {tx.type === 'reward_code' && '🎁 CÓDIGO ESPECIAL'}
-                        {tx.type === 'tournament_reward' && '🏆 CÓDIGO SECRETO'}
+                        {tx.type === 'tournament_reward' && '🏆 PREMIO TORNEO'}
+                        {tx.type === 'tournament_reentry' && '🔄 REENTRADA TORNEO'}
                         {tx.type === 'referral_reward' && '👥 GANANCIAS REFERIDOS'}
                       </span>
                       <span className="market-tx-time">{formatTxTime(tx.createdAt)}</span>
@@ -1499,7 +1500,9 @@ export default function Marketplace({
                                 : tx.type === 'reward_code'
                                 ? 'canjeó código promocional'
                                 : tx.type === 'tournament_reward'
-                                ? 'ganó en Código Secreto'
+                                ? 'ganó premio en Torneo Oficial'
+                                : tx.type === 'tournament_reentry'
+                                ? 'reingresó al Torneo Oficial'
                                 : tx.type === 'referral_reward'
                                 ? 'cobró ganancias de referidos'
                                 : 'recibió recompensa'}

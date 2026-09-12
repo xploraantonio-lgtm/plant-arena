@@ -211,7 +211,7 @@ export const tournamentService = {
   },
 
   /**
-   * Reentrada al torneo: 3 gemas por 2 vidas adicionales (losses pasa a 1, eliminando el estado eliminado).
+   * Reentrada al torneo: 200 gemas por 2 vidas adicionales (losses pasa a 1, eliminando el estado eliminado).
    */
   async reenterTournament(tournamentId: string): Promise<{
     success: boolean
@@ -230,7 +230,7 @@ export const tournamentService = {
 
       if (error) {
         if (error.message.includes('INSUFFICIENT_GEMS')) {
-          return { success: false, error: 'No tienes suficientes Gemas (3 💎 requeridas).' }
+          return { success: false, error: 'No tienes suficientes Gemas (200 💎 requeridas).' }
         }
         console.warn('reenter_tournament remote fallback:', error.message)
         return this._reenterLocalTournament(tournamentId)
