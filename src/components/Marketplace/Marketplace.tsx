@@ -244,7 +244,7 @@ export default function Marketplace({
         const qty = Number(farmingItems[fId] || 0)
         if (qty > 0) {
           const def = FARMING_ITEM_DEFINITIONS[fId]
-          const minP = FARMING_ITEM_MIN_PRICES[fId] || 100
+          const minP = FARMING_ITEM_MIN_PRICES[fId] || 10
           items.push({
             kind: 'farming',
             id: `farming_${fId}`,
@@ -269,11 +269,17 @@ export default function Marketplace({
     return sellableItems[0]?.id || ''
   })
 
+  const [sellQuantity, setSellQuantity] = useState<number>(1)
+
   useEffect(() => {
     if (sellableItems.length > 0 && (!selectedItemId || !sellableItems.some((c) => c.id === selectedItemId))) {
       setSelectedItemId(sellableItems[0].id)
     }
   }, [sellableItems, selectedItemId])
+
+  useEffect(() => {
+    setSellQuantity(1)
+  }, [selectedItemId])
 
   const selectedItem = sellableItems.find((c) => c.id === selectedItemId) || sellableItems[0]
 
@@ -425,20 +431,22 @@ export default function Marketplace({
     }
 
     const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
+    const qty = Math.max(1, Number(item.quantity) || 1)
     const nombre = isFarming
       ? (FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId]?.label || item.itemId || 'Recurso')
       : (item.plantId && PLANT_CONFIGS[item.plantId as PlantId]?.name || item.plantId || 'Carta')
     const detalle = isFarming
-      ? `1x "${nombre}"`
+      ? (qty > 1 ? `el lote completo de ${qty}x "${nombre}"` : `1x "${nombre}"`)
       : `"${nombre}" (Nivel ${item.nivel})`
 
     const split = calculateMarketplaceSplit(item.precio, comisionPct)
 
     showModalConfirm(
       'CONFIRMAR COMPRA',
-      `¿Deseas comprar ${detalle} por ${item.precio} 💎?\n\n` +
+      `¿Deseas comprar ${detalle} por un total de ${item.precio} 💎?\n\n` +
         `• Se descontará el 100% (${item.precio} 💎) de tu saldo de gemas.\n` +
-        `• El vendedor recibirá el 90% neto (${split.neto} 💎) y el juego retiene el ${split.comisionPct}% (${split.comision} 💎) de comisión.`,
+        `• El vendedor recibirá el 90% neto (${split.neto} 💎) y el juego retiene el ${split.comisionPct}% (${split.comision} 💎) de comisión.\n` +
+        (isFarming && qty > 1 ? `• Recibirás las ${qty} unidades juntas en tu inventario de cultivo.` : ''),
       '🛒',
       async () => {
         const r = await marketplaceService.buyMarketplaceCard(item.id)
@@ -508,16 +516,17 @@ export default function Marketplace({
     const split = calculateMarketplaceSplit(sellPriceGems, comisionPct)
 
     if (selectedItem.kind === 'farming') {
+      const qtyToSell = Math.max(1, Math.min(selectedItem.availableQty, sellQuantity))
       showModalConfirm(
-        'PUBLICAR ÍTEM EN EL MERCADO',
-        `¿Confirmas poner en venta 1x "${selectedItem.name}" por ${sellPriceGems} 💎?\n\n` +
-          `• Al comprador se le descuenta el 100% (${sellPriceGems} 💎).\n` +
+        'PUBLICAR LOTE EN EL MERCADO',
+        `¿Confirmas poner en venta el lote de ${qtyToSell}x "${selectedItem.name}" por un precio total de ${sellPriceGems} 💎?\n\n` +
+          `• La venta es por el lote completo: el comprador pagará ${sellPriceGems} 💎 por las ${qtyToSell} unidades.\n` +
           `• La comisión retenida por el juego es del ${split.comisionPct}% (${split.comision} 💎).\n` +
           `• Recibirás el 90% neto (${split.neto} 💎) cuando se concrete la venta.\n\n` +
-          '⚠️ El recurso se descontará de tu inventario mientras esté publicado en el mercado.',
+          `⚠️ Los ${qtyToSell} recursos se descontarán de tu inventario mientras el lote esté publicado.`,
         '🏷️',
         async () => {
-          const r = await marketplaceService.listMarketplaceItem('farming', selectedItem.itemId, sellPriceGems, 1)
+          const r = await marketplaceService.listMarketplaceItem('farming', selectedItem.itemId, sellPriceGems, qtyToSell)
           if (!r.success) {
             showModalAlert('NO SE PUDO PUBLICAR', r.error || 'Inténtalo de nuevo.', '⚠️', 'error')
             return
@@ -525,16 +534,17 @@ export default function Marketplace({
 
           soundManager.playSound('plantation', 0.9)
           showModalAlert(
-            '¡OFERTA PUBLICADA EN EL MERCADO!',
-            `1x "${selectedItem.name}" está en venta por ${sellPriceGems} 💎.\nRecibirás el 90% neto (${split.neto} 💎) cuando se venda.`,
+            '¡LOTE PUBLICADO EN EL MERCADO!',
+            `Lote de ${qtyToSell}x "${selectedItem.name}" puesto en venta por ${sellPriceGems} 💎 en total.\nRecibirás el 90% neto (${split.neto} 💎) al concretarse la venta.`,
             '🏷️',
             'success'
           )
           setActiveTab('browse')
           await refreshListings()
+          window.dispatchEvent(new Event('refresh_user_inventory'))
           onServerChange?.()
         },
-        `SÍ, VENDER (${sellPriceGems} 💎)`,
+        `SÍ, VENDER LOTE (${sellPriceGems} 💎)`,
         'CANCELAR'
       )
       return
@@ -546,6 +556,17 @@ export default function Marketplace({
         'ESTA CARTA NO SE PUEDE VENDER',
         'Es una carta base del juego, no una instancia de tu inventario. Vende cartas obtenidas en sobres o cofres.',
         '⚠️',
+        'warning'
+      )
+      return
+    }
+
+    // Comprobación Enfoque B: Si la planta está en el mazo activo, el sistema NO le permite venderla
+    if (selectedItem.inDeck) {
+      showModalAlert(
+        'PLANTA EN MAZO DE BATALLA',
+        'Esta planta está en tu mazo de batalla. Desequípala tú mismo en Mi Jardín antes de ponerla en venta.',
+        '🛑',
         'warning'
       )
       return
@@ -566,7 +587,7 @@ export default function Marketplace({
       '⚠️ ¿VENDER TU CARTA DE PLANTA?',
       `Vas a poner en venta tu carta jugable "${selectedItem.name}" (Nivel ${selectedItem.level}) por ${sellPriceGems} 💎.\n\n` +
         `❌ ¡ATENCIÓN! NO estás vendiendo copias. Las copias NO se venden en el mercado (las copias solo sirven para FUSIÓN y mejoras de nivel +15% stats).\n\n` +
-        `⚠️ Venderás tu PLANTA ÚNICA: se retirará de tu Jardín y de tu Mazo de Batalla. Si otro jugador la compra, dejará de pertenecerte (solo podrás tener otra si la compras a otro jugador).\n\n` +
+        `⚠️ Venderás tu PLANTA ÚNICA: se retirará de tu Jardín. Si otro jugador la compra, dejará de pertenecerte (solo podrás tener otra si la compras a otro jugador).\n\n` +
         `• Al comprador se le descuenta el 100% (${sellPriceGems} 💎).\n` +
         `• La comisión retenida por el juego es del ${split.comisionPct}% (${split.comision} 💎).\n` +
         `• Recibirás el 90% neto (${split.neto} 💎) al concretarse la venta.\n\n` +
@@ -599,13 +620,15 @@ export default function Marketplace({
   // RETIRAR MI OFERTA
   const handleCancelListing = (item: OfertaDelMercado) => {
     const isFarming = item.itemType === 'farming' || Boolean(item.itemId && FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId])
+    const qty = Math.max(1, Number(item.quantity) || 1)
     const nombre = isFarming
       ? (FARMING_ITEM_DEFINITIONS[item.itemId as FarmingItemId]?.label || item.itemId || 'Recurso')
       : (item.plantId && PLANT_CONFIGS[item.plantId as PlantId]?.name || item.plantId || 'Carta')
+    const detalle = isFarming && qty > 1 ? `el lote de ${qty}x "${nombre}"` : `"${nombre}"`
 
     showModalConfirm(
       'RETIRAR OFERTA DEL MERCADO',
-      `¿Deseas retirar "${nombre}" del mercado y recuperarla en tu ${isFarming ? 'inventario' : 'Jardín'}?`,
+      `¿Deseas retirar ${detalle} del mercado y recuperar ${isFarming ? 'los recursos en tu inventario' : 'la planta en tu Jardín'}?`,
       '📦',
       async () => {
         const r = await marketplaceService.cancelMarketplaceListing(item.id)
@@ -616,7 +639,7 @@ export default function Marketplace({
         soundManager.playSound('plantation', 0.8)
         showModalAlert(
           'OFERTA RETIRADA',
-          `"${nombre}" ha vuelto a tu ${isFarming ? 'inventario de cultivo' : 'Jardín'}.`,
+          `${detalle} ha vuelto a tu ${isFarming ? 'inventario de cultivo' : 'Jardín'}.`,
           '📦',
           'info'
         )
@@ -756,15 +779,16 @@ export default function Marketplace({
               const itemIcon = isFarming ? farmingDef?.icon : (plantDef?.packetActive || plantDef?.icon)
               const rInfo = !isFarming && item.plantId
                 ? getPlantRarityAndMinPrice(item.plantId as PlantId)
-                : { rarity: 'FARMING', minPrice: item.itemId ? (FARMING_ITEM_MIN_PRICES[item.itemId as FarmingItemId] || 100) : 100, color: '#4ade80' }
+                : { rarity: 'FARMING', minPrice: 10, color: '#4ade80' }
               const itemName = isFarming ? (farmingDef?.label || item.itemId || 'Recurso') : (plantDef?.name || item.plantId || 'Carta')
+              const itemQty = Math.max(1, Number(item.quantity) || 1)
 
               return (
                 <div key={item.id} className="market-item-card">
                   {/* Card Header */}
                   <div className="market-item-card__header">
                     <span className="market-item-level-tag">
-                      {isFarming ? `🌾 x${item.quantity || 1}` : (item.nivel > 0 ? `⭐ LVL ${item.nivel}` : '🌱 BASE')}
+                      {isFarming ? `🌾 LOTE x${itemQty}` : (item.nivel > 0 ? `⭐ LVL ${item.nivel}` : '🌱 BASE')}
                     </span>
                     <span className="market-item-rarity-badge" style={{ color: rInfo.color, borderColor: rInfo.color }}>
                       {rInfo.rarity}
@@ -794,7 +818,9 @@ export default function Marketplace({
                       <img src={itemIcon} alt={itemName} className="market-item-icon" />
                     )}
                   </div>
-                  <h4 className="market-item-name">{itemName}</h4>
+                  <h4 className="market-item-name">
+                    {isFarming && itemQty > 1 ? `${itemQty}x ${itemName}` : itemName}
+                  </h4>
 
                   {/* Stat Rolls Pills or Farming Description */}
                   <div className="market-item-stats-box">
@@ -812,7 +838,7 @@ export default function Marketplace({
                   {/* Price and Action Button */}
                   <div className="market-item-card__footer">
                     <div className="market-item-price-box">
-                      <span className="market-price-label">PRECIO</span>
+                      <span className="market-price-label">{isFarming && itemQty > 1 ? 'TOTAL LOTE' : 'PRECIO'}</span>
                       <span className="market-price-val">{item.precio} 💎</span>
                     </div>
 
@@ -1008,7 +1034,7 @@ export default function Marketplace({
                   <div className="market-sell-preview-header">
                     <span className="market-item-level-tag">
                       {selectedItem.kind === 'farming'
-                        ? `🌾 1x DISP (${selectedItem.availableQty})`
+                        ? `🌾 DISP (${selectedItem.availableQty})`
                         : (selectedItem.level > 0 ? `⭐ LVL ${selectedItem.level}` : '🌱 BASE')}
                     </span>
                     <span
@@ -1042,6 +1068,53 @@ export default function Marketplace({
                           {selectedItem.description}
                         </span>
                       </div>
+
+                      {/* Selector de cantidad para lote de farming */}
+                      <div className="market-price-input-group" style={{ marginTop: '10px', marginBottom: '14px' }}>
+                        <label>
+                          Cantidad a Vender en el Lote —{' '}
+                          <span style={{ color: '#4ade80' }}>Disponible: {selectedItem.availableQty}</span>
+                        </label>
+                        <div className="market-price-stepper-wrap">
+                          <button
+                            type="button"
+                            className="market-stepper-btn"
+                            disabled={sellQuantity <= 1}
+                            onClick={() => setSellQuantity((q) => Math.max(1, q - 1))}
+                            title="Restar 1"
+                          >
+                            -
+                          </button>
+                          <div className="market-price-input-wrap">
+                            <span>🌾</span>
+                            <input
+                              type="number"
+                              step="1"
+                              min={1}
+                              max={selectedItem.availableQty}
+                              value={sellQuantity}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10) || 1
+                                setSellQuantity(Math.max(1, Math.min(selectedItem.availableQty, val)))
+                              }}
+                              required
+                            />
+                            <span>unid.</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="market-stepper-btn"
+                            disabled={sellQuantity >= selectedItem.availableQty}
+                            onClick={() => setSellQuantity((q) => Math.min(selectedItem.availableQty, q + 1))}
+                            title="Sumar 1"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', textAlign: 'center' }}>
+                          Elige la cantidad exacta a vender (máximo disponible: <strong style={{ color: '#4ade80' }}>{selectedItem.availableQty} unid.</strong>)
+                        </div>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -1060,8 +1133,8 @@ export default function Marketplace({
                       </div>
 
                       {selectedItem.inDeck && (
-                        <div className="market-deck-warning">
-                          ⚠️ Esta carta está equipada en tu Mazo de Batalla. Se desequipará automáticamente al ponerla en venta.
+                        <div className="market-deck-warning market-deck-warning--danger">
+                          🛑 Esta planta está en tu mazo de batalla. Desequípala tú mismo en Mi Jardín antes de ponerla en venta.
                         </div>
                       )}
 
@@ -1084,7 +1157,9 @@ export default function Marketplace({
                   {/* Price Setting with Steppers */}
                   <div className="market-price-input-group">
                     <label>
-                      Precio de Venta (💎 gemas) —{' '}
+                      {selectedItem.kind === 'farming'
+                        ? `Precio Total del Lote (${sellQuantity}x ${selectedItem.name}) — `
+                        : 'Precio de Venta (💎 gemas) — '}
                       <span style={{ color: '#fde047' }}>Mínimo: {selectedItem.minPrice} 💎</span>
                     </label>
                     <div className="market-price-stepper-wrap">
@@ -1153,15 +1228,32 @@ export default function Marketplace({
                         +100 💎
                       </button>
                     </div>
+
+                    {selectedItem.kind === 'farming' && sellQuantity > 1 && (
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', textAlign: 'center' }}>
+                        ≈ {(sellPriceGems / sellQuantity).toFixed(1)} 💎 por unidad
+                      </div>
+                    )}
                   </div>
 
                   <button
                     type="submit"
-                    disabled={!canSell || sellPriceGems < selectedItem.minPrice || (selectedItem.kind === 'plant' && availablePlantsCount <= 3)}
-                    className={`market-publish-btn ${!canSell || (selectedItem.kind === 'plant' && availablePlantsCount <= 3) ? 'market-publish-btn--locked' : ''}`}
+                    disabled={
+                      !canSell ||
+                      sellPriceGems < selectedItem.minPrice ||
+                      (selectedItem.kind === 'plant' && (availablePlantsCount <= 3 || selectedItem.inDeck))
+                    }
+                    className={`market-publish-btn ${
+                      !canSell ||
+                      (selectedItem.kind === 'plant' && (availablePlantsCount <= 3 || selectedItem.inDeck))
+                        ? 'market-publish-btn--locked'
+                        : ''
+                    }`}
                     title={
                       !canSell
                         ? 'Requiere Pase PvP o 1,350 Copas para vender en el mercado'
+                        : selectedItem.kind === 'plant' && selectedItem.inDeck
+                        ? 'Esta planta está en tu mazo de batalla. Desequípala tú mismo en Mi Jardín antes de ponerla en venta'
                         : selectedItem.kind === 'plant' && availablePlantsCount <= 3
                         ? 'Debes conservar al menos 3 plantas para poder jugar'
                         : undefined
@@ -1169,9 +1261,13 @@ export default function Marketplace({
                   >
                     {!canSell
                       ? '🔒 REQUIERE PASE PVP O 1,350 COPAS'
+                      : selectedItem.kind === 'plant' && selectedItem.inDeck
+                      ? '🛑 DESEQUÍPALA EN MI JARDÍN PARA VENDER'
                       : selectedItem.kind === 'plant' && availablePlantsCount <= 3
                       ? '🛑 MÍNIMO 3 PLANTAS REQUERIDAS PARA JUGAR'
-                      : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes el 90% (${calculateMarketplaceSplit(sellPriceGems, comisionPct).neto} 💎)`}
+                      : selectedItem.kind === 'farming' && sellQuantity > 1
+                      ? `🏷️ PUBLICAR LOTE (${sellQuantity}x) POR ${sellPriceGems} 💎 · neto ${calculateMarketplaceSplit(sellPriceGems, comisionPct).neto} 💎`
+                      : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · neto ${calculateMarketplaceSplit(sellPriceGems, comisionPct).neto} 💎`}
                   </button>
 
                   {!canSell && (
@@ -1439,11 +1535,6 @@ export default function Marketplace({
                           <span className="market-tx-amount-num" style={{ color: '#4ade80', fontWeight: 'bold' }}>
                             +{tx.amountGems.toLocaleString()} 💎
                           </span>
-                          {tx.amountUsd && Number(tx.amountUsd) > 0 && (
-                            <span style={{ fontSize: '9px', color: '#94a3b8', display: 'block', textAlign: 'right' }}>
-                              ≈ ${Number(tx.amountUsd).toFixed(2)} USD
-                            </span>
-                          )}
                         </div>
                       ) : (
                         <div className="market-tx-amount-box">

@@ -23,7 +23,8 @@ export interface GoldPackage {
   id: string
   name: string
   goldAmount: number
-  priceUsd: number
+  priceGems: number
+  priceUsd?: number
   badge?: string
   popular?: boolean
   bestValue?: boolean
@@ -35,6 +36,7 @@ export const GOLD_PACKAGES: GoldPackage[] = [
     id: 'gold_100',
     name: 'Bolsa de Monedas',
     goldAmount: 100,
+    priceGems: 100,
     priceUsd: 100,
     badge: 'BÁSICO',
     description: '100 Monedas de Oro directas a tu cuenta.',
@@ -43,6 +45,7 @@ export const GOLD_PACKAGES: GoldPackage[] = [
     id: 'gold_250',
     name: 'Cofre de Monedas',
     goldAmount: 250,
+    priceGems: 200,
     priceUsd: 200,
     badge: 'MÁS POPULAR • +25% EXTRA',
     popular: true,
@@ -52,6 +55,7 @@ export const GOLD_PACKAGES: GoldPackage[] = [
     id: 'gold_700',
     name: 'Bóveda Real de Monedas',
     goldAmount: 700,
+    priceGems: 500,
     priceUsd: 500,
     badge: 'MEJOR VALOR • +40% EXTRA',
     bestValue: true,
@@ -324,7 +328,7 @@ export default function Shop({
 
   /** Precio del sobre. Respaldo en PACK_DEFINITIONS si el servidor no responde. */
   const packPrice = (packId: PackId): number =>
-    serverPackPrices?.[packId] ?? PACK_DEFINITIONS[packId].priceUsd
+    serverPackPrices?.[packId] ?? (PACK_DEFINITIONS[packId].priceGems ?? PACK_DEFINITIONS[packId].priceUsd ?? 300)
 
   const getQty = (packId: PackId) => buyQuantities[packId] || 1
 
@@ -382,10 +386,11 @@ export default function Shop({
   }
 
   const handleBuyGold = async (pkg: GoldPackage) => {
-    if (userTokens < pkg.priceUsd) {
+    const costGems = pkg.priceGems ?? pkg.priceUsd ?? 100
+    if (userTokens < costGems) {
       setThemedAlert({
         title: 'GEMAS INSUFICIENTES',
-        message: `⚠️ Gemas insuficientes (${userTokens} Gemas 💎 disponibles).\nSe requieren ${pkg.priceUsd} Gemas 💎 para comprar ${pkg.goldAmount.toLocaleString()} Monedas de Oro.`,
+        message: `⚠️ Gemas insuficientes (${userTokens} Gemas 💎 disponibles).\nSe requieren ${costGems} Gemas 💎 para comprar ${pkg.goldAmount.toLocaleString()} Monedas de Oro.`,
         icon: '⚠️',
       })
       return
@@ -400,11 +405,11 @@ export default function Shop({
         trackEvent('purchase_gold', {
           package_id: pkg.id,
           gold_amount: pkg.goldAmount,
-          price_usd: pkg.priceUsd,
+          price_gems: costGems,
         })
         setThemedAlert({
           title: '¡COMPRA EXITOSA!',
-          message: `💰 ¡Has adquirido con éxito +${(res.goldAdded ?? pkg.goldAmount).toLocaleString()} Monedas de Oro por ${pkg.priceUsd} Gemas 💎!`,
+          message: `💰 ¡Has adquirido con éxito +${(res.goldAdded ?? pkg.goldAmount).toLocaleString()} Monedas de Oro por ${costGems} Gemas 💎!`,
           icon: '💰',
         })
       } else {
@@ -896,7 +901,7 @@ export default function Shop({
                             onClick={() => handleBuyGold(pkg)}
                           >
                             <span>🛒 COMPRAR</span>
-                            <strong className="shop-epic-buy-price">{pkg.priceUsd} 💎 Gemas</strong>
+                            <strong className="shop-epic-buy-price">{pkg.priceGems ?? pkg.priceUsd} 💎 Gemas</strong>
                           </button>
                         </div>
                       ))}

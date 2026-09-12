@@ -180,6 +180,15 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       const openRound = (rows as CodeRoundRow[]).find((r) => r.status === 'open')
       if (openRound?.prizes_config && Array.isArray(openRound.prizes_config) && openRound.prizes_config.length > 0) {
         setCodePrizeTiers(openRound.prizes_config)
+        const p1 = openRound.prizes_config.find((t) => t.place === 1)
+        if (p1) {
+          setCodePrizePool(p1.amount)
+        }
+      } else if (openRound?.prize_pool_gems) {
+        setCodePrizePool(openRound.prize_pool_gems)
+      }
+      if (openRound?.free_attempts) {
+        setCodeFreeAttempts(openRound.free_attempts)
       }
     } catch (err: any) {
       console.error('[AdminPanel] Error al cargar rondas de código:', err)
@@ -203,6 +212,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const handleOpenCodeRound = async () => {
     const top1 = codePrizeTiers.find((t) => t.place === 1)
     const top1Gems = top1?.currency === 'gems' ? top1.amount : codePrizePool
+    const top1Label = top1 ? `${top1.amount} ${top1.currency === 'gems' ? '💎' : '💰'}` : `${codePrizePool} 💎`
     const top2 = codePrizeTiers.find((t) => t.place === 2)?.amount ?? 0
     const top3 = codePrizeTiers.find((t) => t.place === 3)?.amount ?? 0
 
@@ -223,8 +233,8 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       return
     }
     soundManager.playSound('victory', 0.8)
-    alert(`🎉 ¡Ronda #${res.roundNumber} abierta con éxito! (5 Slots · ${codePrizePool} 💎)`)
-    showNotice(`🔐 Ronda #${res.roundNumber} abierta con éxito.`)
+    alert(`🎉 ¡Ronda #${res.roundNumber} abierta con éxito! (5 Slots · Top 1: ${top1Label} · ${codePrizeTiers.length} puestos configurados)`)
+    showNotice(`🔐 Ronda #${res.roundNumber} abierta con éxito (Top 1: ${top1Label}).`)
     await loadCodeRounds()
   }
 
@@ -249,6 +259,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const handleRestartCodeRound = async (settlePrevious: boolean) => {
     const top1 = codePrizeTiers.find((t) => t.place === 1)
     const top1Gems = top1?.currency === 'gems' ? top1.amount : codePrizePool
+    const top1Label = top1 ? `${top1.amount} ${top1.currency === 'gems' ? '💎' : '💰'}` : `${codePrizePool} 💎`
     const top2 = codePrizeTiers.find((t) => t.place === 2)?.amount ?? 0
     const top3 = codePrizeTiers.find((t) => t.place === 3)?.amount ?? 0
 
@@ -271,8 +282,8 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       return
     }
     soundManager.playSound('victory', 0.8)
-    alert(`🚀 ¡Nuevo Acertijo #${res.roundNumber} iniciado con éxito! (5 Slots · ${codePrizePool} 💎)`)
-    showNotice(`🚀 Nuevo Acertijo #${res.roundNumber} iniciado (5 slots · ${codePrizePool} 💎).`)
+    alert(`🚀 ¡Nuevo Acertijo #${res.roundNumber} iniciado con éxito! (5 Slots · Top 1: ${top1Label} · ${codePrizeTiers.length} puestos)`)
+    showNotice(`🚀 Nuevo Acertijo #${res.roundNumber} iniciado (5 slots · Top 1: ${top1Label}).`)
     await loadCodeRounds()
   }
 
@@ -1005,8 +1016,12 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                   {activa ? (
                     <>
                       <div className="admin-form-group">
-                        <label>Bote:</label>
-                        <strong>{activa.prize_pool_gems} 💎</strong>
+                        <label>Bote Top 1:</label>
+                        <strong>
+                          {activa.prizes_config?.[0]
+                            ? `${activa.prizes_config[0].amount} ${activa.prizes_config[0].currency === 'gold' ? '💰 Oro' : '💎 Gemas'}`
+                            : `${activa.prize_pool_gems} 💎`}
+                        </strong>
                       </div>
                       <div className="admin-form-group">
                         <label>Intentos gratis por jugador:</label>
@@ -1017,10 +1032,10 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                         <strong>{new Date(activa.created_at).toLocaleString()}</strong>
                       </div>
 
-                      {activa.prizes_config && activa.prizes_config.length > 0 && (
+                      {activa.prizes_config && activa.prizes_config.length > 0 ? (
                         <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
                           <div style={{ fontSize: '12px', fontWeight: 700, color: '#facc15', marginBottom: '6px' }}>
-                            🏆 Premios configurados para esta ronda activa:
+                            🏆 Premios configurados para esta ronda activa (módulo creador):
                           </div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                             {activa.prizes_config.map((t) => (
@@ -1040,6 +1055,15 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                                 </strong>
                               </span>
                             ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', marginBottom: '4px' }}>
+                            ℹ️ Premios estándar (Ronda sin configuración personalizada):
+                          </div>
+                          <div style={{ fontSize: '11px', opacity: 0.8 }}>
+                            #1: {activa.prize_pool_gems} 💎 · #2 al #10: Oro 💰
                           </div>
                         </div>
                       )}
@@ -1231,7 +1255,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                             disabled={isLoading}
                             onClick={() => handleRestartCodeRound(true)}
                           >
-                            🏆 Repartir actual e Iniciar Nuevo (5 Slots · {codePrizePool} 💎)
+                            🏆 Repartir actual e Iniciar Nuevo (5 Slots · Top 1: {codePrizeTiers.find((t) => t.place === 1)?.amount ?? codePrizePool} {codePrizeTiers.find((t) => t.place === 1)?.currency === 'gold' ? '💰' : '💎'})
                           </button>
                           <button
                             type="button"
@@ -1413,7 +1437,7 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                           disabled={isLoading}
                           onClick={handleOpenCodeRound}
                         >
-                          {isLoading ? '⏳ Procesando...' : `🔐 Abrir ronda (5 slots · ${codePrizePool} 💎)`}
+                          {isLoading ? '⏳ Procesando...' : `🔐 Abrir ronda (5 slots · Top 1: ${codePrizeTiers.find((t) => t.place === 1)?.amount ?? codePrizePool} ${codePrizeTiers.find((t) => t.place === 1)?.currency === 'gold' ? '💰' : '💎'})`}
                         </button>
                         <button
                           type="button"
