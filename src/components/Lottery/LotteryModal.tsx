@@ -242,6 +242,12 @@ export default function LotteryModal({
   const [codeExtra, setCodeExtra] = useState(0)
   const [codeHistory, setCodeHistory] = useState<ServerAttempt[]>([])
   const [codeBoard, setCodeBoard] = useState<BoardEntry[]>([])
+  const [codeHints, setCodeHints] = useState<{ id: string; hintText: string; createdAt: string }[]>([])
+  const [buyingHint, setBuyingHint] = useState(false)
+  const [roundsList, setRoundsList] = useState<any[]>([])
+  const [selectedRankingRoundId, setSelectedRankingRoundId] = useState<string | null>(null)
+  const [rankingBoard, setRankingBoard] = useState<BoardEntry[]>([])
+  const [loadingRanking, setLoadingRanking] = useState(false)
   const [codeMyPayout, setCodeMyPayout] = useState<{ place: number; gems: number; tiedWith: number } | null>(null)
   const [codeBusy, setCodeBusy] = useState(false)
 
@@ -282,11 +288,12 @@ export default function LotteryModal({
   const totalAttemptsAvailable = codeAttemptsLeft
   const roundIsOpen = codeRound?.status === 'open'
 
-  // Carga el estado de la ronda y la clasificación.
+  // Carga el estado de la ronda, la clasificación y las pistas.
   const loadCodeData = async () => {
-    const [st, board] = await Promise.all([
+    const [st, board, rounds] = await Promise.all([
       lotteryService.secretCodeState(),
       lotteryService.secretCodeLeaderboard(),
+      lotteryService.getSecretCodeRounds(),
     ])
     if (st) {
       const newRound = (st.round as CodeRound) ?? null
@@ -304,9 +311,56 @@ export default function LotteryModal({
       setCodeFreeUsed(st.freeUsed ?? 0)
       setCodeExtra(st.extraAttempts ?? 0)
       setCodeHistory((st.attempts as ServerAttempt[]) ?? [])
+      setCodeHints(st.hints ?? [])
       setCodeMyPayout(st.myPayout ?? null)
     }
-    setCodeBoard(board as BoardEntry[])
+    const safeBoard = (board as BoardEntry[]) || []
+    setCodeBoard(safeBoard)
+    setRankingBoard(safeBoard)
+
+    if (rounds && Array.isArray(rounds)) {
+      setRoundsList(rounds)
+      if (rounds.length > 0 && !selectedRankingRoundId) {
+        setSelectedRankingRoundId(rounds[0].id)
+      }
+    }
+  }
+
+  const loadRoundLeaderboard = async (roundId: string) => {
+    setLoadingRanking(true)
+    try {
+      const b = await lotteryService.secretCodeLeaderboard(roundId)
+      setRankingBoard((b as BoardEntry[]) || [])
+    } catch (_) {
+    } finally {
+      setLoadingRanking(false)
+    }
+  }
+
+  const handleBuyHint = async () => {
+    if (currentGems < 10) {
+      alert('Gemas insuficientes. Se requieren 10 💎 para adquirir una pista.')
+      return
+    }
+    setBuyingHint(true)
+    soundManager.playSound('click', 0.4)
+    const res = await lotteryService.buySecretCodeHint()
+    setBuyingHint(false)
+    if (res.success && res.hint) {
+      soundManager.playSound('victory', 0.6)
+      setCurrentGems((g) => Math.max(0, g - 10))
+      setCodeHints((prev) => [
+        ...prev,
+        {
+          id: String(Date.now()),
+          hintText: res.hint!,
+          createdAt: new Date().toISOString(),
+        },
+      ])
+      onRewardsChanged?.()
+    } else {
+      alert(`⚠️ ${res.error || 'No se pudo comprar la pista.'}`)
+    }
   }
 
   // Recompensas dinámicas calculadas según la configuración del creador/admin en Supabase
@@ -342,22 +396,55 @@ export default function LotteryModal({
   const top1CurrencyLabel = top1Currency === 'gems' ? 'Gemas 💎' : 'Oro 💰'
   const top1PrizeBadge = `${top1Amount} ${top1Currency === 'gems' ? '💎' : '💰'}`
 
+  // Ronda actualmente seleccionada en la pestaña Ranking
+  const selectedRankingRound = useMemo(() => {
+    if (!selectedRankingRoundId) return codeRound
+    const found = roundsList.find((r) => r.id === selectedRankingRoundId)
+    return found || codeRound
+  }, [selectedRankingRoundId, roundsList, codeRound])
+
+  // Premios de la ronda seleccionada en Ranking
+  const rankingConfiguredTiers: CodeRoundPrizeTier[] = useMemo(() => {
+    const targetRound = selectedRankingRound
+    let raw = targetRound?.prizesConfig || (targetRound as any)?.prizes_config
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw) } catch (_) {}
+    }
+    if (raw && Array.isArray(raw) && raw.length > 0) {
+      return raw.map((t: any, i: number) => ({
+        place: Number(t.place) || (i + 1),
+        amount: Number(t.amount) || 0,
+        currency: t.currency === 'gold' ? 'gold' : 'gems',
+      }))
+    }
+    const pool = targetRound?.prize_1st ?? (targetRound as any)?.prize1st ?? targetRound?.prizes?.[0] ?? targetRound?.prizePool ?? targetRound?.prize_pool_gems ?? 50
+    const list: CodeRoundPrizeTier[] = [{ place: 1, amount: pool, currency: 'gems' }]
+    if (targetRound?.prize_2nd && targetRound.prize_2nd > 0) {
+      list.push({ place: 2, amount: targetRound.prize_2nd, currency: 'gold' })
+    }
+    if (targetRound?.prize_3rd && targetRound.prize_3rd > 0) {
+      list.push({ place: 3, amount: targetRound.prize_3rd, currency: 'gold' })
+    }
+    return list
+  }, [selectedRankingRound])
+
   // Calcula el premio correspondiente y su reparto equitativo entre jugadores empatados en el mismo puesto
   const boardWithDividedPrizes = useMemo(() => {
-    if (!codeBoard || codeBoard.length === 0) return []
+    const activeBoard = rankingBoard && rankingBoard.length > 0 ? rankingBoard : codeBoard
+    if (!activeBoard || activeBoard.length === 0) return []
 
     // Contar cuántos jugadores hay empatados en cada puesto
     const placeCounts = new Map<number, number>()
-    for (const e of codeBoard) {
+    for (const e of activeBoard) {
       const p = e.place || 1
       placeCounts.set(p, (placeCounts.get(p) || 0) + 1)
     }
 
-    return codeBoard.map((e) => {
+    return activeBoard.map((e) => {
       const place = e.place || 1
       const tiedCount = placeCounts.get(place) || 1
 
-      const configuredPrize = configuredTiers.find((p) => p.place === place)
+      const configuredPrize = rankingConfiguredTiers.find((p) => p.place === place)
       let totalPrize = 0
       let currency: 'gems' | 'gold' = 'gold'
 
@@ -382,7 +469,7 @@ export default function LotteryModal({
         currency,
       }
     })
-  }, [codeBoard, configuredTiers])
+  }, [rankingBoard, codeBoard, rankingConfiguredTiers])
 
   // Carga y sincroniza los sectores reales de la ruleta desde Supabase
   const loadWheelSectors = async () => {
@@ -1089,74 +1176,9 @@ export default function LotteryModal({
                     {/* PROMO HERO BANNER */}
                     <div className="lottery-code-promo-banner">
                       <div className="lottery-promo-badge">
-                        {`🔐 RONDA #${codeRound?.roundNumber ?? ''} · BOTE ${top1PrizeBadge}`}
+                        {`🔐 RONDA #${codeRound?.roundNumber ?? ''} · BOTE: ${top1PrizeBadge}`}
                       </div>
-                      <h3>¡ADIVINA LA SECUENCIA DE {SECRET_CODE_LENGTH} PLANTAS!</h3>
-                      <p>
-                        {codeRound?.freeAttempts ?? 3} intentos gratis por ronda (Reintentos: <strong>5 💎</strong>). Pistas globales <strong>Mastermind (Ciego)</strong>:{' '}
-                        <span style={{ color: '#4ade80' }}>🟢 Exactas</span> = posición correcta,{' '}
-                        <span style={{ color: '#facc15' }}>🟡 Desubicadas</span> = en otra casilla,{' '}
-                        <span style={{ color: '#f87171' }}>🔴 Descartadas</span> = no están en el código.{' '}
-                        <em>¡Las pistas no revelan la casilla exacta, deberás deducirlo!</em>{' '}
-                        ¡El primero en descifrar las {SECRET_CODE_LENGTH} se lleva{' '}
-                        <strong>
-                          {top1Amount} {top1CurrencyLabel}
-                        </strong>!
-                      </p>
-
-                      {/* Tiras dinámicas de premios con estilo gaming */}
-                      {configuredTiers.length > 0 && (
-                        <div style={{
-                          marginTop: '10px',
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '6px',
-                          alignItems: 'center',
-                          padding: '8px 12px',
-                          background: 'rgba(15, 23, 42, 0.75)',
-                          borderRadius: '8px',
-                          border: '1px solid rgba(56, 189, 248, 0.25)',
-                          boxShadow: 'inset 0 0 12px rgba(56, 189, 248, 0.05)',
-                        }}>
-                          <span style={{ fontSize: '11px', fontWeight: 900, color: '#facc15', letterSpacing: '0.5px' }}>
-                            🎮 BOTÍN EN JUEGO:
-                          </span>
-                          {configuredTiers.map((t) => (
-                            <span
-                              key={t.place}
-                              style={{
-                                fontSize: '11px',
-                                padding: '3px 8px',
-                                borderRadius: '5px',
-                                background: t.place === 1
-                                  ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.3) 0%, rgba(245, 158, 11, 0.15) 100%)'
-                                  : t.place === 2
-                                  ? 'rgba(148, 163, 184, 0.15)'
-                                  : t.place === 3
-                                  ? 'rgba(217, 119, 6, 0.15)'
-                                  : 'rgba(0, 0, 0, 0.45)',
-                                border: t.place === 1
-                                  ? '1px solid #eab308'
-                                  : t.place === 2
-                                  ? '1px solid #94a3b8'
-                                  : t.place === 3
-                                  ? '1px solid #d97706'
-                                  : '1px solid rgba(255, 255, 255, 0.12)',
-                                fontWeight: 800,
-                                fontVariantNumeric: 'tabular-nums',
-                                boxShadow: t.place === 1 ? '0 0 8px rgba(234, 179, 8, 0.3)' : undefined,
-                              }}
-                            >
-                              <span style={{ color: t.place === 1 ? '#facc15' : t.place === 2 ? '#e2e8f0' : t.place === 3 ? '#fb923c' : '#94a3b8', marginRight: '3px' }}>
-                                {t.place === 1 ? '🥇' : t.place === 2 ? '🥈' : t.place === 3 ? '🥉' : `#${t.place}`}
-                              </span>
-                              <strong style={{ color: t.currency === 'gems' ? '#38bdf8' : '#facc15' }}>
-                                {t.amount} {t.currency === 'gems' ? '💎' : '💰'}
-                              </strong>
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <h3>¡ADIVINA LA SECUENCIA!</h3>
                     </div>
 
                     {/* 5 ACTIVE SLOTS */}
@@ -1240,7 +1262,7 @@ export default function LotteryModal({
                       const missCount = Math.max(0, (lastAtt.sequence?.length || SECRET_CODE_LENGTH) - lastAtt.exactCount - lastAtt.wrongPosCount)
                       return (
                         <div className="lottery-code-last-attempt-card">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '9px', fontWeight: 800, color: '#fbbf24' }}>Último Intento:</span>
                             <div className="lottery-history-cards">
                               {lastAtt.sequence.map((pId, pIdx) => {
@@ -1268,16 +1290,43 @@ export default function LotteryModal({
                               {Number(lastAtt.pct).toFixed(1)}%
                             </strong>
                           </div>
-                          <button
-                            type="button"
-                            className="lottery-view-all-btn"
-                            onClick={() => setCodeSubTab('history')}
-                          >
-                            📜 Ver Historial ({codeHistory.length}) ➔
-                          </button>
                         </div>
                       )
                     })()}
+
+                    {/* CHAT / FEED DE PISTAS DEDUCTIVAS */}
+                    <div className="lottery-code-hints-section">
+                      <div className="lottery-code-hints-header">
+                        <div className="lottery-code-hints-title">
+                          <span style={{ fontSize: '11px', fontWeight: 900, color: '#facc15' }}>💬 CHAT DE PISTAS</span>
+                          <span style={{ fontSize: '9px', color: '#94a3b8' }}>Deducción sin revelar casillas</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="lottery-code-buy-hint-btn"
+                          onClick={handleBuyHint}
+                          disabled={buyingHint || currentGems < 10 || !roundIsOpen}
+                          title="Pagar 10 Gemas 💎 para adquirir una pista deductiva"
+                        >
+                          {buyingHint ? '⏳ Comprando...' : '💡 COMPRAR PISTA (10 💎)'}
+                        </button>
+                      </div>
+
+                      <div className="lottery-code-hints-chat">
+                        {codeHints.length === 0 ? (
+                          <div className="lottery-hints-empty">
+                            <span>💡 ¿Atascado? Compra una pista por 10 💎 para descartar plantas o deducir familias secretas.</span>
+                          </div>
+                        ) : (
+                          codeHints.map((h, i) => (
+                            <div key={h.id || i} className="lottery-hint-bubble">
+                              <span className="lottery-hint-tag">Pista #{i + 1}</span>
+                              <span className="lottery-hint-text">{h.hintText}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )
@@ -1361,10 +1410,66 @@ export default function LotteryModal({
             {codeSubTab === 'ranking' && (
               <div className="lottery-code-full-pane">
                 <div className="lottery-code-history-box" style={{ flex: 1 }}>
+                  {/* SELECTOR DE RONDA: ACTUAL VS PASADAS */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    padding: '8px 12px',
+                    background: 'rgba(15, 23, 42, 0.9)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    marginBottom: '10px',
+                    flexWrap: 'wrap',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 800, color: '#facc15' }}>🗂️ Consultar Ronda:</span>
+                      <select
+                        value={selectedRankingRoundId || ''}
+                        onChange={(e) => {
+                          const rId = e.target.value
+                          setSelectedRankingRoundId(rId)
+                          loadRoundLeaderboard(rId)
+                        }}
+                        style={{
+                          background: '#0f172a',
+                          color: '#ffffff',
+                          border: '1px solid #38bdf8',
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {roundsList.length === 0 && codeRound && (
+                          <option value={codeRound.id}>
+                            Ronda #{codeRound.roundNumber} {codeRound.status === 'open' ? '🟢 (En curso)' : '✅ (Finalizada)'}
+                          </option>
+                        )}
+                        {roundsList.map((r) => {
+                          const rNum = r.round_number ?? r.roundNumber
+                          const rStatus = r.status === 'open' ? '🟢 (En curso)' : '✅ (Finalizada)'
+                          const t1 = r.prizes_config?.find((p: any) => p.place === 1)
+                          const t1Badge = t1 ? `${t1.amount} ${t1.currency === 'gems' ? '💎' : '💰'}` : `${r.prize_pool_gems || 50} 💎`
+                          return (
+                            <option key={r.id} value={r.id}>
+                              Ronda #{rNum} {rStatus} · Bote: {t1Badge}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
+                    {loadingRanking && (
+                      <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700 }}>⏳ Cargando clasificación...</span>
+                    )}
+                  </div>
+
                   <div className="lottery-history-header">
-                    <h5>🏆 CLASIFICACIÓN DE LA RONDA:</h5>
+                    <h5>🏆 CLASIFICACIÓN RONDA #{selectedRankingRound?.round_number ?? selectedRankingRound?.roundNumber ?? ''}:</h5>
                     <div className="lottery-pins-legend" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                      {configuredTiers.slice(0, 3).map((p) => (
+                      {rankingConfiguredTiers.slice(0, 3).map((p) => (
                         <span
                           key={p.place}
                           className="pin-tag pin-tag--exact"
@@ -1376,9 +1481,9 @@ export default function LotteryModal({
                           {p.place === 1 ? '🥇' : p.place === 2 ? '🥈' : '🥉'} {p.amount} {p.currency === 'gold' ? '💰' : '💎'}
                         </span>
                       ))}
-                      {configuredTiers.length > 3 && (
+                      {rankingConfiguredTiers.length > 3 && (
                         <span className="pin-tag pin-tag--wrong">
-                          Top 4-{configuredTiers.length}: Recompensas
+                          Top 4-{rankingConfiguredTiers.length}: Recompensas
                         </span>
                       )}
                       <span style={{ fontSize: '9.5px', color: '#94a3b8', fontWeight: 600 }}>
@@ -1504,14 +1609,14 @@ export default function LotteryModal({
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
                       <span style={{ fontSize: '11.5px', fontWeight: 900, color: '#facc15', letterSpacing: '0.5px' }}>
-                        🎮 TABLA OFICIAL DE RECOMPENSAS (RONDA #{codeRound?.roundNumber ?? ''}):
+                        🎮 TABLA OFICIAL DE RECOMPENSAS (RONDA #{selectedRankingRound?.round_number ?? selectedRankingRound?.roundNumber ?? ''}):
                       </span>
                       <span style={{ fontSize: '10.5px', color: '#38bdf8', fontWeight: 700 }}>
-                        {configuredTiers.length} puestos premiados
+                        {rankingConfiguredTiers.length} puestos premiados
                       </span>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                      {configuredTiers.map((t) => (
+                      {rankingConfiguredTiers.map((t) => (
                         <span
                           key={t.place}
                           style={{
@@ -1548,16 +1653,10 @@ export default function LotteryModal({
                     </div>
                     <p style={{ fontSize: 11, opacity: 0.85, margin: 0, lineHeight: 1.5 }}>
                       El primer lugar que descifre el 100% se lleva{' '}
-                      <strong style={{ color: top1Currency === 'gems' ? '#38bdf8' : '#f59e0b' }}>
-                        {top1Amount} {top1CurrencyLabel}
-                      </strong>.
-                      {configuredTiers.length > 1 ? (
-                        <>
-                          {' '}Los puestos del 2 al {configuredTiers[configuredTiers.length - 1].place} reciben sus respectivas recompensas configuradas por el administrador al cerrarse la ronda.
-                        </>
-                      ) : (
-                        ' Solo el puesto #1 recibe premio en esta ronda.'
-                      )}
+                      <strong style={{ color: rankingConfiguredTiers[0]?.currency === 'gems' ? '#38bdf8' : '#f59e0b' }}>
+                        {rankingConfiguredTiers[0]?.amount ?? 50} {rankingConfiguredTiers[0]?.currency === 'gems' ? 'Gemas 💎' : 'Oro 💰'}
+                      </strong>
+                      . Los empates en cualquier puesto se reparten equitativamente el premio asignado a dicho puesto.
                     </p>
                   </div>
                 </div>

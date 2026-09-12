@@ -256,10 +256,12 @@ export default function ProfileModal({
           msg = res.message || `🎉 ¡Has recibido +${res.goldAmount?.toLocaleString() || ''} de Oro y 1 Sobre!`
         } else if (res.rewardType === 'gold' && !res.message) {
           msg = `💰 ¡Has recibido +${res.goldAmount?.toLocaleString() || ''} de Oro!`
+        } else if (res.rewardType === 'gems' && !res.message) {
+          msg = `💎 ¡Has recibido +${res.gemsAmount?.toLocaleString() || ''} Gemas!`
         } else if (res.rewardType === 'plant' && !res.message) {
           msg = `🌿 ¡Carta ${res.plantId || ''} añadida a tu inventario!`
         } else if (res.rewardType === 'pvp_pack') {
-          msg = '🎉 ¡Sobre PvP añadido al jardín!'
+          msg = res.message || '🎉 ¡Sobre PvP añadido al jardín!'
         }
         setCodeFeedback({ text: msg, type: 'success' })
         showFeedback(msg, 'success')

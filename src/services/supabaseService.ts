@@ -2059,6 +2059,11 @@ export const SupabaseService = {
       wasFree: boolean
       createdAt: string
     }[]
+    hints?: {
+      id: string
+      hintText: string
+      createdAt: string
+    }[]
     myPayout?: { place: number; gems: number; tiedWith: number } | null
   } | null> {
     if (!isSupabaseConfigured()) return null
@@ -2168,6 +2173,58 @@ export const SupabaseService = {
     }
   },
 
+  /** Compra una pista deductiva por 10 Gemas sin revelar casillas ni solución */
+  async buySecretCodeHint(): Promise<{
+    success: boolean
+    hint?: string
+    newBalance?: number
+    error?: string
+  }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('buy_secret_code_hint')
+      if (error) {
+        logError('buySecretCodeHint', error)
+        return { success: false, error: error.message }
+      }
+      return data
+    } catch (e: any) {
+      logError('buySecretCodeHint', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /** Lista de rondas activas y pasadas para visualización pública en el Ranking */
+  async getSecretCodeRounds(limit = 15): Promise<any[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await (supabase.from('secret_code_rounds') as any)
+        .select('id, round_number, status, free_attempts, prize_pool_gems, prize_1st, prize_2nd, prize_3rd, prizes_config, winner_id, created_at, finished_at')
+        .order('round_number', { ascending: false })
+        .limit(limit)
+
+      if (!error && Array.isArray(data)) {
+        return data.map((r: any) => {
+          let cfg = r.prizes_config || r.prizesConfig
+          if (typeof cfg === 'string') {
+            try { cfg = JSON.parse(cfg) } catch (_) {}
+          }
+          return {
+            ...r,
+            prizes_config: Array.isArray(cfg)
+              ? cfg.map((t: any, i: number) => ({
+                  place: Number(t.place) || i + 1,
+                  amount: Number(t.amount) || 0,
+                  currency: t.currency === 'gold' ? 'gold' : 'gems',
+                }))
+              : undefined,
+          }
+        })
+      }
+    } catch (_) {}
+    return []
+  },
+
   /** Obtiene las rondas de código secreto de forma autoritativa para el panel de administración */
   async adminGetSecretCodeRounds(): Promise<any[]> {
     if (!isSupabaseConfigured()) return []
@@ -2267,9 +2324,11 @@ export const SupabaseService = {
     const top1 = cleanPrizes.find((t) => t.place === 1)
     const top2 = cleanPrizes.find((t) => t.place === 2)
     const top3 = cleanPrizes.find((t) => t.place === 3)
+    const prize1st = opts?.prize1st ?? (top1?.amount ?? 50)
+    const prizePool = top1?.currency === 'gems' ? prize1st : (opts?.prizePool ?? 0)
     const payload = {
-      prizePool: opts?.prizePool ?? (top1?.amount ?? 50),
-      prize1st: opts?.prize1st ?? (top1?.amount ?? 50),
+      prizePool,
+      prize1st,
       prize2nd: opts?.prize2nd ?? (top2?.amount ?? 0),
       prize3rd: opts?.prize3rd ?? (top3?.amount ?? 0),
       freeAttempts: opts?.freeAttempts ?? 3,
@@ -2469,9 +2528,11 @@ export const SupabaseService = {
     const top1 = cleanPrizes.find((t) => t.place === 1)
     const top2 = cleanPrizes.find((t) => t.place === 2)
     const top3 = cleanPrizes.find((t) => t.place === 3)
+    const prize1st = opts?.prize1st ?? (top1?.amount ?? 50)
+    const prizePool = top1?.currency === 'gems' ? prize1st : (opts?.prizePool ?? 0)
     const payload = {
-      prizePool: opts?.prizePool ?? (top1?.amount ?? 50),
-      prize1st: opts?.prize1st ?? (top1?.amount ?? 50),
+      prizePool,
+      prize1st,
       prize2nd: opts?.prize2nd ?? (top2?.amount ?? 0),
       prize3rd: opts?.prize3rd ?? (top3?.amount ?? 0),
       freeAttempts: opts?.freeAttempts ?? 3,
@@ -2593,8 +2654,8 @@ export const SupabaseService = {
     const top1 = cleanPrizes.find((t) => t.place === 1)
     const top2 = cleanPrizes.find((t) => t.place === 2)
     const top3 = cleanPrizes.find((t) => t.place === 3)
-    const prize1st = top1?.currency === 'gems' ? top1.amount : (opts.prizePool ?? 50)
-    const prizePool = opts.prizePool ?? (top1?.currency === 'gems' ? top1.amount : 50)
+    const prize1st = top1?.amount ?? (opts.prizePool ?? 50)
+    const prizePool = top1?.currency === 'gems' ? prize1st : (opts.prizePool ?? 0)
 
     const payload = {
       prizePool,
@@ -3878,9 +3939,10 @@ export const SupabaseService = {
     packId?: string
     status?: 'pending'
     arenaLevel?: number
-    rewardType?: 'gold' | 'plant' | 'pvp_pack' | 'bundle' | 'probabilistic'
+    rewardType?: 'gold' | 'gems' | 'plant' | 'pvp_pack' | 'bundle' | 'probabilistic' | 'lanzamaiz_pack'
     packType?: string
     goldAmount?: number
+    gemsAmount?: number
     plantId?: string
     rarity?: string
     isNew?: boolean
@@ -3927,6 +3989,7 @@ export const SupabaseService = {
         arenaLevel: data?.arenaLevel,
         rewardType: data?.rewardType,
         goldAmount: data?.goldAmount,
+        gemsAmount: data?.gemsAmount,
         plantId: data?.plantId,
         rarity: data?.rarity,
         isNew: data?.isNew,

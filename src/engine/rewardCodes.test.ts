@@ -804,6 +804,27 @@ describe('Sistema de Códigos de Recompensa Streamer y Sobres PvP en Jardín (Mi
     })
   })
 
+  // ── AUDITORÍA DE LA MIGRACIÓN 125: SOBRE PVP LANZAMAIZ ──────────────────────
+  describe('Auditoría estática y lógica de 125-reward-code-sobre-pvp-lanzamaiz.sql', () => {
+    const migrationPath = path.resolve(__dirname, '../../supabase/migrations/125-reward-code-sobre-pvp-lanzamaiz.sql')
+
+    it('A. El archivo de migración 125 existe y contiene la estructura requerida', () => {
+      expect(fs.existsSync(migrationPath)).toBe(true)
+      const sqlContent = fs.readFileSync(migrationPath, 'utf-8')
+
+      // Código LANZAMAIZ con 2 usos máximos
+      expect(sqlContent).toContain(`'LANZAMAIZ'`)
+      expect(sqlContent).toContain(`max_uses, used_count, active`)
+      expect(sqlContent).toContain(`VALUES\n  ('LANZAMAIZ', 'LANZAMAIZ', 'lanzamaiz_pack', 100, NULL, NULL, 2, 0, TRUE)`)
+
+      // Recompensas: 100 Gemas, 500 Oro o Planta Común
+      expect(sqlContent).toContain(`gems_balance = COALESCE(gems_balance, 0) + 100`)
+      expect(sqlContent).toContain(`gold_balance = COALESCE(gold_balance, 0) + v_gold_amt`)
+      expect(sqlContent).toContain(`ARRAY['sunflower', 'peashooter', 'wallnut', 'chomper']`)
+      expect(sqlContent).toContain(`'lanzamaiz_pack'`)
+    })
+  })
+
   // ── AUDITORÍA ESTÁTICA DEL ARCHIVO SQL DE LA MIGRACIÓN 50 ──────────────────
   describe('Auditoría estática de 50-reward-codes-streamer-pvp-pack.sql', () => {
     const sqlPath = path.resolve(__dirname, '../../supabase/50-reward-codes-streamer-pvp-pack.sql')

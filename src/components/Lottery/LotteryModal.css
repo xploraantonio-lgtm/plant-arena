@@ -1450,3 +1450,103 @@
   }
 }
 
+/* ── CHAT DE PISTAS DEDUCTIVAS ────────────────────────────────────────────── */
+.lottery-code-hints-section {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: inset 0 0 10px rgba(56, 189, 248, 0.05);
+}
+
+.lottery-code-hints-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lottery-code-hints-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lottery-code-buy-hint-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1.5px solid #38bdf8;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+  transition: all 0.15s ease;
+}
+
+.lottery-code-buy-hint-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.55);
+}
+
+.lottery-code-buy-hint-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.lottery-code-hints-chat {
+  max-height: 85px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.lottery-hints-empty {
+  padding: 6px 8px;
+  font-size: 9.5px;
+  color: #94a3b8;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
+  text-align: center;
+  font-style: italic;
+}
+
+.lottery-hint-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 6px;
+  padding: 4px 8px;
+  animation: lotteryFadeIn 0.2s ease-out;
+}
+
+.lottery-hint-tag {
+  background: rgba(234, 179, 8, 0.2);
+  border: 1px solid #eab308;
+  color: #facc15;
+  font-size: 8.5px;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.lottery-hint-text {
+  font-size: 9.5px;
+  color: #f1f5f9;
+  line-height: 1.35;
+  font-weight: 600;
+}
+

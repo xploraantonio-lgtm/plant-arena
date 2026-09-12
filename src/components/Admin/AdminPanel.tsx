@@ -111,8 +111,8 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
     setCodePrizeTiers((prev) => {
       const copy = [...prev]
       copy[idx] = { ...copy[idx], [field]: val }
-      if (field === 'amount' && copy[idx].place === 1 && copy[idx].currency === 'gems') {
-        const numVal = Number(val) || 0
+      if (copy[idx].place === 1) {
+        const numVal = Number(copy[idx].amount) || 0
         setCodePrizePool(numVal)
       }
       return copy
@@ -212,15 +212,16 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
 
   const handleOpenCodeRound = async () => {
     const top1 = codePrizeTiers.find((t) => t.place === 1)
-    const top1Gems = top1?.currency === 'gems' ? top1.amount : codePrizePool
-    const top1Label = top1 ? `${top1.amount} ${top1.currency === 'gems' ? '💎' : '💰'}` : `${codePrizePool} 💎`
+    const top1Amount = top1?.amount ?? codePrizePool
+    const top1Currency = top1?.currency ?? 'gems'
+    const top1Label = `${top1Amount} ${top1Currency === 'gems' ? '💎' : '💰'}`
     const top2 = codePrizeTiers.find((t) => t.place === 2)?.amount ?? 0
     const top3 = codePrizeTiers.find((t) => t.place === 3)?.amount ?? 0
 
     setIsLoading(true)
     const res = await adminService.adminOpenSecretCodeRound({
-      prizePool: codePrizePool,
-      prize1st: top1Gems,
+      prizePool: top1Currency === 'gems' ? top1Amount : 0,
+      prize1st: top1Amount,
       prize2nd: top2,
       prize3rd: top3,
       freeAttempts: codeFreeAttempts,
@@ -240,9 +241,13 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   }
 
   const handleSaveActiveRoundPrizes = async () => {
+    const top1 = codePrizeTiers.find((t) => t.place === 1)
+    const top1Amount = top1?.amount ?? codePrizePool
+    const top1Currency = top1?.currency ?? 'gems'
+
     setIsLoading(true)
     const res = await adminService.adminUpdateActiveSecretCodePrizes({
-      prizePool: codePrizePool,
+      prizePool: top1Currency === 'gems' ? top1Amount : 0,
       prizesConfig: codePrizeTiers,
     })
     setIsLoading(false)
@@ -279,15 +284,16 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
 
   const handleRestartCodeRound = async (settlePrevious: boolean) => {
     const top1 = codePrizeTiers.find((t) => t.place === 1)
-    const top1Gems = top1?.currency === 'gems' ? top1.amount : codePrizePool
-    const top1Label = top1 ? `${top1.amount} ${top1.currency === 'gems' ? '💎' : '💰'}` : `${codePrizePool} 💎`
+    const top1Amount = top1?.amount ?? codePrizePool
+    const top1Currency = top1?.currency ?? 'gems'
+    const top1Label = `${top1Amount} ${top1Currency === 'gems' ? '💎' : '💰'}`
     const top2 = codePrizeTiers.find((t) => t.place === 2)?.amount ?? 0
     const top3 = codePrizeTiers.find((t) => t.place === 3)?.amount ?? 0
 
     setIsLoading(true)
     const res = await adminService.adminRestartSecretCodeRound({
-      prizePool: codePrizePool,
-      prize1st: top1Gems,
+      prizePool: top1Currency === 'gems' ? top1Amount : 0,
+      prize1st: top1Amount,
       prize2nd: top2,
       prize3rd: top3,
       freeAttempts: codeFreeAttempts,
