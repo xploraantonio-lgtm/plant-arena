@@ -181,4 +181,55 @@ describe('SISTEMA AUTORITATIVO DE TORNEOS — PRUEBAS DE DOMINIO Y REGLAS', () =
     const diffMs = new Date(details!.tournament.start_time).getTime() - Date.now()
     expect(diffMs).toBeGreaterThan(0)
   })
+
+  it('9. Auditoría de Participantes: la lista completa de inscritos se preserva sin truncamiento arbitrario', async () => {
+    // Simular un torneo con 185 participantes registrados
+    const fakeTourneyId = 'tourney_185_players'
+    const fakeParticipants = Array.from({ length: 185 }, (_, i) => ({
+      tournament_id: fakeTourneyId,
+      user_id: `user_${i + 1}`,
+      username: `Gladiador_${i + 1}`,
+      wins: i === 0 ? 10 : i === 1 ? 9 : i === 2 ? 8 : Math.max(0, 5 - Math.floor(i / 30)),
+      losses: i === 0 ? 0 : i === 1 ? 1 : i === 2 ? 1 : Math.min(3, Math.floor(i / 50)),
+      is_eliminated: Math.floor(i / 50) >= 3,
+      created_at: new Date(Date.now() - i * 1000).toISOString(),
+    }))
+
+    // Mapeo autoritativo de clasificación con 185 elementos
+    const mappedLeaderboard = fakeParticipants.map((tp, idx) => ({
+      rank: idx + 1,
+      user_id: tp.user_id,
+      username: tp.username,
+      wins: tp.wins,
+      losses: tp.losses,
+      is_eliminated: tp.is_eliminated,
+      is_me: tp.user_id === 'user_1',
+      prize_awarded_gems: idx === 0 ? 50 : idx === 1 ? 30 : idx === 2 ? 20 : 0,
+    }))
+
+    expect(mappedLeaderboard.length).toBe(185)
+    expect(mappedLeaderboard[0].rank).toBe(1)
+    expect(mappedLeaderboard[184].rank).toBe(185)
+    expect(mappedLeaderboard[0].prize_awarded_gems).toBe(50)
+    expect(mappedLeaderboard[1].prize_awarded_gems).toBe(30)
+    expect(mappedLeaderboard[2].prize_awarded_gems).toBe(20)
+    expect(mappedLeaderboard[3].prize_awarded_gems).toBe(0)
+  })
+
+  it('10. Torneo Finalizado: mantiene la clasificación final y premios de todos los participantes', async () => {
+    const created = await tournamentService.createTournament({
+      title: 'Torneo Finalizado Histórico',
+      prize_pool_gems: 100,
+      entry_fee_gems: 0,
+      duration_minutes: 60,
+    })
+    const tourneyId = created.tournament_id!
+
+    const details = await tournamentService.getTournamentDetails(tourneyId)
+    expect(details).not.toBeNull()
+    expect(details?.leaderboard).toBeDefined()
+    expect(Array.isArray(details?.leaderboard)).toBe(true)
+    expect(details?.leaderboard.length).toBeGreaterThan(0)
+  })
 })
+

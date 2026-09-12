@@ -58,6 +58,8 @@ export default function TournamentModal({
   const [selectedTourneyId, setSelectedTourneyId] = useState<string | null>(null)
   const [details, setDetails] = useState<TournamentDetailsResponse | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
+  const [loadingDetails, setLoadingDetails] = useState<boolean>(false)
+  const [searchParticipant, setSearchParticipant] = useState<string>('')
   const [activeTab, setActiveTab] = useState<'active' | 'ended'>('active')
 
   // Modals inside Tournament
@@ -142,11 +144,14 @@ export default function TournamentModal({
 
   // Load selected tournament details
   const loadDetails = useCallback(async (tourneyId: string) => {
+    setLoadingDetails(true)
     try {
       const res = await tournamentService.getTournamentDetails(tourneyId)
       setDetails(res)
     } catch (err) {
       console.warn('Error loading tournament details:', err)
+    } finally {
+      setLoadingDetails(false)
     }
   }, [])
 
@@ -158,6 +163,8 @@ export default function TournamentModal({
 
   useEffect(() => {
     if (selectedTourneyId) {
+      setSearchParticipant('')
+      setDetails(null)
       void loadDetails(selectedTourneyId)
     }
   }, [selectedTourneyId, loadDetails])
@@ -170,10 +177,29 @@ export default function TournamentModal({
     return tournaments.filter((t) => t.status === 'ended' || t.status === 'cancelled')
   }, [tournaments, activeTab])
 
+  const displayedLeaderboard = useMemo(() => {
+    if (!details?.leaderboard || details?.tournament?.id !== selectedTourneyId) return []
+    const list = details.leaderboard
+    if (!searchParticipant.trim()) return list
+    const q = searchParticipant.toLowerCase().trim()
+    return list.filter((p) =>
+      p.username.toLowerCase().includes(q) || (p.is_me && (q === 'tu' || q === 'tú' || q === 'yo'))
+    )
+  }, [details, selectedTourneyId, searchParticipant])
+
   const selectedTourney = useMemo(() => {
-    if (details?.tournament) return details.tournament
+    if (details?.tournament && details.tournament.id === selectedTourneyId) {
+      return details.tournament
+    }
     return tournaments.find((t) => t.id === selectedTourneyId) || null
   }, [details, tournaments, selectedTourneyId])
+
+  const myPart = useMemo(() => {
+    if (details?.tournament && details.tournament.id === selectedTourneyId) {
+      return details.my_participation
+    }
+    return null
+  }, [details, selectedTourneyId])
 
   if (!isOpen) return null
 
@@ -375,7 +401,6 @@ export default function TournamentModal({
     }
   }
 
-  const myPart = details?.my_participation
   const myLosses = myPart?.losses ?? 0
   const isMyPartEliminated = myPart?.is_eliminated || myLosses >= 3
   const activeDeckList = myPart?.deck || ['sunflower', 'peashooter', 'wallnut', 'chomper', 'repeater']
@@ -746,16 +771,78 @@ export default function TournamentModal({
                 )}
               </div>
 
-              {/* LEADERBOARD (CLASIFICACIÓN EN VIVO) */}
+              {/* LEADERBOARD (CLASIFICACIÓN COMPLETA Y PARTICIPANTES) */}
               <div className="tourney-lb-section">
                 <div className="tourney-lb-header">
-                  <span>Tabla de Clasificación en Vivo</span>
-                  <span style={{ color: '#c084fc', fontSize: '0.78rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span>
+                      {isLive
+                        ? 'Tabla de Clasificación en Vivo'
+                        : isEnded
+                        ? 'Tabla de Clasificación Final'
+                        : 'Participantes Inscritos'}
+                    </span>
+                    <span
+                      style={{
+                        background: 'rgba(192, 132, 252, 0.18)',
+                        border: '1px solid rgba(192, 132, 252, 0.45)',
+                        color: '#e9d5ff',
+                        fontSize: '0.72rem',
+                        padding: '2px 8px',
+                        borderRadius: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      👥 {details?.leaderboard ? `${details.leaderboard.length} participantes` : 'Cargando…'}
+                    </span>
+                  </div>
+                  <span style={{ color: '#c084fc', fontSize: '0.76rem' }}>
                     Ordenado por Victorias DESC
                   </span>
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
+                {/* FILTRO DE BÚSQUEDA RÁPIDA DE PARTICIPANTE */}
+                {details?.leaderboard && details.leaderboard.length > 5 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0 2px' }}>
+                    <input
+                      type="text"
+                      className="tourney-form-input"
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.8rem',
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        border: '1px solid rgba(168, 85, 247, 0.4)',
+                        borderRadius: 8,
+                        color: '#fff',
+                        width: '100%',
+                        maxWidth: 320,
+                      }}
+                      placeholder={`🔍 Buscar entre los ${details.leaderboard.length} participantes...`}
+                      value={searchParticipant}
+                      onChange={(e) => setSearchParticipant(e.target.value)}
+                    />
+                    {searchParticipant && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchParticipant('')}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          border: '1px solid #ef4444',
+                          color: '#fca5a5',
+                          borderRadius: 6,
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✕ Limpiar
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
                   <table className="tourney-lb-table">
                     <thead>
                       <tr>
@@ -764,15 +851,23 @@ export default function TournamentModal({
                         <th>Victorias</th>
                         <th>Derrotas</th>
                         <th>Estado</th>
-                        <th>Premio Estimado</th>
+                        <th>Premio {isEnded ? 'Obtenido' : 'Estimado'}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {details?.leaderboard && details.leaderboard.length > 0 ? (
-                        details.leaderboard.map((row) => {
+                      {loadingDetails && !details ? (
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: 24 }}>
+                            ⏳ Cargando participantes inscritos…
+                          </td>
+                        </tr>
+                      ) : displayedLeaderboard.length > 0 ? (
+                        displayedLeaderboard.map((row) => {
                           let prizeText = '—'
                           const pool = selectedTourney.prize_pool_gems || 0
-                          if (pool > 0 && row.wins > 0) {
+                          if (isEnded && row.prize_awarded_gems && row.prize_awarded_gems > 0) {
+                            prizeText = `${Number(row.prize_awarded_gems).toFixed(1)} 💎`
+                          } else if (pool > 0 && (row.wins > 0 || isEnded)) {
                             if (row.rank === 1) prizeText = `${(pool * 0.5).toFixed(1)} 💎`
                             else if (row.rank === 2) prizeText = `${(pool * 0.3).toFixed(1)} 💎`
                             else if (row.rank === 3) prizeText = `${(pool * 0.2).toFixed(1)} 💎`
@@ -808,7 +903,9 @@ export default function TournamentModal({
                       ) : (
                         <tr>
                           <td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: 16 }}>
-                            Aún no hay partidas disputadas en este torneo.
+                            {searchParticipant
+                              ? `No se encontró ningún participante con "${searchParticipant}".`
+                              : 'Aún no hay participantes inscritos en este torneo.'}
                           </td>
                         </tr>
                       )}

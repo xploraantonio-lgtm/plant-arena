@@ -20,19 +20,17 @@ export const tournamentService = {
 
     try {
       const { data, error } = await (supabase.rpc as any)('get_tournaments_list')
-      if (error) {
-        console.warn('tournamentService.listTournaments fallback:', error.message)
-        return this._getLocalTournaments()
-      }
-
-      if (Array.isArray(data)) {
+      if (!error && Array.isArray(data)) {
         return data as TournamentModel[]
       }
-      return []
+      if (error) {
+        console.warn('tournamentService.listTournaments RPC error:', error.message)
+      }
     } catch (err: any) {
       console.warn('tournamentService.listTournaments catch:', err)
-      return this._getLocalTournaments()
     }
+
+    return this._getSupabaseTournamentsDirect()
   },
 
   /**
@@ -48,19 +46,19 @@ export const tournamentService = {
         p_tournament_id: tournamentId,
       })
 
-      if (error) {
-        console.warn('tournamentService.getTournamentDetails fallback:', error.message)
-        return this._getLocalTournamentDetails(tournamentId)
-      }
-
-      if (data && typeof data === 'object') {
+      if (!error && data && typeof data === 'object' && (data as any).success !== false) {
         return data as TournamentDetailsResponse
       }
-      return null
+
+      if (error) {
+        console.warn('tournamentService.getTournamentDetails RPC error:', error.message)
+      }
     } catch (err: any) {
       console.warn('tournamentService.getTournamentDetails catch:', err)
-      return this._getLocalTournamentDetails(tournamentId)
     }
+
+    // Fallback autoritativo directo a tablas de Supabase (garantiza todos los participantes reales 185+)
+    return this._getSupabaseTournamentDetailsDirect(tournamentId)
   },
 
   /**
@@ -279,6 +277,126 @@ export const tournamentService = {
     }
   },
 
+  /**
+   * Consulta autoritativa directa a la tabla tournaments en Supabase si el RPC presenta demoras.
+   */
+  async _getSupabaseTournamentsDirect(): Promise<TournamentModel[]> {
+    try {
+      const { data: tourneys, error: tErr } = await (supabase as any)
+        .from('tournaments')
+        .select('*')
+        .order('start_time', { ascending: false })
+
+      if (tErr || !Array.isArray(tourneys) || tourneys.length === 0) {
+        return this._getLocalTournaments()
+      }
+
+      const tourneyIds = tourneys.map((t: any) => t.id)
+      const { data: participants } = await (supabase as any)
+        .from('tournament_participants')
+        .select('tournament_id, is_eliminated')
+        .in('tournament_id', tourneyIds)
+
+      const countMap = new Map<string, { total: number; active: number }>()
+      if (Array.isArray(participants)) {
+        participants.forEach((p: any) => {
+          const cur = countMap.get(p.tournament_id) || { total: 0, active: 0 }
+          cur.total += 1
+          if (!p.is_eliminated) cur.active += 1
+          countMap.set(p.tournament_id, cur)
+        })
+      }
+
+      return tourneys.map((t: any) => ({
+        ...t,
+        participants_count: countMap.get(t.id)?.total || 0,
+        active_participants_count: countMap.get(t.id)?.active || 0,
+      }))
+    } catch {
+      return this._getLocalTournaments()
+    }
+  },
+
+  /**
+   * Consulta autoritativa directa a tournament_participants en Supabase.
+   * Garantiza cargar el 100% de los participantes reales (185+) registrados.
+   */
+  async _getSupabaseTournamentDetailsDirect(tournamentId: string): Promise<TournamentDetailsResponse | null> {
+    try {
+      const { data: tourney, error: tErr } = await (supabase as any)
+        .from('tournaments')
+        .select('*')
+        .eq('id', tournamentId)
+        .maybeSingle()
+
+      if (tErr || !tourney) {
+        console.warn('tournamentService: Torneo no encontrado en Supabase:', tErr?.message)
+        return this._getLocalTournamentDetails(tournamentId)
+      }
+
+      // Obtener todos los participantes del torneo ordenados por victorias y derrotas
+      const { data: participants, error: pErr } = await (supabase as any)
+        .from('tournament_participants')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('wins', { ascending: false })
+        .order('losses', { ascending: true })
+        .order('created_at', { ascending: true })
+
+      if (pErr) {
+        console.warn('tournamentService: Error al leer tournament_participants:', pErr.message)
+      }
+
+      const list = Array.isArray(participants) ? participants : []
+
+      // Obtener el ID del usuario autenticado si existe
+      let currentUserId: string | null = null
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        currentUserId = sessionData?.session?.user?.id || null
+      } catch {
+        // Ignorar
+      }
+
+      const leaderboard = list.map((tp: any, index: number) => ({
+        rank: tp.final_rank ?? (index + 1),
+        user_id: tp.user_id,
+        username: tp.username || 'Gladiador',
+        wins: Number(tp.wins || 0),
+        losses: Number(tp.losses || 0),
+        is_eliminated: Boolean(tp.is_eliminated),
+        is_me: Boolean(currentUserId && tp.user_id === currentUserId),
+        prize_awarded_gems: Number(tp.prize_awarded_gems || 0),
+      }))
+
+      const myPart = list.find((tp: any) => currentUserId && tp.user_id === currentUserId)
+
+      return {
+        tournament: {
+          ...tourney,
+          participants_count: list.length,
+          active_participants_count: list.filter((p: any) => !p.is_eliminated).length,
+        },
+        leaderboard,
+        my_participation: myPart
+          ? {
+              registered: true,
+              deck: Array.isArray(myPart.deck) ? myPart.deck : undefined,
+              wins: myPart.wins || 0,
+              losses: myPart.losses || 0,
+              is_eliminated: Boolean(myPart.is_eliminated),
+              prize_awarded_gems: Number(myPart.prize_awarded_gems || 0),
+            }
+          : {
+              registered: false,
+            },
+      }
+    } catch (err: any) {
+      console.warn('tournamentService._getSupabaseTournamentDetailsDirect falló:', err)
+      return this._getLocalTournamentDetails(tournamentId)
+    }
+  },
+
   // ───────────────────────────────────────────────────────────────────────────
   // MÉTODOS LOCALES / OFFLINE (FALLBACK PARA DESARROLLO SIN CONEXIÓN)
   // ───────────────────────────────────────────────────────────────────────────
@@ -351,14 +469,13 @@ export const tournamentService = {
     let myPart = memoryParticipants.get(tournamentId)
     if (!myPart) {
       myPart = {
-        registered: true,
+        registered: false,
         deck: ['sunflower', 'peashooter', 'wallnut', 'chomper', 'repeater'],
         wins: 0,
         losses: 0,
         is_eliminated: false,
         prize_awarded_gems: 0,
       }
-      memoryParticipants.set(tournamentId, myPart)
     }
 
     const leaderboard = [
