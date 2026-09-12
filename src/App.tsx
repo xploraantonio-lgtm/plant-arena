@@ -535,6 +535,7 @@ function App() {
    */
   const [mazosDeLaSala, setMazosDeLaSala] = useState<{ mio: unknown; rival: unknown } | null>(null)
   const [partidaAsincrona, setPartidaAsincrona] = useState<boolean>(false)
+  const [reopenTournamentOnMenu, setReopenTournamentOnMenu] = useState<boolean>(false)
 
   // Reaccionar a errores asíncronos de la cola (por ej. agotamiento de energías en backend)
   useEffect(() => {
@@ -652,10 +653,13 @@ function App() {
   }, [])
 
   const handleRegresarAlMenu = useCallback(() => {
+    if (battleMatchMode === 'tournament') {
+      setReopenTournamentOnMenu(true)
+    }
     limpiarEstadoPartida()
     setScreen('menu')
     void refreshFromServer()
-  }, [limpiarEstadoPartida, refreshFromServer])
+  }, [battleMatchMode, limpiarEstadoPartida, refreshFromServer])
 
   /** Cancelar la búsqueda y volver al menú. */
   const salirDeLaCola = async () => {
@@ -1195,6 +1199,8 @@ function App() {
             onFastUnlockSlot={fastUnlockSlot}
             onOpenSlotPack={handleOpenSlotPack}
             onDeductTokens={deductUserTokens}
+            reopenTournamentModal={reopenTournamentOnMenu}
+            onResetReopenTournamentModal={() => setReopenTournamentOnMenu(false)}
           />
         )}
         {screen === 'partidas' && (

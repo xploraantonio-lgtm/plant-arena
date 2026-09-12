@@ -3,6 +3,7 @@ import { referralService, type MisReferidos } from '../../services/referralServi
 import { soundManager } from '../../utils/audioManager'
 import { enlaceDeReferido } from '../../utils/direccionPublica'
 import { getPlayerAvatarUrl, UserManager } from '../../utils/userManager'
+import GoldIcon from '../Common/GoldIcon'
 import './PanelDeReferidos.css'
 
 /**
@@ -208,10 +209,10 @@ export default function PanelDeReferidos() {
       UserManager.addTransaction({
         type: 'reward',
         amountUsd: 0.0,
-        description: `Bono de referidos: +${r.oro} 🪙 Oro por amigos válidos`,
+        description: `Bono de referidos: +${r.oro} 💰 Oro por amigos válidos`,
         status: 'completed',
       })
-      decir(`¡Cobro exitoso! +${r.oro} 🪙 de oro acreditados por ${r.amigos} amigo(s).`)
+      decir(`¡Cobro exitoso! +${r.oro} 💰 de oro acreditados por ${r.amigos} amigo(s).`)
       window.dispatchEvent(new Event('refresh_user_balance'))
       void cargar()
     } else {
@@ -404,10 +405,13 @@ export default function PanelDeReferidos() {
         {/* 1. Oro por amigos válidos */}
         <div className="ref-premio">
           <div className="ref-premio__txt">
-            <strong>🪙 100 de Oro por cada amigo válido</strong>
+            <strong>
+              <GoldIcon size={18} style={{ marginRight: '6px' }} />
+              100 de Oro por cada amigo válido
+            </strong>
             <small>
               {datos.amigosSinCobrar > 0
-                ? `${datos.amigosSinCobrar} amigo(s) en 1,100+ copas listos para cobrar (+${datos.oroPorCobrar} 🪙)`
+                ? `${datos.amigosSinCobrar} amigo(s) en 1,100+ copas listos para cobrar (+${datos.oroPorCobrar} 💰)`
                 : 'Todo el oro acumulado ha sido cobrado.'}
             </small>
           </div>
@@ -417,7 +421,13 @@ export default function PanelDeReferidos() {
             disabled={datos.oroPorCobrar <= 0 || ocupado === 'oro'}
             onClick={() => void cobrarOro()}
           >
-            {ocupado === 'oro' ? '⏳ Cobrando...' : `Cobrar ${datos.oroPorCobrar} 🪙 Oro`}
+            {ocupado === 'oro' ? (
+              '⏳ Cobrando...'
+            ) : (
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                Cobrar {datos.oroPorCobrar} <GoldIcon size={15} /> Oro
+              </span>
+            )}
           </button>
         </div>
 
@@ -528,7 +538,13 @@ export default function PanelDeReferidos() {
                   {p.gemas > 0 ? `${p.gemas.toLocaleString()} 💎` : '—'}
                 </td>
                 <td style={{ color: p.oro > 0 ? '#facc15' : '#94a3b8' }}>
-                  {p.oro > 0 ? `${p.oro.toLocaleString()} 🪙` : '—'}
+                  {p.oro > 0 ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      {p.oro.toLocaleString()} <GoldIcon size={14} />
+                    </span>
+                  ) : (
+                    '—'
+                  )}
                 </td>
                 <td style={{ color: p.sobres > 0 ? '#4ade80' : '#94a3b8' }}>
                   {p.sobres > 0 ? `${p.sobres}x ${p.tipoSobre}` : '—'}
@@ -584,7 +600,11 @@ export default function PanelDeReferidos() {
                             <span className="ref-ranking__reward-titulo">Premio Estimado:</span>
                             <span className="ref-ranking__reward-desc">
                               {premio.gemas > 0 && <strong className="ref-badge-gemas">+{premio.gemas.toLocaleString()} 💎 </strong>}
-                              {premio.oro > 0 && <strong className="ref-badge-oro">+{premio.oro.toLocaleString()} 🪙 </strong>}
+                              {premio.oro > 0 && (
+                                <strong className="ref-badge-oro" style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                  +{premio.oro.toLocaleString()} <GoldIcon size={12} />{' '}
+                                </strong>
+                              )}
                               {premio.sobres > 0 && <span className="ref-badge-sobre">+{premio.sobres}x {premio.tipoSobre}</span>}
                             </span>
                           </div>
@@ -720,8 +740,8 @@ export default function PanelDeReferidos() {
                           {a.oroCobrado
                             ? '✓ 100 Oro Cobrado'
                             : esValido
-                            ? '🪙 100 Oro Listo'
-                            : '🪙 100 Oro a 1100'}
+                            ? '💰 100 Oro Listo'
+                            : '💰 100 Oro a 1100'}
                         </span>
                       </div>
                     </div>

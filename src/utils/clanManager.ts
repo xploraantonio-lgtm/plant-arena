@@ -105,6 +105,8 @@ export interface ClanData {
   seasonPayoutClaimedMembers: string[]
   settings?: ClanSettings
   rewardShares?: Record<string, number>
+  damageDealt?: number
+  dailyDamageDealt?: number
 }
 
 const STORAGE_KEYS = {
@@ -213,6 +215,8 @@ export class ClanManager {
       createdAt: new Date().toISOString().split('T')[0],
       fullBonusClaimedMembers: [],
       seasonPayoutClaimedMembers: [],
+      damageDealt: 0,
+      dailyDamageDealt: 0,
     }
 
     const clans = this.getClans()
@@ -606,6 +610,11 @@ export class ClanManager {
     winner.wins += 1
     loser.losses += 1
 
+    // Daño de Guerra infligido al clan rival (350 a 500 de daño de base)
+    const raidDamage = 350 + Math.floor(Math.random() * 151)
+    winner.damageDealt = (winner.damageDealt || 0) + raidDamage
+    winner.dailyDamageDealt = (winner.dailyDamageDealt || 0) + raidDamage
+
     // If loser vault hits 0 -> State of Defeat
     if (loser.vaultUsd <= 0) {
       loser.status = 'defeated'
@@ -627,7 +636,7 @@ export class ClanManager {
     localStorage.setItem(STORAGE_KEYS.WAR_LOGS, JSON.stringify(logs.slice(0, 30)))
 
     this.saveClans(clans)
-    return { success: true, winnerClan: winner, loserClan: loser, stolenAmount }
+    return { success: true, winnerClan: winner, loserClan: loser, stolenAmount, damageDealt: raidDamage }
   }
 
   static getWarLogs(): ClanWarLog[] {
@@ -1035,4 +1044,147 @@ export class ClanManager {
     localStorage.setItem(STORAGE_KEYS.CLAN_INVITATIONS, JSON.stringify(invs))
     return { success: true, clanId: inv.clanId, clanName: inv.clanName }
   }
+
+  /**
+   * Obtener lista de clanes ordenada por daño (Ranking de Clanes)
+   */
+  static getClansRanking(userClanId?: string | null): ClanRankingEntry[] {
+    const clans = this.getClans()
+    const sorted = [...clans].sort((a, b) => {
+      const dmgA = a.damageDealt ?? 0
+      const dmgB = b.damageDealt ?? 0
+      if (dmgB !== dmgA) return dmgB - dmgA
+      const winsDiff = (b.wins || 0) - (a.wins || 0)
+      if (winsDiff !== 0) return winsDiff
+      return (b.vaultGems ?? b.vaultUsd ?? 0) - (a.vaultGems ?? a.vaultUsd ?? 0)
+    })
+
+    return sorted.map((c, idx) => ({
+      rank: idx + 1,
+      id: c.id,
+      name: c.name,
+      tag: c.tag,
+      badge: c.badge || '🛡️',
+      description: c.description,
+      leader: c.leader,
+      memberCount: c.members.length,
+      damageDealt: c.damageDealt ?? (c.wins * 420),
+      dailyDamageDealt: c.dailyDamageDealt ?? Math.floor((c.damageDealt ?? (c.wins * 420)) * 0.35),
+      wins: c.wins || 0,
+      losses: c.losses || 0,
+      vaultGems: c.vaultGems ?? c.vaultUsd ?? 0,
+      isUserClan: Boolean(userClanId && c.id === userClanId),
+    }))
+  }
+
+  /**
+   * Cálculo de Recompensas Diarias por puesto (Top 10 a las 00:00 UTC)
+   */
+  static getDailyRewardsForRank(rank: number): { goldPerMember: number; hasPvpPack: boolean; badge: string; text: string } {
+    if (rank === 1) {
+      return {
+        goldPerMember: 500,
+        hasPvpPack: true,
+        badge: '500 💰 + ⚔️ Pack PvP (5 min)',
+        text: '500 Oro para cada miembro + 1x Pack PvP Exclusivo (temporizador de 5 min para abrir, no expira)',
+      }
+    }
+    if (rank === 2) {
+      return {
+        goldPerMember: 200,
+        hasPvpPack: false,
+        badge: '200 💰 Oro',
+        text: '200 Oro para cada miembro del clan',
+      }
+    }
+    if (rank === 3) {
+      return {
+        goldPerMember: 100,
+        hasPvpPack: false,
+        badge: '100 💰 Oro',
+        text: '100 Oro para cada miembro del clan',
+      }
+    }
+    if (rank >= 4 && rank <= 10) {
+      return {
+        goldPerMember: 50,
+        hasPvpPack: false,
+        badge: '50 💰 Oro',
+        text: '50 Oro para cada miembro del clan',
+      }
+    }
+    return {
+      goldPerMember: 0,
+      hasPvpPack: false,
+      badge: 'Sin premio',
+      text: 'Fuera de la zona de premios diaria',
+    }
+  }
+
+  /**
+   * Duración estricta del temporizador de desbloqueo del Pack PvP (5 minutos en ms)
+   */
+  static readonly PVP_PACK_UNLOCK_DURATION_MS = 5 * 60 * 1000
+
+  /**
+   * Obtiene la marca de tiempo (timestamp en ms) en la que el Pack PvP se desbloquea para abrir.
+   * Si no se define availableAt, se usa createdAt + 5 minutos.
+   */
+  static getFlashPackUnlockTime(availableAt?: string | number | null, createdAt?: string | number | null): number {
+    if (availableAt) {
+      const parsed = typeof availableAt === 'string' ? new Date(availableAt).getTime() : Number(availableAt)
+      if (!isNaN(parsed) && parsed > 0) return parsed
+    }
+    if (createdAt) {
+      const parsedCreated = typeof createdAt === 'string' ? new Date(createdAt).getTime() : Number(createdAt)
+      if (!isNaN(parsedCreated) && parsedCreated > 0) {
+        return parsedCreated + ClanManager.PVP_PACK_UNLOCK_DURATION_MS
+      }
+    }
+    return Date.now()
+  }
+
+  /**
+   * Verifica si el Pack PvP ya cumplió su temporizador estricto de 5 minutos y recién se puede abrir.
+   * ¡IMPORTANTE!: El pack NO EXPIRA NUNCA; solo recién se puede abrir cuando este método retorna true.
+   */
+  static isFlashPackUnlocked(availableAt?: string | number | null, createdAt?: string | number | null): boolean {
+    const unlockTime = ClanManager.getFlashPackUnlockTime(availableAt, createdAt)
+    return Date.now() >= unlockTime
+  }
+
+  /**
+   * Devuelve los segundos restantes de la cuenta regresiva de 5 minutos (0 si ya se puede abrir).
+   */
+  static getFlashPackRemainingSeconds(availableAt?: string | number | null, createdAt?: string | number | null): number {
+    const unlockTime = ClanManager.getFlashPackUnlockTime(availableAt, createdAt)
+    const diff = unlockTime - Date.now()
+    return Math.max(0, Math.ceil(diff / 1000))
+  }
+
+  /**
+   * El Pack PvP NO EXPIRA NUNCA. Permanece disponible hasta que el jugador lo abra.
+   * Devuelve siempre false.
+   */
+  static isFlashPackExpired(_expiresAt?: string | number | null): boolean {
+    return false
+  }
 }
+
+export interface ClanRankingEntry {
+  rank: number
+  id: string
+  name: string
+  tag: string
+  badge: string
+  description?: string
+  leader: string
+  memberCount: number
+  damageDealt: number
+  dailyDamageDealt: number
+  wins: number
+  losses: number
+  vaultGems: number
+  isUserClan?: boolean
+}
+

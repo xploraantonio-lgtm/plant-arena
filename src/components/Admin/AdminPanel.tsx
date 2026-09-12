@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import { soundManager } from '../../utils/audioManager'
 import { adminService } from '../../services/adminService'
+import { SupabaseService } from '../../services/supabaseService'
 import type { Database, CodeRoundPrizeTier } from '../../types/database.types'
+import GoldIcon from '../Common/GoldIcon'
 import './AdminPanel.css'
 
 type TournamentRow = Database['public']['Tables']['tournaments']['Row']
@@ -33,7 +35,7 @@ interface CodeBoardEntry {
   userId: string
   username: string
   bestPct: number
-  attempts: number
+  attemptsCount: number
   place: number
 }
 
@@ -43,7 +45,7 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'tournaments' | 'seasons' | 'players' | 'rewards' | 'code' | 'referidos' | 'partidas'>('tournaments')
+  const [activeTab, setActiveTab] = useState<'tournaments' | 'seasons' | 'players' | 'rewards' | 'code' | 'referidos' | 'partidas' | 'clan_rewards'>('tournaments')
 
   /**
    * ¿SE SEPARARON LAS DOS PANTALLAS?
@@ -127,6 +129,87 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
   const [bpLevels, setBpLevels] = useState<BattlePassLevelRow[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [statusNotice, setStatusNotice] = useState<string | null>(null)
+
+  // Clan rewards state
+  const [clanRankingPreview, setClanRankingPreview] = useState<any[]>([])
+  const [clanSettlementHistory, setClanSettlementHistory] = useState<any[]>([])
+  const [isLoadingClanRewards, setIsLoadingClanRewards] = useState<boolean>(false)
+
+  const loadClanRewardsData = async () => {
+    setIsLoadingClanRewards(true)
+    try {
+      const [ranking, history] = await Promise.all([
+        SupabaseService.getClanRanking(),
+        SupabaseService.getDailyClanSettlements(30),
+      ])
+      setClanRankingPreview(ranking || [])
+      setClanSettlementHistory(history || [])
+    } catch (e: any) {
+      console.error('Error loading clan rewards data', e)
+    } finally {
+      setIsLoadingClanRewards(false)
+    }
+  }
+
+  const handleDistributeClanDailyRewards = async () => {
+    if (
+      !confirm(
+        '¿Estás seguro de ejecutar y confirmar el reparto diario de clanes (00:00 UTC) para el Top 10?\n\n' +
+          '• Top 1: 500 Oro para CADA miembro + 1x Pack PvP (límite 5 min)\n' +
+          '• Top 2: 200 Oro para CADA miembro\n' +
+          '• Top 3: 100 Oro para CADA miembro\n' +
+          '• Top 4-10: 50 Oro para CADA miembro\n\n' +
+          'Se acreditará inmediatamente el oro a los perfiles y se reiniciará el daño diario.'
+      )
+    )
+      return
+    setIsLoading(true)
+    try {
+      const res = await SupabaseService.distributeDailyClanRewards()
+      if (res.success) {
+        soundManager.playSound('victory', 0.9)
+        alert('🎉 ¡Reparto diario de clanes ejecutado y confirmado con éxito!\n' + JSON.stringify(res.summary, null, 2))
+        showNotice('✅ Reparto diario de clanes liquidado exitosamente.')
+        await loadClanRewardsData()
+      } else {
+        alert('⚠️ Error al liquidar reparto diario: ' + (res.error || 'Error desconocido'))
+      }
+    } catch (e: any) {
+      alert('Excepción: ' + e.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSettleClanSeason = async () => {
+    if (
+      !confirm(
+        '¿Deseas cerrar la temporada de clanes y repartir las gemas al Top 5 clanes por daño?\n\n' +
+          '• Top 1: 5,000 Gemas 💎\n' +
+          '• Top 2: 3,000 Gemas 💎\n' +
+          '• Top 3: 1,500 Gemas 💎\n' +
+          '• Top 4: 1,000 Gemas 💎\n' +
+          '• Top 5: 500 Gemas 💎'
+      )
+    )
+      return
+    setIsLoading(true)
+    try {
+      const res = await SupabaseService.settleClanSeasonRewards()
+      if (res.success) {
+        soundManager.playSound('victory', 0.9)
+        alert('👑 ¡Temporada de clanes liquidada con éxito!\n' + JSON.stringify(res.summary, null, 2))
+        showNotice('🏆 Temporada de clanes liquidada exitosamente.')
+        await loadClanRewardsData()
+      } else {
+        alert('⚠️ Error al liquidar temporada de clanes: ' + (res.error || 'Error desconocido'))
+      }
+    } catch (e: any) {
+      alert('Excepción: ' + e.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Tournament Form state
   const [tourneyTitle, setTourneyTitle] = useState('')
@@ -761,6 +844,16 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
             }}
           >
             🔬 ¿Partidas iguales?
+          </button>
+          <button
+            type="button"
+            className={`admin-tab-btn ${activeTab === 'clan_rewards' ? 'admin-tab-btn--active' : ''}`}
+            onClick={() => {
+              setActiveTab('clan_rewards')
+              loadClanRewardsData()
+            }}
+          >
+            ⚔️ Rewards Clanes por Confirmar
           </button>
         </div>
 
@@ -2354,6 +2447,180 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
             </div>
           )
         })()}
+
+        {/* TAB 8: RECOMPENSAS DE CLANES POR CONFIRMAR */}
+        {activeTab === 'clan_rewards' && (
+          <div className="admin-content-section">
+            <div className="admin-alert-banner" style={{ borderColor: '#ef4444' }}>
+              🛡️ <strong>Gestión Autoritativa de Recompensas de Clanes (Daño a Clanes Rivales)</strong>
+              <br />
+              • <strong>Diaria (00:00 UTC) Top 10:</strong> Top 1 (500 💰 c/u + ⚔️ Pack PvP con temporizador de 5 min para abrir, no expira), Top 2 (200 💰 c/u), Top 3 (100 💰 c/u), Top 4-10 (50 💰 c/u).
+              <br />
+              • <strong>Fin de Temporada:</strong> Reparto de Pozo en Gemas 💎 a los 5 clanes con mayor daño acumulado de temporada.
+            </div>
+
+            {/* ZONA DE CONTROL Y ACCIÓN INMEDIATA */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="admin-submit-btn"
+                disabled={isLoading || isLoadingClanRewards}
+                onClick={handleDistributeClanDailyRewards}
+                style={{ flex: 1, minWidth: '280px', background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)', color: '#fff', fontWeight: 800 }}
+              >
+                {isLoading ? '⏳ Procesando...' : '⚡ Confirmar y Repartir Recompensa Diaria de Clanes (00:00 UTC)'}
+              </button>
+
+              <button
+                type="button"
+                className="admin-submit-btn"
+                disabled={isLoading || isLoadingClanRewards}
+                onClick={handleSettleClanSeason}
+                style={{ flex: 1, minWidth: '280px', background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: '#fff', fontWeight: 800 }}
+              >
+                {isLoading ? '⏳ Procesando...' : '👑 Confirmar Cierre y Reparto de Temporada de Clanes (Gemas 💎)'}
+              </button>
+
+              <button
+                type="button"
+                className="admin-action-btn--green"
+                onClick={loadClanRewardsData}
+                disabled={isLoadingClanRewards}
+                style={{ padding: '0 16px', height: '42px' }}
+              >
+                🔄 Actualizar
+              </button>
+            </div>
+
+            {/* PREVISUALIZACIÓN DEL TOP 10 DIARIO */}
+            <div className="admin-card" style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h3 style={{ margin: 0 }}>📊 Clasificación de Clanes por Daño (Previsualización de Liquidación Hoy)</h3>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                  {clanRankingPreview.length} clanes registrados
+                </span>
+              </div>
+
+              {isLoadingClanRewards ? (
+                <p className="admin-card-desc">⏳ Cargando ranking de clanes...</p>
+              ) : clanRankingPreview.length === 0 ? (
+                <p className="admin-card-desc">No hay clanes con daño registrado hoy.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', fontSize: '12.5px', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: '1px solid #334155', color: '#94a3b8' }}>
+                        <th style={{ padding: '8px' }}>Puesto</th>
+                        <th style={{ padding: '8px' }}>Clan</th>
+                        <th style={{ padding: '8px' }}>Líder</th>
+                        <th style={{ padding: '8px', textAlign: 'center' }}>Miembros</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Daño Diario</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Daño Total</th>
+                        <th style={{ padding: '8px', textAlign: 'center' }}>Oro / Miembro</th>
+                        <th style={{ padding: '8px', textAlign: 'center' }}>Pack PvP (5 min)</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Oro Total a Clan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clanRankingPreview.slice(0, 10).map((c, idx) => {
+                        const rank = idx + 1
+                        const goldPerMember = rank === 1 ? 500 : rank === 2 ? 200 : rank === 3 ? 100 : 50
+                        const membersCount = Number(c.member_count) || (c.members ? c.members.length : 1)
+                        const totalGoldForClan = goldPerMember * membersCount
+                        return (
+                          <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <td style={{ padding: '8px', fontWeight: 900, color: rank === 1 ? '#facc15' : rank === 2 ? '#e2e8f0' : rank === 3 ? '#fb923c' : '#94a3b8' }}>
+                              {rank === 1 ? '🥇 #1' : rank === 2 ? '🥈 #2' : rank === 3 ? '🥉 #3' : `#${rank}`}
+                            </td>
+                            <td style={{ padding: '8px' }}>
+                              <span style={{ marginRight: '6px' }}>{c.badge || '🛡️'}</span>
+                              <strong>{c.name}</strong>{' '}
+                              <span style={{ fontSize: '10px', color: '#38bdf8' }}>{c.tag}</span>
+                            </td>
+                            <td style={{ padding: '8px', color: '#cbd5e1' }}>{c.leader_name || c.leader || 'Líder'}</td>
+                            <td style={{ padding: '8px', textAlign: 'center' }}>👥 {membersCount}/15</td>
+                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 800, color: '#f59e0b' }}>
+                              💥 {Number(c.daily_damage_dealt || 0).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 800, color: '#ef4444' }}>
+                              ⚔️ {Number(c.damage_dealt || 0).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'center', color: '#facc15', fontWeight: 800 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                <GoldIcon size={14} /> {goldPerMember}
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'center' }}>
+                              {rank === 1 ? (
+                                <span style={{ background: '#7f1d1d', color: '#fca5a5', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                                   ⚔️ Pack PvP (5 min)
+                                </span>
+                              ) : (
+                                <span style={{ color: '#64748b' }}>-</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right', color: '#22c55e', fontWeight: 900 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                {totalGoldForClan.toLocaleString()} <GoldIcon size={14} />
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* HISTORIAL DE LIQUIDACIONES DIARIAS */}
+            <div className="admin-card">
+              <h3>📜 Historial de Liquidaciones Diarias de Clanes</h3>
+              {clanSettlementHistory.length === 0 ? (
+                <p className="admin-card-desc">Aún no hay liquidaciones diarias registradas en Supabase.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: '1px solid #334155', color: '#94a3b8' }}>
+                        <th style={{ padding: '6px' }}>Fecha UTC</th>
+                        <th style={{ padding: '6px' }}>Puesto</th>
+                        <th style={{ padding: '6px' }}>Clan</th>
+                        <th style={{ padding: '6px', textAlign: 'right' }}>Daño</th>
+                        <th style={{ padding: '6px', textAlign: 'center' }}>Oro / Miembro</th>
+                        <th style={{ padding: '6px', textAlign: 'center' }}>Pack PvP</th>
+                        <th style={{ padding: '6px', textAlign: 'center' }}>Miembros</th>
+                        <th style={{ padding: '6px', textAlign: 'right' }}>Oro Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clanSettlementHistory.map((h) => (
+                        <tr key={h.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '6px', color: '#94a3b8' }}>{h.settlement_date}</td>
+                          <td style={{ padding: '6px', fontWeight: 800 }}>#{h.rank}</td>
+                          <td style={{ padding: '6px', color: '#fff', fontWeight: 700 }}>{h.clan_name}</td>
+                          <td style={{ padding: '6px', textAlign: 'right', color: '#ef4444' }}>⚔️ {Number(h.damage_snapshot).toLocaleString()}</td>
+                          <td style={{ padding: '6px', textAlign: 'center', color: '#facc15' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                              <GoldIcon size={13} /> {h.gold_per_member}
+                            </span>
+                          </td>
+                          <td style={{ padding: '6px', textAlign: 'center' }}>{h.pvp_pack_awarded ? '⚔️ Sí (5 min)' : '-'}</td>
+                          <td style={{ padding: '6px', textAlign: 'center' }}>👥 {h.members_rewarded_count}</td>
+                          <td style={{ padding: '6px', textAlign: 'right', color: '#22c55e', fontWeight: 800 }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                              {h.total_gold_distributed} <GoldIcon size={13} />
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

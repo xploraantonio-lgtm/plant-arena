@@ -1048,7 +1048,7 @@ export default function Battlefield({
               onServerEloUpdated(eloAfter)
             }
 
-            if (yoGane && onBattleComplete) {
+            if (yoGane && onBattleComplete && matchMode !== 'tournament' && matchMode !== 'friendly') {
               try {
                 const res = await onBattleComplete(true)
                 if (res?.packResult) {
@@ -1103,7 +1103,7 @@ export default function Battlefield({
             onServerEloUpdated(liq.eloAfter)
           }
 
-          if (liq.statusServidor === 'liquidada' && liq.resultadoFinal === 'victory' && onBattleComplete) {
+          if (liq.statusServidor === 'liquidada' && liq.resultadoFinal === 'victory' && onBattleComplete && matchMode !== 'tournament' && matchMode !== 'friendly') {
             try {
               const res = await onBattleComplete(true)
               if (res?.packResult) {
@@ -1169,8 +1169,9 @@ export default function Battlefield({
       // Ranked sin roomId = entrenamiento/bot (el cliente calcula ELO local).
       // Ranked con roomId = el servidor calcula ELO autoritativo, pero el cofre de victoria se sincroniza inmediatamente.
       // Strategic Test Match está 100% aislado (sin ELO, sin cofres, sin settlement).
+      // Torneos y Amistosos están 100% aislados (sin ELO de ranked, sin cofres de ranked).
       if (gameStatus === 'victory') {
-        if (onBattleComplete && matchMode !== 'strategic_test') {
+        if (onBattleComplete && matchMode !== 'strategic_test' && matchMode !== 'tournament' && matchMode !== 'friendly') {
           void (async () => {
             const res = await onBattleComplete(true)
             if (res) {
@@ -1184,7 +1185,7 @@ export default function Battlefield({
           })()
         }
       } else if (gameStatus === 'defeat') {
-        if (onBattleComplete && matchMode !== 'strategic_test') {
+        if (onBattleComplete && matchMode !== 'strategic_test' && matchMode !== 'tournament' && matchMode !== 'friendly') {
           void (async () => {
             const res = await onBattleComplete(false)
             if (res) {
@@ -1308,8 +1309,10 @@ export default function Battlefield({
     // Una game_room terminada JAMÁS puede reutilizarse.
     // Para jugar nuevamente necesitamos matchmaking y roomId NUEVO.
     // ============================================================
-    if (roomId) {
-      MatchActionOutbox.discardRoom(roomId)
+    if (roomId || matchMode === 'tournament') {
+      if (roomId) {
+        MatchActionOutbox.discardRoom(roomId)
+      }
 
       soundManager.playBgm('menu')
 
@@ -2261,7 +2264,7 @@ export default function Battlefield({
                 )}
 
                 <div className="game-card__prompt">
-                  ¿Deseas seguir jugando o regresar al menú?
+                  {matchMode === 'tournament' ? 'Revisa tu posición en la tabla de clasificación del torneo.' : '¿Deseas seguir jugando o regresar al menú?'}
                 </div>
 
                 <div className="game-card__actions">
@@ -2270,9 +2273,9 @@ export default function Battlefield({
                     type="button"
                     onClick={handlePlayAgain}
                   >
-                    🎮 SEGUIR JUGANDO
+                    {matchMode === 'tournament' ? '🏆 VOLVER AL TORNEO' : '🎮 SEGUIR JUGANDO'}
                   </button>
-                  {onBackToMenu && (
+                  {onBackToMenu && matchMode !== 'tournament' && (
                     <button
                       className="game-button game-button--secondary"
                       type="button"

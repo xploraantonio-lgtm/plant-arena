@@ -77,6 +77,8 @@ interface MainMenuProps {
   // era la vía por la que ProfileModal se sumaba saldo sin cobrar nada.
   onDeductTokens?: (amountUsd: number) => boolean
   onlineUsersCount?: number
+  reopenTournamentModal?: boolean
+  onResetReopenTournamentModal?: () => void
 }
 
 export default function MainMenu({
@@ -115,12 +117,24 @@ export default function MainMenu({
   onFastUnlockSlot,
   onOpenSlotPack,
   onDeductTokens,
+  reopenTournamentModal,
+  onResetReopenTournamentModal,
 }: MainMenuProps) {
   const [playerProfile, setPlayerProfile] = useState<PlayerProfile>(() => UserManager.getProfile())
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
   const [isColosseumModalOpen, setIsColosseumModalOpen] = useState(false)
   const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (reopenTournamentModal) {
+      setIsTournamentModalOpen(true)
+      if (onResetReopenTournamentModal) {
+        onResetReopenTournamentModal()
+      }
+    }
+  }, [reopenTournamentModal, onResetReopenTournamentModal])
+
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
   const [ticker, setTicker] = useState<number>(0)
   const [upcomingTournament, setUpcomingTournament] = useState<TournamentModel | null>(null)

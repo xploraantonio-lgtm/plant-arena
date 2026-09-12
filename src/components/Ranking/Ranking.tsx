@@ -9,6 +9,8 @@ import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import type { PlantId } from '../../types/game'
 import { getMostPlantedPlant } from '../../utils/plantUsageTracker'
 import { supabase } from '../../lib/supabaseClient'
+import { ClanManager, type ClanRankingEntry } from '../../utils/clanManager'
+import GoldIcon from '../Common/GoldIcon'
 import './Ranking.css'
 
 import type { Database } from '../../types/database.types'
@@ -233,8 +235,8 @@ export function getReferralRankReward(rank: number): RankRewardInfo | null {
       gems: 0,
       pack: '1x Sobre Común 🟢',
       gold: 2500,
-      badgeText: '2.5k 🪙 + 🟢 Sobre',
-      fullText: '2,500 Oro 🪙 + 1x Sobre Común 🟢',
+      badgeText: '2.5k 💰 + 🟢 Sobre',
+      fullText: '2,500 Oro 💰 + 1x Sobre Común 🟢',
       tierClass: 'lb-reward-badge--top4',
     }
   }
@@ -243,8 +245,8 @@ export function getReferralRankReward(rank: number): RankRewardInfo | null {
       gems: 0,
       pack: null,
       gold: 2000,
-      badgeText: '2k 🪙 Oro',
-      fullText: '2,000 Oro 🪙',
+      badgeText: '2k 💰 Oro',
+      fullText: '2,000 Oro 💰',
       tierClass: 'lb-reward-badge--top5',
     }
   }
@@ -252,7 +254,7 @@ export function getReferralRankReward(rank: number): RankRewardInfo | null {
 }
 
 export default function Ranking({ userElo, userProfile, hasVipPass = false, onBack }: RankingProps) {
-  const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
+  const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals' | 'clans'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
 
   const currentArena = getArenaForElo(userElo)
@@ -294,6 +296,21 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
   const [referralPage, setReferralPage] = useState<number>(1)
   const [referralPageSize, setReferralPageSize] = useState<number | 'all'>(20)
   const referralTableRef = useRef<HTMLDivElement>(null)
+
+  // Clan leaderboard state
+  const [clanLeaderboard, setClanLeaderboard] = useState<ClanRankingEntry[]>([])
+  const [isLoadingClans, setIsLoadingClans] = useState<boolean>(false)
+  const [clansError, setClansError] = useState<string | null>(null)
+  const [clansSearch, setClansSearch] = useState<string>('')
+  const [clansPage, setClansPage] = useState<number>(1)
+  const [clansPageSize, setClansPageSize] = useState<number | 'all'>(20)
+  const clansTableRef = useRef<HTMLDivElement>(null)
+
+  // Recompensas pendientes y contador regresivo UTC
+  const [utcCountdown, setUtcCountdown] = useState<string>('')
+  const [pendingRewards, setPendingRewards] = useState<any[]>([])
+  const [flashRewardClaiming, setFlashRewardClaiming] = useState<boolean>(false)
+  const [flashClaimNotice, setFlashClaimNotice] = useState<string | null>(null)
 
   const loadLeaderboard = useCallback(() => {
     const myId = userProfile?.id
@@ -398,6 +415,131 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
       mounted = false
     }
   }, [loadLeaderboard, userProfile?.username, userElo])
+
+  // Reloj regresivo en tiempo real hacia las 00:00 UTC
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0))
+      const diffMs = Math.max(0, tomorrow.getTime() - now.getTime())
+      const hours = Math.floor(diffMs / 3600000)
+      const minutes = Math.floor((diffMs % 3600000) / 60000)
+      const seconds = Math.floor((diffMs % 60000) / 1000)
+      setUtcCountdown(
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      )
+    }
+    updateCountdown()
+    const timer = setInterval(updateCountdown, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Cargar ranking de clanes
+  const loadClansRanking = useCallback(() => {
+    setIsLoadingClans(true)
+    setClansError(null)
+    const userClan = ClanManager.getUserClan()
+    const userClanId = userClan?.id || null
+
+    SupabaseService.getClanRanking()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: ClanRankingEntry[] = data.map((c: any, idx: number) => ({
+            rank: c.rank || idx + 1,
+            id: c.id,
+            name: c.name,
+            tag: c.tag,
+            badge: c.badge || '🛡️',
+            description: c.description,
+            leader: c.leader_name || c.leader || 'Líder',
+            memberCount: Number(c.member_count) || (c.members ? c.members.length : 1),
+            damageDealt: Number(c.damage_dealt) || 0,
+            dailyDamageDealt: Number(c.daily_damage_dealt) || 0,
+            wins: Number(c.wins) || 0,
+            losses: Number(c.losses) || 0,
+            vaultGems: Number(c.vault_gems) || 0,
+            isUserClan: Boolean(c.is_user_clan || (userClanId && c.id === userClanId)),
+          }))
+          setClanLeaderboard(mapped)
+        } else {
+          const localRanking = ClanManager.getClansRanking(userClanId)
+          setClanLeaderboard(localRanking)
+        }
+        setIsLoadingClans(false)
+      })
+      .catch(() => {
+        const localRanking = ClanManager.getClansRanking(userClanId)
+        setClanLeaderboard(localRanking)
+        setIsLoadingClans(false)
+      })
+
+    SupabaseService.getMyPendingRewards()
+      .then((rewards) => {
+        setPendingRewards(rewards || [])
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'clans') {
+      loadClansRanking()
+    }
+  }, [activeTab, loadClansRanking])
+
+  const myClanRankEntry = useMemo(() => {
+    return clanLeaderboard.find((c) => c.isUserClan) || null
+  }, [clanLeaderboard])
+
+  const filteredClanList = useMemo(() => {
+    let list = [...clanLeaderboard]
+    const query = clansSearch.trim().toLowerCase()
+    if (query) {
+      list = list.filter(
+        (c) =>
+          c.name.toLowerCase().includes(query) ||
+          c.tag.toLowerCase().includes(query) ||
+          c.leader.toLowerCase().includes(query)
+      )
+    } else {
+      list = list.slice(3) // Primeros 3 al podio
+    }
+    return list
+  }, [clanLeaderboard, clansSearch])
+
+  const totalClanCount = filteredClanList.length
+  const totalClanPages = clansPageSize === 'all' ? 1 : Math.ceil(totalClanCount / clansPageSize)
+  const currentClanPage = Math.min(Math.max(1, clansPage), Math.max(1, totalClanPages))
+
+  const paginatedClanList = useMemo(() => {
+    if (clansPageSize === 'all') return filteredClanList
+    const start = (currentClanPage - 1) * clansPageSize
+    return filteredClanList.slice(start, start + clansPageSize)
+  }, [filteredClanList, clansPageSize, currentClanPage])
+
+  const clanStartIdx = totalClanCount === 0 ? 0 : (currentClanPage - 1) * (clansPageSize === 'all' ? totalClanCount : clansPageSize) + 1
+  const clanEndIdx = clansPageSize === 'all' ? totalClanCount : Math.min(clanStartIdx + clansPageSize - 1, totalClanCount)
+
+  const handleClanPageChange = (newPage: number) => {
+    setClansPage(newPage)
+    if (clansTableRef.current) {
+      clansTableRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
+  // Reclamar Flash Pack PvP de 5 minutos
+  const handleClaimFlashPack = async (rewardId: string) => {
+    setFlashRewardClaiming(true)
+    setFlashClaimNotice(null)
+    const res = await SupabaseService.claimPendingReward(rewardId)
+    setFlashRewardClaiming(false)
+    if (res.success) {
+      soundManager.playSound('victory', 0.9)
+      setFlashClaimNotice('🎉 ¡Pack PvP Exclusivo reclamado con éxito! Se ha añadido a tu inventario.')
+      setPendingRewards((prev) => prev.filter((r) => r.id !== rewardId))
+    } else {
+      setFlashClaimNotice(`⚠️ ${res.message || res.error || 'No se pudo reclamar el pack.'}`)
+    }
+  }
 
   const leaderboardData = realLeaderboard
 
@@ -543,6 +685,16 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
           }}
         >
           👥 RANKING REFERIDOS
+        </button>
+        <button
+          type="button"
+          className={`ranking-nav-tab ${activeTab === 'clans' ? 'ranking-nav-tab--active' : ''}`}
+          onClick={() => {
+            soundManager.playSound('click', 0.5)
+            setActiveTab('clans')
+          }}
+        >
+          🛡️ RANKING CLANES
         </button>
       </div>
 
@@ -1530,6 +1682,489 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: CLAN DAMAGE LEADERBOARD */}
+        {activeTab === 'clans' && (
+          <div className="ranking-tab-pane">
+            <div className="leaderboard-container">
+              {/* UTC COUNTDOWN & REWARDS BANNER */}
+              <div className="clan-ranking-hero-banner">
+                <div className="clan-hero-left">
+                  <div className="clan-hero-title-row">
+                    <span className="clan-hero-badge">🛡️ GUERRA DE CLANES</span>
+                    <span className="clan-hero-timer">
+                      ⏰ Próximo Reparto Diario: <strong>{utcCountdown || '00:00:00'}</strong> (00:00 UTC)
+                    </span>
+                  </div>
+                  <p className="clan-hero-desc">
+                    El ranking de clanes se define por <strong>daño total infligido a clanes rivales</strong> en asaltos y guerras. A las <strong>00:00 UTC</strong> se reparte oro a todos los miembros del Top 10 y el <strong>Pack PvP Exclusivo</strong> (temporizador de 5 min para abrir, no expira) para el Top 1.
+                  </p>
+                </div>
+
+                <div className="clan-hero-rewards-grid">
+                  <div className="clan-reward-pill clan-reward-pill--top1" title="Top 1 Diario">
+                    <div className="clan-reward-pill__rank">🥇 Top 1</div>
+                    <div className="clan-reward-pill__val">
+                      <GoldIcon size={16} style={{ marginRight: '4px' }} />
+                      500 c/u + ⚔️ Pack PvP
+                    </div>
+                    <small>⏳ 5 min para abrir (no expira)</small>
+                  </div>
+                  <div className="clan-reward-pill clan-reward-pill--top2" title="Top 2 Diario">
+                    <div className="clan-reward-pill__rank">🥈 Top 2</div>
+                    <div className="clan-reward-pill__val">
+                      <GoldIcon size={16} style={{ marginRight: '4px' }} />
+                      200 c/u
+                    </div>
+                    <small>Todo el clan</small>
+                  </div>
+                  <div className="clan-reward-pill clan-reward-pill--top3" title="Top 3 Diario">
+                    <div className="clan-reward-pill__rank">🥉 Top 3</div>
+                    <div className="clan-reward-pill__val">
+                      <GoldIcon size={16} style={{ marginRight: '4px' }} />
+                      100 c/u
+                    </div>
+                    <small>Todo el clan</small>
+                  </div>
+                  <div className="clan-reward-pill clan-reward-pill--top4" title="Top 4-10 Diario">
+                    <div className="clan-reward-pill__rank">🎖️ Top 4-10</div>
+                    <div className="clan-reward-pill__val">
+                      <GoldIcon size={16} style={{ marginRight: '4px' }} />
+                      50 c/u
+                    </div>
+                    <small>Todo el clan</small>
+                  </div>
+                </div>
+              </div>
+
+              {/* PVP PACK NOTIFICATION CON TEMPORIZADOR ESTRICTO DE 5 MINUTOS (NO EXPIRA) */}
+              {pendingRewards
+                .filter((r) => r.reward_type === 'pvp_flash_pack' && r.status !== 'claimed')
+                .map((rew) => {
+                  const remSec = ClanManager.getFlashPackRemainingSeconds(rew.available_at, rew.created_at)
+                  const isReady = remSec <= 0
+                  const mins = Math.floor(remSec / 60)
+                  const secs = remSec % 60
+                  const timeFormatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+
+                  return (
+                    <div
+                      key={rew.id}
+                      className={`clan-flash-pack-banner ${isReady ? 'clan-flash-pack-banner--ready' : 'clan-flash-pack-banner--locked'}`}
+                    >
+                      <div className="clan-flash-info">
+                        <span className="clan-flash-icon">{isReady ? '🎁' : '⏳'}</span>
+                        <div>
+                          <strong>
+                            {isReady ? '¡PACK PVP EXCLUSIVO LISTO PARA ABRIR!' : '🔒 PACK PVP EN DESBLOQUEO (5 MIN)'}
+                          </strong>
+                          <p>
+                            {isReady
+                              ? '¡El temporizador estricto de 5 minutos ha finalizado! Tu Sobre PvP Exclusivo del Top 1 Diario está listo para ser abierto cuando desees (no expira).'
+                              : `Tu clan conquistó el Top 1 Diario. Tu Sobre PvP Exclusivo requiere un temporizador de 5 minutos para abrirse (no expira, recién se podrá abrir en ${timeFormatted}).`}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`clan-flash-btn ${!isReady ? 'clan-flash-btn--locked' : ''}`}
+                        disabled={!isReady || flashRewardClaiming}
+                        onClick={() => handleClaimFlashPack(rew.id)}
+                        style={!isReady ? { opacity: 0.75, cursor: 'not-allowed', filter: 'grayscale(0.3)' } : undefined}
+                      >
+                        {flashRewardClaiming
+                          ? '⏳ Abriendo...'
+                          : isReady
+                          ? '🎁 ¡ABRIR PACK PVP AHORA!'
+                          : `⏳ Bloqueado (${timeFormatted})`}
+                      </button>
+                    </div>
+                  )
+                })}
+
+              {flashClaimNotice && (
+                <div className="clan-notice-banner">
+                  {flashClaimNotice}
+                </div>
+              )}
+
+              {isLoadingClans ? (
+                <div className="leaderboard-loading-state">
+                  <span>⏳ Cargando clasificación de clanes por daño...</span>
+                </div>
+              ) : clansError && clanLeaderboard.length === 0 ? (
+                <div className="leaderboard-error-state" style={{ textAlign: 'center', padding: '40px 16px' }}>
+                  <p style={{ color: '#ff6b6b', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '16px' }}>
+                    ⚠️ {clansError}
+                  </p>
+                  <button
+                    type="button"
+                    className="game-button"
+                    onClick={() => {
+                      soundManager.playSound('click', 0.3)
+                      loadClansRanking()
+                    }}
+                  >
+                    🔄 Reintentar
+                  </button>
+                </div>
+              ) : clanLeaderboard.length === 0 ? (
+                <div className="leaderboard-empty-state">
+                  <span>🛡️ Aún no hay clanes con daño registrado en esta temporada. ¡Inicia un asalto de guerra desde CLAN!</span>
+                </div>
+              ) : (
+                <div className="leaderboard-split-layout">
+                  {/* LEFT COLUMN: PODIUM #1 TOP, #2 & #3 BOTTOM */}
+                  <div className="leaderboard-podium-col">
+                    {/* 1st Place Clan Card */}
+                    {clanLeaderboard[0] ? (
+                      <div
+                        className={`podium-card-v2 podium-card-v2--gold ${clanLeaderboard[0].isUserClan ? 'podium-card-v2--user' : ''}`}
+                      >
+                        <div className="podium-v2-top">
+                          <span className="podium-v2-star">★</span>
+                          <span className="podium-v2-rank-gold">#1 CLAN</span>
+                          <span className="podium-v2-star">★</span>
+                        </div>
+
+                        <div className="podium-v2-avatar-wrapper">
+                          <svg className="podium-v2-laurel-svg" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M 32 96 C 18 68 22 38 46 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="M 24 84 C 14 81 12 71 20 70 C 26 70 27 78 24 84 Z" fill="#fbbf24" />
+                            <path d="M 20 66 C 10 62 9 52 17 50 C 24 49 25 59 20 66 Z" fill="#f59e0b" />
+                            <path d="M 22 46 C 14 39 16 29 24 30 C 30 31 29 41 22 46 Z" fill="#fbbf24" />
+                            <path d="M 30 28 C 24 20 29 11 37 14 C 42 17 39 25 30 28 Z" fill="#fde047" />
+                            <path d="M 42 14 C 39 6 46 0 52 4 C 57 8 52 15 42 14 Z" fill="#fbbf24" />
+                            <path d="M 128 96 C 142 68 138 38 114 14" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="M 136 84 C 146 81 148 71 140 70 C 134 70 133 78 136 84 Z" fill="#fbbf24" />
+                            <path d="M 140 66 C 150 62 151 52 143 50 C 136 49 135 59 140 66 Z" fill="#f59e0b" />
+                            <path d="M 138 46 C 146 39 144 29 136 30 C 130 31 131 41 138 46 Z" fill="#fbbf24" />
+                            <path d="M 130 28 C 136 20 131 11 123 14 C 118 17 121 25 130 28 Z" fill="#fde047" />
+                            <path d="M 118 14 C 121 6 114 0 108 4 C 103 8 108 15 118 14 Z" fill="#fbbf24" />
+                          </svg>
+                          <div className="clan-podium-badge-box clan-podium-badge-box--gold">
+                            {clanLeaderboard[0].badge}
+                          </div>
+                        </div>
+
+                        <div className="podium-v2-user-row">
+                          <span className="podium-v2-username">
+                            {clanLeaderboard[0].name}
+                          </span>
+                          <span className="clan-tag-pill">{clanLeaderboard[0].tag}</span>
+                        </div>
+
+                        <div className="clan-podium-meta">
+                          <span>👑 Líder: <strong>{clanLeaderboard[0].leader}</strong></span>
+                          <span>👥 {clanLeaderboard[0].memberCount}/15</span>
+                        </div>
+
+                        <div className="podium-v2-prize-box podium-v2-prize-box--gold" title="Premio Diario Top 1">
+                          <div className="podium-v2-gems-val" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                            <GoldIcon size={18} /> 500 ORO x Miembro
+                          </div>
+                          <div className="podium-v2-pack-val">⚔️ 1x Pack PvP (5 min)</div>
+                        </div>
+
+                        <div className="podium-v2-stats-row" style={{ justifyContent: 'center' }}>
+                          <div className="podium-v2-cups" style={{ color: '#ef4444', fontSize: '12px', fontWeight: 900 }}>
+                            ⚔️ {clanLeaderboard[0].damageDealt.toLocaleString()} Daño
+                          </div>
+                          <div className="podium-v2-divider" />
+                          <div className="podium-v2-winrate" style={{ color: '#22c55e', fontSize: '11px', fontWeight: 800 }}>
+                            🏆 {clanLeaderboard[0].wins}V - {clanLeaderboard[0].losses}D
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="podium-card-v2 podium-card-v2--placeholder">
+                        <span>Esperando clan #1...</span>
+                      </div>
+                    )}
+
+                    {/* Bottom row: #2 Silver & #3 Bronze */}
+                    <div className="podium-v2-bottom-grid">
+                      {/* 2nd Place */}
+                      {clanLeaderboard[1] ? (
+                        <div
+                          className={`podium-card-v2 podium-card-v2--silver ${clanLeaderboard[1].isUserClan ? 'podium-card-v2--user' : ''}`}
+                        >
+                          <div className="podium-v2-sub-rank podium-v2-sub-rank--silver">
+                            #2 CLAN
+                          </div>
+                          <div className="clan-podium-badge-mini clan-podium-badge-mini--silver">
+                            {clanLeaderboard[1].badge}
+                          </div>
+                          <div className="podium-v2-sub-username">
+                            {clanLeaderboard[1].name}
+                          </div>
+                          <span className="clan-tag-pill clan-tag-pill--sm">{clanLeaderboard[1].tag}</span>
+                          <div className="podium-v2-sub-prize" style={{ color: '#fbbf24', fontWeight: 800, fontSize: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                            <GoldIcon size={14} /> 200 Oro x miembro
+                          </div>
+                          <div className="podium-v2-sub-stats" style={{ color: '#ef4444', fontWeight: 900 }}>
+                            ⚔️ {clanLeaderboard[1].damageDealt.toLocaleString()}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="podium-card-v2 podium-card-v2--placeholder">
+                          <span>#2 Vacante</span>
+                        </div>
+                      )}
+
+                      {/* 3rd Place */}
+                      {clanLeaderboard[2] ? (
+                        <div
+                          className={`podium-card-v2 podium-card-v2--bronze ${clanLeaderboard[2].isUserClan ? 'podium-card-v2--user' : ''}`}
+                        >
+                          <div className="podium-v2-sub-rank podium-v2-sub-rank--bronze">
+                            #3 CLAN
+                          </div>
+                          <div className="clan-podium-badge-mini clan-podium-badge-mini--bronze">
+                            {clanLeaderboard[2].badge}
+                          </div>
+                          <div className="podium-v2-sub-username">
+                            {clanLeaderboard[2].name}
+                          </div>
+                          <span className="clan-tag-pill clan-tag-pill--sm">{clanLeaderboard[2].tag}</span>
+                          <div className="podium-v2-sub-prize" style={{ color: '#fbbf24', fontWeight: 800, fontSize: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                            <GoldIcon size={14} /> 100 Oro x miembro
+                          </div>
+                          <div className="podium-v2-sub-stats" style={{ color: '#ef4444', fontWeight: 900 }}>
+                            ⚔️ {clanLeaderboard[2].damageDealt.toLocaleString()}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="podium-card-v2 podium-card-v2--placeholder">
+                          <span>#3 Vacante</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT COLUMN: SEARCHABLE TABLE (#4 IN ONWARD) */}
+                  <div className="leaderboard-table-col">
+                    <div className="lb-search-bar" style={{ marginBottom: '8px' }}>
+                      <span className="lb-search-icon">🔍</span>
+                      <input
+                        type="text"
+                        className="lb-search-input"
+                        placeholder="Buscar clan por nombre, tag o líder..."
+                        value={clansSearch}
+                        onChange={(e) => {
+                          setClansSearch(e.target.value)
+                          setClansPage(1)
+                        }}
+                      />
+                      {clansSearch && (
+                        <button
+                          type="button"
+                          className="lb-search-clear"
+                          onClick={() => {
+                            setClansSearch('')
+                            setClansPage(1)
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Table Container */}
+                    <div className="lb-table-wrap" ref={clansTableRef}>
+                      {paginatedClanList.length > 0 ? (
+                        <table className="lb-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '45px', textAlign: 'center' }}>#</th>
+                              <th>CLAN</th>
+                              <th style={{ width: '130px', textAlign: 'center' }}>MIEMBROS</th>
+                              <th style={{ width: '150px', textAlign: 'right' }}>DAÑO A OTROS CLANES</th>
+                              <th style={{ width: '160px', textAlign: 'center' }}>RECOMPENSA DIARIA</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedClanList.map((cln) => {
+                              const dailyRew = ClanManager.getDailyRewardsForRank(cln.rank)
+                              return (
+                                <tr key={cln.id} className={cln.isUserClan ? 'lb-row--user' : ''}>
+                                  <td className="lb-col-rank">
+                                    {cln.rank === 1 ? '🥇 #1' : cln.rank === 2 ? '🥈 #2' : cln.rank === 3 ? '🥉 #3' : `#${cln.rank}`}
+                                  </td>
+                                  <td className="lb-col-player">
+                                    <div className="lb-player-cell">
+                                      <span className="clan-table-badge">{cln.badge}</span>
+                                      <div className="clan-table-names">
+                                        <div className="clan-table-title-row">
+                                          <strong className="clan-table-name">{cln.name}</strong>
+                                          <span className="clan-tag-pill clan-tag-pill--sm">{cln.tag}</span>
+                                          {cln.isUserClan && <span className="user-self-badge">TU CLAN</span>}
+                                        </div>
+                                        <small className="clan-table-leader">👑 Líder: {cln.leader}</small>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td style={{ textAlign: 'center', color: '#94a3b8', fontSize: '11px', fontWeight: 800 }}>
+                                    👥 {cln.memberCount}/15
+                                  </td>
+                                  <td style={{ textAlign: 'right', fontWeight: 900, color: '#ef4444', fontSize: '12px' }}>
+                                    ⚔️ {cln.damageDealt.toLocaleString()}
+                                    {cln.dailyDamageDealt > 0 && (
+                                      <span style={{ display: 'block', fontSize: '10px', color: '#f59e0b', fontWeight: 700 }}>
+                                        (+{cln.dailyDamageDealt} hoy)
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="lb-col-rewards" style={{ textAlign: 'center' }}>
+                                    {dailyRew.goldPerMember > 0 ? (
+                                      <span
+                                        className={`lb-reward-badge ${cln.rank === 1 ? 'lb-reward-badge--top1' : cln.rank === 2 ? 'lb-reward-badge--top2' : cln.rank === 3 ? 'lb-reward-badge--top3' : 'lb-reward-badge--gold-tier'}`}
+                                        title={dailyRew.text}
+                                      >
+                                        {dailyRew.badge}
+                                      </span>
+                                    ) : (
+                                      <span className="lb-reward-badge--none">-</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="leaderboard-empty-state" style={{ padding: '32px 16px' }}>
+                          <span>🔎 No se encontraron clanes con "{clansSearch}".</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pagination & Page Size Footer */}
+                    <div className="lb-table-footer">
+                      <div className="lb-page-size-picker">
+                        <span className="lb-footer-label">Ver:</span>
+                        {[10, 20, 50].map((size) => (
+                          <button
+                            key={size}
+                            type="button"
+                            className={`lb-size-btn ${clansPageSize === size ? 'lb-size-btn--active' : ''}`}
+                            onClick={() => {
+                              soundManager.playSound('click', 0.2)
+                              setClansPageSize(size)
+                              setClansPage(1)
+                            }}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className={`lb-size-btn ${clansPageSize === 'all' ? 'lb-size-btn--active' : ''}`}
+                          onClick={() => {
+                            soundManager.playSound('click', 0.2)
+                            setClansPageSize('all')
+                            setClansPage(1)
+                          }}
+                        >
+                          Todos ({totalClanCount})
+                        </button>
+                        <span className="pagination-info" style={{ fontSize: '10px', color: '#94a3b8', marginLeft: '6px' }}>
+                          {totalClanCount === 0 ? '' : `(${clanStartIdx} - ${clanEndIdx})`}
+                        </span>
+                      </div>
+
+                      {totalClanPages > 1 && (
+                        <div className="pagination-controls">
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentClanPage <= 1}
+                            onClick={() => handleClanPageChange(1)}
+                            title="Primera página"
+                          >
+                            ««
+                          </button>
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentClanPage <= 1}
+                            onClick={() => handleClanPageChange(currentClanPage - 1)}
+                            title="Página anterior"
+                          >
+                            ‹ Ant
+                          </button>
+
+                          <div className="pagination-pages">
+                            {generatePageNumbers(currentClanPage, totalClanPages).map((p, idx) =>
+                              p === '...' ? (
+                                <span key={`dots-cln-${idx}`} className="pagination-dots">…</span>
+                              ) : (
+                                <button
+                                  key={`page-cln-${p}`}
+                                  type="button"
+                                  className={`pagination-btn ${p === currentClanPage ? 'pagination-btn--active' : ''}`}
+                                  onClick={() => handleClanPageChange(Number(p))}
+                                >
+                                  {p}
+                                </button>
+                              )
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentClanPage >= totalClanPages}
+                            onClick={() => handleClanPageChange(currentClanPage + 1)}
+                            title="Página siguiente"
+                          >
+                            Sig ›
+                          </button>
+                          <button
+                            type="button"
+                            className="pagination-btn pagination-btn--nav"
+                            disabled={currentClanPage >= totalClanPages}
+                            onClick={() => handleClanPageChange(totalClanPages)}
+                            title="Última página"
+                          >
+                            »»
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STICKY FOOTER BAR: TU CLAN */}
+              <div className="clan-user-status-bar">
+                {myClanRankEntry ? (
+                  <div className="clan-user-status-content">
+                    <div className="clan-user-status-left">
+                      <span className="clan-status-rank">#{myClanRankEntry.rank}</span>
+                      <span className="clan-status-badge">{myClanRankEntry.badge}</span>
+                      <strong>{myClanRankEntry.name}</strong>
+                      <span className="clan-tag-pill clan-tag-pill--sm">{myClanRankEntry.tag}</span>
+                    </div>
+                    <div className="clan-user-status-right">
+                      <span>⚔️ <strong>{myClanRankEntry.damageDealt.toLocaleString()}</strong> Daño infligido</span>
+                      <span className="clan-status-sep">|</span>
+                      <span>🏆 <strong>{myClanRankEntry.wins}</strong>V / <strong>{myClanRankEntry.losses}</strong>D</span>
+                      <span className="clan-status-sep">|</span>
+                      <span className="clan-status-prize">
+                        🎁 Premio diario estimado: <strong>{ClanManager.getDailyRewardsForRank(myClanRankEntry.rank).badge}</strong>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="clan-user-status-content clan-user-status-content--none">
+                    <span>🛡️ Actualmente no perteneces a ningún clan. ¡Únete o funda un clan para competir por el daño diario y ganar oro!</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

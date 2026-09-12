@@ -1920,6 +1920,148 @@ export const SupabaseService = {
     }
   },
 
+  /**
+   * Obtener ranking dinámico de clanes ordenado por daño infligido
+   */
+  async getClanRanking(): Promise<any[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_clan_ranking')
+      if (error) {
+        logError('getClanRanking', error)
+        return []
+      }
+      return Array.isArray(data) ? data : []
+    } catch (e: any) {
+      logError('getClanRanking', e)
+      return []
+    }
+  },
+
+  /**
+   * Registrar daño de asalto o batalla infligido por un clan
+   */
+  async recordClanDamage(clanId: string, damage: number): Promise<{ success: boolean; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: true }
+    try {
+      const { data, error } = await (supabase.rpc as any)('record_clan_damage', {
+        p_clan_id: clanId,
+        p_damage: damage,
+      })
+      if (error) {
+        logError('recordClanDamage', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean }
+    } catch (e: any) {
+      logError('recordClanDamage', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Ejecutar la liquidación diaria de clanes a las 00:00 UTC (Top 10)
+   */
+  async distributeDailyClanRewards(forceDate?: string): Promise<{ success: boolean; summary?: any; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no conectado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('distribute_daily_clan_rewards', {
+        p_force_date: forceDate || null,
+      })
+      if (error) {
+        logError('distributeDailyClanRewards', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; summary?: any }
+    } catch (e: any) {
+      logError('distributeDailyClanRewards', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Obtener recompensas pendientes activas del usuario (ej. Flash Pack PvP de 5 min)
+   */
+  async getMyPendingRewards(): Promise<any[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await supabase
+        .from('player_pending_rewards')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+      if (error) {
+        logError('getMyPendingRewards', error)
+        return []
+      }
+      return data || []
+    } catch (e: any) {
+      logError('getMyPendingRewards', e)
+      return []
+    }
+  },
+
+  /**
+   * Reclamar recompensa pendiente (valida que no haya expirado el tiempo límite)
+   */
+  async claimPendingReward(rewardId: string): Promise<{ success: boolean; pack_id?: string; gold_amount?: number; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no conectado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('claim_pending_reward', {
+        p_reward_id: rewardId,
+      })
+      if (error) {
+        logError('claimPendingReward', error)
+        return { success: false, error: error.message }
+      }
+      return data as any
+    } catch (e: any) {
+      logError('claimPendingReward', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Liquidar temporada de clanes en gemas
+   */
+  async settleClanSeasonRewards(): Promise<{ success: boolean; summary?: any; error?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no conectado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('settle_clan_season_rewards')
+      if (error) {
+        logError('settleClanSeasonRewards', error)
+        return { success: false, error: error.message }
+      }
+      return data as { success: boolean; summary?: any }
+    } catch (e: any) {
+      logError('settleClanSeasonRewards', e)
+      return { success: false, error: e?.message }
+    }
+  },
+
+  /**
+   * Obtener historial de liquidaciones diarias de clanes
+   */
+  async getDailyClanSettlements(limit = 30): Promise<any[]> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await supabase
+        .from('clan_daily_settlements')
+        .select('*')
+        .order('settlement_date', { ascending: false })
+        .order('rank', { ascending: true })
+        .limit(limit)
+      if (error) {
+        logError('getDailyClanSettlements', error)
+        return []
+      }
+      return data || []
+    } catch (e: any) {
+      logError('getDailyClanSettlements', e)
+      return []
+    }
+  },
+
   // ---------------------------------------------------------------------------
   // TOURNAMENTS
   // ---------------------------------------------------------------------------

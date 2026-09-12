@@ -70,10 +70,11 @@ export default function TournamentModal({
   const [createEntryType, setCreateEntryType] = useState<'free' | 'gems'>('free')
   const [createEntryFeeGems, setCreateEntryFeeGems] = useState<number>(100)
   const [createStartOffsetMin, setCreateStartOffsetMin] = useState<number>(5)
-  const [createDurationMin, setCreateDurationMin] = useState<number>(60)
+  const [createDurationMin, setCreateDurationMin] = useState<number>(120)
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState<boolean>(false)
   const [isReentering, setIsReentering] = useState<boolean>(false)
+  const [isFinalizing, setIsFinalizing] = useState<boolean>(false)
 
   // Custom UTC Date States (Siempre del año actual)
   const [startMode, setStartMode] = useState<'quick' | 'custom_utc'>('quick')
@@ -245,6 +246,41 @@ export default function TournamentModal({
       alert(err?.message || 'Error en reentrada')
     } finally {
       setIsReentering(false)
+    }
+  }
+
+  // Finalize tournament handler (Distribute gems pool to Top 1, 2, 3)
+  const handleFinalizeTournament = async () => {
+    if (!selectedTourney) return
+    const pool = selectedTourney.prize_pool_gems || 0
+    const top1 = Number((pool * 0.5).toFixed(1))
+    const top2 = Number((pool * 0.3).toFixed(1))
+    const top3 = Number((pool * 0.2).toFixed(1))
+
+    const confirmReparto = window.confirm(
+      `¿Deseas liquidar y repartir el pozo oficial de ${pool} Gemas entre los ganadores?\n\n` +
+      `🥇 1.er Puesto (50%): ${top1} 💎\n` +
+      `🥈 2.º Puesto (30%): ${top2} 💎\n` +
+      `🥉 3.er Puesto (20%): ${top3} 💎\n\n` +
+      `Esta acción acreditará las gemas directamente a los balances de los jugadores ganadores.`
+    )
+    if (!confirmReparto) return
+
+    setIsFinalizing(true)
+    try {
+      soundManager.playSound('victory', 0.9)
+      const res = await tournamentService.finalizeTournament(selectedTourney.id)
+      if (res.success) {
+        alert('🎉 ¡Premios en gemas liquidados y repartidos exitosamente a los ganadores del torneo!')
+        await loadDetails(selectedTourney.id)
+        await loadTournaments()
+      } else {
+        alert(res.error || 'No se pudieron repartir los premios del torneo.')
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Error al liquidar premios')
+    } finally {
+      setIsFinalizing(false)
     }
   }
 
@@ -662,13 +698,39 @@ export default function TournamentModal({
                           ⏳ Esperando Hora de Inicio ({formatCountdown(startMs)})
                         </button>
                       ) : isEnded ? (
-                        <button
-                          type="button"
-                          className="tourney-btn-battle"
-                          disabled
-                        >
-                          🏁 Torneo Finalizado
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+                          <button
+                            type="button"
+                            className="tourney-btn-battle"
+                            disabled
+                          >
+                            🏁 Torneo Finalizado
+                          </button>
+                          {isAdmin && !selectedTourney.prizes_distributed && (
+                            <button
+                              type="button"
+                              className="tourney-btn-reentry"
+                              style={{
+                                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                borderColor: '#fde047',
+                                color: '#1a1000',
+                                fontWeight: 900,
+                                padding: '12px 16px',
+                                fontSize: '0.92rem',
+                                boxShadow: '0 0 20px rgba(245, 158, 11, 0.45)',
+                              }}
+                              onClick={handleFinalizeTournament}
+                              disabled={isFinalizing}
+                            >
+                              {isFinalizing ? '⏳ Repartiendo Premios…' : '🏆 Liquidar y Repartir Premios (Gemas)'}
+                            </button>
+                          )}
+                          {selectedTourney.prizes_distributed && (
+                            <div style={{ textAlign: 'center', color: '#4ade80', fontSize: '0.85rem', fontWeight: 800, background: 'rgba(74, 222, 128, 0.12)', padding: '8px 12px', borderRadius: 8, border: '1px solid #22c55e' }}>
+                              ✅ Premios del pozo liquidados y entregados a los ganadores (Top 1, 2 y 3).
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -1000,10 +1062,10 @@ export default function TournamentModal({
                   <label>Duración del Torneo</label>
                   <div className="tourney-quick-times">
                     {[
-                      { label: '30 min', min: 30 },
                       { label: '45 min', min: 45 },
-                      { label: '60 min', min: 60 },
-                      { label: '120 min', min: 120 },
+                      { label: '1 hora (60 min)', min: 60 },
+                      { label: '🔥 2 Horas (120 min)', min: 120 },
+                      { label: '3 Horas (180 min)', min: 180 },
                     ].map((opt) => (
                       <button
                         key={opt.min}
