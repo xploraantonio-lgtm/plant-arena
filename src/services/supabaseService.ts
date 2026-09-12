@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+export { isSupabaseConfigured }
 import type { Database, CodeRoundPrizeTier } from '../types/database.types'
 export type { CodeRoundPrizeTier }
 import { type FreePackSlot, type PlayerRewardPack, normalizePackSlots } from '../utils/freePackManager'
@@ -1123,6 +1124,13 @@ export const SupabaseService = {
     p2_deck: unknown
     colosseum_bet: number
     status: string
+    settled_at?: string | null
+    server_winner_id?: string | null
+    p1_reported_winner?: string | null
+    p2_reported_winner?: string | null
+    verification_status?: string | null
+    verification_payload?: any
+    verification_note?: string | null
     engine_version?: string | null
     is_async_match?: boolean
     async_opponent_id?: string | null
@@ -1135,7 +1143,7 @@ export const SupabaseService = {
     try {
       const { data, error } = await supabase
         .from('game_rooms')
-        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status, engine_version, is_async_match, async_opponent_id, async_display_name, async_avatar_id, async_rating_snapshot, async_deck_snapshot')
+        .select('id, mode, player1_id, player2_id, seed, p1_deck, p2_deck, colosseum_bet, status, settled_at, server_winner_id, p1_reported_winner, p2_reported_winner, verification_status, verification_payload, verification_note, engine_version, is_async_match, async_opponent_id, async_display_name, async_avatar_id, async_rating_snapshot, async_deck_snapshot')
         .eq('id', roomId)
         .single()
       if (error) {
@@ -1187,11 +1195,22 @@ export const SupabaseService = {
    *   status 'esperando_al_rival'   → tu reporte quedó registrado
    *   status 'resultado_en_disputa' → no coinciden, no se paga a nadie
    *   status 'liquidada'            → pagado, `payout` trae el importe
+   *   status 'ya_liquidada'         → sala ya resuelta, trae datos de ELO
    */
   async reportMatchResult(
     roomId: string,
     winnerId: string
-  ): Promise<{ success: boolean; status?: string; payout?: number; error?: string }> {
+  ): Promise<{
+    success: boolean
+    status?: string
+    payout?: number
+    eloGained?: number
+    eloLost?: number
+    eloAfter?: number
+    winner?: string
+    elo?: any
+    error?: string
+  }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
     try {
       const { data, error } = await (supabase.rpc as any)('report_match_result', {
@@ -1202,7 +1221,7 @@ export const SupabaseService = {
         logError('reportMatchResult', error)
         return { success: false, error: error.message }
       }
-      return data as { success: boolean; status?: string; payout?: number }
+      return data as any
     } catch (e: any) {
       logError('reportMatchResult', e)
       return { success: false, error: e?.message }
@@ -1210,7 +1229,7 @@ export const SupabaseService = {
   },
 
   /**
-   * Pide al árbitro servidor reconstruir la partida.
+   * Pide al árbitro servidor reconstruir la partida o confirmar la liquidación autoritativa.
    * El navegador NO manda ganador: sólo roomId.
    */
   async verifyMatch(roomId: string): Promise<{
@@ -1228,34 +1247,110 @@ export const SupabaseService = {
       eloGained?: number
       eloLost?: number
       payout?: number
+      eloDelta?: number
+      eloBefore?: number
+      eloAfter?: number
+      opponentElo?: number
+      rawElo?: any
       [k: string]: unknown
     }
     error?: string
   }> {
     if (!isSupabaseConfigured()) return { ok: false, error: 'sin_supabase' }
 
-    // La función puede responder pending si todavía falta alcanzar el tic final
-    // + la pequeña ventana de gracia. Reintentamos unas veces desde el cliente.
-    for (let intento = 0; intento < 8; intento += 1) {
+    // Helper interno para resolver desde el estado de la base de datos si ya liquidó
+    const checkDbSettled = async (): Promise<{
+      ok: boolean
+      status: 'verified_draw' | 'settled'
+      winnerId: string | null
+      winnerSide: 1 | 2 | null
+      isAsyncMatch: boolean
+      settlement: {
+        success: boolean
+        status: string
+        rawElo: any
+      }
+    } | null> => {
+      try {
+        const room = await this.getGameRoom(roomId)
+        if (room?.settled_at) {
+          const isDraw = room.status === 'draw'
+          const isP1Winner = room.status === 'p1_won'
+          const isP2Winner = room.status === 'p2_won'
+          const winnerSide: 1 | 2 | null = isP1Winner ? 1 : isP2Winner ? 2 : null
+          const eloAudit = room.verification_payload?.elo
+
+          return {
+            ok: true,
+            status: isDraw ? 'verified_draw' : 'settled',
+            winnerId: room.server_winner_id || (winnerSide === 1 ? room.player1_id : (room.player2_id || null)),
+            winnerSide,
+            isAsyncMatch: Boolean(room.is_async_match),
+            settlement: {
+              success: true,
+              status: isDraw ? 'empate' : 'liquidada',
+              rawElo: eloAudit,
+            },
+          }
+        }
+      } catch {
+        // silencioso
+      }
+      return null
+    }
+
+    // En PvP humano, el rival puede tardar varios segundos en terminar y reportar.
+    // Reintentamos hasta 25 veces (~30-35s) y cotejamos contra la DB ante cualquier respuesta.
+    for (let intento = 0; intento < 25; intento += 1) {
       try {
         const { data, error } = await supabase.functions.invoke('verify-match', {
           body: { roomId },
         })
 
-        if (error) {
-          logError('verifyMatch', error)
-          return { ok: false, error: error.message }
+        if (!error && data) {
+          if (data.status !== 'pending') {
+            // Si verify-match responde 'settled' pero sin settlement completo de ELO,
+            // enriquecerlo desde game_rooms si ya tiene settled_at
+            if (data.status === 'settled' && (!data.settlement || !(data.settlement as any).rawElo)) {
+              const dbResolved = await checkDbSettled()
+              if (dbResolved) {
+                return {
+                  ...data,
+                  ...dbResolved,
+                  settlement: {
+                    ...(data.settlement || {}),
+                    ...(dbResolved.settlement || {}),
+                  },
+                }
+              }
+            }
+            return data
+          }
         }
 
-        if (data?.status !== 'pending') return data
+        // Si la función responde pending o falló, verificar si ya liquidó en DB
+        const dbResolved = await checkDbSettled()
+        if (dbResolved) {
+          return dbResolved
+        }
 
-        const espera = Math.max(250, Math.min(Number(data.retryAfterMs) || 750, 5000))
+        const espera = Math.max(500, Math.min(Number(data?.retryAfterMs) || 1200, 3000))
         await new Promise((resolve) => setTimeout(resolve, espera))
       } catch (e: any) {
         logError('verifyMatch', e)
-        return { ok: false, error: e?.message ?? 'verify-match falló' }
+        const dbResolved = await checkDbSettled()
+        if (dbResolved) return dbResolved
+
+        if (intento >= 24) {
+          return { ok: false, error: e?.message ?? 'verify-match falló' }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       }
     }
+
+    // Comprobación final directa en DB
+    const finalDbResolved = await checkDbSettled()
+    if (finalDbResolved) return finalDbResolved
 
     return { ok: true, status: 'pending' }
   },
@@ -1676,6 +1771,81 @@ export const SupabaseService = {
     } catch (e: any) {
       logError('respondClanJoinRequest', e)
       return { success: false, error: e?.message }
+    }
+  },
+
+  async sendClanInvitation(
+    clanId: string,
+    targetUsername: string
+  ): Promise<{ success: boolean; invitation_id?: string; target_username?: string; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('send_clan_invitation', {
+        p_clan_id: clanId,
+        p_target_username: targetUsername.trim(),
+      })
+      if (error) {
+        logError('sendClanInvitation', error)
+        return { success: false, error: error.message, message: error.message }
+      }
+      return data as { success: boolean; invitation_id?: string; target_username?: string; error?: string; message?: string }
+    } catch (e: any) {
+      logError('sendClanInvitation', e)
+      return { success: false, error: e?.message, message: e?.message }
+    }
+  },
+
+  async respondClanInvitation(
+    invitationId: string,
+    accept: boolean
+  ): Promise<{ success: boolean; status?: string; clan_id?: string; clan_name?: string; error?: string; message?: string }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('respond_clan_invitation', {
+        p_invitation_id: invitationId,
+        p_accept: accept,
+      })
+      if (error) {
+        logError('respondClanInvitation', error)
+        return { success: false, error: error.message, message: error.message }
+      }
+      return data as { success: boolean; status?: string; clan_id?: string; clan_name?: string; error?: string; message?: string }
+    } catch (e: any) {
+      logError('respondClanInvitation', e)
+      return { success: false, error: e?.message, message: e?.message }
+    }
+  },
+
+  async getMyClanInvitations(): Promise<Array<{
+    id: string
+    clanId: string
+    clanName: string
+    clanTag: string
+    clanBadge: string
+    clanDescription: string
+    leaderName: string
+    createdAt: string
+  }>> {
+    if (!isSupabaseConfigured()) return []
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_my_clan_invitations')
+      if (error) {
+        logError('getMyClanInvitations', error)
+        return []
+      }
+      return (data || []) as Array<{
+        id: string
+        clanId: string
+        clanName: string
+        clanTag: string
+        clanBadge: string
+        clanDescription: string
+        leaderName: string
+        createdAt: string
+      }>
+    } catch (e: any) {
+      logError('getMyClanInvitations', e)
+      return []
     }
   },
 

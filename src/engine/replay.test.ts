@@ -18,6 +18,7 @@ import {
   type JugadaGrabada,
 } from './replay'
 import { stepTick, createBattleState, crearPlantaDelRival, crearPlantaPropia, TIC_MUERTE_SUBITA } from './simulate'
+import { resolverCartaRival } from './asyncOpponent'
 import type { PlantId } from '../types/game'
 
 /** Una partida grabada: lo que devuelve match_replay. */
@@ -328,4 +329,74 @@ describe('arbitro autoritativo auth-v1 (recalcularGanadorAutoritativo)', () => {
     expect(res.consistente).toBe(true)
     expect(res.ganador).toBeNull()
   })
+
+  it('tolera huecos en los slots del mazo (p. ej. slots 0 y 2) cuando la acción envía el índice de mano (slot 1)', () => {
+    // Caso real de elcruel: mazo guardado con huecos (slots 0, 2, 3), pero el cliente juega slot 1 (segunda carta en mano)
+    const datos: DatosDeRepeticion = {
+      roomId: 'room-slot-gap-tolerance',
+      mode: 'ranked',
+      seed: 12345,
+      engineVersion: 'auth-v1',
+      jugadaEn: '2026-08-20T00:00:00Z',
+      jugador1: {
+        nombre: 'elcruel',
+        avatar: 'tallnut',
+        mazo: [
+          { plantId: 'sunflower', slot: 0, level: 1, statRolls: [] },
+          // Nota: no hay slot 1, hay un hueco debido a cartas vendidas/fusionadas
+          { plantId: 'peashooter', slot: 2, level: 2, statRolls: [] },
+          { plantId: 'wallnut', slot: 3, level: 1, statRolls: [] },
+        ],
+      },
+      jugador2: {
+        nombre: 'Rival',
+        avatar: 'sunflower',
+        mazo: [
+          { plantId: 'sunflower', slot: 0, level: 0, statRolls: [] },
+          { plantId: 'peashooter', slot: 1, level: 0, statRolls: [] },
+        ],
+      },
+      ganador: null,
+      yoSoy: 1,
+      jugadas: [
+        // P1 juega 'peashooter' en tick 966 (con soles acumulados naturalmente) pero envía slot 1 en vez de slot 2 (su deck_slot en DB)
+        { de: 1, seq: 1, issuedTick: 960, tick: 966, kind: 'plant', plantId: 'peashooter', slot: 1, lane: 1, col: 2 },
+      ],
+    }
+
+    const res = recalcularGanadorAutoritativo(datos)
+    expect(res.ilegales).toEqual([])
+    expect(res.consistente).toBe(true)
+    expect(res.motivo).not.toBe('slot_no_existe_en_mazo')
+    expect(res.motivo).not.toBe('slot_no_corresponde_a_carta')
+  })
+
+  it('resolverCartaRival resuelve cartas correctamente aun con huecos o desfases de slot', () => {
+    const mazoConHuecos = [
+      { plantId: 'sunflower', slot: 0, level: 1, statRolls: [] },
+      { plantId: 'peashooter', slot: 2, level: 3, statRolls: ['atk', 'atk', 'atk'] },
+      { plantId: 'wallnut', slot: 3, level: 1, statRolls: [] },
+    ]
+
+    // 1. Coincidencia exacta
+    const exacto = resolverCartaRival(mazoConHuecos, 'sunflower', 0)
+    expect(exacto).not.toBeNull()
+    expect(exacto?.plantId).toBe('sunflower')
+
+    // 2. Desfase: cliente envía slot 1 (su índice en mano) para peashooter que está en slot 2 en DB
+    const conDesfase = resolverCartaRival(mazoConHuecos, 'peashooter', 1)
+    expect(conDesfase).not.toBeNull()
+    expect(conDesfase?.plantId).toBe('peashooter')
+    expect(conDesfase?.level).toBe(3)
+
+    // 3. Desfase donde slot 0 apunta a sunflower pero se busca peashooter
+    const cruzado = resolverCartaRival(mazoConHuecos, 'peashooter', 0)
+    expect(cruzado).not.toBeNull()
+    expect(cruzado?.plantId).toBe('peashooter')
+
+    // 4. Planta que no existe en el mazo
+    const inexistente = resolverCartaRival(mazoConHuecos, 'chomper', 1)
+    expect(inexistente).toBeNull()
+  })
 })
+

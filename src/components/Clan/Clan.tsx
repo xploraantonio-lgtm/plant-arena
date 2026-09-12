@@ -90,6 +90,11 @@ export default function Clan({
   const [clanAutoAccept, setClanAutoAccept] = useState<boolean>(true)
   const [pendingRequests, setPendingRequests] = useState<any[]>([])
 
+  // Direct Clan Invitation Modal State (Solo Líder)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteTargetUsername, setInviteTargetUsername] = useState('')
+  const [isSendingInvite, setIsSendingInvite] = useState(false)
+
   // Creation form state
   const [newClanName, setNewClanName] = useState('')
   const [newClanTag, setNewClanTag] = useState('')
@@ -503,6 +508,58 @@ export default function Clan({
       setKickValidation(null)
     } else {
       showModalAlert('ERROR AL EXPULSAR', res.error || 'No se pudo expulsar al miembro.', '❌', 'error')
+    }
+  }
+
+  // SEND DIRECT INVITATION (Solo Líder)
+  const handleSendInvitation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userClan) return
+    const target = inviteTargetUsername.trim()
+    if (!target) {
+      showModalAlert('CAMPO REQUERIDO', 'Ingresa el nombre de usuario del jugador a invitar.', '⚠️', 'warning')
+      return
+    }
+    if (target.toLowerCase() === playerName.toLowerCase()) {
+      showModalAlert('ERROR', 'No puedes invitarte a ti mismo.', '⚠️', 'warning')
+      return
+    }
+    if (userClan.members.length >= 15) {
+      showModalAlert('CLAN LLENO', 'El clan ya alcanzó el cupo máximo de 15 miembros.', '⚠️', 'warning')
+      return
+    }
+
+    setIsSendingInvite(true)
+    try {
+      if (ClanManager.isValidUuid(userClan.id)) {
+        const res = await supabaseService.sendClanInvitation(userClan.id, target)
+        if (!res.success) {
+          showModalAlert('NO SE PUDO ENVIAR', res.message || res.error || 'Error al enviar invitación.', '❌', 'error')
+          setIsSendingInvite(false)
+          return
+        }
+      } else {
+        const res = ClanManager.sendClanInvitation(userClan.id, target, playerName)
+        if (!res.success) {
+          showModalAlert('NO SE PUDO ENVIAR', res.error || 'Error al enviar invitación.', '❌', 'error')
+          setIsSendingInvite(false)
+          return
+        }
+      }
+
+      soundManager.playSound('plantation', 0.8)
+      showModalAlert(
+        '¡INVITACIÓN ENVIADA!',
+        `Se ha enviado la invitación directa a "${target}".\nAl jugador le aparecerá un pop-up en su Lobby para unirse por 200 Gemas 💎.`,
+        '✉️',
+        'success'
+      )
+      setInviteTargetUsername('')
+      setShowInviteModal(false)
+    } catch (err: any) {
+      showModalAlert('ERROR', err?.message || 'Error de conexión al enviar invitación.', '❌', 'error')
+    } finally {
+      setIsSendingInvite(false)
     }
   }
 
@@ -1523,6 +1580,27 @@ export default function Clan({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Barra de herramientas para el Líder: Invitar Jugador */}
+          {isLeader && (
+            <div className="clan-members-toolbar">
+              <span className="clan-members-toolbar__hint">
+                👥 Administra los miembros de tu clan o invita jugadores directamente por nombre de usuario.
+              </span>
+              <button
+                type="button"
+                className="clan-invite-open-btn"
+                onClick={() => {
+                  soundManager.playSound('click', 0.4)
+                  setShowInviteModal(true)
+                }}
+                disabled={userClan.members.length >= 15}
+                title={userClan.members.length >= 15 ? 'El clan ya alcanzó el cupo máximo de 15 miembros' : 'Invitar jugador'}
+              >
+                ✉️ INVITAR JUGADOR AL CLAN
+              </button>
             </div>
           )}
 
@@ -2901,6 +2979,69 @@ export default function Clan({
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* DIRECT INVITATION MODAL (Solo Líder) */}
+      {showInviteModal && userClan && (
+        <div className="clan-modal-backdrop" onClick={() => setShowInviteModal(false)}>
+          <div className="clan-modal-box clan-invite-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="clan-modal-header-row">
+              <div className="clan-modal-header-title">
+                <span className="clan-modal-header-icon">✉️</span>
+                <div>
+                  <h3>INVITAR JUGADOR AL CLAN</h3>
+                  <p>Envía una invitación directa al Lobby de otro jugador</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="clan-modal-close-btn"
+                onClick={() => setShowInviteModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSendInvitation} className="clan-invite-form">
+              <div className="clan-invite-notice">
+                <p>
+                  El jugador recibirá un <strong>pop-up interactivo en su Lobby</strong> para unirse a <strong>{userClan.name}</strong> por <strong>200 Gemas 💎</strong> (las cuales se sumarán al Tesoro de tu Clan).
+                </p>
+              </div>
+
+              <div className="clan-invite-field">
+                <label htmlFor="invite-target-input">Nombre exacto del jugador:</label>
+                <input
+                  id="invite-target-input"
+                  type="text"
+                  className="clan-invite-input"
+                  placeholder="Ejemplo: AdrianIrod, JonSnow, Guerrero..."
+                  value={inviteTargetUsername}
+                  onChange={(e) => setInviteTargetUsername(e.target.value)}
+                  maxLength={30}
+                  autoFocus
+                />
+              </div>
+
+              <div className="clan-modal-actions">
+                <button
+                  type="submit"
+                  className="clan-confirm-btn clan-confirm-btn--invite"
+                  disabled={isSendingInvite || !inviteTargetUsername.trim()}
+                >
+                  {isSendingInvite ? 'ENVIANDO...' : '✉️ ENVIAR INVITACIÓN'}
+                </button>
+                <button
+                  type="button"
+                  className="clan-cancel-btn"
+                  onClick={() => setShowInviteModal(false)}
+                >
+                  CANCELAR
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

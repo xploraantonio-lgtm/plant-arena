@@ -73,6 +73,19 @@ export interface ClanJoinRequest {
   createdAt: number
 }
 
+export interface ClanInvitation {
+  id: string
+  clanId: string
+  clanName: string
+  clanTag: string
+  clanBadge: string
+  clanDescription: string
+  leaderName: string
+  invitedUsername: string
+  status: 'pending' | 'accepted' | 'rejected'
+  createdAt: number
+}
+
 export interface ClanData {
   id: string
   name: string
@@ -102,6 +115,7 @@ const STORAGE_KEYS = {
   ACCOUNT_CLAIMED_FULL_BONUS: 'plant_arena_account_claimed_clan_full_bonus',
   VAULT_DEPOSITS: 'plant_arena_clan_vault_deposits',
   JOIN_REQUESTS: 'plant_arena_clan_join_requests',
+  CLAN_INVITATIONS: 'plant_arena_clan_invitations',
 }
 
 export class ClanManager {
@@ -915,5 +929,110 @@ export class ClanManager {
     req.status = 'accepted'
     localStorage.setItem(STORAGE_KEYS.JOIN_REQUESTS, JSON.stringify(all))
     return { success: true }
+  }
+
+  /**
+   * Send direct invitation from clan leader to a player
+   */
+  static sendClanInvitation(
+    clanId: string,
+    targetUsername: string,
+    senderLeaderName: string
+  ): { success: boolean; invitationId?: string; error?: string } {
+    const clans = this.getClans()
+    const clan = clans.find((c) => c.id === clanId)
+    if (!clan) return { success: false, error: 'Clan no encontrado.' }
+    if (clan.members.length >= 15) return { success: false, error: 'El clan ya alcanzó el máximo de 15 miembros.' }
+    if (targetUsername.toLowerCase() === senderLeaderName.toLowerCase()) {
+      return { success: false, error: 'No puedes invitarte a ti mismo.' }
+    }
+    const targetAlreadyInClan = clans.some((c) => c.members.some((m) => m.name.toLowerCase() === targetUsername.toLowerCase()))
+    if (targetAlreadyInClan) {
+      return { success: false, error: 'Este jugador ya pertenece a un clan.' }
+    }
+
+    const saved = localStorage.getItem(STORAGE_KEYS.CLAN_INVITATIONS)
+    let invs: ClanInvitation[] = []
+    if (saved) {
+      try {
+        invs = JSON.parse(saved)
+      } catch {}
+    }
+
+    const alreadyPending = invs.some(
+      (i) => i.clanId === clanId && i.invitedUsername.toLowerCase() === targetUsername.toLowerCase() && i.status === 'pending'
+    )
+    if (alreadyPending) {
+      return { success: false, error: 'Ya enviaste una invitación a este jugador.' }
+    }
+
+    const newInv: ClanInvitation = {
+      id: `inv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      clanId,
+      clanName: clan.name,
+      clanTag: clan.tag,
+      clanBadge: clan.badge,
+      clanDescription: clan.description,
+      leaderName: clan.leader,
+      invitedUsername: targetUsername,
+      status: 'pending',
+      createdAt: Date.now(),
+    }
+    invs.unshift(newInv)
+    localStorage.setItem(STORAGE_KEYS.CLAN_INVITATIONS, JSON.stringify(invs))
+    return { success: true, invitationId: newInv.id }
+  }
+
+  /**
+   * Get pending invitations for a specific username
+   */
+  static getMyClanInvitations(username: string): ClanInvitation[] {
+    const saved = localStorage.getItem(STORAGE_KEYS.CLAN_INVITATIONS)
+    if (!saved) return []
+    try {
+      const invs: ClanInvitation[] = JSON.parse(saved)
+      return invs.filter((i) => i.invitedUsername.toLowerCase() === username.toLowerCase() && i.status === 'pending')
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Respond to clan invitation (accept or reject)
+   */
+  static respondClanInvitation(
+    invitationId: string,
+    accept: boolean,
+    playerElo = 1000
+  ): { success: boolean; clanId?: string; clanName?: string; error?: string } {
+    const saved = localStorage.getItem(STORAGE_KEYS.CLAN_INVITATIONS)
+    if (!saved) return { success: false, error: 'Invitación no encontrada.' }
+    let invs: ClanInvitation[] = []
+    try {
+      invs = JSON.parse(saved)
+    } catch {
+      return { success: false, error: 'Error al leer invitaciones.' }
+    }
+    const inv = invs.find((i) => i.id === invitationId)
+    if (!inv) return { success: false, error: 'Invitación no encontrada.' }
+    if (inv.status !== 'pending') return { success: false, error: 'Esta invitación ya fue resuelta.' }
+
+    if (!accept) {
+      inv.status = 'rejected'
+      localStorage.setItem(STORAGE_KEYS.CLAN_INVITATIONS, JSON.stringify(invs))
+      return { success: true }
+    }
+
+    const clans = this.getClans()
+    const clan = clans.find((c) => c.id === inv.clanId)
+    if (!clan) return { success: false, error: 'El clan ya no existe.' }
+    if (clan.members.length >= 15) return { success: false, error: 'El clan ya alcanzó el cupo máximo de 15 miembros.' }
+
+    const joined = this.joinClan(inv.clanId, inv.invitedUsername, playerElo)
+    if (!joined) return { success: false, error: 'No se pudo unir al clan.' }
+
+    inv.status = 'accepted'
+    localStorage.setItem(STORAGE_KEYS.CLAN_INVITATIONS, JSON.stringify(invs))
+    return { success: true, clanId: inv.clanId, clanName: inv.clanName }
   }
 }

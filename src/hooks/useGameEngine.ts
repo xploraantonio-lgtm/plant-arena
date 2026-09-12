@@ -471,7 +471,7 @@ export function useGameEngine() {
       seed,
       false,
       esPvp,
-      nivelPorElo(miElo ?? 1500),
+      nivelPorElo(miElo ?? 1000),
       engineVersion,
       INITIAL_BASE_HP + effectiveTreeBonusHp,
       INITIAL_BASE_HP

@@ -462,20 +462,31 @@ BEGIN
   WHERE cm.clan_id = v_clan_id;
 
   -- Donaciones activas
-  SELECT jsonb_agg(
-    jsonb_build_object(
-      'id', cpr.id,
-      'requesterId', cpr.user_id,
-      'requesterName', p.username,
-      'plantId', cpr.plant_id,
-      'copiesRequested', cpr.copies_requested,
-      'donors', cpr.donors,
-      'createdAt', cpr.created_at
-    ) ORDER BY cpr.created_at DESC
-  ) INTO v_donations
-  FROM public.clan_plant_requests cpr
-  JOIN public.profiles p ON p.id = cpr.user_id
-  WHERE cpr.clan_id = v_clan_id AND cpr.status = 'active';
+  IF to_regclass('public.clan_donations') IS NOT NULL THEN
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'id', cd.id,
+        'requesterId', cd.requester_id,
+        'requesterName', COALESCE(p.username, 'Compañero'),
+        'plantId', cd.plant_id,
+        'copiesRequested', cd.copies_requested,
+        'copiesReceived', cd.copies_received,
+        'status', cd.status,
+        'createdAt', cd.created_at,
+        'donors', COALESCE((
+          SELECT jsonb_agg(jsonb_build_object('donorId', cdd.donor_id, 'donorName', dp.username))
+          FROM public.clan_donation_donors cdd
+          JOIN public.profiles dp ON dp.id = cdd.donor_id
+          WHERE cdd.donation_id = cd.id
+        ), '[]'::jsonb)
+      ) ORDER BY cd.created_at DESC
+    ) INTO v_donations
+    FROM public.clan_donations cd
+    JOIN public.profiles p ON p.id = cd.requester_id
+    WHERE cd.clan_id = v_clan_id AND cd.status = 'active';
+  ELSE
+    v_donations := '[]'::jsonb;
+  END IF;
 
   -- Historial de aportes
   SELECT jsonb_agg(

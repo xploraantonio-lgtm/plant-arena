@@ -186,6 +186,15 @@ function resolverCarta(
     encontrada = mazo.find((c) => c.plantId === plantId)
   }
 
+  // Fallback de resiliencia: si por desfase de slot/índice de mano la carta no coincide en slot,
+  // buscarla en el mazo por plantId siempre que exista.
+  if (!encontrada || encontrada.plantId !== plantId) {
+    const porPlantId = mazo.find((c) => c.plantId === plantId)
+    if (porPlantId) {
+      encontrada = porPlantId
+    }
+  }
+
   if (!encontrada) {
     if (!estricto) {
       return {

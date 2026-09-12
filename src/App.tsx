@@ -31,6 +31,8 @@ import { MatchmakingService } from './services/matchmakingService'
 import { useAuth } from './hooks/useAuth'
 import AuthModal from './components/Auth/AuthModal'
 import AdminPanel from './components/Admin/AdminPanel'
+import { supabaseService, isSupabaseConfigured } from './services/supabaseService'
+import { ClanManager } from './utils/clanManager'
 
 import { UserManager } from './utils/userManager'
 import { useVersionDelJuego } from './hooks/useVersionDelJuego'
@@ -85,6 +87,16 @@ function App() {
     actionLabel?: string
     onAction?: () => void
   } | null>(null)
+  const [activeClanInvitation, setActiveClanInvitation] = useState<{
+    id: string
+    clanId: string
+    clanName: string
+    clanTag: string
+    clanBadge: string
+    clanDescription: string
+    leaderName: string
+  } | null>(null)
+  const [isProcessingClanInvitation, setIsProcessingClanInvitation] = useState(false)
 
   useEffect(() => {
     const handleGameAlert = (e: Event) => {
@@ -250,6 +262,125 @@ function App() {
       cancelado = true
     }
   }, [screen, user?.id])
+
+  // Check for direct clan invitations when player is in Lobby
+  useEffect(() => {
+    if (screen !== 'menu' || !user?.id) return
+    let cancelled = false
+
+    const checkInvitations = async () => {
+      // If user already has a valid clan, do not show invitation popups
+      const currentClan = ClanManager.getUserClan()
+      if (currentClan && ClanManager.isValidUuid(currentClan.id)) return
+
+      if (isSupabaseConfigured()) {
+        try {
+          const invs = await supabaseService.getMyClanInvitations()
+          if (!cancelled && invs && invs.length > 0) {
+            setActiveClanInvitation(invs[0])
+            return
+          }
+        } catch {}
+      }
+
+      // Offline fallback
+      const localUsername = profile?.username || UserManager.getProfile().name
+      if (localUsername) {
+        const localInvs = ClanManager.getMyClanInvitations(localUsername)
+        if (!cancelled && localInvs.length > 0) {
+          setActiveClanInvitation(localInvs[0])
+        }
+      }
+    }
+
+    void checkInvitations()
+
+    return () => {
+      cancelled = true
+    }
+  }, [screen, user?.id, profile?.username])
+
+  const handleRespondClanInvitation = async (accept: boolean) => {
+    if (!activeClanInvitation) return
+
+    if (accept) {
+      if (userTokens < 200.0) {
+        soundManager.playSound('surrender', 0.6)
+        setActiveAppAlert({
+          title: 'SALDO INSUFICIENTE',
+          message: `Saldo insuficiente para unirte al clan "${activeClanInvitation.clanName}".\nRequieres 200 Gemas 💎 y tu saldo disponible es de ${Math.floor(userTokens)} Gemas 💎.\nPor favor recarga saldo en la Tienda.`,
+          icon: '💎',
+          actionLabel: 'IR A LA TIENDA',
+          onAction: () => setScreen('shop'),
+        })
+        return
+      }
+
+      setIsProcessingClanInvitation(true)
+      try {
+        if (isSupabaseConfigured()) {
+          const res = await supabaseService.respondClanInvitation(activeClanInvitation.id, true)
+          if (!res.success) {
+            setActiveAppAlert({
+              title: 'ERROR AL UNIRSE',
+              message: res.message || res.error || 'No se pudo aceptar la invitación.',
+              icon: '❌',
+            })
+            setIsProcessingClanInvitation(false)
+            return
+          }
+        } else {
+          const res = ClanManager.respondClanInvitation(activeClanInvitation.id, true, userElo)
+          if (!res.success) {
+            setActiveAppAlert({
+              title: 'ERROR AL UNIRSE',
+              message: res.error || 'No se pudo aceptar la invitación.',
+              icon: '❌',
+            })
+            setIsProcessingClanInvitation(false)
+            return
+          }
+        }
+
+        // Deduct 200 gems
+        deductUserTokens(200.0)
+        soundManager.playSound('plantation', 0.9)
+        ClanManager.setUserClanId(activeClanInvitation.clanId)
+        void refreshFromServer()
+
+        setActiveAppAlert({
+          title: '¡BIENVENIDO AL CLAN!',
+          message: `Te has unido exitosamente al clan "${activeClanInvitation.clanName}".\nSe transfirieron 200 Gemas 💎 al Tesoro del Clan.`,
+          icon: '🎉',
+        })
+        setActiveClanInvitation(null)
+      } catch (e: any) {
+        setActiveAppAlert({
+          title: 'ERROR',
+          message: e?.message || 'Error al procesar la invitación.',
+          icon: '❌',
+        })
+      } finally {
+        setIsProcessingClanInvitation(false)
+      }
+    } else {
+      // Reject
+      setIsProcessingClanInvitation(true)
+      try {
+        if (isSupabaseConfigured()) {
+          await supabaseService.respondClanInvitation(activeClanInvitation.id, false)
+        } else {
+          ClanManager.respondClanInvitation(activeClanInvitation.id, false)
+        }
+        soundManager.playSound('click', 0.4)
+        setActiveClanInvitation(null)
+      } catch {
+        setActiveClanInvitation(null)
+      } finally {
+        setIsProcessingClanInvitation(false)
+      }
+    }
+  }
 
   /**
    * EL ENLACE DE INVITACIÓN
@@ -1354,6 +1485,62 @@ function App() {
     setScreen('jardin')
   }}
 />
+        )}
+
+        {/* POP-UP INVITACIÓN DE CLAN EN EL LOBBY */}
+        {screen === 'menu' && activeClanInvitation && (
+          <div className="main-menu-dialog-backdrop">
+            <div className="clan-invitation-dialog-card" onClick={(e) => e.stopPropagation()}>
+              <div className="clan-invitation-dialog-header">
+                <span className="clan-invitation-dialog-badge">{activeClanInvitation.clanBadge}</span>
+                <div className="clan-invitation-dialog-titles">
+                  <span className="clan-invitation-dialog-tag">{activeClanInvitation.clanTag}</span>
+                  <h3 className="clan-invitation-dialog-title">{activeClanInvitation.clanName}</h3>
+                </div>
+              </div>
+
+              <div className="clan-invitation-dialog-body">
+                <div className="clan-invitation-dialog-leader-box">
+                  <span className="clan-invitation-crown">👑</span>
+                  <span>El Líder <strong>{activeClanInvitation.leaderName}</strong> te ha invitado a unirte a su Clan.</span>
+                </div>
+                {activeClanInvitation.clanDescription && (
+                  <p className="clan-invitation-dialog-desc">«{activeClanInvitation.clanDescription}»</p>
+                )}
+                <div className="clan-invitation-dialog-cost-box">
+                  <div className="clan-invitation-cost-row">
+                    <span>Cuota de entrada al Tesoro:</span>
+                    <strong className="clan-invitation-cost-gems">200 Gemas 💎</strong>
+                  </div>
+                  <div className="clan-invitation-cost-row clan-invitation-cost-row--sub">
+                    <span>Tu saldo disponible:</span>
+                    <span className={userTokens < 200 ? 'clan-invitation-gems--low' : ''}>
+                      {Math.floor(userTokens)} Gemas 💎 {userTokens < 200 ? '(Insuficiente)' : '✓'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="clan-invitation-dialog-actions">
+                <button
+                  type="button"
+                  className="clan-invitation-btn clan-invitation-btn--accept"
+                  onClick={() => handleRespondClanInvitation(true)}
+                  disabled={isProcessingClanInvitation}
+                >
+                  {isProcessingClanInvitation ? 'UNIENDO...' : '✓ UNIRSE AL CLAN (200 💎)'}
+                </button>
+                <button
+                  type="button"
+                  className="clan-invitation-btn clan-invitation-btn--reject"
+                  onClick={() => handleRespondClanInvitation(false)}
+                  disabled={isProcessingClanInvitation}
+                >
+                  ✕ RECHAZAR
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Global Themed Modal Alert */}

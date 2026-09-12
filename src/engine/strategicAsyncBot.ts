@@ -55,7 +55,7 @@ export function aplicarPisoCompetitivo(profile: StrategicProfile): StrategicProf
     defense: Math.max(profile.defense, 0.68),
     opportunism: Math.max(profile.opportunism, 0.72),
     reactionMs: Math.min(profile.reactionMs, 540),
-    badPlayMargin: Math.min(profile.badPlayMargin, 0.04),
+    badPlayMargin: Math.min(profile.badPlayMargin, 0.05),
     irregularity: Math.min(profile.irregularity, 0.22),
     baseReserveSun: Math.min(profile.baseReserveSun, 40),
     targetProducers: Math.min(profile.targetProducers, 3),
@@ -74,9 +74,17 @@ export function escalarPerfilPorElo(
   baseProfile: StrategicProfile,
   playerElo: number = 1200
 ): StrategicProfile {
-  // El escalado por ELO puede aumentar de nuevo el margen de error; lo capamos
-  // después para que ninguna semilla caiga por debajo del suelo de dificultad.
-  return aplicarPisoCompetitivo(base.escalarPerfilPorElo(baseProfile, playerElo))
+  const scaled = base.escalarPerfilPorElo(baseProfile, playerElo)
+  scaled.playerElo = playerElo
+
+  // Para jugadores con menos de 1600 copas (Arena 1 y principiantes),
+  // se preserva el escalado suave y humano para evitar frustración y deserciones.
+  // El piso competitivo estricto se reserva para rangos altos (>= 1600 copas).
+  if (playerElo < 1600) {
+    return scaled
+  }
+
+  return aplicarPisoCompetitivo(scaled)
 }
 
 export function decidirAccionEstrategica(
@@ -90,8 +98,11 @@ export function decidirAccionEstrategica(
   perception: StrategicPerception
   telemetryEntry?: StrategicTelemetryEntry
 } {
-  // También protege perfiles custom o estados restaurados de partidas antiguas.
-  const tuned = aplicarPisoCompetitivo(mentalState.profile)
+  // Si la partida pertenece a un jugador con menos de 1600 copas, respetamos su calibración accesible
+  const elo = mentalState.profile.playerElo
+  const tuned = (typeof elo === 'number' && elo < 1600)
+    ? mentalState.profile
+    : aplicarPisoCompetitivo(mentalState.profile)
   mentalState.profile = tuned
   return base.decidirAccionEstrategica(state, deck, slotCooldowns, sunBank, mentalState)
 }

@@ -5043,6 +5043,70 @@ describe('Rival Semilla Ranked V1 — Suite de Tests', () => {
     expect(res2.eloDelta).toBe(16)
   })
 
+  // 230b. PvP Humano: resolverLiquidacionPartida extrae métricas desde rawElo (verification_payload de game_rooms)
+  it('230b. resolverLiquidacionPartida reconstruye ELO fielmente desde rawElo para P1 y P2 en duelos PvP', () => {
+    const rawEloAudit = {
+      k: 32,
+      formulaVersion: 'ranked-elo-v1',
+      p1Before: 955,
+      p2Before: 1075,
+      p1Delta: -15,
+      p2Delta: 15,
+      p1After: 940,
+      p2After: 1090,
+    }
+
+    // Caso 1: Visto desde P1 (perdedor)
+    const resP1 = resolverLiquidacionPartida({
+      isAsyncMatch: false,
+      soyP1: true,
+      currentUserId: 'usr-p1',
+      serverVerification: {
+        status: 'settled',
+        winnerSide: 2,
+        winnerId: 'usr-p2',
+        settlement: {
+          success: true,
+          status: 'liquidada',
+          rawElo: rawEloAudit,
+        },
+      },
+    })
+
+    expect(resP1.resultadoFinal).toBe('defeat')
+    expect(resP1.statusServidor).toBe('liquidada')
+    expect(resP1.eloBefore).toBe(955)
+    expect(resP1.opponentElo).toBe(1075)
+    expect(resP1.eloDelta).toBe(-15)
+    expect(resP1.eloLost).toBe(15)
+    expect(resP1.eloAfter).toBe(940)
+
+    // Caso 2: Visto desde P2 (ganador)
+    const resP2 = resolverLiquidacionPartida({
+      isAsyncMatch: false,
+      soyP1: false,
+      currentUserId: 'usr-p2',
+      serverVerification: {
+        status: 'settled',
+        winnerSide: 2,
+        winnerId: 'usr-p2',
+        settlement: {
+          success: true,
+          status: 'liquidada',
+          rawElo: rawEloAudit,
+        },
+      },
+    })
+
+    expect(resP2.resultadoFinal).toBe('victory')
+    expect(resP2.statusServidor).toBe('liquidada')
+    expect(resP2.eloBefore).toBe(1075)
+    expect(resP2.opponentElo).toBe(955)
+    expect(resP2.eloDelta).toBe(15)
+    expect(resP2.eloGained).toBe(15)
+    expect(resP2.eloAfter).toBe(1090)
+  })
+
   // 231. Auditoría Estática de Idempotencia SQL: Barreras FOR UPDATE y settled_at en todas las funciones de settlement
   it('231. Auditoría Estática SQL: _settle_room, settle_verified_async_ranked_match, settle_verified_draw y surrender_match adquieren FOR UPDATE antes de comprobar settled_at', () => {
     const sqlPath = join(process.cwd(), 'supabase', '40-ranked-elo-records.sql')

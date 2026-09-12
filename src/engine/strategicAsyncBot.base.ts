@@ -424,6 +424,7 @@ export interface StrategicProfile {
   targetProducers: number // Número deseado de girasoles
   maxProducers: number // Límite estricto de girasoles
   basePersonality?: BotPersonalityState
+  playerElo?: number
 }
 
 export const STRATEGIC_PROFILES: Record<StrategicStyle, StrategicProfile> = {

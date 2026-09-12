@@ -17,7 +17,7 @@ describe('Rival Semilla - piso competitivo', () => {
 
   it('hard mantiene presión, defensa y oportunismo altos', () => {
     const p = obtenerPerfilEstrategico('economic', 'hard')
-    expect(p.badPlayMargin).toBeLessThanOrEqual(0.04)
+    expect(p.badPlayMargin).toBeLessThanOrEqual(0.05)
     expect(p.irregularity).toBeLessThanOrEqual(0.22)
     expect(p.aggression).toBeGreaterThanOrEqual(0.68)
     expect(p.defense).toBeGreaterThanOrEqual(0.68)
@@ -25,11 +25,19 @@ describe('Rival Semilla - piso competitivo', () => {
     expect(p.baseReserveSun).toBeLessThanOrEqual(40)
   })
 
-  it('el escalado por ELO no vuelve a crear bots demasiado fáciles', () => {
+  it('el escalado por ELO suaviza la dificultad para novatos (< 1600 copas)', () => {
     const base = obtenerPerfilEstrategico('balanced', 'normal')
     const lowElo = escalarPerfilPorElo(base, 700)
-    expect(lowElo.badPlayMargin).toBeLessThanOrEqual(0.08)
-    expect(lowElo.irregularity).toBeLessThanOrEqual(0.30)
+    expect(lowElo.badPlayMargin).toBe(0.15)
+    expect(lowElo.irregularity).toBe(0.45)
+    expect(lowElo.reactionMs).toBeGreaterThan(650)
+  })
+
+  it('el escalado por ELO mantiene el piso competitivo a partir de 1600 copas', () => {
+    const base = obtenerPerfilEstrategico('balanced', 'normal')
+    const highElo = escalarPerfilPorElo(base, 1600)
+    expect(highElo.badPlayMargin).toBeLessThanOrEqual(0.08)
+    expect(highElo.irregularity).toBeLessThanOrEqual(0.30)
   })
 
   it('respeta elite sin degradarlo', () => {

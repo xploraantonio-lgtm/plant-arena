@@ -385,7 +385,7 @@ export default function Battlefield({
 
         startedGensRef.current.add(attemptGen)
         setClockSyncStatus('synced')
-        startGame(seed, true, reloj.ancoraMs, undefined, soyP1, mazosDeLaSala, isAsyncMatch, undefined, validEngine, treeBonusHpRef.current)
+        startGame(seed, true, reloj.ancoraMs, userElo, soyP1, mazosDeLaSala, isAsyncMatch, undefined, validEngine, treeBonusHpRef.current)
       })
       .catch((err: any) => {
         if (matchClockGenRef.current !== attemptGen) {
@@ -394,7 +394,7 @@ export default function Battlefield({
         setClockSyncStatus('error')
         setClockSyncError(err?.message || 'No se pudo sincronizar la partida con el servidor.')
       })
-  }, [seed, soyP1, mazosDeLaSala, isAsyncMatch, engineVersion, startGame])
+  }, [seed, soyP1, mazosDeLaSala, isAsyncMatch, engineVersion, userElo, startGame])
 
   const [colosseumResult, setColosseumResult] = useState<{
     payoutGems: number
@@ -421,11 +421,11 @@ export default function Battlefield({
   const activeBgImage = customBgImage || activeArena.bgImage
 
   const allCatalogCards = useMemo(() => Object.keys(PLANT_CONFIGS) as PlantId[], [])
+  const mazoMioParsed = useMemo(() => leerMazo(mazosDeLaSala?.mio), [mazosDeLaSala?.mio])
   const effectiveDeck = useMemo(() => {
     if (matchMode === 'tournament' && tournamentDeck && tournamentDeck.length > 0) {
       return tournamentDeck
     }
-    const mazoMioParsed = leerMazo(mazosDeLaSala?.mio)
     if (mazoMioParsed && mazoMioParsed.length >= 3) {
       const roomDeck = mazoMioParsed
         .map((c) => c.plantId as PlantId)
@@ -438,7 +438,7 @@ export default function Battlefield({
       return activeDeck
     }
     return allCatalogCards.slice(0, 6)
-  }, [matchMode, tournamentDeck, mazosDeLaSala, activeDeck, allCatalogCards])
+  }, [matchMode, tournamentDeck, mazoMioParsed, activeDeck, allCatalogCards])
 
   // ── EL REGISTRO DE ACCIONES ────────────────────────────────────────────────
   //
@@ -989,9 +989,73 @@ export default function Battlefield({
         setResultadoServidor({ success: true, status: 'verificando' })
 
         void (async () => {
-          let reportRes: { success: boolean; status?: string; payout?: number; error?: string } | undefined
+          let reportRes:
+            | {
+                success: boolean
+                status?: string
+                payout?: number
+                eloGained?: number
+                eloLost?: number
+                eloAfter?: number
+                winner?: string
+                elo?: any
+                error?: string
+              }
+            | undefined
+
           if (!isAsyncMatch) {
             reportRes = await battleService.reportMatchResult(capturedRoomId, ganadorQueVioMiCliente)
+          }
+
+          if (capturedGeneration !== sessionGenerationRef.current || capturedRoomId !== roomIdRef.current) {
+            return
+          }
+
+          // Si el reporte ya liquidó directamente en la DB (éramos el segundo en reportar o la sala ya cerró):
+          if (reportRes && (reportRes.status === 'liquidada' || reportRes.status === 'ya_liquidada')) {
+            const yoGane = reportRes.winner ? reportRes.winner === currentUserId : gameStatus === 'victory'
+            const rawElo = reportRes.elo
+            const eloDelta = yoGane
+              ? (typeof reportRes.eloGained === 'number' ? reportRes.eloGained : (rawElo ? (soyP1 ? rawElo.p1Delta : rawElo.p2Delta) : undefined))
+              : (typeof reportRes.eloLost === 'number' ? -reportRes.eloLost : (rawElo ? (soyP1 ? rawElo.p1Delta : rawElo.p2Delta) : undefined))
+            const eloAfter = typeof reportRes.eloAfter === 'number'
+              ? reportRes.eloAfter
+              : (rawElo ? (soyP1 ? rawElo.p1After : rawElo.p2After) : undefined)
+            const eloGained = yoGane ? (eloDelta && eloDelta > 0 ? eloDelta : reportRes.eloGained) : undefined
+            const eloLost = !yoGane ? (eloDelta && eloDelta < 0 ? Math.abs(eloDelta) : reportRes.eloLost) : undefined
+
+            setResultadoServidor({
+              success: true,
+              status: 'liquidada',
+              eloBefore: rawElo ? (soyP1 ? rawElo.p1Before : rawElo.p2Before) : undefined,
+              opponentElo: rawElo ? (soyP1 ? rawElo.p2Before : rawElo.p1Before) : undefined,
+              eloDelta,
+              eloAfter,
+              eloGained,
+              eloLost,
+              payout: reportRes.payout ?? 0,
+            })
+
+            if (typeof eloAfter === 'number' && onServerEloUpdated) {
+              onServerEloUpdated(eloAfter)
+            }
+
+            if (yoGane && onBattleComplete) {
+              try {
+                const res = await onBattleComplete(true)
+                if (res?.packResult) {
+                  setBattleSummaryResult((prev) => ({
+                    ...prev,
+                    packResult: res.packResult,
+                  }))
+                }
+              } catch (e) {
+                console.warn('[Battlefield] Error obteniendo pack de victoria:', e)
+              }
+            }
+
+            terminarPorOrdenDelServidor(yoGane ? 'victory' : 'defeat')
+            return
           }
 
           const verificacion = await battleService.verifyMatch(capturedRoomId)
@@ -1552,10 +1616,31 @@ export default function Battlefield({
                     }
                   } else {
                     const carta = selectedCard
-                    const slot = selectedSlotIndex !== null
-                      ? selectedSlotIndex
-                      : (carta ? effectiveDeck.indexOf(carta) : 0)
-                    const resolvedSlot = slot >= 0 ? slot : 0
+                    let resolvedSlot = 0
+                    if (mazoMioParsed && mazoMioParsed.length > 0) {
+                      if (
+                        selectedSlotIndex !== null &&
+                        mazoMioParsed[selectedSlotIndex]?.plantId === carta &&
+                        typeof mazoMioParsed[selectedSlotIndex]?.slot === 'number'
+                      ) {
+                        resolvedSlot = mazoMioParsed[selectedSlotIndex].slot!
+                      } else {
+                        const encontrada = mazoMioParsed.find((c) => c.plantId === carta)
+                        if (encontrada && typeof encontrada.slot === 'number') {
+                          resolvedSlot = encontrada.slot
+                        } else {
+                          const slot = selectedSlotIndex !== null
+                            ? selectedSlotIndex
+                            : (carta ? effectiveDeck.indexOf(carta) : 0)
+                          resolvedSlot = slot >= 0 ? slot : 0
+                        }
+                      }
+                    } else {
+                      const slot = selectedSlotIndex !== null
+                        ? selectedSlotIndex
+                        : (carta ? effectiveDeck.indexOf(carta) : 0)
+                      resolvedSlot = slot >= 0 ? slot : 0
+                    }
                     const seq = roomId ? ++ordenRef.current : undefined
                     const enTic = placePlant(lane.id, col, carta, resolvedSlot, seq)
                     if (enTic !== null) {
@@ -1929,19 +2014,17 @@ export default function Battlefield({
           >
             <h2 className="game-card__title">
               {resultadoEnRevision
-                ? 'PARTIDA EN REVISIÓN'
+                ? '🛡️ COMBATE EN ARBITRAJE'
                 : resultadoEmpatado
-                ? '¡EMPATE!'
+                ? '🤝 ¡EMPATE TÁCTICO!'
                 : gameStatus === 'victory'
-                ? '¡VICTORIA!'
+                ? '🏆 ¡VICTORIA!'
                 : battleSummaryResult?.isSurrendered
                 ? '🏳️ ¡TE HAS RENDIDO!'
-                : '¡DERROTA!'}
+                : '💀 ¡DERROTA!'}
             </h2>
 
-            {/* PARTIDA REAL: LO QUE DICE EL SERVIDOR
-                Sólo aparece cuando hay sala. Mientras confirma enseña el spinner
-                y al responder enseña las copas autoritativas calculadas. */}
+            {/* PARTIDA REAL: RESULTADO AUTORITATIVO DEL SERVIDOR */}
             {roomId && (
               <div className="resultado-servidor">
                 {esperandoConfirmacionServidor && (
@@ -1950,20 +2033,26 @@ export default function Battlefield({
                       className="resultado-servidor__spinner"
                       aria-hidden="true"
                     />
-                    <span>Calculando copas con el servidor...</span>
+                    <span>⚔️ Validando resultado del combate...</span>
                   </div>
                 )}
 
                 {resultadoServidor?.status === 'revision_servidor' && (
-                  <p className="resultado-servidor__disputa">
-                    ⚠️ Empate Técnico, no se modificó el ELO.
-                  </p>
+                  <div className="elo-result-badge elo-result-badge--draw" style={{ background: 'rgba(234, 179, 8, 0.15)', borderColor: '#eab308' }}>
+                    <span>🛡️ COMBATE PROTEGIDO</span>
+                    <span className="elo-result-badge__total" style={{ color: '#fef08a' }}>
+                      Tus copas están a salvo (0 Copas modificadas)
+                    </span>
+                  </div>
                 )}
 
                 {resultadoEmpatado && (
-                  <p className="resultado-servidor__esperando">
-                    🤝 Partida empatada
-                  </p>
+                  <div className="elo-result-badge elo-result-badge--draw" style={{ background: 'rgba(148, 163, 184, 0.15)', borderColor: '#94a3b8' }}>
+                    <span>🤝 ¡EMPATE TÁCTICO!</span>
+                    <span className="elo-result-badge__total" style={{ color: '#cbd5e1' }}>
+                      (0 Copas modificadas · Total: {userElo} 🏆)
+                    </span>
+                  </div>
                 )}
 
                 {!esperandoConfirmacionServidor && resultadoServidor?.status === 'liquidada' && (() => {
@@ -1989,12 +2078,24 @@ export default function Battlefield({
                       : battleSummaryResult?.newElo ?? fallbackTotal
 
                   return (
-                    <p className="resultado-servidor__ok">
-                      ✅ {delta >= 0 ? `+${delta} 🏆` : `${delta} 🏆`} (Total: {total.toLocaleString('en-US')} 🏆)
-                      {typeof resultadoServidor.payout === 'number' &&
-                        resultadoServidor.payout > 0 &&
-                        ` · +${resultadoServidor.payout} 💎`}
-                    </p>
+                    <div className="game-card__elo-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                      <div
+                        className={`elo-result-badge ${
+                          delta >= 0
+                            ? 'elo-result-badge--win'
+                            : 'elo-result-badge--loss'
+                        }`}
+                      >
+                        <span>
+                          {delta >= 0
+                            ? `🏆 +${delta} COPAS`
+                            : `🏆 ${delta} COPAS`}
+                        </span>
+                        <span className="elo-result-badge__total">
+                          (Total: {total.toLocaleString('en-US')} 🏆)
+                        </span>
+                      </div>
+                    </div>
                   )
                 })()}
 
@@ -2002,7 +2103,9 @@ export default function Battlefield({
                   resultadoServidor?.status !== 'revision_servidor' &&
                   resultadoServidor?.error && (
                     <p className="resultado-servidor__disputa">
-                      {resultadoServidor.error}
+                      🛡️ {resultadoServidor.error.includes('inconsistencia') || resultadoServidor.error.includes('missing')
+                        ? 'El resultado tardó en sincronizarse con el rival. Tus copas han sido resguardadas de forma segura.'
+                        : resultadoServidor.error}
                     </p>
                   )}
               </div>

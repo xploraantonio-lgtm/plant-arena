@@ -313,12 +313,16 @@ export function createStrategicOpponentController(
   options: CreateStrategicOpponentOptions = {}
 ): AsyncOpponentController {
   const style = options.style ?? 'balanced'
+  const playerElo = options.playerElo
   const difficulty =
     options.difficulty ??
-    ((options.playerElo !== undefined && options.playerElo >= 3000) ? 'elite' : 'hard')
+    (playerElo !== undefined
+      ? (playerElo >= 3000 ? 'elite' : playerElo >= 1600 ? 'hard' : 'normal')
+      : 'hard')
   let profile = options.profile ?? obtenerPerfilEstrategico(style, difficulty)
-  if (options.playerElo !== undefined) {
-    profile = escalarPerfilPorElo(profile, options.playerElo)
+  profile.playerElo = playerElo
+  if (playerElo !== undefined) {
+    profile = escalarPerfilPorElo(profile, playerElo)
   }
   const seed = (options.roomSeed ?? 12345) + (options.botSeed ?? 777)
   const strategicState = crearEstadoMentalEstrategico(seed, profile)
@@ -362,6 +366,14 @@ export function resolverCartaRival(
     }
   } else {
     encontrada = mazo.find((c) => c.plantId === plantId)
+  }
+
+  // Fallback si por desfase de slots/índice de mano no coincide por slot
+  if (!encontrada || encontrada.plantId !== plantId) {
+    const porPlantId = mazo.find((c) => c.plantId === plantId)
+    if (porPlantId) {
+      encontrada = porPlantId
+    }
   }
 
   if (!encontrada) return null
@@ -1491,10 +1503,28 @@ export function resolverLiquidacionPartida(options: {
       ? serverVerification.winnerSide === 1
       : (serverVerification.winnerId === currentUserId || serverVerification.winnerSide === (soyP1 ? 1 : 2))
     const s = serverVerification.settlement ?? {}
-    const eloDelta = typeof s.eloDelta === 'number' ? s.eloDelta : undefined
-    const eloBefore = typeof s.eloBefore === 'number' ? s.eloBefore : undefined
-    const eloAfter = typeof s.eloAfter === 'number' ? s.eloAfter : undefined
-    const opponentElo = typeof s.opponentElo === 'number' ? s.opponentElo : undefined
+    const rawElo = (s as any).rawElo
+
+    const eloDelta = typeof s.eloDelta === 'number'
+      ? s.eloDelta
+      : rawElo
+        ? (soyP1 ? rawElo.p1Delta : rawElo.p2Delta)
+        : undefined
+    const eloBefore = typeof s.eloBefore === 'number'
+      ? s.eloBefore
+      : rawElo
+        ? (soyP1 ? rawElo.p1Before : rawElo.p2Before)
+        : undefined
+    const eloAfter = typeof s.eloAfter === 'number'
+      ? s.eloAfter
+      : rawElo
+        ? (soyP1 ? rawElo.p1After : rawElo.p2After)
+        : undefined
+    const opponentElo = typeof s.opponentElo === 'number'
+      ? s.opponentElo
+      : rawElo
+        ? (soyP1 ? rawElo.p2Before : rawElo.p1Before)
+        : undefined
     const eloGained = yoGaneServidor
       ? (typeof s.eloGained === 'number' && s.eloGained > 0 ? s.eloGained : (eloDelta !== undefined && eloDelta > 0 ? eloDelta : undefined))
       : undefined

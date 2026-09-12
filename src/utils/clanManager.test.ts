@@ -195,4 +195,31 @@ describe('ClanManager & Gem Valuations', () => {
     expect(reactivatedClan?.vaultUsd).toBe(50)
     expect(reactivatedClan?.status).toBe('active')
   })
+
+  it('manages direct clan invitations properly (send, list, accept, reject)', () => {
+    const clan = ClanManager.createClan('Dragones V', 'DV', '🐉', 'Clan cerrado', 'Líder Dragon', 1500)
+
+    // Send invitation to GuerreroAmigo
+    const sendRes = ClanManager.sendClanInvitation(clan.id, 'GuerreroAmigo', 'Líder Dragon')
+    expect(sendRes.success).toBe(true)
+    expect(sendRes.invitationId).toBeDefined()
+
+    // Query pending invitations for GuerreroAmigo
+    const myInvs = ClanManager.getMyClanInvitations('GuerreroAmigo')
+    expect(myInvs.length).toBe(1)
+    expect(myInvs[0].clanName).toBe('DRAGONES V')
+    expect(myInvs[0].status).toBe('pending')
+
+    // Accept invitation
+    const acceptRes = ClanManager.respondClanInvitation(sendRes.invitationId!, true, 1400)
+    expect(acceptRes.success).toBe(true)
+
+    // Clan now has 2 members
+    const updated = ClanManager.getClans().find((c) => c.id === clan.id)
+    expect(updated?.members.length).toBe(2)
+    expect(updated?.members.some((m) => m.name === 'GuerreroAmigo')).toBe(true)
+
+    // Invitations list is now empty for this player
+    expect(ClanManager.getMyClanInvitations('GuerreroAmigo').length).toBe(0)
+  })
 })
