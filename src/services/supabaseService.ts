@@ -55,28 +55,29 @@ export interface MisReferidos {
   }>
   total: number
   validos: number
+  validosTemporada?: number
   copasNecesarias: number
-  /** Oro que se puede cobrar ahora mismo. */
+  /** Oro que se puede cobrar ahora mismo (100 por cada amigo que llegó a 1100 copas). */
   oroPorCobrar: number
   amigosSinCobrar: number
   oroPorAmigo: number
+  /** Gemas acumuladas por el 5% de comisión en depósitos de referidos listas para retirar. */
+  gemasDepositoPorCobrar: number
   metaSobre: { objetivo: number; alcanzada: boolean; cobrada: boolean }
   metaGemas: {
     objetivo: number
     gemas: number
     alcanzada: boolean
     cobrada: boolean
-    /** Cuántos jugadores pueden cobrarla en total. */
-    cupo: number
-    quedan: number
+    cupo?: number
+    quedan?: number
   }
   temporada: { terminaEn: string; empezoEn: string; segundos: number }
   miPuesto: number | null
-  /** Referidos válidos de TODOS los jugadores: es lo que decide la meta. */
-  totalGlobal: number
-  metaActual: number | null
-  metaSiguiente: number | null
-  premios: Array<{ meta: number; puesto: number; gemas: number; sobres: number; p2pPct: number }>
+  totalGlobal?: number
+  metaActual?: number | null
+  metaSiguiente?: number | null
+  premios: Array<{ puesto: number; gemas: number; oro: number; sobres: number; packType?: string; p2pPct?: number }>
   ranking: Array<{ puesto: number; nombre: string | null; avatar: string | null; validos: number }>
 }
 
@@ -3372,26 +3373,46 @@ export const SupabaseService = {
     }
   },
 
-  /** Cobra una de las dos metas: el sobre de los 10 o las gemas de los 25. */
-  async claimReferralReward(kind: 'sobre_10' | 'gemas_25'): Promise<{
+  /** Retira las gemas acumuladas por el 5% de comisión en depósitos de referidos */
+  async claimReferralDepositGems(): Promise<{ ok: boolean; gemas?: number; depositos_reclamados?: number; motivo?: string }> {
+    if (!isSupabaseConfigured()) return { ok: false, motivo: 'sin_supabase' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('claim_referral_deposit_gems')
+      if (error) {
+        logError('claimReferralDepositGems', error)
+        return { ok: false, motivo: error.message }
+      }
+      return data ?? { ok: false }
+    } catch (e: any) {
+      logError('claimReferralDepositGems', e)
+      return { ok: false, motivo: e?.message }
+    }
+  },
+
+  /** Cobra una de las metas de la temporada activa (10 amigos: sobre_10, 35 amigos: gemas_35) */
+  async claimReferralReward(kind: 'sobre_10' | 'gemas_35' | 'gemas_25'): Promise<{
     ok: boolean
     gemas?: number
     sobres?: number
-    quedan?: number
+    pack_id?: string
     motivo?: string
     tienes?: number
     necesitas?: number
-    /** El cupo global, cuando el motivo es que se agotó. */
-    cupo?: number
   }> {
     if (!isSupabaseConfigured()) return { ok: false, motivo: 'sin_supabase' }
     try {
-      const { data, error } = await (supabase.rpc as any)('claim_referral_reward', {
-        p_kind: kind,
+      const dbKind = kind === 'gemas_25' ? 'gemas_35' : kind
+      const { data, error } = await (supabase.rpc as any)('claim_referral_season_milestone', {
+        p_kind: dbKind,
       })
       if (error) {
-        logError('claimReferralReward', error)
-        return { ok: false, motivo: error.message }
+        // Fallback por compatibilidad si la función vieja seguía llamándose claim_referral_reward
+        const fallback = await (supabase.rpc as any)('claim_referral_reward', { p_kind: dbKind })
+        if (fallback.error) {
+          logError('claimReferralReward', fallback.error)
+          return { ok: false, motivo: fallback.error.message }
+        }
+        return fallback.data ?? { ok: false }
       }
       return data ?? { ok: false }
     } catch (e: any) {

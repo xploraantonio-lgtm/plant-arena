@@ -115,4 +115,72 @@ describe('Marketplace Selling Safeties & Deck Auto-Heal', () => {
     expect(content).toMatch(/enter_matchmaking/i)
     expect(content).toMatch(/jsonb_array_length\(v_deck\)\s*<\s*3/i)
   })
+
+  it('4. Valida matemáticamente el split 100% cobrado al comprador, 90% acreditado al vendedor y 10% retenido por el juego', async () => {
+    const { calculateMarketplaceSplit } = await import('../../utils/marketplaceAccess')
+
+    const casosDePrueba = [
+      { precio: 50, comisionEsperada: 5, netoEsperado: 45 },
+      { precio: 55, comisionEsperada: 5.5, netoEsperado: 49.5 },
+      { precio: 100, comisionEsperada: 10, netoEsperado: 90 },
+      { precio: 500, comisionEsperada: 50, netoEsperado: 450 },
+      { precio: 800, comisionEsperada: 80, netoEsperado: 720 },
+      { precio: 1000, comisionEsperada: 100, netoEsperado: 900 },
+      { precio: 1500, comisionEsperada: 150, netoEsperado: 1350 },
+      { precio: 2000, comisionEsperada: 200, netoEsperado: 1800 },
+      { precio: 2550, comisionEsperada: 255, netoEsperado: 2295 },
+      { precio: 1, comisionEsperada: 0.1, netoEsperado: 0.9 },
+    ]
+
+    for (const { precio, comisionEsperada, netoEsperado } of casosDePrueba) {
+      const split = calculateMarketplaceSplit(precio, 10)
+
+      // 1. El comprador paga exactamente el 100%
+      expect(split.precio).toBe(precio)
+
+      // 2. El juego retiene el 10% de comisión (2 decimales)
+      expect(split.comision).toBe(comisionEsperada)
+      expect(split.comisionPct).toBe(10)
+
+      // 3. El vendedor recibe el 90% neto
+      expect(split.neto).toBe(netoEsperado)
+      expect(split.vendedorPct).toBe(90)
+
+      // 4. Invariante de conservación: comision + neto = precio total
+      expect(Math.round((split.comision + split.neto) * 100) / 100).toBe(precio)
+    }
+  })
+
+  it('5. Auditoría del Backend: valida que buy_marketplace_card en PostgreSQL gestione el 100% / 90% / 10% autoritativamente por seguridad', () => {
+    const migration94Path = join(process.cwd(), 'supabase', 'migrations', '94-fix-plant-instances-user-id-and-marketplace-buy.sql')
+    expect(existsSync(migration94Path)).toBe(true)
+
+    const content = readFileSync(migration94Path, 'utf8')
+
+    // 1. Debe ser SECURITY DEFINER
+    expect(content).toMatch(/FUNCTION public\.buy_marketplace_card/i)
+    expect(content).toMatch(/SECURITY DEFINER/i)
+
+    // 2. Comprador debe ser estrictamente auth.uid()
+    expect(content).toMatch(/v_buyer_id\s*UUID\s*:=\s*auth\.uid\(\)/i)
+
+    // 3. Verificación de no comprar oferta propia
+    expect(content).toMatch(/v_listing\.seller_id\s*=\s*v_buyer_id/i)
+
+    // 4. Cálculo autoritativo de comisión del 10% y neto del 90%
+    expect(content).toMatch(/v_commission\s*:=\s*ROUND\(v_listing\.price_gems\s*\*\s*0\.10,\s*2\)/i)
+    expect(content).toMatch(/v_net_seller\s*:=\s*v_listing\.price_gems\s*-\s*v_commission/i)
+
+    // 5. Descuento estricto del 100% de gemas al comprador
+    expect(content).toMatch(/SET\s+gems_balance\s*=\s*gems_balance\s*-\s*v_listing\.price_gems\s+WHERE\s+id\s*=\s*v_buyer_id/i)
+
+    // 6. Acreditación estricta del 90% neto al vendedor
+    expect(content).toMatch(/SET\s+gems_balance\s*=\s*gems_balance\s*\+\s*v_net_seller\s+WHERE\s+id\s*=\s*v_listing\.seller_id/i)
+
+    // 7. Registro de transacciones atómicas
+    expect(content).toMatch(/-v_listing\.price_gems/i)
+    expect(content).toMatch(/v_net_seller/i)
+    expect(content).toMatch(/'marketplace_buy'/i)
+    expect(content).toMatch(/'marketplace_sale'/i)
+  })
 })

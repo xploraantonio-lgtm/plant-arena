@@ -6,24 +6,25 @@ import { getPlayerAvatarUrl } from '../../utils/userManager'
 import './PanelDeReferidos.css'
 
 /**
- * EL PANEL DE REFERIDOS
+ * PANEL DE REFERIDOS ACTUALIZADO
  *
- * Lo que había antes en esta pestaña era un decorado: el enlace apuntaba a
- * «/?ref=<nombre>», nadie leía ese parámetro, y «Amigos Invitados» y «Bonos
- * Ganados» eran dos ceros guardados en el navegador. Un jugador podía repartir su
- * enlace a cien personas y no pasaba nada.
- *
- * Ahora todo lo que se ve aquí lo cuenta el servidor (my_referrals) y todo lo que
- * se pulsa lo cobra el servidor. El navegador no suma ni resta nada: si sumara,
- * bastaría con abrir las herramientas del navegador para regalarse premios.
- *
- * El orden de la pantalla es el orden de las preguntas del jugador: qué enlace
- * reparto, cuánto llevo, qué puedo cobrar YA, y qué se está repartiendo.
+ * 1. Recompensas Permanentes:
+ *    - 100 de oro por única vez por cada amigo que alcance 1,100 copas por primera vez.
+ *    - 5% en gemas de cada depósito que realicen tus amigos referidos (acumulable y retirable).
+ * 2. Metas de Temporada (se renuevan cada 15 días):
+ *    - 10 amigos válidos en la temporada: 1 Sobre Básico de cartas.
+ *    - 35 amigos válidos en la temporada: 500 Gemas.
+ * 3. Ranking de Temporada (Top 1 al 5 con liquidación automática por backend al vencer):
+ *    - 🥇 Top 1: 1,000 Gemas + 1 Sobre Legendario
+ *    - 🥈 Top 2: 500 Gemas + 1 Sobre Épico
+ *    - 🥉 Top 3: 200 Gemas + 2 Sobres Comunes
+ *    - 🎖️ Top 4: 2,500 Oro + 1 Sobre Común
+ *    - 🎖️ Top 5: 2,000 Oro
  */
 
-/** Los segundos que faltan, en palabras. */
+/** Formatea los segundos restantes de la temporada en formato legible */
 function cuentaAtras(segundos: number): string {
-  if (segundos <= 0) return 'terminada'
+  if (segundos <= 0) return 'Terminada'
   const d = Math.floor(segundos / 86400)
   const h = Math.floor((segundos % 86400) / 3600)
   const m = Math.floor((segundos % 3600) / 60)
@@ -33,28 +34,29 @@ function cuentaAtras(segundos: number): string {
   return `${m}m ${s}s`
 }
 
-/**
- * Por qué no se puede usar un código, dicho para una persona.
- *
- * Los motivos vienen del servidor en clave. Enseñarlos tal cual («
- * cuenta_demasiado_antigua») es peor que no decir nada; y esconder el cuadro sin
- * explicación parece un fallo del juego.
- */
 const POR_QUE_NO: Record<string, string> = {
   cuenta_demasiado_antigua:
-    'Tu cuenta tiene ya demasiados días. El código de un amigo sólo se puede usar al empezar.',
+    'Tu cuenta tiene más de 7 días. El código de un amigo solo se puede usar al empezar.',
   ya_pasaste_las_copas:
-    'Ya pasaste las copas a las que un invitado empieza a contar, así que este código ya no valdría.',
-  ya_tienes_referidor: 'Ya tienes a quien te invitó.',
+    'Ya pasaste las 1,100 copas a las que un invitado empieza a contar, por lo que este código ya no aplica.',
+  ya_tienes_referidor: 'Ya estás vinculado con quien te invitó.',
   sin_perfil: 'No se encontró tu perfil.',
 }
 
-/** Y lo mismo para lo que puede fallar al enviarlo. */
 const FALLO_AL_ENVIAR: Record<string, string> = {
   codigo_no_existe: 'Ese código no existe. Revisa que esté bien escrito.',
-  es_tu_propio_codigo: 'Ése es tu propio código.',
+  es_tu_propio_codigo: 'Ese es tu propio código.',
   sin_codigo: 'Escribe un código.',
 }
+
+// Premios oficiales del Ranking de Temporada (Top 1 al 5)
+export const PREMIOS_OFICIALES = [
+  { puesto: 1, titulo: '1.º Puesto', gemas: 1000, oro: 0, sobres: 1, tipoSobre: 'Legendario 🌟', icono: '🥇' },
+  { puesto: 2, titulo: '2.º Puesto', gemas: 500, oro: 0, sobres: 1, tipoSobre: 'Épico 🟣', icono: '🥈' },
+  { puesto: 3, titulo: '3.º Puesto', gemas: 200, oro: 0, sobres: 2, tipoSobre: 'Comunes 🟢', icono: '🥉' },
+  { puesto: 4, titulo: '4.º Puesto', gemas: 0, oro: 2500, sobres: 1, tipoSobre: 'Común 🟢', icono: '🎖️' },
+  { puesto: 5, titulo: '5.º Puesto', gemas: 0, oro: 2000, sobres: 0, tipoSobre: 'Ninguno', icono: '🎖️' },
+]
 
 export default function PanelDeReferidos() {
   const [datos, setDatos] = useState<MisReferidos | null>(null)
@@ -63,18 +65,17 @@ export default function PanelDeReferidos() {
   const [copiado, setCopiado] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [restante, setRestante] = useState(0)
-  /** Lo que se escribe en el cuadro del código, cuando se llegó sin enlace. */
   const [codigoEscrito, setCodigoEscrito] = useState('')
 
-  // Estados de paginación y búsqueda para "Tus invitados"
+  // Paginación y búsqueda de amigos invitados
   const [amigosBusqueda, setAmigosBusqueda] = useState('')
   const [amigosPagina, setAmigosPagina] = useState(1)
-  const [amigosTamanoPagina, setAmigosTamanoPagina] = useState<number | 'all'>(10)
+  const amigosTamanoPagina = 10
   const amigosListaRef = useRef<HTMLUListElement>(null)
 
-  // Estados de paginación para "Los que más invitan"
+  // Paginación del ranking
   const [rankingPagina, setRankingPagina] = useState(1)
-  const [rankingTamanoPagina, setRankingTamanoPagina] = useState<number | 'all'>(10)
+  const rankingTamanoPagina = 10
   const rankingListaRef = useRef<HTMLOListElement>(null)
 
   const cargar = useCallback(async () => {
@@ -88,11 +89,7 @@ export default function PanelDeReferidos() {
     void cargar()
   }, [cargar])
 
-  // El contador baja en el navegador, pero el número de partida y el cierre los
-  // pone el servidor: así nadie adelanta el reparto cambiando su reloj.
-  //
-  // La dependencia es el booleano y no el número: con `[restante]` se crearía y
-  // se destruiría un temporizador por segundo.
+  // Temporizador en vivo sincronizado con el backend
   const corriendo = restante > 0
   useEffect(() => {
     if (!corriendo) return
@@ -100,7 +97,7 @@ export default function PanelDeReferidos() {
     return () => clearInterval(id)
   }, [corriendo])
 
-  // Amigos filtrados y paginados (HOOKS LLAMADOS INCONDICIONALMENTE AL INICIO)
+  // Amigos filtrados y paginados
   const amigosFiltrados = useMemo(() => {
     const q = amigosBusqueda.trim().toLowerCase()
     if (!datos?.amigos) return []
@@ -128,7 +125,7 @@ export default function PanelDeReferidos() {
     amigosListaRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // Ranking de referidos paginado
+  // Ranking paginado
   const totalRanking = datos?.ranking?.length ?? 0
   const tamanoRealRanking = rankingTamanoPagina === 'all' ? (totalRanking || 1) : rankingTamanoPagina
   const totalPaginasRanking = Math.max(1, Math.ceil(totalRanking / tamanoRealRanking))
@@ -153,15 +150,18 @@ export default function PanelDeReferidos() {
   }
 
   if (cargando) {
-    return <div className="ref-panel"><p className="ref-cargando">Cargando tus referidos…</p></div>
+    return (
+      <div className="ref-panel">
+        <p className="ref-cargando">⏳ Cargando panel de referidos…</p>
+      </div>
+    )
   }
 
   if (!datos) {
     return (
       <div className="ref-panel">
         <p className="ref-cargando">
-          No se pudieron cargar los referidos. Si acabas de entrar, vuelve a abrir
-          esta pestaña.
+          No se pudieron cargar los datos de referidos. Por favor, vuelve a abrir esta pestaña.
         </p>
       </div>
     )
@@ -176,10 +176,7 @@ export default function PanelDeReferidos() {
       setCopiado(true)
       setTimeout(() => setCopiado(false), 2500)
     } catch {
-      // El portapapeles puede negarse (permisos, contexto no seguro). El enlace
-      // está a la vista justo encima para copiarlo a mano; decirlo es mejor que
-      // dejar un botón que parece no hacer nada.
-      decir('El navegador no dejó copiar. Selecciona el enlace de arriba a mano.', false)
+      decir('No se pudo copiar automáticamente. Selecciona el enlace de arriba para copiarlo a mano.', false)
     }
   }
 
@@ -193,59 +190,84 @@ export default function PanelDeReferidos() {
     if (r.ok) {
       soundManager.playSound('victory', 0.8)
       setCodigoEscrito('')
-      decir('¡Listo! Ya estás apuntado como invitado.')
+      decir('¡Excelente! Ya estás vinculado con tu amigo.')
       void cargar()
       return
     }
     decir(
       FALLO_AL_ENVIAR[r.motivo ?? ''] ??
         POR_QUE_NO[r.motivo ?? ''] ??
-        `No se pudo: ${r.motivo ?? 'error'}`,
+        `No se pudo vincular: ${r.motivo ?? 'error'}`,
       false
     )
   }
 
+  // COBRAR ORO POR AMIGOS VÁLIDOS (100 ORO C/U)
   const cobrarOro = async () => {
     setOcupado('oro')
     const r = await referralService.claimReferralGold()
     setOcupado(null)
     if (r.ok) {
-      soundManager.playSound('victory', 0.7)
-      decir(`+${r.oro} de oro por ${r.amigos} amigo(s).`)
+      soundManager.playSound('victory', 0.8)
+      decir(`¡Cobro exitoso! +${r.oro} 🪙 de oro acreditados por ${r.amigos} amigo(s).`)
+      window.dispatchEvent(new Event('refresh_user_balance'))
       void cargar()
     } else {
-      decir(r.motivo === 'nada_que_cobrar'
-        ? 'Todavía no hay amigos nuevos que hayan llegado a las copas.'
-        : `No se pudo cobrar: ${r.motivo ?? 'error'}`, false)
+      decir(
+        r.motivo === 'nada_que_cobrar'
+          ? 'No tienes amigos nuevos que hayan alcanzado las 1,100 copas.'
+          : `No se pudo cobrar el oro: ${r.motivo ?? 'error'}`,
+        false
+      )
     }
   }
 
-  const cobrarMeta = async (kind: 'sobre_10' | 'gemas_25') => {
+  // RETIRAR 5% DE DEPÓSITOS DE REFERIDOS EN GEMAS
+  const retirarGemasDeposito = async () => {
+    setOcupado('gemas_deposito')
+    const r = await referralService.claimReferralDepositGems()
+    setOcupado(null)
+    if (r.ok) {
+      soundManager.playSound('victory', 0.9)
+      decir(`¡Retiro completado! +${r.gemas} 💎 acreditadas directamente a tu balance de gemas.`)
+      window.dispatchEvent(new Event('refresh_user_balance'))
+      void cargar()
+    } else {
+      decir(
+        r.motivo === 'nada_que_cobrar'
+          ? 'Aún no tienes comisiones de depósitos acumuladas para retirar.'
+          : `No se pudo retirar: ${r.motivo ?? 'error'}`,
+        false
+      )
+    }
+  }
+
+  // COBRAR METAS DE TEMPORADA (10 AMIGOS -> SOBRE BÁSICO, 35 AMIGOS -> 500 GEMAS)
+  const cobrarMeta = async (kind: 'sobre_10' | 'gemas_35') => {
     setOcupado(kind)
     const r = await referralService.claimReferralReward(kind)
     setOcupado(null)
     if (r.ok) {
-      soundManager.playSound('victory', 0.8)
-      decir(kind === 'sobre_10'
-        ? '¡Sobre básico añadido a tu jardín!'
-        : `+${r.gemas} gemas. Quedan ${r.quedan} cupos.`)
+      soundManager.playSound('victory', 0.9)
+      decir(
+        kind === 'sobre_10'
+          ? '🎉 ¡Recompensa de temporada reclamada! 1 Sobre Básico añadido a tu inventario.'
+          : '🎉 ¡Recompensa de temporada reclamada! +500 💎 gemas añadidas a tu saldo.'
+      )
+      window.dispatchEvent(new Event('refresh_user_balance'))
+      window.dispatchEvent(new Event('refresh_user_inventory'))
       void cargar()
     } else if (r.motivo === 'faltan_amigos') {
-      decir(`Te faltan amigos: tienes ${r.tienes} de ${r.necesitas}.`, false)
-    } else if (r.motivo === 'cupo_agotado') {
-      decir(`El cupo de ${r.cupo ?? 5} jugadores ya se agotó.`, false)
+      decir(`Te faltan amigos en esta temporada: tienes ${r.tienes} de ${r.necesitas}.`, false)
     } else if (r.motivo === 'ya_cobrada') {
-      decir('Ya la habías cobrado.', false)
+      decir('Ya habías cobrado esta meta en la temporada actual.', false)
     } else {
-      decir(`No se pudo cobrar: ${r.motivo ?? 'error'}`, false)
+      decir(`No se pudo cobrar la meta: ${r.motivo ?? 'error'}`, false)
     }
   }
 
-  // La meta colectiva que se está persiguiendo, para la barra de progreso.
-  const meta = datos.metaSiguiente ?? datos.metaActual ?? 50
-  const premiosDeLaMeta = datos.premios.filter(
-    (p) => p.meta === (datos.metaActual ?? datos.metaSiguiente ?? 50)
-  )
+  const validosTemporada = datos.validosTemporada ?? datos.validos
+  const gemasDeposito = Number(datos.gemasDepositoPorCobrar ?? 0)
 
   return (
     <div className="ref-panel">
@@ -255,45 +277,39 @@ export default function PanelDeReferidos() {
         </div>
       )}
 
-      {/* ── EL ENLACE ────────────────────────────────────────────────────── */}
+      {/* ── SECCIÓN 1: ENLACE Y CÓDIGO DE INVITACIÓN ────────────────────── */}
       <div className="ref-bloque">
-        <h3 className="ref-titulo">🔗 Tu enlace de invitación</h3>
+        <h3 className="ref-titulo">🔗 Tu Enlace de Invitación</h3>
         <p className="ref-sub">
-          Quien lo abra y se registre queda apuntado como tu invitado. Cuenta
-          cuando llega a <strong>{datos.copasNecesarias} copas</strong>.
+          Comparte tu enlace con amigos. Quien se registre queda vinculado a tu cuenta y se considerará
+          un amigo válido cuando alcance <strong>1,100 copas</strong> en la Arena por primera vez.
         </p>
         <div className="ref-enlace">
           <code>{enlace}</code>
           <button type="button" className="ref-btn ref-btn--principal" onClick={() => void copiar()}>
-            {copiado ? '✓ Copiado' : 'Copiar'}
+            {copiado ? '✓ Copiado' : '📋 Copiar Enlace'}
           </button>
         </div>
         <p className="ref-codigo">
-          Tu código: <strong>{datos.codigo ?? '—'}</strong>
+          Tu código de referido: <strong>{datos.codigo ?? '—'}</strong>
         </p>
       </div>
 
-      {/* ── ¿TE INVITÓ ALGUIEN? ──────────────────────────────────────────
-          El cuadro sólo aparece si de verdad se puede usar. Antes esto no
-          existía y el enganche sólo ocurría al entrar con «?ref=» en la
-          dirección: si te mandaban el enlace y lo abrías sin el parámetro, o te
-          decían el código por voz, el amigo que te trajo no contaba y no había
-          forma de arreglarlo desde el juego. */}
+      {/* ── SECCIÓN 2: ¿TE INVITÓ ALGUIEN? (VINCULACIÓN MANUAL) ─────────── */}
       {datos.miReferidor ? (
         <div className="ref-bloque ref-bloque--invitado">
           <span className="ref-invitado">
-            🤝 Te invitó <strong>{datos.miReferidor}</strong>
+            🤝 Fuiste invitado por <strong>{datos.miReferidor}</strong>
           </span>
         </div>
       ) : datos.puedoUsarCodigo ? (
         <div className="ref-bloque">
           <h3 className="ref-titulo">🤝 ¿Te invitó alguien?</h3>
           <p className="ref-sub">
-            Si llegaste sin su enlace, escribe su código aquí y cuenta igual.{' '}
+            Si te registraste sin el enlace de tu amigo, escribe su código aquí para vincularte.{' '}
             {datos.diasParaUsarCodigo > 0 && (
               <strong>
-                Te quedan {datos.diasParaUsarCodigo}{' '}
-                {datos.diasParaUsarCodigo === 1 ? 'día' : 'días'} para usarlo.
+                Te quedan {datos.diasParaUsarCodigo} {datos.diasParaUsarCodigo === 1 ? 'día' : 'días'} para usarlo.
               </strong>
             )}
           </p>
@@ -308,11 +324,8 @@ export default function PanelDeReferidos() {
               className="ref-input"
               type="text"
               value={codigoEscrito}
-              // Se enseña en mayúsculas porque así se reparte, pero el servidor
-              // acepta cualquier caja y quita los espacios: nadie debería perder
-              // un referido por teclear en minúscula.
               onChange={(ev) => setCodigoEscrito(ev.target.value.toUpperCase())}
-              placeholder="CÓDIGO"
+              placeholder="CÓDIGO DE TU AMIGO"
               maxLength={16}
               autoComplete="off"
               spellCheck={false}
@@ -323,7 +336,7 @@ export default function PanelDeReferidos() {
               className="ref-btn ref-btn--principal"
               disabled={!codigoEscrito.trim() || ocupado === 'codigo'}
             >
-              {ocupado === 'codigo' ? '…' : 'Usar código'}
+              {ocupado === 'codigo' ? '⏳ Vinculando...' : '✓ Vincular Código'}
             </button>
           </form>
         </div>
@@ -332,41 +345,47 @@ export default function PanelDeReferidos() {
           <div className="ref-bloque">
             <h3 className="ref-titulo">🤝 ¿Te invitó alguien?</h3>
             <p className="ref-sub">
-              {POR_QUE_NO[datos.motivoNoPuedo] ?? 'Ya no se puede usar un código.'}
+              {POR_QUE_NO[datos.motivoNoPuedo] ?? 'Ya no es posible vincular un código de invitación.'}
             </p>
           </div>
         )
       )}
 
-      {/* ── MIS NÚMEROS ──────────────────────────────────────────────────── */}
+      {/* ── SECCIÓN 3: ESTADÍSTICAS DEL JUGADOR ─────────────────────────── */}
       <div className="ref-cifras">
         <div className="ref-cifra">
           <span className="ref-cifra__num">{datos.validos}</span>
-          <span className="ref-cifra__lbl">Amigos que cuentan</span>
+          <span className="ref-cifra__lbl">Amigos Válidos (1,100+ Copas)</span>
         </div>
         <div className="ref-cifra">
-          <span className="ref-cifra__num ref-cifra__num--gris">{datos.total - datos.validos}</span>
-          <span className="ref-cifra__lbl">Aún sin llegar a {datos.copasNecesarias}</span>
+          <span className="ref-cifra__num ref-cifra__num--gris">
+            {Math.max(0, datos.total - datos.validos)}
+          </span>
+          <span className="ref-cifra__lbl">En Progreso (&lt; 1,100 Copas)</span>
         </div>
         <div className="ref-cifra">
           <span className="ref-cifra__num ref-cifra__num--oro">
             {datos.miPuesto ? `#${datos.miPuesto}` : '—'}
           </span>
-          <span className="ref-cifra__lbl">Tu puesto</span>
+          <span className="ref-cifra__lbl">Tu Puesto en Temporada</span>
         </div>
       </div>
 
-      {/* ── LO QUE SE PUEDE COBRAR AHORA ─────────────────────────────────── */}
+      {/* ── SECCIÓN 4: RECOMPENSAS PERMANENTES (SIEMPRE ACTIVAS) ────────── */}
       <div className="ref-bloque">
-        <h3 className="ref-titulo">🎁 Para cobrar</h3>
+        <h3 className="ref-titulo">💰 Recompensas Permanentes</h3>
+        <p className="ref-sub">
+          Estas recompensas siempre están activas y no vencen. Retira tus ganancias en cualquier momento.
+        </p>
 
+        {/* 1. Oro por amigos válidos */}
         <div className="ref-premio">
           <div className="ref-premio__txt">
-            <strong>{datos.oroPorAmigo} de oro por cada amigo</strong>
+            <strong>🪙 100 de Oro por cada amigo válido</strong>
             <small>
               {datos.amigosSinCobrar > 0
-                ? `${datos.amigosSinCobrar} amigo(s) sin cobrar`
-                : 'Todo cobrado'}
+                ? `${datos.amigosSinCobrar} amigo(s) en 1,100+ copas listos para cobrar (+${datos.oroPorCobrar} 🪙)`
+                : 'Todo el oro acumulado ha sido cobrado.'}
             </small>
           </div>
           <button
@@ -375,14 +394,45 @@ export default function PanelDeReferidos() {
             disabled={datos.oroPorCobrar <= 0 || ocupado === 'oro'}
             onClick={() => void cobrarOro()}
           >
-            {ocupado === 'oro' ? '…' : `Cobrar ${datos.oroPorCobrar} 💰`}
+            {ocupado === 'oro' ? '⏳ Cobrando...' : `Cobrar ${datos.oroPorCobrar} 🪙 Oro`}
           </button>
         </div>
 
+        {/* 2. 5% en gemas por depósitos de referidos */}
         <div className="ref-premio">
           <div className="ref-premio__txt">
-            <strong>1 sobre básico al llegar a {datos.metaSobre.objetivo} amigos</strong>
-            <small>{datos.validos} de {datos.metaSobre.objetivo}</small>
+            <strong>💎 5% de Comisión por Depósitos de tus Referidos</strong>
+            <small>
+              Recibes el 5% en gemas de cada depósito que realicen tus amigos. Se acredita directamente a tu balance de gemas.
+              {gemasDeposito > 0 ? ` (Disponible: +${gemasDeposito.toFixed(2)} 💎)` : ' (Sin depósitos pendientes)'}
+            </small>
+          </div>
+          <button
+            type="button"
+            className="ref-btn ref-btn--principal"
+            style={{ background: gemasDeposito > 0 ? 'linear-gradient(180deg, #c084fc, #9333ea)' : undefined, borderColor: '#a855f7', color: '#fff' }}
+            disabled={gemasDeposito <= 0 || ocupado === 'gemas_deposito'}
+            onClick={() => void retirarGemasDeposito()}
+          >
+            {ocupado === 'gemas_deposito' ? '⏳ Retirando...' : `Retirar ${gemasDeposito.toFixed(2)} 💎`}
+          </button>
+        </div>
+      </div>
+
+      {/* ── SECCIÓN 5: METAS DE LA TEMPORADA ACTIVA ─────────────────────── */}
+      <div className="ref-bloque">
+        <h3 className="ref-titulo">🎯 Metas de la Temporada Activa</h3>
+        <p className="ref-sub">
+          Disponibles durante los 15 días de la temporada actual. Al finalizar la temporada estas metas se reinician.
+        </p>
+
+        {/* Meta 1: 10 amigos -> 1 Sobre Básico */}
+        <div className="ref-premio">
+          <div className="ref-premio__txt">
+            <strong>📦 1 Sobre Básico al alcanzar 10 amigos</strong>
+            <small>
+              Progreso en temporada: <strong>{validosTemporada}</strong> / 10 amigos válidos.
+            </small>
           </div>
           <button
             type="button"
@@ -390,306 +440,223 @@ export default function PanelDeReferidos() {
             disabled={!datos.metaSobre.alcanzada || datos.metaSobre.cobrada || ocupado === 'sobre_10'}
             onClick={() => void cobrarMeta('sobre_10')}
           >
-            {datos.metaSobre.cobrada ? '✓ Cobrado' : ocupado === 'sobre_10' ? '…' : 'Cobrar'}
+            {datos.metaSobre.cobrada
+              ? '✓ Cobrado'
+              : ocupado === 'sobre_10'
+              ? '⏳'
+              : datos.metaSobre.alcanzada
+              ? 'Cobrar 1 Sobre 📦'
+              : `${validosTemporada}/10 amigos`}
           </button>
         </div>
 
+        {/* Meta 2: 35 amigos -> 500 Gemas */}
         <div className="ref-premio">
           <div className="ref-premio__txt">
-            <strong>
-              {datos.metaGemas.gemas} gemas al llegar a {datos.metaGemas.objetivo} amigos
-            </strong>
-            {/* El cupo se enseña siempre, no sólo cuando se alcanza la meta: es
-                una carrera contra otros jugadores y hay que saberlo antes. */}
+            <strong>💎 500 Gemas al alcanzar 35 amigos</strong>
             <small>
-              {datos.validos} de {datos.metaGemas.objetivo} · sólo para los primeros{' '}
-              {datos.metaGemas.cupo} jugadores ({datos.metaGemas.quedan} libres)
+              Progreso en temporada: <strong>{validosTemporada}</strong> / 35 amigos válidos.
             </small>
           </div>
           <button
             type="button"
             className="ref-btn ref-btn--principal"
-            disabled={
-              !datos.metaGemas.alcanzada ||
-              datos.metaGemas.cobrada ||
-              datos.metaGemas.quedan <= 0 ||
-              ocupado === 'gemas_25'
-            }
-            onClick={() => void cobrarMeta('gemas_25')}
+            disabled={!datos.metaGemas.alcanzada || datos.metaGemas.cobrada || ocupado === 'gemas_35'}
+            onClick={() => void cobrarMeta('gemas_35')}
           >
             {datos.metaGemas.cobrada
               ? '✓ Cobrado'
-              : datos.metaGemas.quedan <= 0
-              ? 'Cupo agotado'
-              : ocupado === 'gemas_25'
-              ? '…'
-              : 'Cobrar'}
+              : ocupado === 'gemas_35'
+              ? '⏳'
+              : datos.metaGemas.alcanzada
+              ? 'Cobrar 500 💎'
+              : `${validosTemporada}/35 amigos`}
           </button>
         </div>
       </div>
 
-      {/* ── LA TEMPORADA ─────────────────────────────────────────────────── */}
+      {/* ── SECCIÓN 6: RANKING Y PREMIOS DE TEMPORADA ────────────────────── */}
       <div className="ref-bloque">
-        <h3 className="ref-titulo">🏆 Temporada de referidos</h3>
+        <h3 className="ref-titulo">🏆 Premios del Ranking de Temporada</h3>
         <p className="ref-sub">
-          Al terminar el contador se reparten los premios del ranking. Cuanto más
-          alto llegue el <strong>total de todos los jugadores</strong>, más grandes
-          son.
+          La temporada concluye en la fecha indicada. Al llegar al término, el backend liquida y entrega los premios automáticamente a los mejores 5 participantes.
         </p>
 
         <div className="ref-reloj">
           <span className="ref-reloj__num">{cuentaAtras(restante)}</span>
-          <span className="ref-reloj__lbl">para el reparto</span>
+          <span className="ref-reloj__lbl">para la liquidación automática</span>
         </div>
 
-        <div className="ref-meta">
-          <div className="ref-meta__barra">
-            <div style={{ width: `${Math.min(100, (datos.totalGlobal / meta) * 100)}%` }} />
-          </div>
-          <span className="ref-meta__txt">
-            {datos.totalGlobal} referidos entre todos
-            {datos.metaSiguiente
-              ? ` · siguiente meta: ${datos.metaSiguiente}`
-              : ' · meta máxima alcanzada'}
-          </span>
-        </div>
-
-        {premiosDeLaMeta.length > 0 ? (
-          <table className="ref-tabla">
-            <thead>
-              <tr>
-                <th>Puesto</th><th>Gemas</th><th>Sobres</th><th>% del mercado</th>
+        {/* Tabla de Premios Oficiales Top 1 al 5 */}
+        <table className="ref-tabla">
+          <thead>
+            <tr>
+              <th>Puesto</th>
+              <th>Gemas</th>
+              <th>Oro</th>
+              <th>Sobres</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PREMIOS_OFICIALES.map((p) => (
+              <tr key={p.puesto} style={datos.miPuesto === p.puesto ? { background: 'rgba(251, 191, 36, 0.15)', fontWeight: 'bold' } : undefined}>
+                <td>{p.icono} {p.titulo}</td>
+                <td style={{ color: p.gemas > 0 ? '#c084fc' : '#94a3b8' }}>
+                  {p.gemas > 0 ? `${p.gemas.toLocaleString()} 💎` : '—'}
+                </td>
+                <td style={{ color: p.oro > 0 ? '#facc15' : '#94a3b8' }}>
+                  {p.oro > 0 ? `${p.oro.toLocaleString()} 🪙` : '—'}
+                </td>
+                <td style={{ color: p.sobres > 0 ? '#4ade80' : '#94a3b8' }}>
+                  {p.sobres > 0 ? `${p.sobres}x ${p.tipoSobre}` : '—'}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {premiosDeLaMeta.map((p) => (
-                <tr key={p.puesto}>
-                  <td>{p.puesto}.º</td>
-                  <td>{p.gemas > 0 ? `${p.gemas} 💎` : '—'}</td>
-                  <td>{p.sobres > 0 ? `${p.sobres} 📦` : '—'}</td>
-                  <td>{p.p2pPct > 0 ? `${p.p2pPct} %` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="ref-sub">
-            Todavía no se ha alcanzado la primera meta ({datos.metaSiguiente ?? 50}{' '}
-            referidos entre todos). Al llegar se premia a los tres primeros.
-          </p>
-        )}
-      </div>
-
-      {/* ── EL RANKING ───────────────────────────────────────────────────── */}
-      {datos.ranking.length > 0 && (
-        <div className="ref-bloque">
-          <div className="ref-bloque-header">
-            <h3 className="ref-titulo">📋 Los que más invitan ({datos.ranking.length})</h3>
-            {datos.ranking.length > 5 && (
-              <div className="ref-tamano-selector">
-                <span className="ref-tamano-lbl">Ver:</span>
-                {[10, 20].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`ref-tamano-btn ${rankingTamanoPagina === s ? 'ref-tamano-btn--activo' : ''}`}
-                    onClick={() => {
-                      soundManager.playSound('click', 0.2)
-                      setRankingTamanoPagina(s)
-                      setRankingPagina(1)
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className={`ref-tamano-btn ${rankingTamanoPagina === 'all' ? 'ref-tamano-btn--activo' : ''}`}
-                  onClick={() => {
-                    soundManager.playSound('click', 0.2)
-                    setRankingTamanoPagina('all')
-                    setRankingPagina(1)
-                  }}
-                >
-                  Todos
-                </button>
-              </div>
-            )}
-          </div>
-
-          <ol className="ref-ranking" ref={rankingListaRef}>
-            {rankingPaginado.map((r) => (
-              <li key={r.puesto}>
-                <span className="ref-ranking__pos">{r.puesto}</span>
-                <img
-                  src={getPlayerAvatarUrl(r.avatar)}
-                  alt=""
-                  className="ref-ranking__avatar"
-                  onError={(e) => {
-                    e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
-                  }}
-                />
-                <span className="ref-ranking__nombre">{r.nombre ?? 'Jugador'}</span>
-                <span className="ref-ranking__num">{r.validos} amigos</span>
-              </li>
             ))}
-          </ol>
+          </tbody>
+        </table>
 
-          {totalPaginasRanking > 1 && (
-            <div className="ref-paginacion">
-              <span className="ref-paginacion-info">
-                Pág. {paginaRankingActual} de {totalPaginasRanking}
-              </span>
-              <div className="ref-paginacion-btns">
+        {/* Tabla de los que más invitan (Ranking en vivo) */}
+        <h4 style={{ margin: '1.2rem 0 0.5rem', fontSize: '0.88rem', color: '#fde047' }}>
+          👑 Los que más invitan en esta Temporada
+        </h4>
+
+        {totalRanking === 0 ? (
+          <p className="ref-sub">Aún no hay invitaciones válidas registradas en esta temporada. ¡Sé el primero en liderar!</p>
+        ) : (
+          <>
+            <ol className="ref-ranking" ref={rankingListaRef}>
+              {rankingPaginado.map((r) => (
+                <li
+                  key={r.puesto}
+                  className={`ref-ranking__item ${r.puesto === datos.miPuesto ? 'ref-ranking__item--yo' : ''}`}
+                >
+                  <span className="ref-ranking__puesto">#{r.puesto}</span>
+                  <img
+                    src={getPlayerAvatarUrl(r.avatar || 'peashooter')}
+                    alt={r.nombre || 'Jugador'}
+                    className="ref-ranking__avatar"
+                  />
+                  <span className="ref-ranking__nombre">
+                    {r.nombre || 'Jugador'}
+                    {r.puesto === datos.miPuesto && ' (Tú)'}
+                  </span>
+                  <span className="ref-ranking__validos">{r.validos} amigos</span>
+                </li>
+              ))}
+            </ol>
+
+            {totalPaginasRanking > 1 && (
+              <div className="ref-paginacion">
                 <button
                   type="button"
-                  className="ref-pag-btn"
+                  className="ref-btn"
                   disabled={paginaRankingActual <= 1}
                   onClick={() => handleRankingPagina(paginaRankingActual - 1)}
                 >
-                  ‹ Ant
+                  ◀ Anterior
                 </button>
+                <span className="ref-paginacion__info">
+                  Página {paginaRankingActual} de {totalPaginasRanking}
+                </span>
                 <button
                   type="button"
-                  className="ref-pag-btn"
+                  className="ref-btn"
                   disabled={paginaRankingActual >= totalPaginasRanking}
                   onClick={() => handleRankingPagina(paginaRankingActual + 1)}
                 >
-                  Sig ›
+                  Siguiente ▶
                 </button>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
 
-      {/* ── MIS AMIGOS ───────────────────────────────────────────────────── */}
+      {/* ── SECCIÓN 7: TUS INVITADOS (LISTA COMPLETA) ───────────────────── */}
       <div className="ref-bloque">
-        <div className="ref-bloque-header">
-          <h3 className="ref-titulo">👥 Tus invitados ({datos.total})</h3>
-          {datos.amigos.length > 5 && (
-            <div className="ref-tamano-selector">
-              <span className="ref-tamano-lbl">Ver:</span>
-              {[10, 25].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`ref-tamano-btn ${amigosTamanoPagina === s ? 'ref-tamano-btn--activo' : ''}`}
-                  onClick={() => {
-                    soundManager.playSound('click', 0.2)
-                    setAmigosTamanoPagina(s)
-                    setAmigosPagina(1)
-                  }}
-                >
-                  {s}
-                </button>
-              ))}
-              <button
-                type="button"
-                className={`ref-tamano-btn ${amigosTamanoPagina === 'all' ? 'ref-tamano-btn--activo' : ''}`}
-                onClick={() => {
-                  soundManager.playSound('click', 0.2)
-                  setAmigosTamanoPagina('all')
-                  setAmigosPagina(1)
-                }}
-              >
-                Todos
-              </button>
-            </div>
-          )}
-        </div>
+        <h3 className="ref-titulo">👥 Tus Amigos Invitados ({datos.total})</h3>
+        <p className="ref-sub">
+          Lista de jugadores que se registraron con tu código. Cada uno cuenta como válido al llegar a 1,100 copas.
+        </p>
 
-        {datos.amigos.length > 4 && (
-          <div className="ref-search-box">
-            <span className="ref-search-icon">🔍</span>
+        {datos.total > 0 && (
+          <div className="ref-busqueda-wrap" style={{ marginBottom: '0.6rem' }}>
             <input
               type="text"
-              className="ref-search-input"
-              placeholder="Buscar amigo por nombre..."
+              className="ref-input"
+              style={{ width: '100%' }}
+              placeholder="🔍 Buscar por nombre..."
               value={amigosBusqueda}
               onChange={(e) => {
                 setAmigosBusqueda(e.target.value)
                 setAmigosPagina(1)
               }}
             />
-            {amigosBusqueda && (
-              <button
-                type="button"
-                className="ref-search-clear"
-                onClick={() => {
-                  setAmigosBusqueda('')
-                  setAmigosPagina(1)
-                }}
-              >
-                ✕
-              </button>
-            )}
           </div>
         )}
 
-        {datos.amigos.length === 0 ? (
+        {totalAmigos === 0 ? (
           <p className="ref-sub">
-            Nadie todavía. Comparte tu enlace por WhatsApp, Discord o Telegram.
-          </p>
-        ) : amigosPaginados.length === 0 ? (
-          <p className="ref-sub">
-            No se encontró ningún invitado que coincida con "{amigosBusqueda}".
+            {datos.total === 0
+              ? 'Aún no has invitado a ningún amigo. ¡Comparte tu enlace para empezar a ganar recompensas!'
+              : 'No se encontraron amigos con ese nombre.'}
           </p>
         ) : (
           <>
             <ul className="ref-amigos" ref={amigosListaRef}>
-              {amigosPaginados.map((a, i) => (
-                <li key={`${a.nombre}-${i}`} className={a.valido ? 'ref-amigo--ok' : ''}>
-                  <img
-                    src={getPlayerAvatarUrl(a.avatar)}
-                    alt=""
-                    className="ref-amigo__avatar"
-                    onError={(e) => {
-                      e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.webp'
-                    }}
-                  />
-                  <span className="ref-amigo__nombre">{a.nombre ?? 'Jugador'}</span>
-                  <span className="ref-amigo__copas">{a.copas} copas</span>
-                  <span className="ref-amigo__estado">
-                    {a.valido
-                      ? a.oroCobrado ? '✓ cobrado' : '✓ cuenta'
-                      : `faltan ${Math.max(0, datos.copasNecesarias - a.copas)}`}
-                  </span>
-                </li>
-              ))}
+              {amigosPaginados.map((a, i) => {
+                const falta = Math.max(0, 1100 - (a.copas ?? 1000))
+                return (
+                  <li key={i} className="ref-amigo">
+                    <img
+                      src={getPlayerAvatarUrl(a.avatar || 'peashooter')}
+                      alt={a.nombre || 'Amigo'}
+                      className="ref-amigo__avatar"
+                    />
+                    <div className="ref-amigo__info">
+                      <strong className="ref-amigo__nombre">{a.nombre || 'Jugador'}</strong>
+                      <span className="ref-amigo__copas">
+                        🏆 {a.copas ?? 1000} Copas {a.valido ? '· ¡Meta de 1,100 superada!' : `· (faltan ${falta} copas)`}
+                      </span>
+                    </div>
+                    <div className="ref-amigo__badges" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+                      {a.valido ? (
+                        <span className="ref-tag ref-tag--valido">✓ Amigo Válido</span>
+                      ) : (
+                        <span className="ref-tag ref-tag--pendiente">⏳ En progreso</span>
+                      )}
+                      <span style={{ fontSize: '0.68rem', color: a.oroCobrado ? '#4ade80' : a.valido ? '#facc15' : '#94a3b8' }}>
+                        {a.oroCobrado ? '✓ 100 Oro cobrado' : a.valido ? '🪙 100 Oro listo' : '🪙 100 Oro a las 1,100'}
+                      </span>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
 
-            <div className="ref-paginacion">
-              <span className="ref-paginacion-info">
-                {totalAmigos === 0
-                  ? '0 invitados'
-                  : `Mostrando ${inicioAmigos} - ${finAmigos} de ${totalAmigos} invitados`}
-              </span>
-
-              {totalPaginasAmigos > 1 && (
-                <div className="ref-paginacion-btns">
-                  <button
-                    type="button"
-                    className="ref-pag-btn"
-                    disabled={paginaAmigosActual <= 1}
-                    onClick={() => handleAmigosPagina(paginaAmigosActual - 1)}
-                  >
-                    ‹ Ant
-                  </button>
-                  <span className="ref-pag-num">
-                    {paginaAmigosActual} / {totalPaginasAmigos}
-                  </span>
-                  <button
-                    type="button"
-                    className="ref-pag-btn"
-                    disabled={paginaAmigosActual >= totalPaginasAmigos}
-                    onClick={() => handleAmigosPagina(paginaAmigosActual + 1)}
-                  >
-                    Sig ›
-                  </button>
-                </div>
-              )}
-            </div>
+            {totalPaginasAmigos > 1 && (
+              <div className="ref-paginacion">
+                <button
+                  type="button"
+                  className="ref-btn"
+                  disabled={paginaAmigosActual <= 1}
+                  onClick={() => handleAmigosPagina(paginaAmigosActual - 1)}
+                >
+                  ◀ Anterior
+                </button>
+                <span className="ref-paginacion__info">
+                  {inicioAmigos}-{finAmigos} de {totalAmigos}
+                </span>
+                <button
+                  type="button"
+                  className="ref-btn"
+                  disabled={paginaAmigosActual >= totalPaginasAmigos}
+                  onClick={() => handleAmigosPagina(paginaAmigosActual + 1)}
+                >
+                  Siguiente ▶
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

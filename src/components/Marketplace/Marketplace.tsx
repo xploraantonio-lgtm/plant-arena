@@ -14,7 +14,7 @@ import { marketplaceService, type GlobalTransactionItem } from '../../services/m
 import { isSupabaseConfigured } from '../../lib/supabaseClient'
 import type { PlantId, PlantCardInstance } from '../../types/game'
 import { PLANT_CONFIGS, STAT_LABELS, VIP_PASS_PRECIO_GEMAS, type PlantStatKey } from '../../utils/gameConstants'
-import { evaluateMarketplaceAccess } from '../../utils/marketplaceAccess'
+import { evaluateMarketplaceAccess, calculateMarketplaceSplit } from '../../utils/marketplaceAccess'
 import './Marketplace.css'
 
 function formatTxTime(dateStr?: string): string {
@@ -432,9 +432,13 @@ export default function Marketplace({
       ? `1x "${nombre}"`
       : `"${nombre}" (Nivel ${item.nivel})`
 
+    const split = calculateMarketplaceSplit(item.precio, comisionPct)
+
     showModalConfirm(
       'CONFIRMAR COMPRA',
-      `¿Deseas comprar ${detalle} por ${item.precio} 💎 gemas?`,
+      `¿Deseas comprar ${detalle} por ${item.precio} 💎?\n\n` +
+        `• Se descontará el 100% (${item.precio} 💎) de tu saldo de gemas.\n` +
+        `• El vendedor recibirá el 90% neto (${split.neto} 💎) y el juego retiene el ${split.comisionPct}% (${split.comision} 💎) de comisión.`,
       '🛒',
       async () => {
         const r = await marketplaceService.buyMarketplaceCard(item.id)
@@ -460,7 +464,7 @@ export default function Marketplace({
 
         showModalAlert(
           '¡COMPRA EXITOSA!',
-          `Has adquirido ${detalle} por ${item.precio} 💎.\nYa está en tu ${isFarming ? 'inventario de cultivo' : 'Jardín'}.`,
+          `Has adquirido ${detalle} por ${item.precio} 💎.\nSe descontaron ${item.precio} 💎 de tu saldo y ya está en tu ${isFarming ? 'inventario de cultivo' : 'Jardín'}.`,
           '🎉',
           'success'
         )
@@ -501,14 +505,15 @@ export default function Marketplace({
       return
     }
 
-    const comision = Math.round(sellPriceGems * comisionPct) / 100
-    const neto = sellPriceGems - comision
+    const split = calculateMarketplaceSplit(sellPriceGems, comisionPct)
 
     if (selectedItem.kind === 'farming') {
       showModalConfirm(
         'PUBLICAR ÍTEM EN EL MERCADO',
         `¿Confirmas poner en venta 1x "${selectedItem.name}" por ${sellPriceGems} 💎?\n\n` +
-          `El comprador paga ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct} % (${comision} 💎) y tú recibes ${neto} 💎.\n\n` +
+          `• Al comprador se le descuenta el 100% (${sellPriceGems} 💎).\n` +
+          `• La comisión retenida por el juego es del ${split.comisionPct}% (${split.comision} 💎).\n` +
+          `• Recibirás el 90% neto (${split.neto} 💎) cuando se concrete la venta.\n\n` +
           '⚠️ El recurso se descontará de tu inventario mientras esté publicado en el mercado.',
         '🏷️',
         async () => {
@@ -521,7 +526,7 @@ export default function Marketplace({
           soundManager.playSound('plantation', 0.9)
           showModalAlert(
             '¡OFERTA PUBLICADA EN EL MERCADO!',
-            `1x "${selectedItem.name}" está en venta por ${sellPriceGems} 💎.\nRecibirás ${neto} 💎 cuando se venda.`,
+            `1x "${selectedItem.name}" está en venta por ${sellPriceGems} 💎.\nRecibirás el 90% neto (${split.neto} 💎) cuando se venda.`,
             '🏷️',
             'success'
           )
@@ -562,7 +567,9 @@ export default function Marketplace({
       `Vas a poner en venta tu carta jugable "${selectedItem.name}" (Nivel ${selectedItem.level}) por ${sellPriceGems} 💎.\n\n` +
         `❌ ¡ATENCIÓN! NO estás vendiendo copias. Las copias NO se venden en el mercado (las copias solo sirven para FUSIÓN y mejoras de nivel +15% stats).\n\n` +
         `⚠️ Venderás tu PLANTA ÚNICA: se retirará de tu Jardín y de tu Mazo de Batalla. Si otro jugador la compra, dejará de pertenecerte (solo podrás tener otra si la compras a otro jugador).\n\n` +
-        `El comprador pagará ${sellPriceGems} 💎, la comisión del mercado es del ${comisionPct}% (${comision} 💎) y recibirás ${neto} 💎 al concretarse la venta.\n\n` +
+        `• Al comprador se le descuenta el 100% (${sellPriceGems} 💎).\n` +
+        `• La comisión retenida por el juego es del ${split.comisionPct}% (${split.comision} 💎).\n` +
+        `• Recibirás el 90% neto (${split.neto} 💎) al concretarse la venta.\n\n` +
         `¿Estás seguro de que deseas ponerla en venta?`,
       '🏷️',
       async () => {
@@ -575,7 +582,7 @@ export default function Marketplace({
         soundManager.playSound('plantation', 0.9)
         showModalAlert(
           '¡OFERTA PUBLICADA EN EL MERCADO!',
-          `"${selectedItem.name}" (Nivel ${selectedItem.level}) está en venta por ${sellPriceGems} 💎.\nRecibirás ${neto} 💎 cuando se venda.`,
+          `"${selectedItem.name}" (Nivel ${selectedItem.level}) está en venta por ${sellPriceGems} 💎.\nRecibirás el 90% neto (${split.neto} 💎) cuando se venda.`,
           '🏷️',
           'success'
         )
@@ -651,7 +658,7 @@ export default function Marketplace({
           ) : (
             <span className="market-vip-badge">🏆 MAESTRÍA COMPETITIVA ({copasActuales} COPAS) — COMPRA Y VENTA HABILITADAS</span>
           )}
-          <span>Compra y vende cartas con gemas. El mercado retiene un {comisionPct} % de comisión por venta.</span>
+          <span>Compra y vende cartas con gemas. Al comprar se descuenta el 100%. Al vender recibes el 90% neto y el juego retiene el {comisionPct}% de comisión.</span>
         </div>
       ) : (
         <div className="market-vip-active-banner" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)', borderColor: '#10b981' }}>
@@ -1164,7 +1171,7 @@ export default function Marketplace({
                       ? '🔒 REQUIERE PASE PVP O 1,350 COPAS'
                       : selectedItem.kind === 'plant' && availablePlantsCount <= 3
                       ? '🛑 MÍNIMO 3 PLANTAS REQUERIDAS PARA JUGAR'
-                      : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes ${sellPriceGems - Math.round((sellPriceGems * comisionPct) / 100)} 💎`}
+                      : `🏷️ PUBLICAR POR ${sellPriceGems} 💎 · recibes el 90% (${calculateMarketplaceSplit(sellPriceGems, comisionPct).neto} 💎)`}
                   </button>
 
                   {!canSell && (

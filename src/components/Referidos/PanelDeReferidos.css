@@ -559,3 +559,96 @@
 }
 
 .ref-invitado strong { color: #4ade80; }
+
+/* ── Tags y Badges de Estado ─────────────────────────────────────────────── */
+
+.ref-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 0.35rem;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ref-tag--valido {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+}
+
+.ref-tag--pendiente {
+  color: #fed7aa;
+  background: rgba(249, 115, 22, 0.18);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+/* ── Items de Ranking y Amigos ───────────────────────────────────────────── */
+
+.ref-ranking__item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.08);
+  border-radius: 0.35rem;
+  transition: background 0.15s ease;
+}
+
+.ref-ranking__item--yo {
+  background: rgba(251, 191, 36, 0.12);
+  border-left: 3px solid #fbbf24;
+}
+
+.ref-ranking__puesto {
+  width: 1.6rem;
+  font-weight: 800;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-ranking__validos {
+  font-weight: 800;
+  color: #4ade80;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ref-amigo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.08);
+  border-radius: 0.35rem;
+}
+
+.ref-amigo__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ref-amigo__info .ref-amigo__nombre {
+  font-weight: 700;
+  color: #f1f5f9;
+  font-size: 0.82rem;
+}
+
+.ref-amigo__info .ref-amigo__copas {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.ref-paginacion__info {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+

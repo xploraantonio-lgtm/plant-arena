@@ -63,3 +63,26 @@ export function evaluateMarketplaceAccess(
     copasFaltantes,
   }
 }
+
+/**
+ * Cálculo matemático autoritativo y unificado del reparto en ventas del Mercado:
+ * - 100% cobrado al comprador.
+ * - 90% neto acreditado al vendedor.
+ * - 10% retenido como comisión del juego.
+ * Equivalente exacto a ROUND(price_gems * 0.10, 2) en PostgreSQL.
+ */
+export function calculateMarketplaceSplit(priceGems: number, comisionPct: number = 10) {
+  const safePrice = Math.max(0, Number(priceGems) || 0)
+  const safeComisionPct = Number(comisionPct) || 10
+  const comision = Math.round(safePrice * (safeComisionPct / 100) * 100) / 100
+  const neto = Math.round((safePrice - comision) * 100) / 100
+  const vendedorPct = 100 - safeComisionPct
+
+  return {
+    precio: safePrice,
+    comision,
+    neto,
+    comisionPct: safeComisionPct,
+    vendedorPct,
+  }
+}

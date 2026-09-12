@@ -401,7 +401,8 @@ function App() {
     const codigo = new URLSearchParams(window.location.search).get('ref')
     if (codigo) {
       try {
-        sessionStorage.setItem('pa_ref', codigo)
+        sessionStorage.setItem('pa_ref', codigo.trim())
+        localStorage.setItem('pa_ref', codigo.trim())
       } catch {}
     }
   }, [])
@@ -410,16 +411,19 @@ function App() {
     if (!profile) return
     let codigo: string | null = null
     try {
-      codigo = sessionStorage.getItem('pa_ref')
+      codigo = sessionStorage.getItem('pa_ref') || localStorage.getItem('pa_ref')
     } catch {}
     if (!codigo) return
 
-    // Se quita antes de llamar: si la llamada falla no se reintenta en bucle, y
-    // si el código no valía tampoco tiene sentido guardarlo.
-    try {
-      sessionStorage.removeItem('pa_ref')
-    } catch {}
-    void referralService.referralBind(codigo)
+    void referralService.referralBind(codigo).then((res) => {
+      // Si tuvo éxito o el motivo es terminal (ej. ya vinculado o código inválido), limpiar el almacenamiento
+      if (res.ok || (res.motivo && res.motivo !== 'sin_supabase')) {
+        try {
+          sessionStorage.removeItem('pa_ref')
+          localStorage.removeItem('pa_ref')
+        } catch {}
+      }
+    })
   }, [profile])
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false)
