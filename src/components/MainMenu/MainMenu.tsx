@@ -27,10 +27,7 @@ import ProfileModal from '../ProfileModal/ProfileModal'
 import ModeSelectorModal from '../ModeSelector/ModeSelectorModal'
 import ColosseumModal from '../Colosseum/ColosseumModal'
 import TournamentModal from '../Tournament/TournamentModal'
-import FlashOfferModal from '../FlashOffer/FlashOfferModal'
 import { tournamentService } from '../../services/tournamentService'
-import { inventoryService } from '../../services/inventoryService'
-import { FLASH_OFFER_PRICE_GEMS } from '../../utils/gameConstants'
 import type { ColosseumBetAmount, PlantId, TournamentModel } from '../../types/game'
 import './MainMenu.css'
 
@@ -137,40 +134,6 @@ export default function MainMenu({
   const [slotToAccelerate, setSlotToAccelerate] = useState<FreePackSlot | null>(null)
 
   const [isAccelerating, setIsAccelerating] = useState<boolean>(false)
-  const [isFlashOfferOpen, setIsFlashOfferOpen] = useState<boolean>(false)
-  const [flashOfferStatus, setFlashOfferStatus] = useState<{
-    userBought: number
-    remainingPurchases: number
-    isSoldOut: boolean
-    priceGems?: number
-  } | null>(null)
-
-  const loadFlashOfferStatus = useCallback(async () => {
-    try {
-      const res = await inventoryService.getFlashOfferStatus('flash_jalapeno_30')
-      if (res && res.success) {
-        setFlashOfferStatus({
-          userBought: res.userBought,
-          remainingPurchases: res.remainingPurchases,
-          isSoldOut: res.isSoldOut,
-          priceGems: res.priceGems,
-        })
-      }
-    } catch {
-      // Manejo silencioso de fallo no crítico
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadFlashOfferStatus()
-    const handleSync = () => void loadFlashOfferStatus()
-    window.addEventListener('refresh_user_balance', handleSync)
-    window.addEventListener('refresh_user_inventory', handleSync)
-    return () => {
-      window.removeEventListener('refresh_user_balance', handleSync)
-      window.removeEventListener('refresh_user_inventory', handleSync)
-    }
-  }, [loadFlashOfferStatus])
 
   const handleConfirmAccelerate = async () => {
     if (!slotToAccelerate || !onFastUnlockSlot || isAccelerating) return
@@ -717,39 +680,6 @@ export default function MainMenu({
       <div className="panel panel--left">
         <div id="farming-preview-launcher-slot" className="farming-preview-launcher-host" />
 
-        {/* HEADER DE OFERTA FLASH (ARRIBA DEL BOTÓN DE JARDÍN) */}
-        <div
-          className={`flash-offer-banner-header ${flashOfferStatus?.isSoldOut ? 'flash-offer-banner-header--soldout' : ''}`}
-          onClick={() => {
-            soundManager.playSound('click', 0.5)
-            setIsFlashOfferOpen(true)
-          }}
-          title={`🔥 Oferta Flash: 3 Jalapeños a ${(flashOfferStatus?.priceGems ?? FLASH_OFFER_PRICE_GEMS).toLocaleString()} 💎 c/u (Máx 3 ventas) - Clic para abrir`}
-          role="button"
-          tabIndex={0}
-        >
-          <div className="flash-offer-banner-header__flame-glow" />
-          <div className="flash-offer-banner-header__top-row">
-            <span className="flash-offer-header-tag">⚡ OFERTA FLASH</span>
-            <span className={`flash-offer-stock-pill ${flashOfferStatus?.isSoldOut ? 'flash-offer-stock-pill--soldout' : ''}`}>
-              {flashOfferStatus?.isSoldOut ? 'AGOTADO' : `${flashOfferStatus?.remainingPurchases ?? 3}/3`}
-            </span>
-          </div>
-          <div className="flash-offer-banner-header__body">
-            <img
-              src="/game-assets/greenfoot/jalapenopacket1.webp"
-              alt="Jalapeño"
-              className="flash-offer-banner-header__art"
-            />
-            <div className="flash-offer-banner-header__details">
-              <span className="flash-offer-banner-header__plant-name">JALAPEÑO</span>
-              <span className="flash-offer-banner-header__price-tag">
-                {(flashOfferStatus?.priceGems ?? FLASH_OFFER_PRICE_GEMS).toLocaleString()} 💎 c/u
-              </span>
-            </div>
-          </div>
-        </div>
-
         <button className="banner-button" type="button" onClick={onOpenJardin}>
           <img src={jardin} alt="" />
           <span>JARDÍN</span>
@@ -982,23 +912,6 @@ export default function MainMenu({
           if (onStartTournamentMatch) {
             onStartTournamentMatch(oppName, tourneyId, tourneyDeck)
           }
-        }}
-      />
-
-      {/* MODAL DE OFERTA FLASH */}
-      <FlashOfferModal
-        isOpen={isFlashOfferOpen}
-        onClose={() => {
-          setIsFlashOfferOpen(false)
-          void loadFlashOfferStatus()
-        }}
-        userTokens={userTokens}
-        onPurchaseSuccess={() => {
-          void loadFlashOfferStatus()
-        }}
-        onRechargeGems={() => {
-          setIsFlashOfferOpen(false)
-          setIsProfileModalOpen(true)
         }}
       />
     </div>

@@ -197,6 +197,60 @@ export function getRankReward(rank: number): RankRewardInfo | null {
   return null
 }
 
+export function getReferralRankReward(rank: number): RankRewardInfo | null {
+  if (rank === 1) {
+    return {
+      gems: 1000,
+      pack: '1x Sobre Legendario 🌟',
+      gold: 0,
+      badgeText: '1k 💎 + 🌟 Sobre',
+      fullText: '1,000 Gemas 💎 + 1x Sobre Legendario 🌟',
+      tierClass: 'lb-reward-badge--top1',
+    }
+  }
+  if (rank === 2) {
+    return {
+      gems: 500,
+      pack: '1x Sobre Épico 🟣',
+      gold: 0,
+      badgeText: '500 💎 + 🟣 Sobre',
+      fullText: '500 Gemas 💎 + 1x Sobre Épico 🟣',
+      tierClass: 'lb-reward-badge--top2',
+    }
+  }
+  if (rank === 3) {
+    return {
+      gems: 200,
+      pack: '2x Sobres Comunes 🟢',
+      gold: 0,
+      badgeText: '200 💎 + 2x 🟢 Sobre',
+      fullText: '200 Gemas 💎 + 2x Sobres Comunes 🟢',
+      tierClass: 'lb-reward-badge--top3',
+    }
+  }
+  if (rank === 4) {
+    return {
+      gems: 0,
+      pack: '1x Sobre Común 🟢',
+      gold: 2500,
+      badgeText: '2.5k 🪙 + 🟢 Sobre',
+      fullText: '2,500 Oro 🪙 + 1x Sobre Común 🟢',
+      tierClass: 'lb-reward-badge--top4',
+    }
+  }
+  if (rank === 5) {
+    return {
+      gems: 0,
+      pack: null,
+      gold: 2000,
+      badgeText: '2k 🪙 Oro',
+      fullText: '2,000 Oro 🪙',
+      tierClass: 'lb-reward-badge--top5',
+    }
+  }
+  return null
+}
+
 export default function Ranking({ userElo, userProfile, hasVipPass = false, onBack }: RankingProps) {
   const [activeTab, setActiveTab] = useState<'arenas' | 'leaderboard' | 'referrals'>('arenas')
   const [isMuted, setIsMuted] = useState<boolean>(soundManager.isMuted())
@@ -1182,6 +1236,11 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           {referralLeaderboard[0].tierBadge}
                         </div>
 
+                        <div className="podium-v2-prize-box podium-v2-prize-box--gold" title="Premio de Fin de Temporada Top 1">
+                          <div className="podium-v2-gems-val">💎 1,000 GEMAS</div>
+                          <div className="podium-v2-pack-val">🌟 1x Sobre Legendario</div>
+                        </div>
+
                         <div className="podium-v2-stats-row" style={{ justifyContent: 'center' }}>
                           <div className="podium-v2-cups" style={{ color: '#38bdf8', fontSize: '11px', fontWeight: 900 }}>
                             👥 {referralLeaderboard[0].referredCount} Amigos Invitados
@@ -1221,6 +1280,12 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           <div className="referral-tier-pill" style={{ fontSize: '8.5px', padding: '1px 6px', marginBottom: '2px' }}>
                             {referralLeaderboard[1].tierBadge}
                           </div>
+
+                          <div className="podium-v2-prize-box podium-v2-prize-box--silver" title="Premio de Fin de Temporada Top 2">
+                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 500 GEMAS</div>
+                            <div className="podium-v2-pack-val podium-v2-pack-val--sub">🟣 1x Sobre Épico</div>
+                          </div>
+
                           <div className="podium-v2-sub-stats">
                             <span style={{ color: '#38bdf8', fontSize: '9.5px', fontWeight: 800 }}>
                               👥 {referralLeaderboard[1].referredCount} Amigos
@@ -1258,6 +1323,12 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                           <div className="referral-tier-pill" style={{ fontSize: '8.5px', padding: '1px 6px', marginBottom: '2px' }}>
                             {referralLeaderboard[2].tierBadge}
                           </div>
+
+                          <div className="podium-v2-prize-box podium-v2-prize-box--bronze" title="Premio de Fin de Temporada Top 3">
+                            <div className="podium-v2-gems-val podium-v2-gems-val--sub">💎 200 GEMAS</div>
+                            <div className="podium-v2-pack-val podium-v2-pack-val--sub">🟢 2x Sobres Comunes</div>
+                          </div>
+
                           <div className="podium-v2-sub-stats">
                             <span style={{ color: '#38bdf8', fontSize: '9.5px', fontWeight: 800 }}>
                               👥 {referralLeaderboard[2].referredCount} Amigos
@@ -1309,41 +1380,54 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                             <tr>
                               <th style={{ width: '45px', textAlign: 'center' }}>#</th>
                               <th>EMBAJADOR</th>
-                              <th style={{ width: '150px', textAlign: 'center' }}>AMIGOS ACTIVOS</th>
-                              <th style={{ width: '160px', textAlign: 'right' }}>RANGO</th>
+                              <th style={{ width: '160px', textAlign: 'center' }}>RECOMPENSA</th>
+                              <th style={{ width: '140px', textAlign: 'center' }}>AMIGOS ACTIVOS</th>
+                              <th style={{ width: '150px', textAlign: 'right' }}>RANGO</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {paginatedReferralUsers.map((usr) => (
-                              <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'lb-row--user' : ''}>
-                                <td className="lb-col-rank">
-                                  {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
-                                </td>
-                                <td className="lb-col-player">
-                                  <div className="lb-player-cell">
-                                    <img
-                                      src={getPlayerAvatarUrl(usr.avatar)}
-                                      alt={usr.username}
-                                      className="lb-avatar-circle"
-                                      onError={(e) => {
-                                        e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
-                                      }}
-                                    />
-                                    <span className={`lb-player-name ${usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
-                                      {usr.isCurrentUser && hasVipPass && '👑 '}
-                                      {usr.username}
-                                      {usr.isCurrentUser && <span className="user-self-badge" style={{ marginLeft: '6px' }}>TÚ</span>}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8', fontSize: '12px' }}>
-                                  👥 {usr.referredCount} {usr.referredCount === 1 ? 'Amigo' : 'Amigos'}
-                                </td>
-                                <td style={{ textAlign: 'right' }}>
-                                  <span className="referral-tier-pill">{usr.tierBadge}</span>
-                                </td>
-                              </tr>
-                            ))}
+                            {paginatedReferralUsers.map((usr) => {
+                              const refRew = getReferralRankReward(usr.rank)
+                              return (
+                                <tr key={`${usr.rank}-${usr.username}`} className={usr.isCurrentUser ? 'lb-row--user' : ''}>
+                                  <td className="lb-col-rank">
+                                    {usr.rank === 1 ? '🥇 #1' : usr.rank === 2 ? '🥈 #2' : usr.rank === 3 ? '🥉 #3' : `#${usr.rank}`}
+                                  </td>
+                                  <td className="lb-col-player">
+                                    <div className="lb-player-cell">
+                                      <img
+                                        src={getPlayerAvatarUrl(usr.avatar)}
+                                        alt={usr.username}
+                                        className="lb-avatar-circle"
+                                        onError={(e) => {
+                                          e.currentTarget.src = '/game-assets/greenfoot/peashooterpacket1.png'
+                                        }}
+                                      />
+                                      <span className={`lb-player-name ${usr.isCurrentUser && hasVipPass ? 'vip-gold-text' : ''}`}>
+                                        {usr.isCurrentUser && hasVipPass && '👑 '}
+                                        {usr.username}
+                                        {usr.isCurrentUser && <span className="user-self-badge" style={{ marginLeft: '6px' }}>TÚ</span>}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="lb-col-rewards" style={{ textAlign: 'center' }}>
+                                    {refRew ? (
+                                      <span className={`lb-reward-badge ${refRew.tierClass}`} title={refRew.fullText}>
+                                        {refRew.badgeText}
+                                      </span>
+                                    ) : (
+                                      <span className="lb-reward-badge--none">-</span>
+                                    )}
+                                  </td>
+                                  <td style={{ textAlign: 'center', fontWeight: 900, color: '#38bdf8', fontSize: '12px' }}>
+                                    👥 {usr.referredCount} {usr.referredCount === 1 ? 'Amigo' : 'Amigos'}
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <span className="referral-tier-pill">{usr.tierBadge}</span>
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       ) : (
