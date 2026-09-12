@@ -2068,6 +2068,19 @@ export const SupabaseService = {
         logError('secretCodeState', error)
         return null
       }
+      if (data?.round) {
+        let raw = data.round.prizesConfig || (data.round as any).prizes_config
+        if (typeof raw === 'string') {
+          try { raw = JSON.parse(raw) } catch (_) {}
+        }
+        if (Array.isArray(raw)) {
+          data.round.prizesConfig = raw.map((t: any, i: number) => ({
+            place: Number(t.place) || (i + 1),
+            amount: Number(t.amount) || 0,
+            currency: t.currency === 'gold' ? 'gold' : 'gems',
+          }))
+        }
+      }
       return data
     } catch (e) {
       logError('secretCodeState', e)
@@ -2158,11 +2171,31 @@ export const SupabaseService = {
   /** Obtiene las rondas de código secreto de forma autoritativa para el panel de administración */
   async adminGetSecretCodeRounds(): Promise<any[]> {
     if (!isSupabaseConfigured()) return []
+    const normalizeRounds = (list: any[]) =>
+      list.map((r) => {
+        let cfg = r.prizes_config || r.prizesConfig
+        if (typeof cfg === 'string') {
+          try {
+            cfg = JSON.parse(cfg)
+          } catch (_) {}
+        }
+        return {
+          ...r,
+          prizes_config: Array.isArray(cfg)
+            ? cfg.map((t: any, i: number) => ({
+                place: Number(t.place) || i + 1,
+                amount: Number(t.amount) || 0,
+                currency: t.currency === 'gold' ? 'gold' : 'gems',
+              }))
+            : undefined,
+        }
+      })
+
     try {
       // 1. Intentar RPC SECURITY DEFINER
       const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('admin_get_secret_code_rounds', { p_limit: 15 })
       if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
-        return rpcData
+        return normalizeRounds(rpcData)
       }
     } catch (_) {}
 
@@ -2174,7 +2207,7 @@ export const SupabaseService = {
         .limit(15)
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data
+        return normalizeRounds(data)
       }
     } catch (_) {}
 
@@ -2226,13 +2259,21 @@ export const SupabaseService = {
       }
     } catch (_) {}
 
+    const cleanPrizes = (opts?.prizesConfig ?? []).map((t, i) => ({
+      place: Number(t.place) || i + 1,
+      amount: Number(t.amount) || 0,
+      currency: t.currency === 'gold' ? 'gold' : 'gems',
+    }))
+    const top1 = cleanPrizes.find((t) => t.place === 1)
+    const top2 = cleanPrizes.find((t) => t.place === 2)
+    const top3 = cleanPrizes.find((t) => t.place === 3)
     const payload = {
-      prizePool: opts?.prizePool ?? 50,
-      prize1st: opts?.prize1st ?? (opts?.prizesConfig?.[0]?.amount ?? 50),
-      prize2nd: opts?.prize2nd ?? (opts?.prizesConfig?.[1]?.amount ?? 0),
-      prize3rd: opts?.prize3rd ?? (opts?.prizesConfig?.[2]?.amount ?? 0),
+      prizePool: opts?.prizePool ?? (top1?.amount ?? 50),
+      prize1st: opts?.prize1st ?? (top1?.amount ?? 50),
+      prize2nd: opts?.prize2nd ?? (top2?.amount ?? 0),
+      prize3rd: opts?.prize3rd ?? (top3?.amount ?? 0),
       freeAttempts: opts?.freeAttempts ?? 3,
-      prizesConfig: opts?.prizesConfig ?? [],
+      prizesConfig: cleanPrizes,
     }
 
     let lastError: any = null
@@ -2249,9 +2290,15 @@ export const SupabaseService = {
         }
         if (data.success || (typeof data === 'object' && 'roundId' in data)) {
           const targetId = (data as any)?.roundId
-          if (targetId && opts?.prizesConfig && opts.prizesConfig.length > 0) {
+          if (targetId && cleanPrizes.length > 0) {
             await (supabase.from('secret_code_rounds') as any)
-              .update({ prizes_config: opts.prizesConfig, prize_pool_gems: payload.prizePool })
+              .update({
+                prizes_config: cleanPrizes,
+                prize_pool_gems: payload.prizePool,
+                prize_1st: payload.prize1st,
+                prize_2nd: payload.prize2nd,
+                prize_3rd: payload.prize3rd,
+              })
               .eq('id', targetId)
               .catch(() => null)
           }
@@ -2414,14 +2461,22 @@ export const SupabaseService = {
       }
     } catch (_) {}
 
+    const cleanPrizes = (opts?.prizesConfig ?? []).map((t, i) => ({
+      place: Number(t.place) || i + 1,
+      amount: Number(t.amount) || 0,
+      currency: t.currency === 'gold' ? 'gold' : 'gems',
+    }))
+    const top1 = cleanPrizes.find((t) => t.place === 1)
+    const top2 = cleanPrizes.find((t) => t.place === 2)
+    const top3 = cleanPrizes.find((t) => t.place === 3)
     const payload = {
-      prizePool: opts?.prizePool ?? 50,
-      prize1st: opts?.prize1st ?? (opts?.prizesConfig?.[0]?.amount ?? 50),
-      prize2nd: opts?.prize2nd ?? (opts?.prizesConfig?.[1]?.amount ?? 0),
-      prize3rd: opts?.prize3rd ?? (opts?.prizesConfig?.[2]?.amount ?? 0),
+      prizePool: opts?.prizePool ?? (top1?.amount ?? 50),
+      prize1st: opts?.prize1st ?? (top1?.amount ?? 50),
+      prize2nd: opts?.prize2nd ?? (top2?.amount ?? 0),
+      prize3rd: opts?.prize3rd ?? (top3?.amount ?? 0),
       freeAttempts: opts?.freeAttempts ?? 3,
       attemptCost: opts?.attemptCost ?? 5,
-      prizesConfig: opts?.prizesConfig ?? [],
+      prizesConfig: cleanPrizes,
       settlePrevious: opts?.settlePrevious ?? true,
     }
 
@@ -2439,9 +2494,15 @@ export const SupabaseService = {
         }
         if (data.success || (typeof data === 'object' && 'roundId' in data)) {
           const targetId = (data as any)?.roundId
-          if (targetId && opts?.prizesConfig && opts.prizesConfig.length > 0) {
+          if (targetId && cleanPrizes.length > 0) {
             await (supabase.from('secret_code_rounds') as any)
-              .update({ prizes_config: opts.prizesConfig, prize_pool_gems: payload.prizePool })
+              .update({
+                prizes_config: cleanPrizes,
+                prize_pool_gems: payload.prizePool,
+                prize_1st: payload.prize1st,
+                prize_2nd: payload.prize2nd,
+                prize_3rd: payload.prize3rd,
+              })
               .eq('id', targetId)
               .catch(() => null)
           }
@@ -2524,9 +2585,14 @@ export const SupabaseService = {
   }): Promise<{ success: boolean; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' }
 
-    const top1 = opts.prizesConfig.find((t) => t.place === 1)
-    const top2 = opts.prizesConfig.find((t) => t.place === 2)
-    const top3 = opts.prizesConfig.find((t) => t.place === 3)
+    const cleanPrizes = (opts.prizesConfig ?? []).map((t, i) => ({
+      place: Number(t.place) || i + 1,
+      amount: Number(t.amount) || 0,
+      currency: t.currency === 'gold' ? 'gold' : 'gems',
+    }))
+    const top1 = cleanPrizes.find((t) => t.place === 1)
+    const top2 = cleanPrizes.find((t) => t.place === 2)
+    const top3 = cleanPrizes.find((t) => t.place === 3)
     const prize1st = top1?.currency === 'gems' ? top1.amount : (opts.prizePool ?? 50)
     const prizePool = opts.prizePool ?? (top1?.currency === 'gems' ? top1.amount : 50)
 
@@ -2535,7 +2601,7 @@ export const SupabaseService = {
       prize1st,
       prize2nd: top2?.amount ?? 0,
       prize3rd: top3?.amount ?? 0,
-      prizesConfig: opts.prizesConfig,
+      prizesConfig: cleanPrizes,
     }
 
     // 1. Intentar RPC oficial
@@ -2561,7 +2627,7 @@ export const SupabaseService = {
         const roundId = openRounds[0].id
         const { error: updErr } = await (supabase.from('secret_code_rounds') as any)
           .update({
-            prizes_config: opts.prizesConfig,
+            prizes_config: cleanPrizes,
             prize_pool_gems: prizePool,
             prize_1st: prize1st,
             prize_2nd: top2?.amount ?? 0,

@@ -311,8 +311,18 @@ export default function LotteryModal({
 
   // Recompensas dinámicas calculadas según la configuración del creador/admin en Supabase
   const configuredTiers: CodeRoundPrizeTier[] = useMemo(() => {
-    if (codeRound?.prizesConfig && Array.isArray(codeRound.prizesConfig) && codeRound.prizesConfig.length > 0) {
-      return codeRound.prizesConfig
+    let raw = codeRound?.prizesConfig || (codeRound as any)?.prizes_config
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw)
+      } catch (_) {}
+    }
+    if (raw && Array.isArray(raw) && raw.length > 0) {
+      return raw.map((t: any, i: number) => ({
+        place: Number(t.place) || (i + 1),
+        amount: Number(t.amount) || 0,
+        currency: t.currency === 'gold' ? 'gold' : 'gems',
+      }))
     }
     // Si la ronda no tiene prizesConfig guardado, usamos ÚNICAMENTE los premios reales configurados
     const pool = codeRound?.prizes?.[0] ?? codeRound?.prizePool ?? 50

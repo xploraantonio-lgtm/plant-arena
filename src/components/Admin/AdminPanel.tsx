@@ -171,9 +171,17 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
       const rows = await adminService.adminGetSecretCodeRounds()
       setCodeRounds(rows as CodeRoundRow[])
       const openRound = (rows as CodeRoundRow[]).find((r) => r.status === 'open')
-      if (openRound?.prizes_config && Array.isArray(openRound.prizes_config) && openRound.prizes_config.length > 0) {
-        setCodePrizeTiers(openRound.prizes_config)
-        const p1 = openRound.prizes_config.find((t) => t.place === 1)
+      let cfg = openRound?.prizes_config || (openRound as any)?.prizesConfig
+      if (typeof cfg === 'string') {
+        try { cfg = JSON.parse(cfg) } catch (_) {}
+      }
+      if (cfg && Array.isArray(cfg) && cfg.length > 0) {
+        setCodePrizeTiers(cfg.map((t: any, i: number) => ({
+          place: Number(t.place) || (i + 1),
+          amount: Number(t.amount) || 0,
+          currency: t.currency === 'gold' ? 'gold' : 'gems',
+        })))
+        const p1 = cfg.find((t: any) => t.place === 1)
         if (p1) {
           setCodePrizePool(p1.amount)
         }
@@ -1031,9 +1039,17 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                       <div className="admin-form-group">
                         <label>Bote Top 1:</label>
                         <strong>
-                          {activa.prizes_config?.[0]
-                            ? `${activa.prizes_config[0].amount} ${activa.prizes_config[0].currency === 'gold' ? '💰 Oro' : '💎 Gemas'}`
-                            : `${activa.prize_pool_gems} 💎`}
+                          {(() => {
+                            let cfg = activa.prizes_config || (activa as any)?.prizesConfig
+                            if (typeof cfg === 'string') {
+                              try { cfg = JSON.parse(cfg) } catch (_) {}
+                            }
+                            const t1 = Array.isArray(cfg) ? cfg.find((t: any) => t.place === 1) : null
+                            if (t1) {
+                              return `${t1.amount} ${t1.currency === 'gold' ? '💰 Oro' : '💎 Gemas'}`
+                            }
+                            return `${activa.prize_pool_gems} 💎`
+                          })()}
                         </strong>
                       </div>
                       <div className="admin-form-group">
@@ -1569,7 +1585,9 @@ export default function AdminPanel({ isOpen, onClose }: AdminPanelProps) {
                       </thead>
                       <tbody>
                         {codeBoard.map((e) => {
-                          const configuredPrize = (activa?.prizes_config ?? codePrizeTiers)?.find((p) => p.place === e.place)
+                          const rawCfg = activa?.prizes_config ?? (activa as any)?.prizesConfig ?? codePrizeTiers
+                          const parsedCfg = typeof rawCfg === 'string' ? (() => { try { return JSON.parse(rawCfg) } catch (_) { return [] } })() : rawCfg
+                          const configuredPrize = Array.isArray(parsedCfg) ? parsedCfg.find((p: any) => p.place === e.place) : undefined
                           return (
                             <tr key={e.userId}>
                               <td>{e.place === 1 ? '🥇 1' : e.place === 2 ? '🥈 2' : e.place === 3 ? '🥉 3' : e.place}</td>
