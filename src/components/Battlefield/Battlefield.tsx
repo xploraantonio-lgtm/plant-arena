@@ -37,6 +37,7 @@ import { leerMazo } from '../../engine/mazoDeLaSala'
 import { StrategicPlaytestPostMatch } from '../StrategicPlaytest/StrategicPlaytestPostMatch'
 import type { StrategicPlaytestConfig } from '../../engine/strategicPlaytest'
 import { recordPlantPlacement } from '../../utils/plantUsageTracker'
+import { trackGameOver, trackGameStart } from '../../utils/analytics'
 import './Battlefield.css'
 
 /** Un segundo antes de que el sol se recoja solo: momento de avisar. */
@@ -972,6 +973,13 @@ export default function Battlefield({
       // Detener la música de batalla inmediatamente.
       soundManager.stopBgm()
 
+      // Disparar Pageview Virtual en GA4 y actualizar URL a /play/game-over para redes de anuncios (Ads)
+      trackGameOver({
+        outcome: gameStatus === 'victory' ? 'victory' : 'defeat',
+        matchMode,
+        roomId,
+      })
+
       // ── PARTIDA REAL: LO LIQUIDA EL SERVIDOR ───────────────────────────────
       //
       // Con sala, quien reparte ELO, cofres y gemas es report_match_result, y
@@ -1313,6 +1321,7 @@ export default function Battlefield({
     }
 
     // Sólo entrenamiento/local puede reiniciar en el sitio.
+    trackGameStart({ matchMode })
     startGame()
   }
 

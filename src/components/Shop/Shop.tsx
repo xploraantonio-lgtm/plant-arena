@@ -12,6 +12,7 @@ import { shopService } from '../../services/shopService'
 import Marketplace from '../Marketplace/Marketplace'
 import { VIP_PASS_PRECIO_GEMAS, ENERGY_PACKAGES, type EnergyPackage, type PlantStatKey } from '../../utils/gameConstants'
 import type { FarmingInventory } from '../../utils/pvpRewardManager'
+import { navigateAndTrack, trackEvent } from '../../utils/analytics'
 import './Shop.css'
 
 const commonSeedImg = '/game-assets/greenfoot/seed_pack_common_whitebg.webp'
@@ -270,6 +271,21 @@ export default function Shop({
     }
   }, [initialTab])
 
+  useEffect(() => {
+    if (!activeTab) return
+    const tabTitles: Record<'packs' | 'pass' | 'gold' | 'energy' | 'market', string> = {
+      packs: 'Plant Arena - Tienda: Sobres de Semillas',
+      pass: 'Plant Arena - Tienda: Pase VIP',
+      gold: 'Plant Arena - Tienda: Oro y Emotes',
+      energy: 'Plant Arena - Tienda: Recarga de Energía',
+      market: 'Plant Arena - Tienda: Mercado',
+    }
+    const path = `/play/shop/${activeTab}`
+    const title = tabTitles[activeTab] || 'Plant Arena - Tienda'
+
+    navigateAndTrack(path, title)
+  }, [activeTab])
+
   const [purchasedPacksList, setPurchasedPacksList] = useState<InventoryPack[]>([])
   const [themedAlert, setThemedAlert] = useState<{ title: string; message: string; icon: string } | null>(null)
   const [selectedPackDetails, setSelectedPackDetails] = useState<PackId | null>(null)
@@ -353,6 +369,12 @@ export default function Shop({
       if (bought.length > 0) {
         soundManager.playSound('plantation', 0.8)
         setPurchasedPacksList(bought)
+        trackEvent('purchase_pack', {
+          pack_id: packId,
+          quantity: qty,
+          total_cost: totalCost,
+          currency: 'GEMS',
+        })
       }
     } finally {
       setIsPurchasingPack(false)
@@ -375,6 +397,11 @@ export default function Shop({
       const res = await onBuyGold(pkg.id)
       if (res.success) {
         soundManager.playSound('plantation', 0.8)
+        trackEvent('purchase_gold', {
+          package_id: pkg.id,
+          gold_amount: pkg.goldAmount,
+          price_usd: pkg.priceUsd,
+        })
         setThemedAlert({
           title: '¡COMPRA EXITOSA!',
           message: `💰 ¡Has adquirido con éxito +${(res.goldAdded ?? pkg.goldAmount).toLocaleString()} Monedas de Oro por ${pkg.priceUsd} Gemas 💎!`,
@@ -403,6 +430,9 @@ export default function Shop({
     if (onBuyVipPass) {
       const { success: ok, error } = await onBuyVipPass()
       if (ok) {
+        trackEvent('purchase_vip_pass', {
+          price_gems: VIP_PASS_PRECIO_GEMAS,
+        })
         setThemedAlert({
           title: '¡PASE VIP ACTIVADO!',
           message: '👑 ¡Pase VIP de Temporada activado con éxito!\nAhora puedes reclamar todas las recompensas doradas desde el Menú Principal.',
@@ -435,6 +465,11 @@ export default function Shop({
       const res = await onBuyEnergyPack(pkg.id)
       if (res.success) {
         soundManager.playSound('plantation', 0.8)
+        trackEvent('purchase_energy', {
+          package_id: pkg.id,
+          energy_added: res.energyAdded ?? pkg.energyAmount,
+          price_gems: pkg.priceGems,
+        })
         setThemedAlert({
           title: '¡ENERGÍA RECARGADA!',
           message: `⚡ ¡Has adquirido con éxito +${res.energyAdded ?? pkg.energyAmount} Energías ⚡ por ${pkg.priceGems} Gemas 💎!\nAhora puedes seguir compitiendo en Ranked.`,

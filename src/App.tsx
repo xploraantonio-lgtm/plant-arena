@@ -45,23 +45,27 @@ import BetaPhaseModal from './components/BetaPhaseModal/BetaPhaseModal'
 import { isStrategicPlaytestAuthorized } from './utils/strategicPlaytestAuth'
 import { useOnlineUsers } from './hooks/useOnlineUsers'
 import { VIP_PASS_PRECIO_GEMAS } from './utils/gameConstants'
+import {
+  trackPageView,
+  type GameScreen,
+  SCREEN_ROUTES,
+  getScreenFromPath,
+  getShopTabFromPath,
+} from './utils/analytics'
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'menu' | 'searching' | 'battle' | 'partidas' | 'repeticion' | 'collection' | 'jardin' | 'shop' | 'ranking' | 'pass' | 'clan' | 'market'>(() => {
+  const [screen, setScreen] = useState<GameScreen>(() => {
     if (typeof window !== 'undefined') {
-      const path = window.location.pathname.toLowerCase()
-      const hash = window.location.hash.toLowerCase()
-      // Un enlace de repetición compartida, /r/<código>. Va primero porque quien
-      // lo abre puede no tener cuenta y no debe acabar en la pantalla de entrada:
-      // el sentido de compartir es que se pueda ver sin registrarse.
-      if (path.startsWith('/r/')) return 'repeticion'
-      if (path.startsWith('/play') || hash.includes('play')) {
-        return 'menu'
-      }
+      return getScreenFromPath(window.location.pathname, window.location.hash)
     }
     return 'landing'
   })
-  const [shopInitialTab, setShopInitialTab] = useState<'packs' | 'pass' | 'gold' | 'energy' | 'market'>('packs')
+  const [shopInitialTab, setShopInitialTab] = useState<'packs' | 'pass' | 'gold' | 'energy' | 'market'>(() => {
+    if (typeof window !== 'undefined') {
+      return getShopTabFromPath(window.location.pathname)
+    }
+    return 'packs'
+  })
 
 
   /**
@@ -144,17 +148,43 @@ function App() {
 
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname.toLowerCase()
-      const hash = window.location.hash.toLowerCase()
-      if (path.startsWith('/play') || hash.includes('play')) {
-        setScreen((prev) => (prev === 'landing' ? 'menu' : prev))
-      } else {
-        setScreen('landing')
+      const nextScreen = getScreenFromPath(window.location.pathname, window.location.hash)
+      if (nextScreen === 'shop') {
+        setShopInitialTab(getShopTabFromPath(window.location.pathname))
       }
+      setScreen(nextScreen)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
+
+  // Sincronización con HTML5 History API (pushState) y Pageviews Virtuales (GA4)
+  useEffect(() => {
+    const route = SCREEN_ROUTES[screen]
+    if (!route) return
+
+    try {
+      if (typeof window !== 'undefined' && window.location.protocol !== 'file:') {
+        const currentPath = window.location.pathname.toLowerCase()
+        const isGameOverPath = currentPath.includes('/game-over') && screen === 'battle'
+        const isShopSubpath = currentPath.startsWith('/play/shop') && screen === 'shop'
+        if (currentPath !== route.path.toLowerCase() && !isGameOverPath && !isShopSubpath) {
+          window.history.pushState({ screen }, route.title, route.path)
+        }
+      }
+    } catch (e) {
+      console.warn('[History API] Error al actualizar pushState:', e)
+    }
+
+    // Si la tienda ya gestiona sus propias subrutas (/play/shop/packs, etc.), no duplicar el pageview general
+    const isShopSpecific = window.location.pathname.toLowerCase().startsWith('/play/shop/') && screen === 'shop'
+    if (!isShopSpecific) {
+      trackPageView({
+        page_title: route.title,
+        page_path: route.path,
+      })
+    }
+  }, [screen])
 
   const {
     syncProfileData,

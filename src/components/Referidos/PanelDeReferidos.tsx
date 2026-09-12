@@ -106,18 +106,16 @@ export default function PanelDeReferidos() {
   }, [datos?.amigos, amigosBusqueda])
 
   const totalAmigos = amigosFiltrados.length
-  const tamanoRealAmigos = amigosTamanoPagina === 'all' ? (totalAmigos || 1) : amigosTamanoPagina
-  const totalPaginasAmigos = Math.max(1, Math.ceil(totalAmigos / tamanoRealAmigos))
+  const totalPaginasAmigos = Math.max(1, Math.ceil(totalAmigos / amigosTamanoPagina))
   const paginaAmigosActual = Math.min(amigosPagina, totalPaginasAmigos)
 
   const amigosPaginados = useMemo(() => {
-    if (amigosTamanoPagina === 'all') return amigosFiltrados
-    const start = (paginaAmigosActual - 1) * tamanoRealAmigos
-    return amigosFiltrados.slice(start, start + tamanoRealAmigos)
-  }, [amigosFiltrados, paginaAmigosActual, tamanoRealAmigos, amigosTamanoPagina])
+    const start = (paginaAmigosActual - 1) * amigosTamanoPagina
+    return amigosFiltrados.slice(start, start + amigosTamanoPagina)
+  }, [amigosFiltrados, paginaAmigosActual, amigosTamanoPagina])
 
-  const inicioAmigos = totalAmigos === 0 ? 0 : (paginaAmigosActual - 1) * tamanoRealAmigos + 1
-  const finAmigos = amigosTamanoPagina === 'all' ? totalAmigos : Math.min(paginaAmigosActual * tamanoRealAmigos, totalAmigos)
+  const inicioAmigos = totalAmigos === 0 ? 0 : (paginaAmigosActual - 1) * amigosTamanoPagina + 1
+  const finAmigos = Math.min(paginaAmigosActual * amigosTamanoPagina, totalAmigos)
 
   const handleAmigosPagina = (nueva: number) => {
     soundManager.playSound('click', 0.2)
@@ -127,16 +125,14 @@ export default function PanelDeReferidos() {
 
   // Ranking paginado
   const totalRanking = datos?.ranking?.length ?? 0
-  const tamanoRealRanking = rankingTamanoPagina === 'all' ? (totalRanking || 1) : rankingTamanoPagina
-  const totalPaginasRanking = Math.max(1, Math.ceil(totalRanking / tamanoRealRanking))
+  const totalPaginasRanking = Math.max(1, Math.ceil(totalRanking / rankingTamanoPagina))
   const paginaRankingActual = Math.min(rankingPagina, totalPaginasRanking)
 
   const rankingPaginado = useMemo(() => {
     if (!datos?.ranking) return []
-    if (rankingTamanoPagina === 'all') return datos.ranking
-    const start = (paginaRankingActual - 1) * tamanoRealRanking
-    return datos.ranking.slice(start, start + tamanoRealRanking)
-  }, [datos?.ranking, paginaRankingActual, tamanoRealRanking, rankingTamanoPagina])
+    const start = (paginaRankingActual - 1) * rankingTamanoPagina
+    return datos.ranking.slice(start, start + rankingTamanoPagina)
+  }, [datos?.ranking, paginaRankingActual, rankingTamanoPagina])
 
   const handleRankingPagina = (nueva: number) => {
     soundManager.playSound('click', 0.2)

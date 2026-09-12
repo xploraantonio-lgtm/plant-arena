@@ -18,6 +18,20 @@
       href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap"
       rel="stylesheet"
     />
+    <!-- Google Analytics 4 (GA4) -->
+    <!-- Reemplaza G-XXXXXXXXXX con tu ID de Medición de Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      // send_page_view: false evita pageviews automáticos duplicados,
+      // permitiendo disparar pageviews virtuales precisos en cada cambio de vista y partida
+      gtag('config', 'G-XXXXXXXXXX', {
+        send_page_view: false
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
