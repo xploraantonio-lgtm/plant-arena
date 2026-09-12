@@ -410,11 +410,21 @@ export default function ProfileModal({
 
   const handleOpenWithdrawConfirm = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!withdrawGems || withdrawGems <= 0) {
+      soundManager.playSound('error', 0.5)
+      showFeedback('Por favor ingresa la cantidad de gemas a retirar.', 'error')
+      return
+    }
     if (withdrawGems < 1000.0) {
-      showFeedback('El retiro mínimo es de 1,000.00 Gemas (10.00 USDT).', 'error')
+      soundManager.playSound('error', 0.5)
+      showFeedback(
+        `⚠️ El retiro mínimo permitido es de 1,000 Gemas (10.00 USDT). Ingresaste ${withdrawGems.toLocaleString()} 💎.`,
+        'error'
+      )
       return
     }
     if (withdrawGems > currentWithdrawableGems) {
+      soundManager.playSound('error', 0.5)
       if (currentLockedGems > 0 && withdrawGems <= currentTotalGems) {
         showFeedback(
           `Solo tienes ${currentWithdrawableGems.toLocaleString()} gemas retirables. Tus ${currentLockedGems.toLocaleString()} 💎 restantes son saldo bloqueado (bonos y retención de depósito) utilizable en el juego.`,
@@ -426,8 +436,14 @@ export default function ProfileModal({
       return
     }
     const cleanDest = withdrawAddress.trim()
+    if (!cleanDest) {
+      soundManager.playSound('error', 0.5)
+      showFeedback('Por favor ingresa tu dirección de wallet BEP20 (0x...) de destino.', 'error')
+      return
+    }
     if (!cleanDest.match(/^0x[a-fA-F0-9]{40}$/)) {
-      showFeedback('Dirección de destino inválida. Debe ser una dirección BEP20 (0x...).', 'error')
+      soundManager.playSound('error', 0.5)
+      showFeedback('Dirección de destino BEP20 inválida. Debe comenzar con 0x y tener 42 caracteres.', 'error')
       return
     }
 
@@ -966,7 +982,7 @@ export default function ProfileModal({
 
         {/* TAB 3: RETIRAR USDT BEP20 (5% COMISIÓN) */}
         {activeTab === 'withdraw' && (
-          <form onSubmit={handleOpenWithdrawConfirm} className="profile-tab-body">
+          <form onSubmit={handleOpenWithdrawConfirm} noValidate className="profile-tab-body">
             <div className="profile-section-title">
               <span>💸 RETIRO DE FONDOS (GEMAS → USDT BEP20)</span>
               <small>Retira tus gemas a cualquier wallet BEP20 compatible con USDT. Comisión de red: <strong>5%</strong>.</small>
@@ -1044,15 +1060,29 @@ export default function ProfileModal({
                 <span>💎</span>
                 <input
                   type="number"
-                  min={1000}
-                  max={Math.max(1000, currentWithdrawableGems)}
+                  min={0}
                   step={1}
                   value={withdrawGems || ''}
-                  onChange={(e) => setWithdrawGems(Number(e.target.value))}
+                  onChange={(e) => setWithdrawGems(Math.max(0, Number(e.target.value)))}
                   className="profile-number-input"
-                  required
+                  placeholder="Ej: 1000"
                 />
               </div>
+              {withdrawGems > 0 && withdrawGems < 1000 && (
+                <div className="profile-withdraw-hint-badge profile-withdraw-hint-badge--warning">
+                  ⚠️ El retiro mínimo es de <strong>1,000 💎 (10.00 USDT)</strong>. Te faltan <strong>{(1000 - withdrawGems).toLocaleString()} 💎</strong>.
+                </div>
+              )}
+              {withdrawGems > currentWithdrawableGems && (
+                <div className="profile-withdraw-hint-badge profile-withdraw-hint-badge--error">
+                  ⚠️ Supera tu saldo retirable disponible ({currentWithdrawableGems.toLocaleString()} 💎).
+                </div>
+              )}
+              {withdrawGems >= 1000 && withdrawGems <= currentWithdrawableGems && (
+                <div className="profile-withdraw-hint-badge profile-withdraw-hint-badge--success">
+                  ✓ Monto válido para retiro: Recibirás aprox. <strong>{netWithdrawalUsdt.toFixed(2)} USDT</strong> netos.
+                </div>
+              )}
             </div>
 
             <div className="profile-form-row">
@@ -1063,7 +1093,6 @@ export default function ProfileModal({
                 value={withdrawAddress}
                 onChange={(e) => setWithdrawAddress(e.target.value)}
                 className="profile-text-input"
-                required
               />
             </div>
 
@@ -1096,7 +1125,7 @@ export default function ProfileModal({
             <button
               type="submit"
               className="profile-submit-action-btn profile-submit-action-btn--withdraw"
-              disabled={withdrawGems < 1000 || withdrawGems > currentWithdrawableGems || isSubmittingWithdrawal}
+              disabled={isSubmittingWithdrawal}
             >
               {isSubmittingWithdrawal ? '⏳ PROCESANDO...' : `💸 SOLICITAR RETIRO DE ${netWithdrawalUsdt.toFixed(2)} USDT`}
             </button>

@@ -1268,6 +1268,10 @@
   color: #fbbf24;
 }
 
+.lb-col-winrate {
+  white-space: nowrap;
+}
+
 .lb-winrate-wrap {
   display: flex;
   align-items: center;

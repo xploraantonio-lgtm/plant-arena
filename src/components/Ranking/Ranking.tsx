@@ -1042,10 +1042,7 @@ export default function Ranking({ userElo, userProfile, hasVipPass = false, onBa
                                     </span>
                                   </td>
                                   <td className="lb-col-winrate">
-                                    <div className="lb-winrate-wrap">
-                                      <span className="lb-winrate-pct">{usr.winRate}</span>
-                                      <span className="lb-winrate-games">({usr.wins}W / {usr.losses}L)</span>
-                                    </div>
+                                    <span className="lb-winrate-pct">{usr.winRate}</span>
                                   </td>
                                   <td className="lb-col-action">
                                     <button
