@@ -14,6 +14,7 @@ import { PLANT_CONFIGS } from '../../utils/gameConstants'
 import { SeasonManager } from '../../utils/seasonManager'
 import { UserManager } from '../../utils/userManager'
 import { supabaseService } from '../../services/supabaseService'
+import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient'
 import './Clan.css'
 
 interface ClanProps {
@@ -59,6 +60,8 @@ export default function Clan({
     return c && ClanManager.isValidUuid(c.id) ? c : null
   })
   const [allClans, setAllClans] = useState<ClanData[]>(() => ClanManager.getClans())
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const isRefreshingRef = React.useRef(false)
   const [activeTab, setActiveTab] = useState<'members' | 'wars' | 'donations' | 'rewards'>('members')
   const [noClanTab, setNoClanTab] = useState<'browse' | 'create'>('browse')
   const [selectedBrowseClanId, setSelectedBrowseClanId] = useState<string>(() => allClans[0]?.id || '')
@@ -211,27 +214,33 @@ export default function Clan({
     )
   }
 
-  const refreshClanData = async () => {
-    // 1. Estado local inmediato para fluidez de UI (solo si es un UUID válido)
-    const updated = ClanManager.getUserClan()
-    if (updated && !ClanManager.isValidUuid(updated.id)) {
-      ClanManager.setUserClanId(null)
-      setUserClan(null)
-    } else {
-      setUserClan(updated)
-    }
-    setAllClans(ClanManager.getClans())
-    if (updated && ClanManager.isValidUuid(updated.id)) {
-      setDonationRequests(ClanManager.getDonationRequests(updated.id))
-      setVaultDeposits(ClanManager.getVaultDeposits(updated.id))
-      setWarLogs(ClanManager.getWarLogs())
-      if (updated.settings) {
-        setClanPrivacy(updated.settings.privacy)
-        setClanMinElo(updated.settings.minElo)
-        setClanWarPermission(updated.settings.warPermission)
-        setClanAutoAccept(updated.settings.autoAccept)
+  const refreshClanData = async (isInitial = false, showSpinner = false) => {
+    if (isRefreshingRef.current) return
+    isRefreshingRef.current = true
+    if (showSpinner) setIsRefreshing(true)
+
+    // 1. Estado local inmediato para fluidez de UI solo en el montaje inicial
+    if (isInitial) {
+      const updated = ClanManager.getUserClan()
+      if (updated && !ClanManager.isValidUuid(updated.id)) {
+        ClanManager.setUserClanId(null)
+        setUserClan(null)
+      } else if (updated) {
+        setUserClan(updated)
       }
-      setPendingRequests(ClanManager.getJoinRequests(updated.id).filter((r) => r.status === 'pending'))
+      setAllClans(ClanManager.getClans())
+      if (updated && ClanManager.isValidUuid(updated.id)) {
+        setDonationRequests(ClanManager.getDonationRequests(updated.id))
+        setVaultDeposits(ClanManager.getVaultDeposits(updated.id))
+        setWarLogs(ClanManager.getWarLogs())
+        if (updated.settings) {
+          setClanPrivacy(updated.settings.privacy)
+          setClanMinElo(updated.settings.minElo)
+          setClanWarPermission(updated.settings.warPermission)
+          setClanAutoAccept(updated.settings.autoAccept)
+        }
+        setPendingRequests(ClanManager.getJoinRequests(updated.id).filter((r) => r.status === 'pending'))
+      }
     }
 
     // 2. Consulta autoritativa en Supabase (Backend)
@@ -270,6 +279,16 @@ export default function Clan({
         }
         setUserClan(clanObj)
         ClanManager.setUserClanId(clanObj.id)
+
+        // Mantener el caché local de clanes actualizado en ClanManager
+        const localClans = ClanManager.getClans()
+        const existingIdx = localClans.findIndex((c) => c.id === clanObj.id)
+        if (existingIdx >= 0) {
+          localClans[existingIdx] = clanObj
+        } else {
+          localClans.unshift(clanObj)
+        }
+        ClanManager.saveClans(localClans)
 
         if (myClanData.clan.settings) {
           setClanPrivacy(myClanData.clan.settings.privacy || 'public')
@@ -366,11 +385,72 @@ export default function Clan({
       }
     } catch (err) {
       console.warn('Error fetching remote clans:', err)
+    } finally {
+      isRefreshingRef.current = false
+      if (showSpinner) {
+        setTimeout(() => setIsRefreshing(false), 300)
+      }
     }
   }
 
+  // 1. Carga inicial y sondeo periódico continuo cada 3 segundos para reflejar nuevos ingresos inmediatamente
   useEffect(() => {
-    void refreshClanData()
+    void refreshClanData(true, false)
+
+    const pollTimer = setInterval(() => {
+      void refreshClanData(false, false)
+    }, 3000)
+
+    const onFocus = () => {
+      void refreshClanData(false, false)
+    }
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      clearInterval(pollTimer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+
+  // 2. Suscripción en tiempo real vía WebSocket con Supabase Realtime
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return
+
+    const channel = supabase
+      .channel('clan-realtime-live-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clan_members' },
+        () => {
+          void refreshClanData(false, false)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clan_join_requests' },
+        () => {
+          void refreshClanData(false, false)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clans' },
+        () => {
+          void refreshClanData(false, false)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clan_deposits' },
+        () => {
+          void refreshClanData(false, false)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
   }, [])
 
   // Open Settings Modal & Load Saved Settings (Exclusivo Líder)
@@ -1134,7 +1214,20 @@ export default function Clan({
               <div className="clan-browse-sidebar">
                 <div className="clan-browse-sidebar__header">
                   <span>🏆 CLANES DESTACADOS</span>
-                  <small>{allClans.length} Disponibles</small>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <small>{allClans.length} Disponibles</small>
+                    <button
+                      type="button"
+                      className={`clan-mini-refresh-btn ${isRefreshing ? 'clan-refresh-btn--spinning' : ''}`}
+                      onClick={() => {
+                        soundManager.playSound('click', 0.4)
+                        void refreshClanData(false, true)
+                      }}
+                      title="Actualizar clanes y miembros"
+                    >
+                      🔄
+                    </button>
+                  </div>
                 </div>
 
                 <div className="clan-browse-sidebar__list">
@@ -1454,6 +1547,19 @@ export default function Clan({
           </button>
         )}
 
+        {/* Realtime / Refresh Button */}
+        <button
+          type="button"
+          className={`clan-refresh-btn ${isRefreshing ? 'clan-refresh-btn--spinning' : ''}`}
+          onClick={() => {
+            soundManager.playSound('click', 0.4)
+            void refreshClanData(false, true)
+          }}
+          title="Actualizar datos e ingresos del clan en tiempo real"
+        >
+          🔄
+        </button>
+
         {/* Vault & Actions */}
         <div className="clan-topbar-right">
           <div className={`clan-vault-display ${isDefeated ? 'clan-vault-display--defeated' : ''}`}>
@@ -1583,23 +1689,53 @@ export default function Clan({
             </div>
           )}
 
-          {/* Barra de herramientas para el Líder: Invitar Jugador */}
-          {isLeader && (
+          {/* Barra de herramientas para el Líder: Invitar Jugador y Actualizar */}
+          {isLeader ? (
             <div className="clan-members-toolbar">
               <span className="clan-members-toolbar__hint">
                 👥 Administra los miembros de tu clan o invita jugadores directamente por nombre de usuario.
               </span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className={`clan-refresh-btn ${isRefreshing ? 'clan-refresh-btn--spinning' : ''}`}
+                  onClick={() => {
+                    soundManager.playSound('click', 0.4)
+                    void refreshClanData(false, true)
+                  }}
+                  title="Actualizar lista de miembros ahora"
+                >
+                  🔄
+                </button>
+                <button
+                  type="button"
+                  className="clan-invite-open-btn"
+                  onClick={() => {
+                    soundManager.playSound('click', 0.4)
+                    setShowInviteModal(true)
+                  }}
+                  disabled={userClan.members.length >= 15}
+                  title={userClan.members.length >= 15 ? 'El clan ya alcanzó el cupo máximo de 15 miembros' : 'Invitar jugador'}
+                >
+                  ✉️ INVITAR JUGADOR AL CLAN
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="clan-members-toolbar" style={{ justifyContent: 'space-between' }}>
+              <span className="clan-members-toolbar__hint">
+                👥 Miembros del clan ({userClan.members.length}/15). Los nuevos ingresos se sincronizan en tiempo real.
+              </span>
               <button
                 type="button"
-                className="clan-invite-open-btn"
+                className={`clan-refresh-btn ${isRefreshing ? 'clan-refresh-btn--spinning' : ''}`}
                 onClick={() => {
                   soundManager.playSound('click', 0.4)
-                  setShowInviteModal(true)
+                  void refreshClanData(false, true)
                 }}
-                disabled={userClan.members.length >= 15}
-                title={userClan.members.length >= 15 ? 'El clan ya alcanzó el cupo máximo de 15 miembros' : 'Invitar jugador'}
+                title="Actualizar lista de miembros ahora"
               >
-                ✉️ INVITAR JUGADOR AL CLAN
+                🔄
               </button>
             </div>
           )}

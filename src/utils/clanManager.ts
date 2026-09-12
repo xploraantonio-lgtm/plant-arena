@@ -573,7 +573,7 @@ export class ClanManager {
   static executeClanRaid(
     attackerClanId: string,
     defenderClanId: string
-  ): { success: boolean; winnerClan: ClanData; loserClan: ClanData; stolenAmount: number; error?: string } {
+  ): { success: boolean; winnerClan: ClanData; loserClan: ClanData; stolenAmount: number; damageDealt?: number; error?: string } {
     const clans = this.getClans()
     const attacker = clans.find((c) => c.id === attackerClanId)
     const defender = clans.find((c) => c.id === defenderClanId)

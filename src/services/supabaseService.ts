@@ -528,7 +528,7 @@ export const SupabaseService = {
    */
   async enterMatchmaking(
     mode: 'ranked' | 'friendly' | 'colosseum' | 'tournament',
-    opts: { betGems?: number; useTicket?: boolean; roomCode?: string } = {}
+    opts: { betGems?: number; useTicket?: boolean; roomCode?: string; tournamentId?: string } = {}
   ): Promise<{
     matched: boolean
     roomId?: string
@@ -543,7 +543,7 @@ export const SupabaseService = {
         p_mode: mode,
         p_bet: opts.betGems ?? 0,
         p_use_ticket: opts.useTicket ?? false,
-        p_room_code: opts.roomCode ?? null,
+        p_room_code: opts.roomCode ?? opts.tournamentId ?? null,
         p_engine_version: 'auth-v2',
       })
       if (error) {
@@ -1985,7 +1985,7 @@ export const SupabaseService = {
   async getMyPendingRewards(): Promise<any[]> {
     if (!isSupabaseConfigured()) return []
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('player_pending_rewards')
         .select('*')
         .eq('status', 'pending')
@@ -2045,7 +2045,7 @@ export const SupabaseService = {
   async getDailyClanSettlements(limit = 30): Promise<any[]> {
     if (!isSupabaseConfigured()) return []
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('clan_daily_settlements')
         .select('*')
         .order('settlement_date', { ascending: false })

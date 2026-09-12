@@ -35,7 +35,7 @@ interface CodeBoardEntry {
   userId: string
   username: string
   bestPct: number
-  attemptsCount: number
+  attempts: number
   place: number
 }
 

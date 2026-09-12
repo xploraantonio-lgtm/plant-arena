@@ -1044,7 +1044,7 @@ export default function Battlefield({
               payout: reportRes.payout ?? 0,
             })
 
-            if (typeof eloAfter === 'number' && onServerEloUpdated) {
+            if (typeof eloAfter === 'number' && onServerEloUpdated && matchMode !== 'tournament' && matchMode !== 'friendly') {
               onServerEloUpdated(eloAfter)
             }
 
@@ -1099,7 +1099,7 @@ export default function Battlefield({
             error: liq.error,
           })
 
-          if (liq.statusServidor === 'liquidada' && typeof liq.eloAfter === 'number' && onServerEloUpdated) {
+          if (liq.statusServidor === 'liquidada' && typeof liq.eloAfter === 'number' && onServerEloUpdated && matchMode !== 'tournament' && matchMode !== 'friendly') {
             onServerEloUpdated(liq.eloAfter)
           }
 
@@ -2067,7 +2067,7 @@ export default function Battlefield({
                   </div>
                 )}
 
-                {!esperandoConfirmacionServidor && resultadoServidor?.status === 'liquidada' && (() => {
+                {!esperandoConfirmacionServidor && matchMode !== 'tournament' && matchMode !== 'friendly' && resultadoServidor?.status === 'liquidada' && (() => {
                   const fallbackDeltas = getEloDeltasForElo(userElo)
                   const fallbackDelta = gameStatus === 'victory' ? fallbackDeltas.winElo : -fallbackDeltas.loseElo
                   const fallbackTotal = Math.max(
@@ -2124,8 +2124,8 @@ export default function Battlefield({
             )}
 
             <>
-              {/* ELO BADGE (sólo para partidas sin sala / offline) */}
-              {!roomId && battleSummaryResult?.eloChange !== undefined && (
+              {/* ELO BADGE (sólo para partidas sin sala / offline de Ranked) */}
+              {!roomId && matchMode !== 'tournament' && matchMode !== 'friendly' && battleSummaryResult?.eloChange !== undefined && (
                   <div
                     className={`elo-result-badge ${
                       battleSummaryResult.eloChange >= 0

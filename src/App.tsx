@@ -624,9 +624,10 @@ function App() {
         mio: soyP1 ? sala.p1Deck : sala.p2Deck,
         rival: soyP1 ? sala.p2Deck : sala.p1Deck,
       })
-      setPartidaAsincrona(Boolean(sala.isAsyncMatch))
-      setBattleMatchMode(sala.mode as 'ranked' | 'friendly' | 'colosseum' | 'tournament')
-      if (sala.mode === 'ranked' && userElo >= 1602) {
+      const esTorneo = modoBuscando === 'tournament' || sala.mode === 'tournament'
+      setPartidaAsincrona(esTorneo ? false : Boolean(sala.isAsyncMatch))
+      setBattleMatchMode(esTorneo ? 'tournament' : (sala.mode as 'ranked' | 'friendly' | 'colosseum' | 'tournament'))
+      if (!esTorneo && sala.mode === 'ranked' && userElo >= 1602) {
         setPlayerEnergy((prev) => Math.max(0, prev - 1))
       }
       if (sala.mode === 'friendly') {
@@ -936,6 +937,7 @@ function App() {
 
   const handleStartTournamentMatch = async (opponentName: string, tournamentId: string, tourneyDeck?: PlantId[]) => {
     setBattleMatchMode('tournament')
+    setPartidaAsincrona(false)
     setColosseumConfig(null)
     setTournamentOpponent({ name: opponentName || 'Rival del Torneo', tournamentId })
     setTournamentDeck(tourneyDeck || null)
@@ -954,7 +956,7 @@ function App() {
 
     setModoBuscando('tournament')
     setScreen('searching')
-    void buscar('tournament', { roomCode: tournamentId })
+    void buscar('tournament', { roomCode: tournamentId, tournamentId })
   }
 
   const handleStartStrategicPlaytest = (config: StrategicPlaytestConfig) => {

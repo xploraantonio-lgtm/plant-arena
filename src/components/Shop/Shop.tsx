@@ -301,6 +301,7 @@ export default function Shop({
     basic: 1,
     epic: 1,
     legendary: 1,
+    pvp: 1,
   })
 
   const getPackCount = (packId: PackId) => {

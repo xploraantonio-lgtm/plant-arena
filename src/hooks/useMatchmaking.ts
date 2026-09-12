@@ -177,7 +177,7 @@ export function useMatchmaking() {
   const buscar = useCallback(
     async (
       modo: ModoPartida,
-      opciones: { betGems?: number; useTicket?: boolean; roomCode?: string } = {}
+      opciones: { betGems?: number; useTicket?: boolean; roomCode?: string; tournamentId?: string } = {}
     ): Promise<{ ok: boolean; error?: string }> => {
       modoRef.current = modo
       claimingRef.current = false
