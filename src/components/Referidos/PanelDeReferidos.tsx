@@ -521,24 +521,54 @@ export default function PanelDeReferidos() {
         ) : (
           <>
             <ol className="ref-ranking" ref={rankingListaRef}>
-              {rankingPaginado.map((r) => (
-                <li
-                  key={r.puesto}
-                  className={`ref-ranking__item ${r.puesto === datos.miPuesto ? 'ref-ranking__item--yo' : ''}`}
-                >
-                  <span className="ref-ranking__puesto">#{r.puesto}</span>
-                  <img
-                    src={getPlayerAvatarUrl(r.avatar || 'peashooter')}
-                    alt={r.nombre || 'Jugador'}
-                    className="ref-ranking__avatar"
-                  />
-                  <span className="ref-ranking__nombre">
-                    {r.nombre || 'Jugador'}
-                    {r.puesto === datos.miPuesto && ' (Tú)'}
-                  </span>
-                  <span className="ref-ranking__validos">{r.validos} amigos</span>
-                </li>
-              ))}
+              {rankingPaginado.map((r) => {
+                const premio = PREMIOS_OFICIALES.find((p) => p.puesto === r.puesto)
+                return (
+                  <li
+                    key={r.puesto}
+                    className={`ref-ranking__item ${r.puesto === datos.miPuesto ? 'ref-ranking__item--yo' : ''}`}
+                  >
+                    <div className="ref-ranking__left">
+                      <span className={`ref-ranking__puesto ref-ranking__puesto--top${r.puesto <= 3 ? r.puesto : 'other'}`}>
+                        {r.puesto === 1 ? '🥇 #1' : r.puesto === 2 ? '🥈 #2' : r.puesto === 3 ? '🥉 #3' : `#${r.puesto}`}
+                      </span>
+                      <img
+                        src={getPlayerAvatarUrl(r.avatar || 'peashooter')}
+                        alt={r.nombre || 'Jugador'}
+                        className="ref-ranking__avatar"
+                      />
+                      <div className="ref-ranking__detalles">
+                        <span className="ref-ranking__nombre">
+                          {r.nombre || 'Jugador'}
+                          {r.puesto === datos.miPuesto && <strong className="ref-ranking__tag-yo"> (Tú)</strong>}
+                        </span>
+                        <span className="ref-ranking__validos">
+                          👥 {r.validos} {r.validos === 1 ? 'amigo válido' : 'amigos válidos'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Recompensas referenciales del puesto */}
+                    <div className="ref-ranking__right">
+                      {premio ? (
+                        <div className={`ref-ranking__reward-badge ref-ranking__reward-badge--top${premio.puesto}`}>
+                          <span className="ref-ranking__reward-icon">{premio.icono}</span>
+                          <div className="ref-ranking__reward-info">
+                            <span className="ref-ranking__reward-titulo">Premio Estimado:</span>
+                            <span className="ref-ranking__reward-desc">
+                              {premio.gemas > 0 && <strong className="ref-badge-gemas">+{premio.gemas.toLocaleString()} 💎 </strong>}
+                              {premio.oro > 0 && <strong className="ref-badge-oro">+{premio.oro.toLocaleString()} 🪙 </strong>}
+                              {premio.sobres > 0 && <span className="ref-badge-sobre">+{premio.sobres}x {premio.tipoSobre}</span>}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="ref-ranking__sin-premio">Top 5 para premio</span>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ol>
 
             {totalPaginasRanking > 1 && (
@@ -568,7 +598,7 @@ export default function PanelDeReferidos() {
         )}
       </div>
 
-      {/* ── SECCIÓN 7: TUS INVITADOS (LISTA COMPLETA) ───────────────────── */}
+      {/* ── SECCIÓN 7: TUS INVITADOS (LISTA GAMING OPTIMIZADA) ────────────── */}
       <div className="ref-bloque">
         <h3 className="ref-titulo">👥 Tus Amigos Invitados ({datos.total})</h3>
         <p className="ref-sub">
@@ -599,36 +629,92 @@ export default function PanelDeReferidos() {
           </p>
         ) : (
           <>
-            <ul className="ref-amigos" ref={amigosListaRef}>
+            <div className="ref-amigos-grid" ref={amigosListaRef}>
               {amigosPaginados.map((a, i) => {
-                const falta = Math.max(0, 1100 - (a.copas ?? 1000))
+                const copas = a.copas ?? 1000
+                const esValido = a.valido
+                const falta = Math.max(0, 1100 - copas)
+                const progresoPct = Math.min(100, Math.round((copas / 1100) * 100))
+
                 return (
-                  <li key={i} className="ref-amigo">
-                    <img
-                      src={getPlayerAvatarUrl(a.avatar || 'peashooter')}
-                      alt={a.nombre || 'Amigo'}
-                      className="ref-amigo__avatar"
-                    />
-                    <div className="ref-amigo__info">
-                      <strong className="ref-amigo__nombre">{a.nombre || 'Jugador'}</strong>
-                      <span className="ref-amigo__copas">
-                        🏆 {a.copas ?? 1000} Copas {a.valido ? '· ¡Meta de 1,100 superada!' : `· (faltan ${falta} copas)`}
+                  <div
+                    key={i}
+                    className={`ref-amigo-card ${esValido ? 'ref-amigo-card--valido' : 'ref-amigo-card--pendiente'}`}
+                  >
+                    <div className="ref-amigo-card__header">
+                      <div className="ref-amigo-card__avatar-wrap">
+                        <img
+                          src={getPlayerAvatarUrl(a.avatar || 'peashooter')}
+                          alt={a.nombre || 'Amigo'}
+                          className="ref-amigo-card__avatar"
+                        />
+                        <span
+                          className={`ref-amigo-card__indicator ${
+                            esValido ? 'ref-amigo-card__indicator--ok' : 'ref-amigo-card__indicator--wait'
+                          }`}
+                          title={esValido ? 'Meta de 1,100 superada' : 'En progreso hacia 1,100'}
+                        />
+                      </div>
+
+                      <div className="ref-amigo-card__main-info">
+                        <strong className="ref-amigo-card__name" title={a.nombre || 'Jugador'}>
+                          {a.nombre || 'Jugador'}
+                        </strong>
+                        <div className="ref-amigo-card__trophies">
+                          <span className="ref-amigo-card__trophy-val">🏆 {copas} Copas</span>
+                          {esValido ? (
+                            <span className="ref-amigo-card__sub-ok">· ¡Meta Superada!</span>
+                          ) : (
+                            <span className="ref-amigo-card__sub-wait">· Faltan {falta} copas</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="ref-amigo-card__badges">
+                        {esValido ? (
+                          <span className="ref-game-chip ref-game-chip--valido">
+                            ✓ Válido
+                          </span>
+                        ) : (
+                          <span className="ref-game-chip ref-game-chip--progreso">
+                            ⏳ En curso
+                          </span>
+                        )}
+
+                        <span
+                          className={`ref-game-chip ${
+                            a.oroCobrado
+                              ? 'ref-game-chip--cobrado'
+                              : esValido
+                              ? 'ref-game-chip--listo'
+                              : 'ref-game-chip--bloqueado'
+                          }`}
+                        >
+                          {a.oroCobrado
+                            ? '✓ 100 Oro Cobrado'
+                            : esValido
+                            ? '🪙 100 Oro Listo'
+                            : '🪙 100 Oro a 1100'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Barra de progreso estilo gaming hacia las 1,100 copas */}
+                    <div className="ref-amigo-card__progress-wrap">
+                      <div className="ref-amigo-card__bar-bg">
+                        <div
+                          className={`ref-amigo-card__bar-fill ${esValido ? 'ref-amigo-card__bar-fill--complete' : ''}`}
+                          style={{ width: `${progresoPct}%` }}
+                        />
+                      </div>
+                      <span className="ref-amigo-card__progress-text">
+                        {esValido ? '1,100 / 1,100 Copas (Completado)' : `${copas} / 1,100 Copas (${progresoPct}%)`}
                       </span>
                     </div>
-                    <div className="ref-amigo__badges" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
-                      {a.valido ? (
-                        <span className="ref-tag ref-tag--valido">✓ Amigo Válido</span>
-                      ) : (
-                        <span className="ref-tag ref-tag--pendiente">⏳ En progreso</span>
-                      )}
-                      <span style={{ fontSize: '0.68rem', color: a.oroCobrado ? '#4ade80' : a.valido ? '#facc15' : '#94a3b8' }}>
-                        {a.oroCobrado ? '✓ 100 Oro cobrado' : a.valido ? '🪙 100 Oro listo' : '🪙 100 Oro a las 1,100'}
-                      </span>
-                    </div>
-                  </li>
+                  </div>
                 )
               })}
-            </ul>
+            </div>
 
             {totalPaginasAmigos > 1 && (
               <div className="ref-paginacion">

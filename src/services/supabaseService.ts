@@ -174,6 +174,31 @@ export const SupabaseService = {
       const { data, error } = await (supabase.rpc as any)('my_balance')
       if (error) {
         logError('myBalance', error)
+        // Fallback de resiliencia directa si la RPC falla temporalmente
+        try {
+          const { data: userData } = await supabase.auth.getUser()
+          if (userData?.user) {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('gems_balance, gold_balance, colosseum_tickets, elo_rating, has_vip_pass, claimed_vip_levels, colosseum_current_streak, colosseum_max_streak, energy_current, energy_last_reset_utc')
+              .eq('id', userData.user.id)
+              .single()
+            if (prof) {
+              return {
+                gems_balance: Number(prof.gems_balance ?? 0),
+                gold_balance: Number(prof.gold_balance ?? 0),
+                colosseum_tickets: Number(prof.colosseum_tickets ?? 0),
+                elo_rating: Number(prof.elo_rating ?? 1000),
+                has_vip_pass: Boolean(prof.has_vip_pass),
+                claimed_vip_levels: Array.isArray(prof.claimed_vip_levels) ? prof.claimed_vip_levels : [],
+                colosseum_current_streak: Number(prof.colosseum_current_streak ?? 0),
+                colosseum_max_streak: Number(prof.colosseum_max_streak ?? 0),
+                energy_current: prof.energy_current ?? (prof.has_vip_pass ? 25 : 20),
+                energy_last_reset_utc: prof.energy_last_reset_utc,
+              }
+            }
+          }
+        } catch {}
         return null
       }
       return data
