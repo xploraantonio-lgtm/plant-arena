@@ -71,7 +71,7 @@ export default function PanelDeReferidos() {
   const [amigosBusqueda, setAmigosBusqueda] = useState('')
   const [amigosPagina, setAmigosPagina] = useState(1)
   const amigosTamanoPagina = 10
-  const amigosListaRef = useRef<HTMLUListElement>(null)
+  const amigosListaRef = useRef<HTMLDivElement>(null)
 
   // Paginación del ranking
   const [rankingPagina, setRankingPagina] = useState(1)
