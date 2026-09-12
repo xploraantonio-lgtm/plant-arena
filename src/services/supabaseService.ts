@@ -159,6 +159,8 @@ export const SupabaseService = {
    */
   async myBalance(): Promise<{
     gems_balance: number
+    locked_gems_balance?: number
+    withdrawable_gems?: number
     gold_balance: number
     colosseum_tickets: number
     elo_rating: number
@@ -178,14 +180,17 @@ export const SupabaseService = {
         try {
           const { data: userData } = await supabase.auth.getUser()
           if (userData?.user) {
-            const { data: prof } = await supabase
-              .from('profiles')
-              .select('gems_balance, gold_balance, colosseum_tickets, elo_rating, has_vip_pass, claimed_vip_levels, colosseum_current_streak, colosseum_max_streak, energy_current, energy_last_reset_utc')
+            const { data: prof } = await (supabase.from as any)('profiles')
+              .select('gems_balance, locked_gems_balance, gold_balance, colosseum_tickets, elo_rating, has_vip_pass, claimed_vip_levels, colosseum_current_streak, colosseum_max_streak, energy_current, energy_last_reset_utc')
               .eq('id', userData.user.id)
               .single()
             if (prof) {
+              const totalGems = Number(prof.gems_balance ?? 0)
+              const lockedGems = Math.min(totalGems, Number(prof.locked_gems_balance ?? 0))
               return {
-                gems_balance: Number(prof.gems_balance ?? 0),
+                gems_balance: totalGems,
+                locked_gems_balance: lockedGems,
+                withdrawable_gems: Math.max(0, totalGems - lockedGems),
                 gold_balance: Number(prof.gold_balance ?? 0),
                 colosseum_tickets: Number(prof.colosseum_tickets ?? 0),
                 elo_rating: Number(prof.elo_rating ?? 1000),
@@ -200,6 +205,16 @@ export const SupabaseService = {
           }
         } catch {}
         return null
+      }
+      if (data) {
+        const total = Number(data.gems_balance ?? 0)
+        const locked = Math.min(total, Number(data.locked_gems_balance ?? 0))
+        return {
+          ...data,
+          gems_balance: total,
+          locked_gems_balance: locked,
+          withdrawable_gems: Number(data.withdrawable_gems ?? Math.max(0, total - locked)),
+        }
       }
       return data
     } catch (e) {
@@ -3521,6 +3536,34 @@ export const SupabaseService = {
     } catch (e: any) {
       logError('getDepositInfo', e)
       return { success: false, error: e?.message }
+    }
+  },
+
+  /** Gasta gemas consumiendo prioritariamente el saldo no retirable (bonos) y completando con el saldo retirable */
+  async spendUserGems(amountGems: number): Promise<{
+    success: boolean
+    total_paid?: number
+    paid_from_locked?: number
+    paid_from_withdrawable?: number
+    new_total_gems?: number
+    new_locked_gems?: number
+    new_withdrawable_gems?: number
+    error?: string
+    message?: string
+  }> {
+    if (!isSupabaseConfigured()) return { success: false, error: 'NO_SUPABASE' }
+    try {
+      const { data, error } = await (supabase.rpc as any)('spend_user_gems', {
+        p_amount: amountGems,
+      })
+      if (error) {
+        logError('spendUserGems', error)
+        return { success: false, error: error.code || 'RPC_ERROR', message: error.message }
+      }
+      return data ?? { success: false }
+    } catch (e: any) {
+      logError('spendUserGems', e)
+      return { success: false, error: 'EXCEPTION', message: e?.message }
     }
   },
 

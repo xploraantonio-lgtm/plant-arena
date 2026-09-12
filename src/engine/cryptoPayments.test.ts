@@ -37,6 +37,106 @@ export function validateAndNormalizeEvmAddress(address: string): string {
   return clean
 }
 
+export interface DualBalanceState {
+  totalGems: number
+  lockedGems: number
+  withdrawableGems: number
+}
+
+export function calculateDepositSplit(
+  amountUsdt: number,
+  bonusPercent = 20.0,
+  retirablePercent = 50.0
+) {
+  const baseGems = Math.round(amountUsdt * 100.0 * 100) / 100
+  const bonusGems = Math.round((baseGems * (bonusPercent / 100.0)) * 100) / 100
+  const totalCredited = baseGems + bonusGems
+  const retirableAdd = Math.round((baseGems * (retirablePercent / 100.0)) * 100) / 100
+  const lockedAdd = (baseGems - retirableAdd) + bonusGems
+
+  return {
+    baseGems,
+    bonusGems,
+    totalCredited,
+    retirableAdd,
+    lockedAdd,
+  }
+}
+
+export function applyGameSpending(state: DualBalanceState, spentGems: number): DualBalanceState {
+  if (spentGems <= 0) return { ...state }
+  if (spentGems > state.totalGems) {
+    throw new Error('INSUFFICIENT_FUNDS')
+  }
+  // Se consume PRIMERO el saldo no retirable (locked)
+  const burnLocked = Math.min(state.lockedGems, spentGems)
+  const newLocked = Math.max(0, state.lockedGems - burnLocked)
+  const newTotal = state.totalGems - spentGems
+  const newWithdrawable = Math.max(0, newTotal - newLocked)
+
+  return {
+    totalGems: newTotal,
+    lockedGems: newLocked,
+    withdrawableGems: newWithdrawable,
+  }
+}
+
+export function creditGameReward(state: DualBalanceState, rewardGems: number): DualBalanceState {
+  if (rewardGems <= 0) return { ...state }
+  // Todo premio legítimo del juego va 100% a saldo retirable
+  const newTotal = state.totalGems + rewardGems
+  const newLocked = state.lockedGems
+  const newWithdrawable = Math.max(0, newTotal - newLocked)
+
+  return {
+    totalGems: newTotal,
+    lockedGems: newLocked,
+    withdrawableGems: newWithdrawable,
+  }
+}
+
+export function executeWithdrawalValidation(state: DualBalanceState, requestGems: number) {
+  if (requestGems < 1000.0) {
+    throw new Error('AMOUNT_BELOW_MIN')
+  }
+  if (requestGems > state.withdrawableGems) {
+    throw new Error('EXCEEDS_WITHDRAWABLE_BALANCE')
+  }
+  const settlement = calculateWithdrawalSettlement(requestGems)
+  const newTotal = state.totalGems - requestGems
+  const newLocked = state.lockedGems
+  const newWithdrawable = Math.max(0, newTotal - newLocked)
+
+  return {
+    settlement,
+    newState: {
+      totalGems: newTotal,
+      lockedGems: newLocked,
+      withdrawableGems: newWithdrawable,
+    },
+  }
+}
+
+export function simulateDetailedPayment(state: DualBalanceState, cost: number) {
+  if (cost <= 0) throw new Error('INVALID_COST')
+  if (state.totalGems < cost) throw new Error('INSUFFICIENT_GEMS')
+  const paidFromLocked = Math.min(state.lockedGems, cost)
+  const paidFromWithdrawable = cost - paidFromLocked
+  const newLocked = state.lockedGems - paidFromLocked
+  const newTotal = state.totalGems - cost
+  const newWithdrawable = Math.max(0, newTotal - newLocked)
+
+  return {
+    paidFromLocked,
+    paidFromWithdrawable,
+    newState: {
+      totalGems: newTotal,
+      lockedGems: newLocked,
+      withdrawableGems: newWithdrawable,
+    },
+  }
+}
+
 export interface DepositEvent {
   network: string
   tokenContract: string
@@ -282,6 +382,164 @@ describe('Sistema de Depósitos y Retiros USDT BEP20 (BNB Smart Chain)', () => {
       expect(res.success).toBe(false)
       expect(res.status).toBe('rejected')
       expect(res.reason).toBe('INVALID_DESTINATION')
+    })
+  })
+
+  // ── NUEVA ARQUITECTURA: SISTEMA DE SALDO DUAL Y BLINDAJE DE RETIROS ──────────
+
+  describe('Sistema de Saldo Dual (Retirable vs No Retirable/Bono)', () => {
+    it('Caso 1: Depósito de $100 con bono del 20% acredita 12,000 gemas (5,000 retirables y 7,000 no retirables)', () => {
+      const split = calculateDepositSplit(100.0, 20.0, 50.0)
+      expect(split.baseGems).toBe(10000.0)
+      expect(split.bonusGems).toBe(2000.0)
+      expect(split.totalCredited).toBe(12000.0)
+      expect(split.retirableAdd).toBe(5000.0)
+      expect(split.lockedAdd).toBe(7000.0)
+
+      const state: DualBalanceState = {
+        totalGems: split.totalCredited,
+        lockedGems: split.lockedAdd,
+        withdrawableGems: split.retirableAdd,
+      }
+      expect(state.totalGems).toBe(12000.0)
+      expect(state.lockedGems).toBe(7000.0)
+      expect(state.withdrawableGems).toBe(5000.0)
+    })
+
+    it('Caso 2: Gastar 600 gemas en tienda quema primero el saldo no retirable (retirable queda intacto en 5,000)', () => {
+      const initial: DualBalanceState = {
+        totalGems: 12000.0,
+        lockedGems: 7000.0,
+        withdrawableGems: 5000.0,
+      }
+
+      const updated = applyGameSpending(initial, 600.0)
+      expect(updated.totalGems).toBe(11400.0)
+      expect(updated.lockedGems).toBe(6400.0)
+      // ¡El saldo retirable sigue intacto en 5,000 gemas ($50 USDT)!
+      expect(updated.withdrawableGems).toBe(5000.0)
+    })
+
+    it('Caso 3: Gastar 8,000 gemas agota completamente los 7,000 de saldo no retirable y descuenta 1,000 de retirable', () => {
+      const initial: DualBalanceState = {
+        totalGems: 12000.0,
+        lockedGems: 7000.0,
+        withdrawableGems: 5000.0,
+      }
+
+      const updated = applyGameSpending(initial, 8000.0)
+      expect(updated.totalGems).toBe(4000.0)
+      expect(updated.lockedGems).toBe(0.0)
+      expect(updated.withdrawableGems).toBe(4000.0)
+    })
+
+    it('Caso 4: Ganancias de Ruleta, Código Secreto, Clanes, Referidos y Mercado van 100% a saldo retirable', () => {
+      const initial: DualBalanceState = {
+        totalGems: 11400.0,
+        lockedGems: 6400.0,
+        withdrawableGems: 5000.0,
+      }
+
+      // Ganar 1,000 gemas en Ruleta / Código Secreto
+      const afterPrize = creditGameReward(initial, 1000.0)
+      expect(afterPrize.totalGems).toBe(12400.0)
+      expect(afterPrize.lockedGems).toBe(6400.0) // No incrementa locked
+      expect(afterPrize.withdrawableGems).toBe(6000.0) // 100% del premio es retirable
+    })
+
+    it('Caso 5: Rechaza solicitud de retiro que intente sacar saldo no retirable (Bono o Retención)', () => {
+      const state: DualBalanceState = {
+        totalGems: 12000.0,
+        lockedGems: 7000.0,
+        withdrawableGems: 5000.0,
+      }
+
+      // Intento de retirar 5,001 gemas teniendo solo 5,000 retirables
+      expect(() => executeWithdrawalValidation(state, 5001.0)).toThrow('EXCEEDS_WITHDRAWABLE_BALANCE')
+      // Intento de retirar las 12,000 gemas
+      expect(() => executeWithdrawalValidation(state, 12000.0)).toThrow('EXCEEDS_WITHDRAWABLE_BALANCE')
+    })
+
+    it('Caso 6: Retiro exitoso descuenta de saldo retirable sin tocar el saldo bloqueado para jugar', () => {
+      const state: DualBalanceState = {
+        totalGems: 12000.0,
+        lockedGems: 7000.0,
+        withdrawableGems: 5000.0,
+      }
+
+      // Retirar 3,000 gemas ($30 USDT)
+      const res = executeWithdrawalValidation(state, 3000.0)
+      expect(res.settlement.amountGems).toBe(3000.0)
+      expect(res.settlement.feeGems).toBe(150.0) // 5%
+      expect(res.settlement.netGems).toBe(2850.0)
+      expect(res.settlement.netAmountUsdt).toBe(28.5)
+
+      expect(res.newState.totalGems).toBe(9000.0)
+      expect(res.newState.lockedGems).toBe(7000.0) // Saldo bloqueado preservado
+      expect(res.newState.withdrawableGems).toBe(2000.0) // 5000 - 3000
+    })
+
+    it('Caso 7: Soporta bonos variables del 5%, 10%, 15% y 20%', () => {
+      // Bono 5%: $100 -> 10,000 base + 500 bono = 10,500 total (5,000 retirable, 5,500 locked)
+      const b5 = calculateDepositSplit(100.0, 5.0, 50.0)
+      expect(b5.bonusGems).toBe(500.0)
+      expect(b5.retirableAdd).toBe(5000.0)
+      expect(b5.lockedAdd).toBe(5500.0)
+
+      // Bono 10%: $100 -> 10,000 base + 1,000 bono = 11,000 total (5,000 retirable, 6,000 locked)
+      const b10 = calculateDepositSplit(100.0, 10.0, 50.0)
+      expect(b10.bonusGems).toBe(1000.0)
+      expect(b10.retirableAdd).toBe(5000.0)
+      expect(b10.lockedAdd).toBe(6000.0)
+
+      // Bono 15%: $100 -> 10,000 base + 1,500 bono = 11,500 total (5,000 retirable, 6,500 locked)
+      const b15 = calculateDepositSplit(100.0, 15.0, 50.0)
+      expect(b15.bonusGems).toBe(1500.0)
+      expect(b15.retirableAdd).toBe(5000.0)
+      expect(b15.lockedAdd).toBe(6500.0)
+    })
+
+    it('Caso 8: Auditoría de Pagos: Primero consulta no retirable y completa con retirable en cualquier gasto', () => {
+      // Estado: 1,000 gemas totales (400 no retirables / bono, 600 retirables)
+      const state: DualBalanceState = {
+        totalGems: 1000.0,
+        lockedGems: 400.0,
+        withdrawableGems: 600.0,
+      }
+
+      // 1. Pago de 300 💎 (ej. Tienda / Oferta Flash):
+      // Consume 300 de las 400 no retirables -> 0 de retirables consumidas
+      const p1 = simulateDetailedPayment(state, 300.0)
+      expect(p1.paidFromLocked).toBe(300.0)
+      expect(p1.paidFromWithdrawable).toBe(0.0)
+      expect(p1.newState.totalGems).toBe(700.0)
+      expect(p1.newState.lockedGems).toBe(100.0)
+      expect(p1.newState.withdrawableGems).toBe(600.0) // 100% de retirable intacto
+
+      // 2. Pago posterior de 250 💎 (ej. Ruleta o Donación de Clan):
+      // Consume los 100 💎 restantes de no retirable y completa con 150 💎 de retirable
+      const p2 = simulateDetailedPayment(p1.newState, 250.0)
+      expect(p2.paidFromLocked).toBe(100.0)
+      expect(p2.paidFromWithdrawable).toBe(150.0)
+      expect(p2.newState.totalGems).toBe(450.0)
+      expect(p2.newState.lockedGems).toBe(0.0) // No retirable agotado
+      expect(p2.newState.withdrawableGems).toBe(450.0) // 600 - 150 = 450
+    })
+
+    it('Caso 9: Sorteo aleatorio de bonos sin montos fijos (5%, 10%, 15%, 20%)', () => {
+      const allowedBonuses = [5.0, 10.0, 15.0, 20.0]
+      for (let i = 0; i < 20; i++) {
+        const randomBonus = allowedBonuses[Math.floor(Math.random() * allowedBonuses.length)]
+        const randomDepositUsdt = 10 + Math.floor(Math.random() * 90) // entre 10 y 100 USDT
+        const split = calculateDepositSplit(randomDepositUsdt, randomBonus, 50.0)
+
+        // El saldo retirable acreditado SIEMPRE es exactamente el 50% de la base depositada
+        expect(split.retirableAdd).toBe(split.baseGems * 0.5)
+        // El saldo no retirable SIEMPRE es el 50% de la base + el bono aleatorio
+        expect(split.lockedAdd).toBe(split.baseGems * 0.5 + split.bonusGems)
+        // La suma de ambos siempre es igual al total acreditado
+        expect(split.retirableAdd + split.lockedAdd).toBe(split.totalCredited)
+      }
     })
   })
 })

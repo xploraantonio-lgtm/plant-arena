@@ -61,10 +61,30 @@ export default function ProfileModal({
   const [showManualTxInput, setShowManualTxInput] = useState(false)
 
   // ── ESTADO DE RETIRO BEP20 (5% COMISIÓN) ──────────────────────────────────
-  const [withdrawGems, setWithdrawGems] = useState<number>(10)
+  const [withdrawGems, setWithdrawGems] = useState<number>(1000)
   const [withdrawAddress, setWithdrawAddress] = useState('')
   const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false)
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false)
+
+  // ── SALDOS FINANCIEROS DUALES (TOTAL, RETIRABLE Y BLOQUEADO/BONO) ────────
+  const [financialBalances, setFinancialBalances] = useState<{
+    totalGems: number
+    lockedGems: number
+    withdrawableGems: number
+  }>({
+    totalGems: userTokens,
+    lockedGems: 0,
+    withdrawableGems: userTokens,
+  })
+
+  // Sincronizar con userTokens recibido por prop si aún no cargó la RPC
+  useEffect(() => {
+    setFinancialBalances((prev) => ({
+      ...prev,
+      totalGems: prev.totalGems || userTokens,
+      withdrawableGems: prev.withdrawableGems !== undefined ? prev.withdrawableGems : userTokens,
+    }))
+  }, [userTokens])
 
   // ── ESTADO DE HISTORIAL FINANCIERO ─────────────────────────────────────────
   const [financialHistory, setFinancialHistory] = useState<{
@@ -98,6 +118,23 @@ export default function ProfileModal({
 
     const loadData = async () => {
       if (!isSupabaseConfigured()) return
+
+      // 1. Cargar saldos financieros autoritativos (Total, Retirable y Bloqueado/Bono)
+      try {
+        const bal = await accountService.myBalance()
+        if (active && bal) {
+          const total = Number(bal.gems_balance ?? userTokens)
+          const locked = Number(bal.locked_gems_balance ?? 0)
+          const withdrawable = Number(bal.withdrawable_gems ?? Math.max(0, total - locked))
+          setFinancialBalances({
+            totalGems: total,
+            lockedGems: locked,
+            withdrawableGems: withdrawable,
+          })
+        }
+      } catch {}
+
+      // 2. Información de depósito
       const info = await accountService.getDepositInfo()
       if (active && info.success) {
         setDepositInfo({
@@ -112,6 +149,7 @@ export default function ProfileModal({
         }
       }
 
+      // 3. Historial financiero
       setIsLoadingHistory(true)
       const hist = await accountService.getFinancialHistory()
       if (active && hist.success) {
@@ -119,7 +157,6 @@ export default function ProfileModal({
           deposits: hist.deposits || [],
           withdrawals: hist.withdrawals || [],
         });
-        // Inicializar depósitos ya conocidos
         (hist.deposits || []).forEach((d: any) => {
           if (d.status === 'credited') knownDepositIdsRef.current.add(d.id)
         })
@@ -128,10 +165,19 @@ export default function ProfileModal({
     }
 
     void loadData()
+
+    const handleRefresh = () => {
+      if (active) void loadData()
+    }
+    window.addEventListener('refresh_user_balance', handleRefresh)
+    window.addEventListener('player_profile_updated', handleRefresh)
+
     return () => {
       active = false
+      window.removeEventListener('refresh_user_balance', handleRefresh)
+      window.removeEventListener('player_profile_updated', handleRefresh)
     }
-  }, [isOpen, activeTab])
+  }, [isOpen, activeTab, userTokens])
 
   // Handle Nick Change
   const handleSaveNick = async (e: React.FormEvent) => {
@@ -358,14 +404,25 @@ export default function ProfileModal({
   const netWithdrawalUsdt = Number(((withdrawGems * 0.95) / 100.0).toFixed(2))
 
   // ── PREPARAR RETIRO Y MOSTRAR CONFIRMACIÓN ─────────────────────────────────
+  const currentTotalGems = financialBalances.totalGems || userTokens
+  const currentWithdrawableGems = financialBalances.withdrawableGems !== undefined ? financialBalances.withdrawableGems : userTokens
+  const currentLockedGems = financialBalances.lockedGems || 0
+
   const handleOpenWithdrawConfirm = (e: React.FormEvent) => {
     e.preventDefault()
     if (withdrawGems < 1000.0) {
       showFeedback('El retiro mínimo es de 1,000.00 Gemas (10.00 USDT).', 'error')
       return
     }
-    if (withdrawGems > userTokens) {
-      showFeedback(`Saldo insuficiente. Tienes ${userTokens} gemas disponibles.`, 'error')
+    if (withdrawGems > currentWithdrawableGems) {
+      if (currentLockedGems > 0 && withdrawGems <= currentTotalGems) {
+        showFeedback(
+          `Solo tienes ${currentWithdrawableGems.toLocaleString()} gemas retirables. Tus ${currentLockedGems.toLocaleString()} 💎 restantes son saldo bloqueado (bonos y retención de depósito) utilizable en el juego.`,
+          'error'
+        )
+      } else {
+        showFeedback(`Saldo retirable insuficiente. Tienes ${currentWithdrawableGems.toLocaleString()} gemas retirables disponibles.`, 'error')
+      }
       return
     }
     const cleanDest = withdrawAddress.trim()
@@ -912,12 +969,50 @@ export default function ProfileModal({
           <form onSubmit={handleOpenWithdrawConfirm} className="profile-tab-body">
             <div className="profile-section-title">
               <span>💸 RETIRO DE FONDOS (GEMAS → USDT BEP20)</span>
-              <small>Retira tus gemas a cualquier wallet BEP20 compatible con USDT. Comisión: <strong>5%</strong>.</small>
+              <small>Retira tus gemas a cualquier wallet BEP20 compatible con USDT. Comisión de red: <strong>5%</strong>.</small>
             </div>
 
-            <div className="profile-balance-banner">
-              <span>💎 Gemas Disponibles para Retirar:</span>
-              <strong>{userTokens.toLocaleString()} Gemas</strong>
+            {/* DUAL BALANCE BREAKDOWN CARDS */}
+            <div className="profile-dual-balance-grid">
+              <div className="profile-balance-card profile-balance-card--total">
+                <div className="profile-balance-card__icon">💎</div>
+                <div className="profile-balance-card__info">
+                  <span className="profile-balance-card__label">TOTAL DE GEMAS</span>
+                  <strong className="profile-balance-card__value">{currentTotalGems.toLocaleString()} 💎</strong>
+                  <small className="profile-balance-card__sub">Saldo total utilizable en todo el juego</small>
+                </div>
+              </div>
+
+              <div className="profile-balance-card profile-balance-card--withdrawable">
+                <div className="profile-balance-card__icon">💸</div>
+                <div className="profile-balance-card__info">
+                  <span className="profile-balance-card__label">SALDO RETIRABLE</span>
+                  <strong className="profile-balance-card__value profile-balance-card__value--success">
+                    {currentWithdrawableGems.toLocaleString()} 💎
+                  </strong>
+                  <small className="profile-balance-card__sub">Equivalente a ${(currentWithdrawableGems / 100).toFixed(2)} USDT</small>
+                </div>
+              </div>
+
+              <div className="profile-balance-card profile-balance-card--locked">
+                <div className="profile-balance-card__icon">🔒</div>
+                <div className="profile-balance-card__info">
+                  <span className="profile-balance-card__label">NO RETIRABLE / BONOS</span>
+                  <strong className="profile-balance-card__value profile-balance-card__value--warning">
+                    {currentLockedGems.toLocaleString()} 💎
+                  </strong>
+                  <small className="profile-balance-card__sub">Se gasta primero al jugar/comprar</small>
+                </div>
+              </div>
+            </div>
+
+            {/* AVISO TRANSPARENTE DEL SISTEMA DUAL */}
+            <div className="profile-dual-balance-notice">
+              <span className="profile-dual-balance-notice__badge">🛡️ REGLAS DE RETIRO Y BONOS</span>
+              <p>
+                <strong>50% de cada depósito</strong> + el <strong>100% de premios</strong> (Ruleta, Código Secreto, Clanes, Referidos y Mercado) van a tu <strong>Saldo Retirable</strong>. 
+                Los bonos promocionales y la retención se gastan <strong>automáticamente primero</strong> al jugar partidas, comprar en tienda o participar en eventos.
+              </p>
             </div>
 
             {/* Quick Amounts */}
@@ -926,6 +1021,7 @@ export default function ProfileModal({
                 <button
                   key={amt}
                   type="button"
+                  disabled={currentWithdrawableGems < amt}
                   className={`profile-quick-btn ${withdrawGems === amt ? 'profile-quick-btn--active' : ''}`}
                   onClick={() => setWithdrawGems(amt)}
                 >
@@ -935,20 +1031,21 @@ export default function ProfileModal({
               <button
                 type="button"
                 className="profile-quick-btn profile-quick-btn--max"
-                onClick={() => setWithdrawGems(Math.max(1000, userTokens))}
+                onClick={() => setWithdrawGems(Math.max(1000, currentWithdrawableGems))}
+                disabled={currentWithdrawableGems < 1000}
               >
-                MÁX ({userTokens.toLocaleString()} 💎)
+                MÁX RETIRABLE ({currentWithdrawableGems.toLocaleString()} 💎)
               </button>
             </div>
 
             <div className="profile-form-row">
-              <label>Cantidad de Gemas a Retirar (Mínimo: 1,000.00 💎):</label>
+              <label>Cantidad de Gemas a Retirar (Mínimo: 1,000.00 💎 • Máx Retirable: {currentWithdrawableGems.toLocaleString()} 💎):</label>
               <div className="profile-input-wrap">
                 <span>💎</span>
                 <input
                   type="number"
                   min={1000}
-                  max={Math.max(1000, userTokens)}
+                  max={Math.max(1000, currentWithdrawableGems)}
                   step={1}
                   value={withdrawGems || ''}
                   onChange={(e) => setWithdrawGems(Number(e.target.value))}
@@ -999,9 +1096,9 @@ export default function ProfileModal({
             <button
               type="submit"
               className="profile-submit-action-btn profile-submit-action-btn--withdraw"
-              disabled={withdrawGems < 1000 || withdrawGems > userTokens}
+              disabled={withdrawGems < 1000 || withdrawGems > currentWithdrawableGems || isSubmittingWithdrawal}
             >
-              💸 SOLICITAR RETIRO DE {netWithdrawalUsdt.toFixed(2)} USDT
+              {isSubmittingWithdrawal ? '⏳ PROCESANDO...' : `💸 SOLICITAR RETIRO DE ${netWithdrawalUsdt.toFixed(2)} USDT`}
             </button>
           </form>
         )}

@@ -1063,6 +1063,12 @@
   border: 1px solid rgba(192, 132, 252, 0.4);
 }
 
+.market-tx-badge--referral_reward {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+}
+
 .market-tx-time {
   font-size: 9.5px;
   color: #64748b;

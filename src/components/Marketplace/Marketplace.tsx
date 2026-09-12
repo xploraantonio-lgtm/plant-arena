@@ -352,7 +352,7 @@ export default function Marketplace({
     if (txFilter === 'marketplace') return transactions.filter((t) => t.type === 'marketplace_sale')
     if (txFilter === 'withdrawal') return transactions.filter((t) => t.type === 'withdrawal')
     if (txFilter === 'shop') return transactions.filter((t) => t.type === 'shop_pack' || t.type === 'shop_gold')
-    if (txFilter === 'reward') return transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward')
+    if (txFilter === 'reward') return transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward' || t.type === 'referral_reward')
     return transactions
   }, [transactions, txFilter])
 
@@ -1287,7 +1287,7 @@ export default function Marketplace({
               className={`market-tx-filter-chip ${txFilter === 'reward' ? 'market-tx-filter-chip--active' : ''}`}
               onClick={() => setTxFilter('reward')}
             >
-              🎁 PREMIOS & RULETA ({transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward').length})
+              🎁 PREMIOS & REFERIDOS ({transactions.filter((t) => t.type === 'lottery_win' || t.type === 'lottery_spin' || t.type === 'reward_code' || t.type === 'tournament_reward' || t.type === 'referral_reward').length})
             </button>
           </div>
 
@@ -1350,6 +1350,7 @@ export default function Marketplace({
                         {tx.type === 'lottery_win' && (tx.amountGems && tx.amountGems >= 50 ? '🎰 JACKPOT RULETA' : '🎁 PREMIO DE RULETA')}
                         {tx.type === 'reward_code' && '🎁 CÓDIGO ESPECIAL'}
                         {tx.type === 'tournament_reward' && '🏆 CÓDIGO SECRETO'}
+                        {tx.type === 'referral_reward' && '👥 GANANCIAS REFERIDOS'}
                       </span>
                       <span className="market-tx-time">{formatTxTime(tx.createdAt)}</span>
                     </div>
@@ -1403,6 +1404,8 @@ export default function Marketplace({
                                 ? 'canjeó código promocional'
                                 : tx.type === 'tournament_reward'
                                 ? 'ganó en Código Secreto'
+                                : tx.type === 'referral_reward'
+                                ? 'cobró ganancias de referidos'
                                 : 'recibió recompensa'}
                             </span>
                           </div>
@@ -1436,6 +1439,11 @@ export default function Marketplace({
                           <span className="market-tx-amount-num" style={{ color: '#4ade80', fontWeight: 'bold' }}>
                             +{tx.amountGems.toLocaleString()} 💎
                           </span>
+                          {tx.amountUsd && Number(tx.amountUsd) > 0 && (
+                            <span style={{ fontSize: '9px', color: '#94a3b8', display: 'block', textAlign: 'right' }}>
+                              ≈ ${Number(tx.amountUsd).toFixed(2)} USD
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <div className="market-tx-amount-box">

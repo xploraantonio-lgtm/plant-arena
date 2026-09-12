@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { referralService, type MisReferidos } from '../../services/referralService'
 import { soundManager } from '../../utils/audioManager'
 import { enlaceDeReferido } from '../../utils/direccionPublica'
-import { getPlayerAvatarUrl } from '../../utils/userManager'
+import { getPlayerAvatarUrl, UserManager } from '../../utils/userManager'
 import './PanelDeReferidos.css'
 
 /**
@@ -205,6 +205,12 @@ export default function PanelDeReferidos() {
     setOcupado(null)
     if (r.ok) {
       soundManager.playSound('victory', 0.8)
+      UserManager.addTransaction({
+        type: 'reward',
+        amountUsd: 0.0,
+        description: `Bono de referidos: +${r.oro} 🪙 Oro por amigos válidos`,
+        status: 'completed',
+      })
       decir(`¡Cobro exitoso! +${r.oro} 🪙 de oro acreditados por ${r.amigos} amigo(s).`)
       window.dispatchEvent(new Event('refresh_user_balance'))
       void cargar()
@@ -225,6 +231,12 @@ export default function PanelDeReferidos() {
     setOcupado(null)
     if (r.ok) {
       soundManager.playSound('victory', 0.9)
+      UserManager.addTransaction({
+        type: 'reward',
+        amountUsd: Number(((r.gemas ?? 0) / 100).toFixed(2)),
+        description: `Comisión de referidos del 5% por depósitos (+${r.gemas} 💎)`,
+        status: 'completed',
+      })
       decir(`¡Retiro completado! +${r.gemas} 💎 acreditadas directamente a tu balance de gemas.`)
       window.dispatchEvent(new Event('refresh_user_balance'))
       void cargar()
@@ -245,6 +257,21 @@ export default function PanelDeReferidos() {
     setOcupado(null)
     if (r.ok) {
       soundManager.playSound('victory', 0.9)
+      if (kind === 'sobre_10') {
+        UserManager.addTransaction({
+          type: 'reward',
+          amountUsd: 1.0,
+          description: 'Meta de Temporada Referidos: 1 Sobre Básico por 10 amigos válidos',
+          status: 'completed',
+        })
+      } else {
+        UserManager.addTransaction({
+          type: 'reward',
+          amountUsd: 5.0,
+          description: 'Meta de Temporada Referidos: 35 amigos válidos (+500 💎)',
+          status: 'completed',
+        })
+      }
       decir(
         kind === 'sobre_10'
           ? '🎉 ¡Recompensa de temporada reclamada! 1 Sobre Básico añadido a tu inventario.'

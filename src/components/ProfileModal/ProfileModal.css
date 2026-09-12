@@ -1444,5 +1444,141 @@
   color: #fca5a5;
 }
 
+/* ── DUAL BALANCE BREAKDOWN CARDS (RETIRABLE VS NO RETIRABLE) ──────────────── */
+.profile-dual-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 8px;
+}
 
+@media (max-width: 640px) {
+  .profile-dual-balance-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
+.profile-balance-card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1.5px solid #334155;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(8px);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.profile-balance-card:hover {
+  transform: translateY(-2px);
+}
+
+.profile-balance-card--total {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(14, 116, 144, 0.15) 100%);
+  box-shadow: 0 4px 15px rgba(14, 116, 144, 0.15);
+}
+
+.profile-balance-card--withdrawable {
+  border-color: rgba(74, 222, 128, 0.5);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(22, 163, 74, 0.18) 100%);
+  box-shadow: 0 4px 15px rgba(22, 163, 74, 0.2);
+}
+
+.profile-balance-card--locked {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(217, 119, 6, 0.15) 100%);
+  box-shadow: 0 4px 15px rgba(217, 119, 6, 0.15);
+}
+
+.profile-balance-card__icon {
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.profile-balance-card__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.profile-balance-card__label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.profile-balance-card__value {
+  font-size: 15px;
+  font-weight: 900;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.profile-balance-card__value--success {
+  color: #4ade80 !important;
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
+}
+
+.profile-balance-card__value--warning {
+  color: #fbbf24 !important;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+.profile-balance-card__sub {
+  font-size: 9px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* NOTICE DE REGLAS TRANSPARENTES */
+.profile-dual-balance-notice {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px dashed #475569;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-dual-balance-notice__badge {
+  font-size: 9px;
+  font-weight: 900;
+  color: #38bdf8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.profile-dual-balance-notice p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #cbd5e1;
+}
+
+.profile-dual-balance-notice p strong {
+  color: #f8fafc;
+}
+
+.profile-quick-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: grayscale(0.8);
+  border-color: #334155 !important;
+}
